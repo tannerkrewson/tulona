@@ -82,6 +82,9 @@ export interface Transition {
   note: string | null;
 }
 
+/** Public tracker name for the raw transition-log record. */
+export type TimeTransition = Transition;
+
 export interface TimeInterval {
   startMs: number;
   endMs: number;

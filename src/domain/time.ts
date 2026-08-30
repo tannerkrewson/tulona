@@ -153,7 +153,11 @@ export function clipInterval(
 }
 
 function transitionTimestamp(transition: Transition): number {
-  return timestampMs(transition.timestamp);
+  try {
+    return timestampMs(transition.timestamp);
+  } catch {
+    return Number.NaN;
+  }
 }
 
 /**
@@ -169,13 +173,31 @@ export function materializeIntervals(
     throw new RangeError('Range end must not precede range start');
   }
   const effectiveNow = options.nowMs ?? nowMs();
+  if (
+    !Number.isFinite(options.startMs) ||
+    !Number.isFinite(options.endMs) ||
+    !Number.isFinite(effectiveNow)
+  ) {
+    throw new RangeError('Range and current time must be finite');
+  }
   const ordered = transitions
     .map((transition, index) => ({ transition, index }))
-    .filter(({ transition }) => transitionTimestamp(transition) <= effectiveNow)
+    .filter(
+      ({ transition }) =>
+        transition.status === 'recorded' && transitionTimestamp(transition) <= effectiveNow
+    )
     .sort((left, right) => {
       const timestampDifference =
         transitionTimestamp(left.transition) - transitionTimestamp(right.transition);
-      return timestampDifference || left.index - right.index;
+      if (timestampDifference) return timestampDifference;
+      const createdAtDifference =
+        transitionTimestamp({ ...left.transition, timestamp: left.transition.createdAt }) -
+        transitionTimestamp({ ...right.transition, timestamp: right.transition.createdAt });
+      return (
+        createdAtDifference ||
+        left.transition.id.localeCompare(right.transition.id) ||
+        left.index - right.index
+      );
     });
 
   const intervals: TimeInterval[] = [];
