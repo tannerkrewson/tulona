@@ -12,17 +12,13 @@ import type {
 } from '@domain';
 import { AppIcon, isIconName } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { ActivityTile, Screen } from '@ui';
+import { ActivityTile, errorText, Screen } from '@ui';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import { AdjustStartSheet } from './AdjustStartSheet';
 import { CurrentActivityHeader } from './CurrentActivityHeader';
-import { createTrackerStore } from './tracker-store';
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function sortedRootItems(catalog: CatalogCollection, showArchived: boolean) {
   return [...catalog.activities, ...catalog.routines]
@@ -36,7 +32,15 @@ function sortedFolders(catalog: CatalogCollection, showArchived: boolean): Folde
     .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name));
 }
 
-function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+function LoadError({
+  message,
+  onRetry,
+  onBack,
+}: {
+  message: string;
+  onRetry: () => void;
+  onBack?: () => void;
+}) {
   const { colors } = useAppTheme();
   return (
     <Column
@@ -55,7 +59,12 @@ function LoadError({ message, onRetry }: { message: string; onRetry: () => void 
         Tracker unavailable
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
-      <Button label="Retry" onPress={onRetry} testID="retry-tracker" />
+      <RecoveryActions
+        onBack={onBack}
+        onRetry={onRetry}
+        retryTestID="retry-tracker"
+        testID="tracker-recovery"
+      />
     </Column>
   );
 }
@@ -63,9 +72,11 @@ function LoadError({ message, onRetry }: { message: string; onRetry: () => void 
 function ActionError({
   message,
   onRetry,
+  onBack,
 }: {
   message: string | null;
   onRetry: (() => void) | null;
+  onBack?: () => void;
 }) {
   const { colors } = useAppTheme();
   if (!message) return null;
@@ -86,13 +97,21 @@ function ActionError({
         Tracker action failed
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
-      {onRetry ? <Button label="Retry" onPress={onRetry} testID="retry-tracker-action" /> : null}
+      {onRetry ? (
+        <RecoveryActions
+          onBack={onBack}
+          onRetry={onRetry}
+          retryTestID="retry-tracker-action"
+          testID="tracker-action-recovery"
+        />
+      ) : null}
     </Column>
   );
 }
 
 export default function TrackerCatalogScreen() {
   const { colors } = useAppTheme();
+  const router = useRouter();
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,7 +140,7 @@ export default function TrackerCatalogScreen() {
     return (
       <Screen title="Tracker" description="Your current activity and catalog">
         {error ? (
-          <LoadError message={error} onRetry={load} />
+          <LoadError message={error} onBack={() => router.replace('/(tabs)')} onRetry={load} />
         ) : (
           <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>Loading tracker...</Text>
         )}
@@ -135,12 +154,8 @@ export default function TrackerCatalogScreen() {
 function TrackerCatalogContent({ runtime }: { runtime: RoutineRuntime }) {
   const { colors } = useAppTheme();
   const router = useRouter();
-  const [store] = useState(() =>
-    createTrackerStore(runtime.trackerService, {
-      initialRange: { startMs: Date.now() - 86_400_000, endMs: Date.now() },
-      catalogService: runtime.catalogService,
-    })
-  );
+  const store = runtime.trackerStore;
+  const settings = runtime.settings;
   const catalog = store((state) => state.catalog);
   const activeTransition = store((state) => state.activeTransition);
   const persistenceError = store((state) => state.persistenceError);
@@ -156,6 +171,8 @@ function TrackerCatalogContent({ runtime }: { runtime: RoutineRuntime }) {
   useFocusEffect(
     useCallback(() => {
       routeVisible.current = true;
+      setShowArchived(settings.showArchived);
+      store.getState().updateSettings(settings, Date.now());
       void store
         .getState()
         .hydrate()
@@ -163,7 +180,7 @@ function TrackerCatalogContent({ runtime }: { runtime: RoutineRuntime }) {
       return () => {
         routeVisible.current = false;
       };
-    }, [store])
+    }, [settings, store])
   );
 
   useEffect(() => {
@@ -183,11 +200,15 @@ function TrackerCatalogContent({ runtime }: { runtime: RoutineRuntime }) {
   }, []);
 
   if (!catalog) {
-    const message = persistenceError?.message;
+    const message = persistenceError ? errorText(persistenceError) : null;
     return (
       <Screen title="Tracker" description="Your current activity and catalog">
         {message ? (
-          <LoadError message={message} onRetry={() => void store.getState().hydrate()} />
+          <LoadError
+            message={message}
+            onBack={() => router.replace('/(tabs)')}
+            onRetry={() => void store.getState().hydrate()}
+          />
         ) : (
           <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>
             {loading ? 'Loading tracker...' : 'No catalog loaded yet.'}
@@ -200,7 +221,7 @@ function TrackerCatalogContent({ runtime }: { runtime: RoutineRuntime }) {
   const rootItems = sortedRootItems(catalog, showArchived);
   const folders = sortedFolders(catalog, showArchived);
   const activePrevious = previousTransition(store.getState().transitions, activeTransition);
-  const visibleActionError = actionError ?? persistenceError?.message ?? null;
+  const visibleActionError = actionError ?? (persistenceError ? errorText(persistenceError) : null);
   const runAction = async (action: () => Promise<void>) => {
     lastAction.current = action;
     setBusy(true);
@@ -270,7 +291,11 @@ function TrackerCatalogContent({ runtime }: { runtime: RoutineRuntime }) {
             previousTransition={activePrevious}
           />
         ) : null}
-        <ActionError message={visibleActionError} onRetry={retry} />
+        <ActionError
+          message={visibleActionError}
+          onBack={() => router.replace('/(tabs)')}
+          onRetry={retry}
+        />
         <Column spacing={8} style={{ width: '100%' }}>
           <Row alignment="center" spacing={8}>
             <Button

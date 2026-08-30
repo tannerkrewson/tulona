@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 
-import type { CatalogCollection, TimeInterval, TimeTransition } from '@domain';
+import {
+  logicalDayBounds,
+  logicalDayKey,
+  type AppSettings,
+  type CatalogCollection,
+  type TimeInterval,
+  type TimeTransition,
+} from '@domain';
 import { PersistenceError } from '@data/errors';
 import type { CatalogRepositoryApi } from '@data/catalog-repository';
 import type { CatalogServiceApi } from '../catalog/catalog-service';
@@ -29,6 +36,7 @@ export interface TrackerStoreState {
   hydrate(): Promise<void>;
   refresh(nowMs?: number): Promise<void>;
   setRange(range: TrackerRange): void;
+  updateSettings(settings: Pick<AppSettings, 'logicalDayRolloverHour'>, nowMs?: number): void;
   setSheet(sheet: TrackerSheet): void;
   switchActivity(
     activityId: string | null,
@@ -133,6 +141,11 @@ export function createTrackerStore(service: TrackerServiceApi, options: TrackerS
         }
       },
       setRange: (selectedRange) => set({ selectedRange }),
+      updateSettings: ({ logicalDayRolloverHour }, currentNowMs = now()) => {
+        const day = logicalDayKey(currentNowMs, { rolloverHour: logicalDayRolloverHour });
+        const bounds = logicalDayBounds(day, { rolloverHour: logicalDayRolloverHour });
+        set({ selectedRange: { startMs: bounds.startMs, endMs: bounds.endMs } });
+      },
       setSheet: (sheet) => set({ sheet }),
       switchActivity: (activityId, switchOptions) =>
         runMutation(() => service.switchActivity(activityId, switchOptions)),
@@ -152,3 +165,5 @@ export function createTrackerStore(service: TrackerServiceApi, options: TrackerS
     };
   });
 }
+
+export type TrackerStore = ReturnType<typeof createTrackerStore>;

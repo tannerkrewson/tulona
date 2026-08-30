@@ -35,6 +35,11 @@ export interface RoutineRepositoryApi {
     run: RoutineRunHistory,
     operationId?: string
   ): Promise<void>;
+  persistCancellation?(
+    activeRoutine: ActiveRoutine,
+    run: RoutineRunHistory,
+    operationId?: string
+  ): Promise<void>;
   finalize(
     activeRoutine: ActiveRoutine,
     run: RoutineRunHistory,
@@ -196,6 +201,50 @@ export class RoutineRepository implements RoutineRepositoryApi {
     });
   }
 
+  /** Journals the cancellation marker so recovery can finish after a later write fails. */
+  async persistCancellation(
+    activeRoutine: ActiveRoutine,
+    run: RoutineRunHistory,
+    operationId = `routine-cancellation-${run.id}`
+  ): Promise<void> {
+    const parsedActive = activeRoutineSchema.safeParse(activeRoutine);
+    if (!parsedActive.success)
+      throw new PersistenceError(
+        'validation',
+        `Active routine failed validation: ${parsedActive.error.message}`
+      );
+    const parsedRun = routineRunHistorySchema.safeParse(run);
+    if (!parsedRun.success)
+      throw new PersistenceError(
+        'validation',
+        `Routine history failed validation: ${parsedRun.error.message}`
+      );
+    if (activeRoutine.status !== 'cancelled' || run.status !== 'cancelled') {
+      throw new PersistenceError(
+        'validation',
+        'Only cancelled routines can retain a cancellation marker'
+      );
+    }
+    const currentActive = await this.readActive();
+    if (!currentActive || currentActive.id !== activeRoutine.id) {
+      throw new PersistenceError(
+        'conflict',
+        'Cannot retain a cancellation marker for a routine other than the persisted active routine'
+      );
+    }
+    await this.journal.run({
+      id: operationId,
+      datasetId: this.namespace.datasetId,
+      kind: 'routine-cancellation',
+      changes: [
+        {
+          key: this.namespace.key('active-routine'),
+          newValue: JSON.stringify(parsedActive.data),
+        },
+      ],
+    });
+  }
+
   async finalize(
     activeRoutine: ActiveRoutine,
     run: RoutineRunHistory,
@@ -213,7 +262,20 @@ export class RoutineRepository implements RoutineRepositoryApi {
           'conflict',
           `Routine run "${run.id}" already has different history`
         );
-      if (currentActive?.id === activeRoutine.id) await this.clearActive();
+      if (currentActive && currentActive.id !== activeRoutine.id) {
+        throw new PersistenceError(
+          'conflict',
+          'Cannot finalize a routine other than the persisted active routine'
+        );
+      }
+      if (currentActive?.id === activeRoutine.id) {
+        await this.journal.run({
+          id: operationId,
+          datasetId: this.namespace.datasetId,
+          kind: 'routine-finalize',
+          changes: [{ key: this.namespace.key('active-routine'), newValue: null }],
+        });
+      }
       return;
     }
     if (currentActive && currentActive.id !== activeRoutine.id) {

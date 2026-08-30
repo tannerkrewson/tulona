@@ -1,18 +1,24 @@
 import { Button, Column, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAppTheme } from '@theme';
-import { Screen } from '@ui';
+import { errorText, Screen } from '@ui';
+import { bootCoordinator } from '../orchestration';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { loadOnboardingService } from './onboarding-runtime';
 import type { OnboardingService, OnboardingStatus } from './onboarding-service';
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function ErrorPanel({ message }: { message: string | null }) {
+function ErrorPanel({
+  message,
+  onRetry,
+  onBack,
+}: {
+  message: string | null;
+  onRetry: () => void;
+  onBack: () => void;
+}) {
   const { colors } = useAppTheme();
   if (!message) return null;
   return (
@@ -32,6 +38,7 @@ function ErrorPanel({ message }: { message: string | null }) {
         Setup could not be completed
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
+      <RecoveryActions onBack={onBack} onRetry={onRetry} testID="onboarding-recovery" />
     </Column>
   );
 }
@@ -43,9 +50,11 @@ export default function OnboardingScreen() {
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const lastChoice = useRef<'empty' | 'starter' | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let cancelled = false;
+    setError(null);
     void loadOnboardingService()
       .then(async (nextService) => ({ service: nextService, status: await nextService.status() }))
       .then((result) => {
@@ -62,8 +71,21 @@ export default function OnboardingScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    let disposed = false;
+    let cleanup: (() => void) | undefined;
+    void Promise.resolve().then(() => {
+      if (!disposed) cleanup = load();
+    });
+    return () => {
+      disposed = true;
+      cleanup?.();
+    };
+  }, [load]);
+
   const choose = async (choice: 'empty' | 'starter') => {
     if (!service) return;
+    lastChoice.current = choice;
     setBusy(true);
     setError(null);
     try {
@@ -72,6 +94,7 @@ export default function OnboardingScreen() {
       if (result.starterData) {
         setStatus('complete');
       }
+      bootCoordinator.reset();
       router.replace('/(tabs)');
     } catch (choiceError) {
       setError(errorText(choiceError));
@@ -144,7 +167,14 @@ export default function OnboardingScreen() {
             variant="outlined"
           />
         ) : null}
-        <ErrorPanel message={error} />
+        <ErrorPanel
+          message={error}
+          onBack={() => router.replace('/(tabs)')}
+          onRetry={() => {
+            if (service && lastChoice.current) void choose(lastChoice.current);
+            else load();
+          }}
+        />
       </Column>
     </Screen>
   );

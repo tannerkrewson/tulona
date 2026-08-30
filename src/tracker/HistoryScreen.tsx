@@ -1,5 +1,5 @@
 import { Button, Column, Picker, Row, Text, TextInput } from '@expo/ui';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -16,18 +16,14 @@ import {
 } from '@domain';
 import { useAppTheme } from '@theme';
 import { AppIcon } from '@icons';
-import { Screen } from '@ui';
+import { errorText, Screen } from '@ui';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
-import { createTrackerStore } from './tracker-store';
 import { orderTransitions } from './tracker-engine';
 
 const NONE = '__none__';
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function dayDate(day: string, rolloverHour: number): Date {
   return dateForLogicalDay(day as import('@domain').LogicalDayKey, rolloverHour);
@@ -81,7 +77,15 @@ function colorForTransition(catalog: CatalogCollection, transition: TimeTransiti
   return resolveCatalogItem(catalog, transition.activityId)?.displayColor ?? '#176B87';
 }
 
-function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
+function ErrorPanel({
+  message,
+  onRetry,
+  onBack,
+}: {
+  message: string;
+  onRetry: () => void;
+  onBack?: () => void;
+}) {
   const { colors } = useAppTheme();
   return (
     <Column
@@ -100,13 +104,19 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
         History action failed
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
-      <Button label="Retry" onPress={onRetry} testID="retry-history" />
+      <RecoveryActions
+        onBack={onBack}
+        onRetry={onRetry}
+        retryTestID="retry-history"
+        testID="history-recovery"
+      />
     </Column>
   );
 }
 
 export default function HistoryScreen() {
   const { colors } = useAppTheme();
+  const router = useRouter();
   const params = useLocalSearchParams<{ day?: string }>();
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -138,7 +148,7 @@ export default function HistoryScreen() {
     return (
       <Screen title="History" description="Derived time for one logical day">
         {loadError ? (
-          <ErrorPanel message={loadError} onRetry={load} />
+          <ErrorPanel message={loadError} onBack={() => router.back()} onRetry={load} />
         ) : (
           <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>Loading history...</Text>
         )}
@@ -172,13 +182,9 @@ function HistoryDay({
   rolloverHour: number;
 }) {
   const { colors } = useAppTheme();
+  const router = useRouter();
   const bounds = logicalDayBounds(day, { rolloverHour });
-  const [store] = useState(() =>
-    createTrackerStore(runtime.trackerService, {
-      initialRange: { startMs: bounds.startMs, endMs: bounds.endMs },
-      catalogService: runtime.catalogService,
-    })
-  );
+  const store = runtime.trackerStore;
   const catalog = store((state) => state.catalog);
   const intervals = store((state) => state.intervals);
   const transitions = store((state) => state.transitions);
@@ -199,20 +205,25 @@ function HistoryDay({
 
   useFocusEffect(
     useCallback(() => {
+      store.getState().setRange({ startMs: bounds.startMs, endMs: bounds.endMs });
       void store
         .getState()
         .hydrate()
         .catch(() => undefined);
       return undefined;
-    }, [store])
+    }, [bounds.endMs, bounds.startMs, store])
   );
 
   if (!catalog) {
-    const message = persistenceError?.message;
+    const message = persistenceError ? errorText(persistenceError) : null;
     return (
       <Screen title="History" description="Derived time for one logical day">
         {message ? (
-          <ErrorPanel message={message} onRetry={() => void store.getState().hydrate()} />
+          <ErrorPanel
+            message={message}
+            onBack={() => router.back()}
+            onRetry={() => void store.getState().hydrate()}
+          />
         ) : (
           <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>
             {loading ? 'Loading history...' : 'No history loaded yet.'}
@@ -231,7 +242,7 @@ function HistoryDay({
     0
   );
   const futureDay = bounds.startMs > nowMs;
-  const visibleError = actionError ?? persistenceError?.message;
+  const visibleError = actionError ?? (persistenceError ? errorText(persistenceError) : null);
 
   const runAction = async (action: () => Promise<void>) => {
     lastAction.current = action;

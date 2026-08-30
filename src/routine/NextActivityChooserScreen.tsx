@@ -1,17 +1,14 @@
 import { Button, Column, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import type { ActiveRoutine, CatalogCollection, UUID } from '@domain';
 import { AppIcon, type IconName } from '@icons';
 import { useAppTheme } from '@theme';
-import { Screen } from '@ui';
+import { errorText, Screen } from '@ui';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { loadRoutineRuntime, type RoutineRuntime } from './routine-runtime';
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function shortTime(timestamp: string | null): string {
   return timestamp
@@ -19,7 +16,7 @@ function shortTime(timestamp: string | null): string {
     : 'unknown time';
 }
 
-function ChooserError({ message }: { message: string | null }) {
+function ChooserError({ message, children }: { message: string | null; children?: ReactNode }) {
   const { colors } = useAppTheme();
   if (!message) return null;
   return (
@@ -38,6 +35,7 @@ function ChooserError({ message }: { message: string | null }) {
         Chooser unavailable
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
+      {children}
     </Column>
   );
 }
@@ -51,9 +49,11 @@ export function NextActivityChooserScreen() {
   const [folderId, setFolderId] = useState<UUID | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const lastChoice = useRef<UUID | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let cancelled = false;
+    setError(null);
     void loadRoutineRuntime()
       .then(async (nextRuntime) => {
         const restored = await nextRuntime.routineService.recover();
@@ -80,8 +80,21 @@ export function NextActivityChooserScreen() {
     };
   }, [router]);
 
+  useEffect(() => {
+    let disposed = false;
+    let cleanup: (() => void) | undefined;
+    void Promise.resolve().then(() => {
+      if (!disposed) cleanup = load();
+    });
+    return () => {
+      disposed = true;
+      cleanup?.();
+    };
+  }, [load]);
+
   const choose = async (activityId: UUID) => {
     if (!runtime) return;
+    lastChoice.current = activityId;
     setBusy(true);
     setError(null);
     try {
@@ -102,7 +115,13 @@ export function NextActivityChooserScreen() {
           <Text textStyle={{ color: colors.text, fontSize: 25, fontWeight: '700' }}>
             What are you doing now?
           </Text>
-          <ChooserError message={error ?? 'Restoring the next-activity chooser...'} />
+          <ChooserError message={error ?? 'Restoring the next-activity chooser...'}>
+            <RecoveryActions
+              onBack={() => router.replace('/(tabs)')}
+              onRetry={load}
+              testID="chooser-recovery"
+            />
+          </ChooserError>
         </Column>
       </Screen>
     );
@@ -197,7 +216,16 @@ export function NextActivityChooserScreen() {
             </Text>
           </Column>
         ) : null}
-        <ChooserError message={error} />
+        <ChooserError message={error}>
+          <RecoveryActions
+            onBack={() => router.replace('/(tabs)')}
+            onRetry={() => {
+              if (lastChoice.current) void choose(lastChoice.current);
+              else load();
+            }}
+            testID="chooser-action-recovery"
+          />
+        </ChooserError>
         <Button
           disabled={busy}
           label="Decide later"

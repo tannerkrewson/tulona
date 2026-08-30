@@ -1,5 +1,5 @@
 import { Button, Column, Row, Text } from '@expo/ui';
-import { useIsFocused } from 'expo-router';
+import { useIsFocused, useRouter } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 
 import {
@@ -10,16 +10,13 @@ import {
   type LogicalDayKey,
 } from '@domain';
 import { useAppTheme } from '@theme';
-import { Screen } from '@ui';
+import { errorText, Screen } from '@ui';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import type { DailyReport, ReportFolder, ReportItem, WeeklyReport } from './reporting-service';
 import { loadReportingRuntime, type ReportingRuntime } from './reporting-runtime';
 
 type ReportView = 'day' | 'week';
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function dayDate(day: LogicalDayKey): Date {
   return dateForLogicalDay(day);
@@ -223,6 +220,7 @@ function InsightsContent({
   initialDay: LogicalDayKey;
 }) {
   const { colors } = useAppTheme();
+  const router = useRouter();
   const rolloverHour = runtime.settings.logicalDayRolloverHour;
   const [day, setDay] = useState(initialDay);
   const [view, setView] = useState<ReportView>('day');
@@ -286,10 +284,11 @@ function InsightsContent({
               Insights unavailable
             </Text>
             <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{error}</Text>
-            <Button
-              label="Retry"
-              onPress={() => setReloadToken((value) => value + 1)}
-              testID="insights-retry"
+            <RecoveryActions
+              onBack={() => router.replace('/(tabs)')}
+              onRetry={() => setReloadToken((value) => value + 1)}
+              retryTestID="insights-retry"
+              testID="insights-recovery"
             />
           </ReportCard>
         ) : view === 'day' ? (
@@ -311,8 +310,10 @@ function InsightsContent({
 export default function InsightsScreen() {
   const { colors } = useAppTheme();
   const focused = useIsFocused();
+  const router = useRouter();
   const [runtime, setRuntime] = useState<ReportingRuntime | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const [initialDay, setInitialDay] = useState<LogicalDayKey>(() => logicalDayKey(Date.now()));
 
   useEffect(() => {
@@ -331,7 +332,7 @@ export default function InsightsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [focused]);
+  }, [focused, reloadToken]);
 
   if (!runtime) {
     return (
@@ -344,6 +345,18 @@ export default function InsightsScreen() {
         >
           {loadError ?? 'Loading insights...'}
         </Text>
+        {loadError ? (
+          <RecoveryActions
+            onBack={() => router.replace('/(tabs)')}
+            onRetry={() => {
+              setLoadError(null);
+              setRuntime(null);
+              setReloadToken((value) => value + 1);
+            }}
+            retryTestID="insights-load-retry"
+            testID="insights-load-recovery"
+          />
+        ) : null}
       </Screen>
     );
   }

@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import Head from 'expo-router/head';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { registerServiceWorker } from '@/src/pwa/registerServiceWorker';
-import { RoutineStartupRestoration } from '@/src/routine/RoutineStartupRestoration';
+import { BootCoordinatorGate } from '@/src/orchestration';
 
 export default function RootLayout() {
   useEffect(() => {
@@ -30,7 +30,9 @@ export default function RootLayout() {
           <Stack.Screen name="backup" />
           <Stack.Screen name="onboarding" />
         </Stack>
-        <RoutineStartupRestoration />
+        <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+          <BootCoordinatorGate />
+        </View>
       </View>
     </>
   );

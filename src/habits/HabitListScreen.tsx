@@ -1,11 +1,11 @@
 import { Button, Column, Row, Text } from '@expo/ui';
 import { useIsFocused, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { Habit, HabitDayState } from '@domain';
 import { AppIcon, normalizeIconName } from '@icons';
 import { useAppTheme } from '@theme';
-import { EmptyState, Screen } from '@ui';
+import { EmptyState, errorText, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { formatHabitSchedule, habitCompletionLabel, habitSignalSummary } from './habit-format';
@@ -13,13 +13,10 @@ import { loadHabitStore } from './habit-runtime';
 import { calculateHabitStreak } from './streak';
 import type { HabitStore } from './habit-store';
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 export default function HabitListScreen() {
   const { colors } = useAppTheme();
   const focused = useIsFocused();
+  const router = useRouter();
   const [store, setStore] = useState<HabitStore | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -50,7 +47,17 @@ export default function HabitListScreen() {
   if (!store) {
     return (
       <Screen title="Habits" description="Small actions, kept visible and on your device.">
-        <HabitErrorMessage message={loadError} />
+        <HabitErrorMessage
+          message={loadError}
+          onRetry={() => {
+            setLoadError(null);
+            void loadHabitStore()
+              .then((nextStore) => setStore(() => nextStore))
+              .catch((error: unknown) => setLoadError(errorText(error)));
+          }}
+          onBack={() => router.replace('/(tabs)')}
+          retryTestID="habits-retry"
+        />
         <Column
           style={{
             backgroundColor: loadError ? 'transparent' : colors.surface,
@@ -82,6 +89,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
   const weekStartsOn = store((state) => state.weekStartsOn);
   const saving = store((state) => state.saving);
   const persistenceError = store((state) => state.persistenceError);
+  const lastAction = useRef<(() => Promise<unknown>) | null>(null);
   const activeHabits = habits
     .filter((habit) => habit.archivedAt === null)
     .sort((left, right) => left.sortOrder - right.sortOrder);
@@ -90,7 +98,14 @@ function HabitListContent({ store }: { store: HabitStore }) {
   return (
     <Screen title="Habits" description="One tap to mark today. Automatic evidence stays separate.">
       <Column spacing={14} style={{ width: '100%' }}>
-        <HabitErrorMessage message={persistenceError?.message ?? null} />
+        <HabitErrorMessage
+          message={persistenceError ? errorText(persistenceError) : null}
+          onBack={() => router.replace('/(tabs)')}
+          onRetry={() => {
+            const action = lastAction.current;
+            void (action ? action() : store.getState().refresh()).catch(() => undefined);
+          }}
+        />
         <Row alignment="center" spacing={10} style={{ width: '100%' }}>
           <Column spacing={3} style={{ width: '65%' }}>
             <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>Today</Text>
@@ -122,8 +137,10 @@ function HabitListContent({ store }: { store: HabitStore }) {
               weekStartsOn={weekStartsOn}
               onDetails={() => router.push(`/habit/${habit.id}`)}
               onToggle={async () => {
+                const action = () => store.getState().toggleManual(habit.id, today);
+                lastAction.current = action;
                 try {
-                  await store.getState().toggleManual(habit.id, today);
+                  await action();
                 } catch {
                   // The store retains the persistence error for the visible banner.
                 }

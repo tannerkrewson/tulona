@@ -15,6 +15,7 @@
     "test:persistence": "tsx tests/persistence-checks.ts",
     "test:tracker": "tsx tests/tracker-engine.ts",
     "test:routine": "tsx tests/routine-service.ts",
+    "test:integration": "tsx tests/integration-coordinator.ts",
     "web:export": "expo export --platform web --output-dir dist && node scripts/prepare-static-site.cjs",
     "pwa:generate": "workbox generateSW workbox.config.cjs",
     "pwa:validate": "node scripts/validate-pwa-build.cjs",

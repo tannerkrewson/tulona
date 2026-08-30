@@ -1,7 +1,7 @@
 import { Button, Column, Picker, Row, Text, TextInput } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type {
   Activity,
@@ -16,7 +16,8 @@ import { createId } from '@domain';
 import { AppIcon } from '@icons';
 import { iconCatalog, type IconName } from '@icons/icon-names';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { Screen } from '@ui';
+import { errorText, Screen } from '@ui';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import type { CatalogService, CreateRoutineStepInput } from '../catalog/catalog-service';
 import { loadRoutineRuntime } from './routine-runtime';
@@ -51,10 +52,6 @@ type EditableStep = Pick<
 export interface RoutineEditorScreenProps {
   id: string;
   initialFolderId?: UUID | null;
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function durationParts(durationMs: number): Pick<StepDraft, 'hours' | 'minutes' | 'seconds'> {
@@ -179,7 +176,15 @@ function Input({
   );
 }
 
-function ErrorMessage({ message }: { message: string | null }) {
+function ErrorMessage({
+  message,
+  onRetry,
+  onBack,
+}: {
+  message: string | null;
+  onRetry?: () => void;
+  onBack?: () => void;
+}) {
   const { colors } = useAppTheme();
   if (!message) return null;
   return (
@@ -198,6 +203,7 @@ function ErrorMessage({ message }: { message: string | null }) {
         Routine action failed
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
+      <RecoveryActions onBack={onBack} onRetry={onRetry} testID="routine-editor-recovery" />
     </Column>
   );
 }
@@ -278,6 +284,7 @@ function StepForm({
   onCancel,
   busy,
   error,
+  onRetry,
 }: {
   draft: StepDraft;
   activities: readonly Activity[];
@@ -286,6 +293,7 @@ function StepForm({
   onCancel: () => void;
   busy: boolean;
   error: string | null;
+  onRetry?: () => void;
 }) {
   const { colors } = useAppTheme();
   const availableActivities = activities.filter(
@@ -391,7 +399,7 @@ function StepForm({
           multiline
         />
       </Field>
-      <ErrorMessage message={error} />
+      <ErrorMessage message={error} onBack={onCancel} onRetry={onRetry} />
       <Row alignment="center" spacing={10}>
         <Button
           disabled={busy}
@@ -530,7 +538,14 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
   if (!resource) {
     return (
       <Screen title={id === NEW_ID ? 'New routine' : 'Routine editor'}>
-        <ErrorMessage message={loadError ?? 'Loading routine editor...'} />
+        <ErrorMessage
+          message={loadError ?? 'Loading routine editor...'}
+          onRetry={() => {
+            setLoadError(null);
+            setVersion((current) => current + 1);
+          }}
+          onBack={() => router.back()}
+        />
       </Screen>
     );
   }
@@ -539,6 +554,7 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
       key={`${id}-${version}`}
       initialFolderId={initialFolderId}
       resource={resource}
+      onCancel={() => router.back()}
       onChanged={() => setVersion((current) => current + 1)}
       onCreated={(routineId) => router.replace(`/routine-edit/${routineId}`)}
       onRun={(routineId) => router.push(`/routine/${routineId}`)}
@@ -549,12 +565,14 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
 function RoutineEditorForm({
   resource,
   initialFolderId,
+  onCancel,
   onChanged,
   onCreated,
   onRun,
 }: {
   resource: EditorResource;
   initialFolderId: UUID | null;
+  onCancel: () => void;
   onChanged: () => void;
   onCreated: (routineId: UUID) => void;
   onRun: (routineId: UUID) => void;
@@ -570,9 +588,11 @@ function RoutineEditorForm({
   const [draft, setDraft] = useState<StepDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastAction = useRef<(() => Promise<void>) | null>(null);
   const activities = catalog.activities;
 
   const run = async (action: () => Promise<void>) => {
+    lastAction.current = action;
     setBusy(true);
     setError(null);
     try {
@@ -586,6 +606,7 @@ function RoutineEditorForm({
   };
 
   const saveRoutine = async () => {
+    lastAction.current = saveRoutine;
     setBusy(true);
     setError(null);
     try {
@@ -732,7 +753,13 @@ function RoutineEditorForm({
             onChange={setFolderId}
           />
         </Field>
-        <ErrorMessage message={error} />
+        <ErrorMessage
+          message={error}
+          onBack={onCancel}
+          onRetry={() => {
+            if (lastAction.current) void lastAction.current();
+          }}
+        />
         <Button
           disabled={busy}
           label={busy ? 'Saving...' : routine ? 'Save routine' : 'Create routine'}
@@ -760,6 +787,10 @@ function RoutineEditorForm({
             onCancel={() => setDraft(null)}
             busy={busy}
             error={error}
+            onRetry={() => {
+              const action = lastAction.current;
+              if (action) void run(action);
+            }}
           />
         ) : null}
         {steps.map((step, index) =>
@@ -776,6 +807,10 @@ function RoutineEditorForm({
               }}
               busy={busy}
               error={error}
+              onRetry={() => {
+                const action = lastAction.current;
+                if (action) void run(action);
+              }}
             />
           ) : (
             <StepRow

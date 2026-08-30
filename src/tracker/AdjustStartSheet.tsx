@@ -10,6 +10,8 @@ import {
 } from '@domain';
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
+import { errorText } from '@ui';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 
@@ -37,10 +39,6 @@ export interface AdjustStartSheetProps {
   onAdjust: (timestamp: string) => Promise<void>;
   onClose: () => void;
   onHistory: () => void;
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function localInputValue(timestamp: string): string {
@@ -226,6 +224,12 @@ export function AdjustStartSheet({
             Adjust start failed
           </Text>
           <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{error}</Text>
+          <RecoveryActions
+            onBack={onClose}
+            onRetry={() => void apply()}
+            retryTestID="retry-adjust-start"
+            testID="adjust-start-recovery"
+          />
         </Column>
       ) : null}
       <Button

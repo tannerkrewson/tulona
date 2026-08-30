@@ -4,14 +4,11 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import type { AppSettings } from '@domain';
 import { useAppTheme } from '@theme';
-import { Screen } from '@ui';
+import { errorText, Screen } from '@ui';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { loadSettingsStore } from './settings-runtime';
 import type { SettingsStore } from './settings-store';
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function SettingSection({
   title,
@@ -68,9 +65,11 @@ function Field({
 
 function ActionError({
   store,
+  onBack,
   themeMode,
 }: {
   store: SettingsStore;
+  onBack: () => void;
   themeMode?: AppSettings['appearance'];
 }) {
   const { colors } = useAppTheme(themeMode);
@@ -92,18 +91,18 @@ function ActionError({
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 15, fontWeight: '700' }}>
         Settings could not be saved
       </Text>
-      <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{error.message}</Text>
-      <Button
+      <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{errorText(error)}</Text>
+      <RecoveryActions
         disabled={store((state) => state.loading || state.saving)}
-        label="Reload settings"
-        onPress={() =>
+        onRetry={() =>
           void store
             .getState()
             .reload()
             .catch(() => undefined)
         }
-        testID="settings-reload"
-        variant="outlined"
+        onBack={onBack}
+        retryTestID="settings-reload"
+        testID="settings-recovery"
       />
     </Column>
   );
@@ -140,7 +139,14 @@ export default function SettingsScreen() {
           >
             {loadError ?? 'Loading settings...'}
           </Text>
-          {loadError ? <Button label="Retry" onPress={load} testID="settings-retry" /> : null}
+          {loadError ? (
+            <RecoveryActions
+              onRetry={load}
+              onBack={() => router.replace('/(tabs)')}
+              retryTestID="settings-retry"
+              testID="settings-load-recovery"
+            />
+          ) : null}
           {noDataset ? (
             <Button
               label="Set up this device"
@@ -186,7 +192,11 @@ function SettingsContent({
       title="Settings"
     >
       <Column spacing={14} style={{ width: '100%' }}>
-        <ActionError store={store} themeMode={settings.appearance} />
+        <ActionError
+          onBack={() => router.replace('/(tabs)')}
+          store={store}
+          themeMode={settings.appearance}
+        />
         <SettingSection
           description="Choose how Tulona looks on this device."
           themeMode={settings.appearance}

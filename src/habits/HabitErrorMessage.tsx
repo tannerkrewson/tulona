@@ -1,8 +1,19 @@
 import { Column, Text } from '@expo/ui';
 
 import { useAppTheme } from '@theme';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
-export function HabitErrorMessage({ message }: { message: string | null }) {
+export function HabitErrorMessage({
+  message,
+  onRetry,
+  onBack,
+  retryTestID,
+}: {
+  message: string | null;
+  onRetry?: () => void;
+  onBack?: () => void;
+  retryTestID?: string;
+}) {
   const { colors } = useAppTheme();
   if (!message) return null;
 
@@ -23,6 +34,12 @@ export function HabitErrorMessage({ message }: { message: string | null }) {
         Habit action failed
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
+      <RecoveryActions
+        onBack={onBack}
+        onRetry={onRetry}
+        retryTestID={retryTestID}
+        testID="habit-recovery"
+      />
     </Column>
   );
 }

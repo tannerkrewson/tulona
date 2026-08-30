@@ -22,6 +22,8 @@ function at(offsetMs: number): string {
 class MemoryStorage implements AsyncStorageLike {
   readonly values = new Map<string, string>();
   failTrackerWrites = false;
+  failNextKey: string | null = null;
+  failNextRemoveKey: string | null = null;
 
   async getItem(key: string): Promise<string | null> {
     return this.values.get(key) ?? null;
@@ -29,16 +31,33 @@ class MemoryStorage implements AsyncStorageLike {
 
   async setItem(key: string, value: string): Promise<void> {
     if (this.failTrackerWrites && key.includes(':tracker:')) throw new Error('tracker unavailable');
+    if (this.failNextKey && key.includes(this.failNextKey)) {
+      this.failNextKey = null;
+      throw new Error(`write unavailable for ${key}`);
+    }
     this.values.set(key, value);
   }
 
   async removeItem(key: string): Promise<void> {
+    if (this.failNextRemoveKey && key.includes(this.failNextRemoveKey)) {
+      this.failNextRemoveKey = null;
+      throw new Error(`remove unavailable for ${key}`);
+    }
     this.values.delete(key);
   }
 }
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
+}
+
+async function rejects(action: () => Promise<unknown>, message: string): Promise<void> {
+  try {
+    await action();
+  } catch {
+    return;
+  }
+  throw new Error(message);
 }
 
 async function createServices(storage: MemoryStorage) {
@@ -217,6 +236,112 @@ async function run(): Promise<void> {
   assert(
     (await failed.trackerService.getActiveTransition(startedAt))?.activityId === routineId,
     'recovery restores the matching tracker transition'
+  );
+
+  const interruptedStorage = new MemoryStorage();
+  const interrupted = await createServices(interruptedStorage);
+  interrupted.setNow(at(150_000));
+  const interruptedRun = await interrupted.routineService.startRoutine(routineId, {
+    id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    startedAt: at(150_000),
+  });
+  interruptedStorage.failNextKey = ':active-routine';
+  await rejects(
+    () => interrupted.routineService.cancelAndFinalize(at(160_000)),
+    'a failed cancellation marker write must surface to the caller'
+  );
+  interruptedStorage.failNextKey = null;
+  interrupted.setNow(at(160_000));
+  assert(
+    (await interrupted.routineRepository.readActive())?.id === interruptedRun.id,
+    'an interrupted cancellation remains discoverable instead of disappearing'
+  );
+  assert(
+    (await interrupted.routineService.recover(at(160_000))) === null,
+    'routine recovery finishes an interrupted cancellation'
+  );
+  assert(
+    (await interrupted.routineRepository.readActive()) === null,
+    'recovered cancellation cannot strand an active routine'
+  );
+  assert(
+    (await interrupted.routineRepository.readHistory('2026-08')).runs.filter(
+      (run) => run.id === interruptedRun.id
+    ).length === 1,
+    'recovered cancellation writes exactly one history record'
+  );
+  assert(
+    (await interrupted.routineService.recover(at(160_000))) === null &&
+      (await interrupted.routineRepository.readHistory('2026-08')).runs.filter(
+        (run) => run.id === interruptedRun.id
+      ).length === 1,
+    'repeating recovery does not duplicate cancellation history'
+  );
+
+  const chooserFailureStorage = new MemoryStorage();
+  const chooserFailure = await createServices(chooserFailureStorage);
+  chooserFailure.setNow(at(170_000));
+  const chooserRun = await chooserFailure.routineService.startRoutine(routineId, {
+    id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    startedAt: at(170_000),
+  });
+  await chooserFailure.routineService.done(at(170_000));
+  await chooserFailure.routineService.finalizeCompletion(at(170_000));
+  chooserFailureStorage.failNextRemoveKey = ':active-routine';
+  await rejects(
+    () => chooserFailure.routineService.selectNextActivity(activityId),
+    'a failed finalization clear must surface to the caller'
+  );
+  chooserFailureStorage.failNextRemoveKey = null;
+  const selected = await chooserFailure.routineService.selectNextActivity(activityId);
+  assert(selected.activityId === activityId, 'retry must preserve the selected next activity');
+  assert(
+    (await chooserFailure.routineRepository.readActive()) === null,
+    'retry after finalization failure clears the active routine'
+  );
+  assert(
+    (await chooserFailure.routineRepository.readHistory('2026-08')).runs.filter(
+      (run) => run.id === chooserRun.id
+    ).length === 1,
+    'retry after finalization failure does not duplicate history'
+  );
+
+  const chooserCrash = await createServices(new MemoryStorage());
+  chooserCrash.setNow(at(180_000));
+  const chooserCrashRun = await chooserCrash.routineService.startRoutine(routineId, {
+    id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    startedAt: at(180_000),
+  });
+  const chooserCrashCompleted = await chooserCrash.routineService.done(at(180_000));
+  await chooserCrash.routineService.finalizeCompletion(at(180_000));
+  assert(chooserCrashCompleted.completedAt, 'chooser crash fixture has a completion timestamp');
+  const chooserCompletionMarker = await chooserCrash.trackerService.getActiveTransition(
+    chooserCrashCompleted.completedAt
+  );
+  assert(chooserCompletionMarker, 'chooser crash fixture has a completion boundary');
+  await chooserCrash.trackerService.editTransition(chooserCompletionMarker.id, {
+    activityId,
+    timestamp: chooserCrashCompleted.completedAt,
+    source: 'routine',
+    note: 'Next activity after routine',
+  });
+  assert(
+    (await chooserCrash.routineRepository.readActive())?.status === 'awaiting-next-activity',
+    'chooser crash fixture retains the awaiting state before recovery'
+  );
+  assert(
+    (await chooserCrash.routineService.recover(at(180_000))) === null,
+    'recovery finalizes a next-activity transition written before a crash'
+  );
+  assert(
+    (await chooserCrash.routineRepository.readActive()) === null,
+    'chooser recovery clears the stranded awaiting routine'
+  );
+  assert(
+    (await chooserCrash.routineRepository.readHistory('2026-08')).runs.filter(
+      (run) => run.id === chooserCrashRun.id
+    ).length === 1,
+    'chooser crash recovery writes one completion history record'
   );
 }
 

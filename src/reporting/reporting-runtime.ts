@@ -1,19 +1,10 @@
-import {
-  createAsyncStorageDatabase,
-  createCatalogRepository,
-  createDatasetManager,
-  createSettingsRepository,
-  createTrackerRepository,
-  PersistenceError,
-} from '@data';
+import { PersistenceError } from '@data';
 
-import { createCatalogService, type CatalogService } from '../catalog/catalog-service';
-import { createSettingsService, type SettingsService } from '../settings/settings-service';
-import { createReportingService, type ReportingService } from './reporting-service';
-import { createTrackerService, type TrackerService } from '../tracker/tracker-service';
-
-const database = createAsyncStorageDatabase();
-const datasetManager = createDatasetManager(database);
+import { bootCoordinator } from '../orchestration/boot-coordinator';
+import type { CatalogService } from '../catalog/catalog-service';
+import type { SettingsService } from '../settings/settings-service';
+import type { ReportingService } from './reporting-service';
+import type { TrackerService } from '../tracker/tracker-service';
 
 export interface ReportingRuntime {
   reportingService: ReportingService;
@@ -24,16 +15,13 @@ export interface ReportingRuntime {
 }
 
 export async function loadReportingRuntime(): Promise<ReportingRuntime> {
-  const namespace = await datasetManager.active();
-  if (!namespace) throw new PersistenceError('metadata', 'Create or activate a dataset first');
-  const catalogService = createCatalogService(createCatalogRepository(database, namespace));
-  const trackerService = createTrackerService(createTrackerRepository(database, namespace));
-  const settingsService = createSettingsService(createSettingsRepository(database, namespace));
-  const settings = await settingsService.read();
-  const reportingService = createReportingService({
-    tracker: trackerService,
-    catalog: catalogService,
-    settings: settingsService,
-  });
-  return { reportingService, catalogService, trackerService, settingsService, settings };
+  const result = await bootCoordinator.hydrate();
+  if (!result.runtime) throw new PersistenceError('metadata', 'Create or activate a dataset first');
+  return {
+    reportingService: result.runtime.services.reporting,
+    catalogService: result.runtime.services.catalog,
+    trackerService: result.runtime.services.tracker,
+    settingsService: result.runtime.services.settings,
+    settings: result.runtime.settings,
+  };
 }

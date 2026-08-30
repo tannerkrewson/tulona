@@ -1,6 +1,6 @@
 import { Button, Column, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   shiftLogicalDay,
@@ -11,7 +11,7 @@ import {
 } from '@domain';
 import { AppIcon, normalizeIconName } from '@icons';
 import { useAppTheme } from '@theme';
-import { Screen } from '@ui';
+import { errorText, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { formatHabitSchedule, habitCompletionLabel, habitSignalSummary } from './habit-format';
@@ -19,10 +19,6 @@ import { loadHabitStore } from './habit-runtime';
 import { calculateHabitStreak } from './streak';
 import type { HabitStore } from './habit-store';
 import { isHabitScheduledDay } from './schedule';
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function recentDays(end: LogicalDayKey, count: number, rolloverHour: number): LogicalDayKey[] {
   return Array.from({ length: count }, (_, index) =>
@@ -60,8 +56,10 @@ export interface HabitDetailScreenProps {
 
 export function HabitDetailScreen({ id }: HabitDetailScreenProps) {
   const { colors } = useAppTheme();
+  const router = useRouter();
   const [store, setStore] = useState<HabitStore | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,12 +76,19 @@ export function HabitDetailScreen({ id }: HabitDetailScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, version]);
 
   if (!store) {
     return (
       <Screen title="Habit details">
-        <HabitErrorMessage message={loadError} />
+        <HabitErrorMessage
+          message={loadError}
+          onBack={() => router.back()}
+          onRetry={() => {
+            setLoadError(null);
+            setVersion((current) => current + 1);
+          }}
+        />
         <Text
           textStyle={{
             color: loadError ? colors.danger.foreground : colors.textMuted,
@@ -110,11 +115,12 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
   const catalog = store((state) => state.catalog);
   const busy = store((state) => state.saving);
   const persistenceError = store((state) => state.persistenceError);
+  const lastAction = useRef<(() => Promise<unknown>) | null>(null);
 
   if (!habit) {
     return (
       <Screen title="Habit details">
-        <HabitErrorMessage message="Habit not found" />
+        <HabitErrorMessage message="Habit not found" onBack={() => router.back()} />
       </Screen>
     );
   }
@@ -130,9 +136,13 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
   const archived = habit.archivedAt !== null;
 
   const changeArchiveState = async () => {
-    try {
+    const action = async () => {
       if (archived) await store.getState().restoreHabit(habit.id);
       else await store.getState().archiveHabit(habit.id);
+    };
+    lastAction.current = action;
+    try {
+      await action();
     } catch {
       // The store retains the persistence error for the visible banner.
     }
@@ -141,7 +151,14 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
   return (
     <Screen title={habit.name} description={formatHabitSchedule(habit.schedule)}>
       <Column spacing={16} style={{ width: '100%' }}>
-        <HabitErrorMessage message={persistenceError?.message ?? null} />
+        <HabitErrorMessage
+          message={persistenceError ? errorText(persistenceError) : null}
+          onBack={() => router.back()}
+          onRetry={() => {
+            const action = lastAction.current;
+            void (action ? action() : store.getState().refresh()).catch(() => undefined);
+          }}
+        />
         <Row alignment="center" spacing={8} style={{ width: '100%' }}>
           <Button
             label="Back to habits"
