@@ -1,5 +1,6 @@
 import {
   createId,
+  dateForLogicalDay,
   habitSchema,
   isUuid,
   normalizeHabitOrder,
@@ -97,16 +98,9 @@ function assertId(value: string, label: string): asserts value is UUID {
 }
 
 function assertLogicalDay(value: string): asserts value is LogicalDayKey {
-  if (!/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value)) {
-    validation(`Invalid logical day "${value}"`);
-  }
-  const [year, month, day] = value.split('-').map(Number);
-  const check = new Date(Date.UTC(year, month - 1, day));
-  if (
-    check.getUTCFullYear() !== year ||
-    check.getUTCMonth() !== month - 1 ||
-    check.getUTCDate() !== day
-  ) {
+  try {
+    dateForLogicalDay(value as LogicalDayKey);
+  } catch {
     validation(`Invalid logical day "${value}"`);
   }
 }

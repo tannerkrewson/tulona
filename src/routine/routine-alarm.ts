@@ -1,5 +1,5 @@
 import type { AudioSource } from 'expo-audio';
-import type { ActiveRoutine, AlarmSettings, UUID } from '@domain';
+import { timestampMs, type ActiveRoutine, type AlarmSettings, type UUID } from '@domain';
 
 import {
   markRoutineAlarmFired,
@@ -149,8 +149,8 @@ export class RoutineAlarmService implements RoutineAlarmServiceApi {
         reason: 'not-due',
       };
     }
-    const nowMs = new Date(at instanceof Date ? at.getTime() : at).getTime();
-    const deadlineMs = new Date(timing.deadlineAt).getTime() - this.leadTimeMs;
+    const nowMs = timestampMs(at);
+    const deadlineMs = timestampMs(timing.deadlineAt) - this.leadTimeMs;
     if (nowMs < deadlineMs) {
       return { activeRoutine, stepId, fired: false, played: false, reason: 'not-due' };
     }
