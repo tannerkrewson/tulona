@@ -2,6 +2,7 @@ import {
   BackupRepository,
   DatasetManager,
   AsyncStorageDatabase,
+  datasetKey,
   type AsyncStorageLike,
 } from '../src/data';
 import type { CatalogCollection, AppSettings, Transition } from '../src/domain';
@@ -86,12 +87,14 @@ function assert(condition: unknown, message: string): asserts condition {
 
 class MemoryStorage implements AsyncStorageLike {
   readonly values = new Map<string, string>();
+  failOnKey: string | null = null;
 
   async getItem(key: string): Promise<string | null> {
     return this.values.get(key) ?? null;
   }
 
   async setItem(key: string, value: string): Promise<void> {
+    if (this.failOnKey === key) throw new Error(`write unavailable for ${key}`);
     this.values.set(key, value);
   }
 
@@ -277,15 +280,10 @@ async function backupChecks(): Promise<void> {
     );
   }
   const metadataBeforeFailedWrite = await database.read('tulona:metadata');
-  const failingReplacement = new DatasetReplacementService(database, manager, {
-    read: (namespace) => repository.read(namespace),
-    write: async () => {
-      throw new Error('simulated replacement write failure');
-    },
-    verify: (namespace, expected) => repository.verify(namespace, expected),
-  });
+  const currentDataBeforeFailedWrite = await repository.read(oldNamespace);
+  storage.failOnKey = datasetKey(ids.newDataset, 'settings');
   try {
-    await failingReplacement.replaceCurrentData(serializeBackup(backup), {
+    await replacement.replaceCurrentData(serializeBackup(backup), {
       datasetId: ids.newDataset,
     });
     throw new Error('failed replacement should fail');
@@ -294,10 +292,30 @@ async function backupChecks(): Promise<void> {
       (await database.read('tulona:metadata')) === metadataBeforeFailedWrite,
       'failed replacement must not mutate active metadata'
     );
+    assert(
+      JSON.stringify(await repository.read(oldNamespace)) ===
+        JSON.stringify(currentDataBeforeFailedWrite),
+      'failed replacement must preserve the current dataset contents'
+    );
   }
-  const result = await replacement.replaceCurrentData(serializeBackup(backup), {
+  storage.failOnKey = null;
+  let verifiedBeforeActivation = false;
+  const verifyingReplacement = new DatasetReplacementService(database, manager, {
+    read: (namespace) => repository.read(namespace),
+    write: (namespace, snapshot) => repository.write(namespace, snapshot),
+    verify: async (namespace, expected) => {
+      assert(
+        (await manager.active())?.datasetId === ids.oldDataset,
+        'replacement must verify the target before activating it'
+      );
+      verifiedBeforeActivation = true;
+      await repository.verify(namespace, expected);
+    },
+  });
+  const result = await verifyingReplacement.replaceCurrentData(serializeBackup(backup), {
     datasetId: ids.newDataset,
   });
+  assert(verifiedBeforeActivation, 'replacement must perform repository verification');
   assert(result.previousDatasetId === ids.oldDataset, 'replacement reports prior dataset');
   assert(
     (await manager.active())?.datasetId === ids.newDataset,
