@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "tulona",
+  "project_id": "8ed88096-d97b-4edf-8301-40c5836f23f5"
+}
