@@ -3,8 +3,11 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  dateForLogicalDay,
   formatDuration,
   logicalDayBounds,
+  logicalDayKey,
+  shiftLogicalDay,
   toTimestamp,
   type CatalogCollection,
   type TimeInterval,
@@ -26,22 +29,23 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function dayDate(day: string): Date {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
-  if (!match) return new Date();
-  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12);
+function dayDate(day: string, rolloverHour: number): Date {
+  return dateForLogicalDay(day as import('@domain').LogicalDayKey, rolloverHour);
 }
 
-function validDay(value: string | string[] | undefined): string {
+function validDay(value: string | string[] | undefined): import('@domain').LogicalDayKey | null {
   const candidate = Array.isArray(value) ? value[0] : value;
-  if (candidate && /^\d{4}-\d{2}-\d{2}$/.test(candidate)) return candidate;
-  return logicalDayBounds(Date.now()).key;
+  return candidate && /^\d{4}-\d{2}-\d{2}$/.test(candidate)
+    ? (candidate as import('@domain').LogicalDayKey)
+    : null;
 }
 
-function shiftDay(day: string, amount: number): string {
-  const next = dayDate(day);
-  next.setDate(next.getDate() + amount);
-  return logicalDayBounds(next).key;
+function shiftDay(
+  day: import('@domain').LogicalDayKey,
+  amount: number,
+  rolloverHour: number
+): import('@domain').LogicalDayKey {
+  return shiftLogicalDay(day, amount, { rolloverHour });
 }
 
 function localInputValue(timestamp: string): string {
@@ -59,8 +63,12 @@ function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function formatDate(day: string): string {
-  return dayDate(day).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+function formatDate(day: string, rolloverHour: number): string {
+  return dayDate(day, rolloverHour).toLocaleDateString([], {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
 }
 
 function catalogName(catalog: CatalogCollection, transition: TimeTransition | null): string {
@@ -102,7 +110,8 @@ export default function HistoryScreen() {
   const params = useLocalSearchParams<{ day?: string }>();
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [day, setDay] = useState(() => validDay(params.day));
+  const [selectedDay, setSelectedDay] = useState(() => validDay(params.day));
+  const [fallbackTimestamp] = useState(() => Date.now());
 
   const load = useCallback(() => {
     setLoadError(null);
@@ -137,20 +146,33 @@ export default function HistoryScreen() {
     );
   }
 
-  return <HistoryDay key={day} day={day} onChangeDay={setDay} runtime={runtime} />;
+  const day =
+    selectedDay ??
+    logicalDayKey(fallbackTimestamp, { rolloverHour: runtime.settings.logicalDayRolloverHour });
+  return (
+    <HistoryDay
+      key={day}
+      day={day}
+      onChangeDay={setSelectedDay}
+      rolloverHour={runtime.settings.logicalDayRolloverHour}
+      runtime={runtime}
+    />
+  );
 }
 
 function HistoryDay({
   runtime,
   day,
   onChangeDay,
+  rolloverHour,
 }: {
   runtime: RoutineRuntime;
   day: string;
-  onChangeDay: (day: string) => void;
+  onChangeDay: (day: import('@domain').LogicalDayKey) => void;
+  rolloverHour: number;
 }) {
   const { colors } = useAppTheme();
-  const bounds = logicalDayBounds(dayDate(day));
+  const bounds = logicalDayBounds(day, { rolloverHour });
   const [store] = useState(() =>
     createTrackerStore(runtime.trackerService, {
       initialRange: { startMs: bounds.startMs, endMs: bounds.endMs },
@@ -284,20 +306,20 @@ function HistoryDay({
           <Button
             disabled={busy}
             label="Previous day"
-            onPress={() => onChangeDay(shiftDay(day, -1))}
+            onPress={() => onChangeDay(shiftDay(day, -1, rolloverHour))}
             testID="history-previous-day"
             variant="outlined"
           />
           <Column alignment="center" spacing={2} style={{ width: '100%' }}>
             <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>
-              {formatDate(day)}
+              {formatDate(day, rolloverHour)}
             </Text>
             <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>{day}</Text>
           </Column>
           <Button
             disabled={busy || futureDay}
             label="Next day"
-            onPress={() => onChangeDay(shiftDay(day, 1))}
+            onPress={() => onChangeDay(shiftDay(day, 1, rolloverHour))}
             testID="history-next-day"
             variant="outlined"
           />

@@ -154,6 +154,13 @@ export default function RoutineCatalogScreen() {
   async function startRoutine(routine: RoutineDefinition): Promise<void> {
     try {
       const runtime = await loadRoutineRuntime();
+      if (runtime.settings.alarmSettings.enabled && runtime.settings.alarmSettings.sound) {
+        try {
+          await runtime.routineAlarmService.prepare();
+        } catch {
+          // Alarm playback remains best-effort; the routine can still start.
+        }
+      }
       const started = await runtime.routineService.startRoutine(routine.id);
       router.push(`/routine/${started.routineId}`);
     } catch (startError) {

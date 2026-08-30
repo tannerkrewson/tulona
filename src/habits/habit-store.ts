@@ -10,6 +10,8 @@ import type { CreateHabitInput, HabitServiceApi, UpdateHabitInput } from './habi
 export interface HabitStoreOptions {
   now?: () => Date | number | string;
   catalogService?: Pick<CatalogServiceApi, 'read'>;
+  logicalDayRolloverHour?: number;
+  weekStartsOn?: number;
 }
 
 export interface HabitStoreState {
@@ -17,6 +19,8 @@ export interface HabitStoreState {
   states: HabitDayState[];
   catalog: CatalogCollection | null;
   today: LogicalDayKey;
+  logicalDayRolloverHour: number;
+  weekStartsOn: number;
   loading: boolean;
   saving: boolean;
   persistenceError: PersistenceError | null;
@@ -52,25 +56,35 @@ function errorFrom(error: unknown): PersistenceError {
       );
 }
 
-function dayFor(value: Date | number | string): LogicalDayKey {
-  return logicalDayKey(value);
+function dayFor(value: Date | number | string, rolloverHour: number): LogicalDayKey {
+  return logicalDayKey(value, { rolloverHour });
 }
 
-function historyStart(habits: readonly Habit[], today: LogicalDayKey): LogicalDayKey {
-  const createdDays = habits.map((habit) => dayFor(habit.createdAt)).filter((day) => day <= today);
+function historyStart(
+  habits: readonly Habit[],
+  today: LogicalDayKey,
+  rolloverHour: number
+): LogicalDayKey {
+  const createdDays = habits
+    .map((habit) => dayFor(habit.createdAt, rolloverHour))
+    .filter((day) => day <= today);
   return createdDays.sort()[0] ?? today;
 }
 
 /** Feature state only; durable habit state remains owned by HabitService. */
 export function createHabitStore(service: HabitServiceApi, options: HabitStoreOptions = {}) {
   const now = options.now ?? (() => Date.now());
+  const logicalDayRolloverHour = options.logicalDayRolloverHour ?? 0;
+  const weekStartsOn = options.weekStartsOn ?? 0;
 
   return create<HabitStoreState>((set, get) => {
     const readSnapshot = async (): Promise<HabitStoreSnapshot> => {
       const habits = await service.read();
-      const today = dayFor(now());
+      const today = dayFor(now(), logicalDayRolloverHour);
       const states =
-        habits.length === 0 ? [] : await service.readStates(historyStart(habits, today), today);
+        habits.length === 0
+          ? []
+          : await service.readStates(historyStart(habits, today, logicalDayRolloverHour), today);
       const catalog = options.catalogService ? await options.catalogService.read() : null;
       return { habits, states, catalog, today };
     };
@@ -93,7 +107,9 @@ export function createHabitStore(service: HabitServiceApi, options: HabitStoreOp
       habits: [],
       states: [],
       catalog: null,
-      today: dayFor(now()),
+      today: dayFor(now(), logicalDayRolloverHour),
+      logicalDayRolloverHour,
+      weekStartsOn,
       loading: false,
       saving: false,
       persistenceError: null,

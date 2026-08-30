@@ -16,6 +16,25 @@ export default function RootHtml({ children }: { children: ReactNode }) {
         <link rel="manifest" href={basePathAsset('manifest.json')} />
         <link rel="icon" href={basePathAsset('favicon.png')} />
         <link rel="apple-touch-icon" href={basePathAsset('icons/apple-touch-icon.png')} />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (() => {
+                const path = window.location.pathname;
+                if (!path.endsWith('.html')) return;
+                const withoutExtension = path.slice(0, -'.html'.length);
+                const normalizedPath = withoutExtension.endsWith('/index')
+                  ? withoutExtension.slice(0, -'/index'.length) || '/'
+                  : withoutExtension;
+                window.history.replaceState(
+                  null,
+                  '',
+                  normalizedPath + window.location.search + window.location.hash
+                );
+              })();
+            `,
+          }}
+        />
         <style>{`
           .skip-link {
             position: absolute;
@@ -38,13 +57,11 @@ export default function RootHtml({ children }: { children: ReactNode }) {
         `}</style>
         <ScrollViewStyleReset />
       </head>
-      <body>
-        <a className="skip-link" href="#main-content">
+      <body style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <a className="skip-link" href="#root">
           Skip to main content
         </a>
-        <main id="main-content" tabIndex={-1}>
-          {children}
-        </main>
+        {children}
       </body>
     </html>
   );

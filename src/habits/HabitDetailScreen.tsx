@@ -2,7 +2,13 @@ import { Button, Column, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 
-import type { CatalogCollection, Habit, HabitDayState, LogicalDayKey } from '@domain';
+import {
+  shiftLogicalDay,
+  type CatalogCollection,
+  type Habit,
+  type HabitDayState,
+  type LogicalDayKey,
+} from '@domain';
 import { AppIcon, normalizeIconName } from '@icons';
 import { useAppTheme } from '@theme';
 import { Screen } from '@ui';
@@ -18,17 +24,10 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function recentDays(end: LogicalDayKey, count: number): LogicalDayKey[] {
-  const [year, month, day] = end.split('-').map(Number);
-  const cursor = new Date(year, month - 1, day, 12, 0, 0, 0);
-  const result: LogicalDayKey[] = [];
-  for (let index = 0; index < count; index += 1) {
-    result.unshift(
-      `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}` as LogicalDayKey
-    );
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return result;
+function recentDays(end: LogicalDayKey, count: number, rolloverHour: number): LogicalDayKey[] {
+  return Array.from({ length: count }, (_, index) =>
+    shiftLogicalDay(end, index - count + 1, { rolloverHour })
+  );
 }
 
 function triggerName(habit: Habit, catalog: CatalogCollection | null): string | null {
@@ -106,6 +105,8 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
   const habit = store((state) => state.habits.find((candidate) => candidate.id === id));
   const states = store((state) => state.states);
   const today = store((state) => state.today);
+  const logicalDayRolloverHour = store((state) => state.logicalDayRolloverHour);
+  const weekStartsOn = store((state) => state.weekStartsOn);
   const catalog = store((state) => state.catalog);
   const busy = store((state) => state.saving);
   const persistenceError = store((state) => state.persistenceError);
@@ -120,7 +121,11 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
 
   const habitStates = states.filter((state) => state.habitId === habit.id);
   const currentState = habitStates.find((state) => state.logicalDay === today) ?? null;
-  const streak = calculateHabitStreak(habit, habitStates, { now: today });
+  const streak = calculateHabitStreak(habit, habitStates, {
+    now: today,
+    rolloverHour: logicalDayRolloverHour,
+    weekStartsOn,
+  });
   const unit = habit.schedule.kind === 'weekly-count' ? 'week' : 'day';
   const archived = habit.archivedAt !== null;
 
@@ -243,7 +248,12 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
           <StatCard label={`Longest streak (${unit}s)`} value={String(streak.longest)} />
         </Row>
 
-        <HistoryGrid habit={habit} states={habitStates} today={today} />
+        <HistoryGrid
+          habit={habit}
+          logicalDayRolloverHour={logicalDayRolloverHour}
+          states={habitStates}
+          today={today}
+        />
 
         <Button
           disabled={busy}
@@ -282,13 +292,15 @@ function HistoryGrid({
   habit,
   states,
   today,
+  logicalDayRolloverHour,
 }: {
   habit: Habit;
   states: readonly HabitDayState[];
   today: LogicalDayKey;
+  logicalDayRolloverHour: number;
 }) {
   const { colors } = useAppTheme();
-  const days = recentDays(today, 28);
+  const days = recentDays(today, 28, logicalDayRolloverHour);
   const stateForDay = (day: LogicalDayKey) =>
     states.find((state) => state.logicalDay === day) ?? null;
 
@@ -318,7 +330,9 @@ function HistoryGrid({
           {days.slice(week * 7, week * 7 + 7).map((day) => {
             const state = stateForDay(day);
             const complete = state?.manual === true || state?.automatic === true;
-            const scheduled = isHabitScheduledDay(habit.schedule, day);
+            const scheduled = isHabitScheduledDay(habit.schedule, day, {
+              rolloverHour: logicalDayRolloverHour,
+            });
             return (
               <Column
                 alignment="center"

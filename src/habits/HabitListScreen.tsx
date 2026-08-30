@@ -78,6 +78,8 @@ function HabitListContent({ store }: { store: HabitStore }) {
   const habits = store((state) => state.habits);
   const states = store((state) => state.states);
   const today = store((state) => state.today);
+  const logicalDayRolloverHour = store((state) => state.logicalDayRolloverHour);
+  const weekStartsOn = store((state) => state.weekStartsOn);
   const saving = store((state) => state.saving);
   const persistenceError = store((state) => state.persistenceError);
   const activeHabits = habits
@@ -116,6 +118,8 @@ function HabitListContent({ store }: { store: HabitStore }) {
               )}
               states={states.filter((candidate) => candidate.habitId === habit.id)}
               today={today}
+              logicalDayRolloverHour={logicalDayRolloverHour}
+              weekStartsOn={weekStartsOn}
               onDetails={() => router.push(`/habit/${habit.id}`)}
               onToggle={async () => {
                 try {
@@ -143,6 +147,8 @@ function HabitListItem({
   states,
   today,
   saving,
+  logicalDayRolloverHour,
+  weekStartsOn,
   onToggle,
   onDetails,
 }: {
@@ -151,13 +157,19 @@ function HabitListItem({
   states: HabitDayState[];
   today: HabitDayState['logicalDay'];
   saving: boolean;
+  logicalDayRolloverHour: number;
+  weekStartsOn: number;
   onToggle: () => Promise<void>;
   onDetails: () => void;
 }) {
   const { colors } = useAppTheme();
   const complete = state?.manual === true || state?.automatic === true;
   const accent = habit.color ?? colors.primary;
-  const streak = calculateHabitStreak(habit, states, { now: today });
+  const streak = calculateHabitStreak(habit, states, {
+    now: today,
+    rolloverHour: logicalDayRolloverHour,
+    weekStartsOn,
+  });
   const streakUnit = habit.schedule.kind === 'weekly-count' ? 'week' : 'day';
   const manualMarked = state?.manual === true;
   const toggleLabel = manualMarked ? 'Clear manual mark' : 'Mark complete manually';

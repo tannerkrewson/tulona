@@ -1,4 +1,10 @@
-import { logicalDayKey, type HabitSchedule, type LogicalDayKey } from '@domain';
+import {
+  dateForLogicalDay,
+  logicalDayKey,
+  shiftLogicalDay as shiftLogicalDayValue,
+  type HabitSchedule,
+  type LogicalDayKey,
+} from '@domain';
 
 export type HabitDateInput = Date | number | string;
 
@@ -53,18 +59,7 @@ function parseLogicalDay(value: string): ParsedLogicalDay {
 }
 
 function logicalDayToDate(value: LogicalDayKey, rolloverHour: number): Date {
-  const parsed = parseLogicalDay(value);
-  const date = new Date(parsed.year, parsed.month - 1, parsed.day, rolloverHour, 0, 0, 0);
-  if (date.getFullYear() !== parsed.year || date.getMonth() !== parsed.month - 1) {
-    throw new RangeError(`Logical day cannot be represented locally: "${value}"`);
-  }
-  return date;
-}
-
-function dateKey(value: Date): LogicalDayKey {
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(
-    value.getDate()
-  ).padStart(2, '0')}` as LogicalDayKey;
+  return dateForLogicalDay(value, rolloverHour);
 }
 
 function inputToLogicalDay(value: HabitDateInput, rolloverHour: number): LogicalDayKey {
@@ -76,9 +71,7 @@ function inputToLogicalDay(value: HabitDateInput, rolloverHour: number): Logical
 }
 
 function shiftLogicalDay(value: LogicalDayKey, days: number, rolloverHour: number): LogicalDayKey {
-  const date = logicalDayToDate(value, rolloverHour);
-  date.setDate(date.getDate() + days);
-  return dateKey(date);
+  return shiftLogicalDayValue(value, days, { rolloverHour });
 }
 
 function dayDifference(start: LogicalDayKey, end: LogicalDayKey): number {

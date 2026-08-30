@@ -50,6 +50,38 @@ function validateRolloverHour(rolloverHour: number): void {
   }
 }
 
+function parseLogicalDay(value: string): { year: number; month: number; day: number } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) throw new RangeError(`Invalid logical day "${value}"`);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() !== month - 1 ||
+    check.getUTCDate() !== day
+  ) {
+    throw new RangeError(`Invalid logical day "${value}"`);
+  }
+  return { year, month, day };
+}
+
+/** Returns the local timestamp at the start of a logical day. */
+export function dateForLogicalDay(value: LogicalDayKey, rolloverHour = 0): Date {
+  validateRolloverHour(rolloverHour);
+  const parsed = parseLogicalDay(value);
+  const date = new Date(parsed.year, parsed.month - 1, parsed.day, rolloverHour, 0, 0, 0);
+  if (
+    date.getFullYear() !== parsed.year ||
+    date.getMonth() !== parsed.month - 1 ||
+    date.getDate() !== parsed.day
+  ) {
+    throw new RangeError(`Logical day cannot be represented locally: "${value}"`);
+  }
+  return date;
+}
+
 function localDateForLogicalDay(value: Date | number | string, rolloverHour: number): Date {
   const date = new Date(timestampMs(value));
   if (date.getHours() < rolloverHour) {
@@ -71,6 +103,9 @@ export function logicalDayKey(
 ): LogicalDayKey {
   const rolloverHour = options.rolloverHour ?? 0;
   validateRolloverHour(rolloverHour);
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return dateKey(dateForLogicalDay(value as LogicalDayKey, rolloverHour));
+  }
   return dateKey(localDateForLogicalDay(value, rolloverHour));
 }
 
@@ -80,12 +115,28 @@ export function logicalDayBounds(
 ): LogicalDayBounds {
   const rolloverHour = options.rolloverHour ?? 0;
   validateRolloverHour(rolloverHour);
-  const logicalDate = localDateForLogicalDay(value, rolloverHour);
+  const logicalDate =
+    typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? dateForLogicalDay(value as LogicalDayKey, rolloverHour)
+      : localDateForLogicalDay(value, rolloverHour);
   const start = new Date(logicalDate);
   start.setHours(rolloverHour, 0, 0, 0);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
   return { key: dateKey(logicalDate), startMs: start.getTime(), endMs: end.getTime() };
+}
+
+/** Shifts a logical-day key while retaining local timezone and rollover rules. */
+export function shiftLogicalDay(
+  value: LogicalDayKey,
+  amount: number,
+  options: LogicalDayOptions = {}
+): LogicalDayKey {
+  if (!Number.isInteger(amount)) throw new RangeError('Logical-day shift must be an integer');
+  const rolloverHour = options.rolloverHour ?? 0;
+  const date = dateForLogicalDay(value, rolloverHour);
+  date.setDate(date.getDate() + amount);
+  return dateKey(date);
 }
 
 export function weekBounds(
@@ -240,5 +291,6 @@ export function materializeIntervals(
 export const getLogicalDayKey = logicalDayKey;
 export const getLogicalDayBounds = logicalDayBounds;
 export const getWeekBounds = weekBounds;
+export const shiftLogicalDayKey = shiftLogicalDay;
 export const formatDurationMs = formatDuration;
 export const formatCountdownMs = formatCountdown;

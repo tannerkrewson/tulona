@@ -132,8 +132,13 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
       recovering.current = true;
       void runtime.routineService
         .recover()
-        .then((next) => {
-          if (next) routeRecovered(next);
+        .then(async (next) => {
+          if (!next || !routeRecovered(next)) return;
+          const alarm = await runtime.routineAlarmService.foregroundResume(next, Date.now());
+          if (alarm.fired && alarm.stepId) {
+            const persisted = await runtime.routineService.markAlarmFired(alarm.stepId);
+            if (persisted.routineId === routineId) setActive(persisted);
+          }
         })
         .catch((error: unknown) => setActionError(errorText(error)))
         .finally(() => {
@@ -141,7 +146,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
         });
     }, 1000);
     return () => clearInterval(timer);
-  }, [runtime, busy, routeRecovered]);
+  }, [runtime, busy, routeRecovered, routineId]);
 
   const runAction = async (
     action: (nextRuntime: RoutineRuntime) => Promise<ActiveRoutine | void>,
@@ -151,6 +156,13 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     setBusy(true);
     setActionError(null);
     try {
+      if (runtime.settings.alarmSettings.enabled && runtime.settings.alarmSettings.sound) {
+        try {
+          await runtime.routineAlarmService.prepare();
+        } catch (alarmError) {
+          setActionError(`Routine alarm could not be prepared: ${errorText(alarmError)}`);
+        }
+      }
       const result = await action(runtime);
       if (result) {
         if (result.status === 'awaiting-next-activity') {
