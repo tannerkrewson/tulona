@@ -8,6 +8,7 @@ import {
 } from '@data';
 
 import { createCatalogService, type CatalogService } from '../catalog/catalog-service';
+import { createSettingsService, type SettingsService } from '../settings/settings-service';
 import { createReportingService, type ReportingService } from './reporting-service';
 import { createTrackerService, type TrackerService } from '../tracker/tracker-service';
 
@@ -18,6 +19,8 @@ export interface ReportingRuntime {
   reportingService: ReportingService;
   catalogService: CatalogService;
   trackerService: TrackerService;
+  settingsService: SettingsService;
+  settings: Awaited<ReturnType<SettingsService['read']>>;
 }
 
 export async function loadReportingRuntime(): Promise<ReportingRuntime> {
@@ -25,11 +28,12 @@ export async function loadReportingRuntime(): Promise<ReportingRuntime> {
   if (!namespace) throw new PersistenceError('metadata', 'Create or activate a dataset first');
   const catalogService = createCatalogService(createCatalogRepository(database, namespace));
   const trackerService = createTrackerService(createTrackerRepository(database, namespace));
-  const settingsRepository = createSettingsRepository(database, namespace);
+  const settingsService = createSettingsService(createSettingsRepository(database, namespace));
+  const settings = await settingsService.read();
   const reportingService = createReportingService({
     tracker: trackerService,
     catalog: catalogService,
-    settings: settingsRepository,
+    settings: settingsService,
   });
-  return { reportingService, catalogService, trackerService };
+  return { reportingService, catalogService, trackerService, settingsService, settings };
 }

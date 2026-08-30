@@ -99,7 +99,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
   const loading = store((state) => state.loading);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
+  const [showArchived, setShowArchived] = useState(runtime.settings.showArchived);
   const [lastAction, setLastAction] = useState<(() => Promise<void>) | null>(null);
 
   useFocusEffect(
@@ -158,6 +158,13 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
     void runAction(async () => {
       if (activeTransition?.activityId === item.id) return;
       if (item.kind === 'routine') {
+        if (runtime.settings.alarmSettings.enabled && runtime.settings.alarmSettings.sound) {
+          try {
+            await runtime.routineAlarmService.prepare();
+          } catch {
+            // Alarm playback remains best-effort; the routine can still start.
+          }
+        }
         const started = await runtime.routineService.startRoutine(item.id);
         await store.getState().refresh();
         router.push(`/routine/${started.routineId}`);

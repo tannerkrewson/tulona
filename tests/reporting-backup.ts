@@ -5,6 +5,7 @@ import {
   type AsyncStorageLike,
 } from '../src/data';
 import type { CatalogCollection, AppSettings, Transition } from '../src/domain';
+import { logicalDayBounds } from '../src/domain';
 import {
   BACKUP_FORMAT,
   BackupMigrationRegistry,
@@ -116,6 +117,10 @@ function transition(id: string, activityId: string | null, value: string): Trans
   };
 }
 
+function localTimestamp(day: number, hour: number): number {
+  return new Date(2026, 7, day, hour, 0, 0, 0).getTime();
+}
+
 function backupDocument(): LifeTrackerBackup {
   return {
     format: BACKUP_FORMAT,
@@ -137,14 +142,14 @@ function backupDocument(): LifeTrackerBackup {
 async function reportingChecks(): Promise<void> {
   const dayIntervals = [
     {
-      startMs: Date.parse('2026-08-29T23:00:00.000Z'),
-      endMs: Date.parse('2026-08-30T04:00:00.000Z'),
+      startMs: localTimestamp(29, 23),
+      endMs: localTimestamp(30, 4),
       activityId: ids.activity,
       transitionId: '66666666-6666-4666-8666-666666666666',
     },
     {
-      startMs: Date.parse('2026-08-30T04:00:00.000Z'),
-      endMs: Date.parse('2026-08-30T05:00:00.000Z'),
+      startMs: localTimestamp(30, 4),
+      endMs: localTimestamp(30, 5),
       activityId: ids.root,
       transitionId: '77777777-7777-4777-8777-777777777777',
     },
@@ -166,18 +171,21 @@ async function reportingChecks(): Promise<void> {
         activeTransition: transition(
           '88888888-8888-4888-8888-888888888888',
           ids.root,
-          '2026-08-30T05:00:00.000Z'
+          new Date(localTimestamp(30, 5)).toISOString()
         ),
       }),
     },
     settings: { read: async () => settings },
   };
   const service = createReportingService(dependencies, {
-    now: () => Date.parse('2026-08-30T05:00:00.000Z'),
+    now: () => localTimestamp(30, 5),
   });
   const report = await service.day('2026-08-30');
+  const expectedRange = logicalDayBounds('2026-08-30', { rolloverHour: 3 });
   assert(
-    report.totalMs === 2 * 60 * 60 * 1000,
+    report.totalMs === 2 * 60 * 60 * 1000 &&
+      report.range.startMs === expectedRange.startMs &&
+      report.range.endMs === expectedRange.endMs,
     'daily report must clip intervals at both boundaries'
   );
   assert(report.activities[0]?.name === 'Deep, "work"', 'archived activity name must resolve');

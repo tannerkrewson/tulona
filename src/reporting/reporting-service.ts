@@ -1,7 +1,9 @@
 import {
   formatDuration,
+  dateForLogicalDay,
   logicalDayBounds,
   logicalDayKey,
+  shiftLogicalDay,
   timestampMs,
   weekBounds,
   type AppSettings,
@@ -12,7 +14,7 @@ import {
   type UUID,
 } from '@domain';
 
-import type { SettingsRepositoryApi } from '@data/settings-repository';
+import type { SettingsServiceApi } from '../settings/settings-service';
 import {
   resolveCatalogItem,
   type CatalogServiceApi,
@@ -100,34 +102,7 @@ export interface ReportingServiceApi {
 export interface ReportingDependencies {
   tracker: Pick<TrackerServiceApi, 'query'>;
   catalog: Pick<CatalogServiceApi, 'read'>;
-  settings?: Pick<SettingsRepositoryApi, 'read'>;
-}
-
-function validateLogicalDay(value: string): asserts value is LogicalDayKey {
-  if (!/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value)) {
-    throw new RangeError(`Invalid logical day "${value}"`);
-  }
-  const [year, month, day] = value.split('-').map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  ) {
-    throw new RangeError(`Invalid logical day "${value}"`);
-  }
-}
-
-function dateForLogicalDay(day: LogicalDayKey, rolloverHour: number): Date {
-  validateLogicalDay(day);
-  const [year, month, date] = day.split('-').map(Number);
-  return new Date(year, month - 1, date, rolloverHour, 0, 0, 0);
-}
-
-function shiftDay(day: LogicalDayKey, amount: number): LogicalDayKey {
-  const date = dateForLogicalDay(day, 0);
-  date.setDate(date.getDate() + amount);
-  return logicalDayKey(date);
+  settings?: Pick<SettingsServiceApi, 'read'>;
 }
 
 function settingsWithDefaults(
@@ -315,7 +290,9 @@ export class ReportingService implements ReportingServiceApi {
       rolloverHour: settings.logicalDayRolloverHour,
     });
     const first = bounds.start.key;
-    const days = Array.from({ length: 7 }, (_, index) => shiftDay(first, index));
+    const days = Array.from({ length: 7 }, (_, index) =>
+      shiftLogicalDay(first, index, { rolloverHour: settings.logicalDayRolloverHour })
+    );
     const reports = await Promise.all(days.map((day) => this.day(day, nowMs)));
     const firstReport = reports[0];
     const lastReport = reports[reports.length - 1];

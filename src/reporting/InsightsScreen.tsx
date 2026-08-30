@@ -2,7 +2,13 @@ import { Button, Column, Row, Text } from '@expo/ui';
 import { useIsFocused } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 
-import { formatDuration, logicalDayKey, type LogicalDayKey } from '@domain';
+import {
+  dateForLogicalDay,
+  formatDuration,
+  logicalDayKey,
+  shiftLogicalDay,
+  type LogicalDayKey,
+} from '@domain';
 import { useAppTheme } from '@theme';
 import { Screen } from '@ui';
 
@@ -16,14 +22,11 @@ function errorText(error: unknown): string {
 }
 
 function dayDate(day: LogicalDayKey): Date {
-  const [year, month, date] = day.split('-').map(Number);
-  return new Date(year, month - 1, date, 12);
+  return dateForLogicalDay(day);
 }
 
-function shiftDay(day: LogicalDayKey, amount: number): LogicalDayKey {
-  const date = dayDate(day);
-  date.setDate(date.getDate() + amount);
-  return logicalDayKey(date);
+function shiftDay(day: LogicalDayKey, amount: number, rolloverHour: number): LogicalDayKey {
+  return shiftLogicalDay(day, amount, { rolloverHour });
 }
 
 function readableDay(day: LogicalDayKey): string {
@@ -220,6 +223,7 @@ function InsightsContent({
   initialDay: LogicalDayKey;
 }) {
   const { colors } = useAppTheme();
+  const rolloverHour = runtime.settings.logicalDayRolloverHour;
   const [day, setDay] = useState(initialDay);
   const [view, setView] = useState<ReportView>('day');
   const [report, setReport] = useState<DailyReport | null>(null);
@@ -252,7 +256,7 @@ function InsightsContent({
         <Row alignment="center" spacing={8} style={{ width: '100%' }}>
           <Button
             label="Previous"
-            onPress={() => setDay(shiftDay(day, view === 'day' ? -1 : -7))}
+            onPress={() => setDay(shiftDay(day, view === 'day' ? -1 : -7, rolloverHour))}
             testID="insights-previous"
           />
           <Button
@@ -267,7 +271,7 @@ function InsightsContent({
           />
           <Button
             label="Next"
-            onPress={() => setDay(shiftDay(day, view === 'day' ? 1 : 7))}
+            onPress={() => setDay(shiftDay(day, view === 'day' ? 1 : 7, rolloverHour))}
             testID="insights-next"
           />
         </Row>
