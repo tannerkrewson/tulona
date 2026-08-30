@@ -1,11 +1,8 @@
-import { PlaceholderScreen } from '@ui';
+import { useLocalSearchParams } from 'expo-router';
+
+import { CatalogEditorScreen } from '../../src/catalog';
 
 export default function FolderEditScreen() {
-  return (
-    <PlaceholderScreen
-      title="Edit folder"
-      iconName="folder"
-      description="Folder editing will appear here."
-    />
-  );
+  const { folderId } = useLocalSearchParams<{ folderId: string }>();
+  return <CatalogEditorScreen kind="folder" id={folderId} />;
 }
