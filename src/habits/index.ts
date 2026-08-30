@@ -1,4 +1,5 @@
 export * from './habit-service';
+export * from './habit-format';
 export * from './reconciliation';
 export * from './schedule';
 export * from './streak';
