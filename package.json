@@ -10,7 +10,12 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "format": "prettier --check ."
+    "format": "prettier --check .",
+    "web:export": "expo export --platform web --output-dir dist && node scripts/prepare-static-site.cjs",
+    "pwa:generate": "workbox generateSW workbox.config.cjs",
+    "pwa:validate": "node scripts/validate-pwa-build.cjs",
+    "web:build": "npm run web:export && npm run pwa:generate && npm run pwa:validate",
+    "deploy": "npm run web:build && gh-pages --dist dist --nojekyll"
   },
   "dependencies": {
     "@expo/ui": "~57.0.14",
