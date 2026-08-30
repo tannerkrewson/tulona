@@ -275,6 +275,15 @@ async function run(): Promise<void> {
     },
   };
   const evaluator = new HabitTriggerEvaluator(tracker, { read: async () => catalog }, { now });
+  const rolloverEvaluation = await evaluator.evaluate(
+    { trigger: { kind: 'tracked-time', activityId: ids.activity } },
+    '2026-08-30',
+    { now: new Date(2026, 7, 30, 19, 0, 0).toISOString(), rolloverHour: 18 }
+  );
+  assert(
+    rolloverEvaluation.range.startMs === new Date(2026, 7, 30, 18, 0, 0).getTime(),
+    'habit trigger ranges preserve logical days when rollover is after noon'
+  );
   const reconciliation = new HabitReconciliationService(
     repository,
     evaluator,

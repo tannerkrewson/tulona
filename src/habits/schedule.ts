@@ -1,5 +1,6 @@
 import {
   dateForLogicalDay,
+  logicalDayDifference,
   logicalDayKey,
   shiftLogicalDay as shiftLogicalDayValue,
   type HabitSchedule,
@@ -29,33 +30,10 @@ export interface HabitSchedulePeriod {
   requiredCount: number;
 }
 
-interface ParsedLogicalDay {
-  year: number;
-  month: number;
-  day: number;
-}
-
 function validateWeekStartsOn(weekStartsOn: number): void {
   if (!Number.isInteger(weekStartsOn) || weekStartsOn < 0 || weekStartsOn > 6) {
     throw new RangeError('weekStartsOn must be an integer from 0 through 6');
   }
-}
-
-function parseLogicalDay(value: string): ParsedLogicalDay {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) throw new RangeError(`Invalid logical day "${value}"`);
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const check = new Date(Date.UTC(year, month - 1, day));
-  if (
-    check.getUTCFullYear() !== year ||
-    check.getUTCMonth() !== month - 1 ||
-    check.getUTCDate() !== day
-  ) {
-    throw new RangeError(`Invalid logical day "${value}"`);
-  }
-  return { year, month, day };
 }
 
 function logicalDayToDate(value: LogicalDayKey, rolloverHour: number): Date {
@@ -64,7 +42,7 @@ function logicalDayToDate(value: LogicalDayKey, rolloverHour: number): Date {
 
 function inputToLogicalDay(value: HabitDateInput, rolloverHour: number): LogicalDayKey {
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    parseLogicalDay(value);
+    dateForLogicalDay(value as LogicalDayKey, rolloverHour);
     return value as LogicalDayKey;
   }
   return logicalDayKey(value, { rolloverHour });
@@ -72,16 +50,6 @@ function inputToLogicalDay(value: HabitDateInput, rolloverHour: number): Logical
 
 function shiftLogicalDay(value: LogicalDayKey, days: number, rolloverHour: number): LogicalDayKey {
   return shiftLogicalDayValue(value, days, { rolloverHour });
-}
-
-function dayDifference(start: LogicalDayKey, end: LogicalDayKey): number {
-  const left = parseLogicalDay(start);
-  const right = parseLogicalDay(end);
-  return (
-    (Date.UTC(right.year, right.month - 1, right.day) -
-      Date.UTC(left.year, left.month - 1, left.day)) /
-    (24 * 60 * 60 * 1000)
-  );
 }
 
 function weekStartFor(
@@ -162,7 +130,7 @@ export function isHabitScheduledDay(
       // A count schedule requires a successful week, not a particular weekday.
       return true;
     case 'interval': {
-      const difference = dayDifference(schedule.startDate, day);
+      const difference = logicalDayDifference(schedule.startDate, day);
       return difference >= 0 && difference % schedule.everyDays === 0;
     }
   }
@@ -174,7 +142,7 @@ function rangeDays(
 ): LogicalDayKey[] {
   const start = inputToLogicalDay(range.start, options.rolloverHour);
   const end = inputToLogicalDay(range.end, options.rolloverHour);
-  const count = dayDifference(start, end);
+  const count = logicalDayDifference(start, end);
   if (count < 0) throw new RangeError('Logical-day range end must not precede its start');
   return Array.from({ length: count + 1 }, (_, index) =>
     shiftLogicalDay(start, index, options.rolloverHour)
@@ -199,7 +167,7 @@ export function evaluateHabitSchedule(
     );
     const periods: HabitSchedulePeriod[] = [];
     let current = firstWeek;
-    while (dayDifference(current, lastWeek) >= 0) {
+    while (logicalDayDifference(current, lastWeek) >= 0) {
       periods.push({
         kind: 'week',
         start: current,

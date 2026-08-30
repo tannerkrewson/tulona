@@ -1,5 +1,6 @@
 import {
   logicalDayBounds,
+  timestampMs,
   type CatalogCollection,
   type Habit,
   type HabitTrigger,
@@ -101,22 +102,8 @@ export function evaluateHabitTrigger(
   };
 }
 
-function logicalDayDate(logicalDay: LogicalDayKey): Date {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(logicalDay);
-  if (!match) throw new RangeError(`Invalid logical day "${logicalDay}"`);
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0);
-  if (
-    date.getFullYear() !== Number(match[1]) ||
-    date.getMonth() !== Number(match[2]) - 1 ||
-    date.getDate() !== Number(match[3])
-  ) {
-    throw new RangeError(`Invalid logical day "${logicalDay}"`);
-  }
-  return date;
-}
-
 function nowMilliseconds(value: HabitDateInput | undefined): number {
-  const result = value === undefined ? Date.now() : new Date(value).getTime();
+  const result = timestampMs(value === undefined ? Date.now() : value);
   if (!Number.isFinite(result))
     throw new RangeError('Habit trigger evaluation time must be finite');
   return result;
@@ -134,10 +121,9 @@ export class HabitTriggerEvaluator {
     logicalDay: LogicalDayKey,
     options: HabitTriggerEvaluatorOptions = {}
   ): Promise<HabitTriggerEvaluation> {
+    const rolloverHour = options.rolloverHour ?? this.options.rolloverHour ?? 0;
+    const bounds = logicalDayBounds(logicalDay, { rolloverHour });
     if (!habit.trigger) {
-      const bounds = logicalDayBounds(logicalDayDate(logicalDay), {
-        rolloverHour: options.rolloverHour ?? this.options.rolloverHour ?? 0,
-      });
       return {
         complete: false,
         totalMs: 0,
@@ -146,8 +132,6 @@ export class HabitTriggerEvaluator {
         targetIds: [],
       };
     }
-    const rolloverHour = options.rolloverHour ?? this.options.rolloverHour ?? 0;
-    const bounds = logicalDayBounds(logicalDayDate(logicalDay), { rolloverHour });
     const nowMs = nowMilliseconds(options.now ?? this.options.now);
     const range = { startMs: bounds.startMs, endMs: bounds.endMs };
     const result: TrackerQuery = await this.tracker.query(range, nowMs);

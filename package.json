@@ -25,7 +25,6 @@
   "dependencies": {
     "@expo/ui": "~57.0.14",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "date-fns": "4.4.0",
     "expo": "~57.0.18",
     "expo-asset": "~57.0.15",
     "expo-audio": "~57.0.4",
@@ -33,7 +32,6 @@
     "expo-document-picker": "~57.0.1",
     "expo-linking": "~57.0.8",
     "expo-router": "~57.0.17",
-    "expo-status-bar": "~57.0.1",
     "lucide-react-native": "1.37.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -48,7 +46,6 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "@types/react-dom": "^19.2.0",
     "eslint": "^9.18.0",
     "eslint-config-expo": "~57.0.2",
     "gh-pages": "6.3.0",

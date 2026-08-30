@@ -67,6 +67,16 @@ function parseLogicalDay(value: string): { year: number; month: number; day: num
   return { year, month, day };
 }
 
+export function logicalDayDifference(start: LogicalDayKey, end: LogicalDayKey): number {
+  const left = parseLogicalDay(start);
+  const right = parseLogicalDay(end);
+  return (
+    (Date.UTC(right.year, right.month - 1, right.day) -
+      Date.UTC(left.year, left.month - 1, left.day)) /
+    (24 * 60 * 60 * 1000)
+  );
+}
+
 /** Returns the local timestamp at the start of a logical day. */
 export function dateForLogicalDay(value: LogicalDayKey, rolloverHour = 0): Date {
   validateRolloverHour(rolloverHour);
