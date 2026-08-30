@@ -23,6 +23,8 @@ npm run format
 npm start
 ```
 
+For Fedora Silverblue and Toolbox setup, see [`docs/development.md`](docs/development.md).
+
 ## Static Web Deployment
 
 The production web artifact is a static Expo export followed by conservative
