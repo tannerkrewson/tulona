@@ -641,15 +641,24 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
       </Screen>
     );
   }
+  const runRoutine = async (routineId: UUID) => {
+    const runtime = await loadRoutineRuntime();
+    await runtime.routineService.startRoutine(routineId);
+    router.push(`/routine/${routineId}`);
+  };
+  const refresh = () => {
+    setResource(null);
+    setVersion((current) => current + 1);
+  };
   return (
     <RoutineEditorForm
       key={`${id}-${version}`}
       initialFolderId={initialFolderId}
       resource={resource}
       onCancel={() => router.back()}
-      onChanged={() => setVersion((current) => current + 1)}
+      onChanged={refresh}
       onCreated={(routineId) => router.replace(`/routine-edit/${routineId}`)}
-      onRun={(routineId) => router.push(`/routine/${routineId}`)}
+      onRun={runRoutine}
     />
   );
 }
@@ -667,7 +676,7 @@ function RoutineEditorForm({
   onCancel: () => void;
   onChanged: () => void;
   onCreated: (routineId: UUID) => void;
-  onRun: (routineId: UUID) => void;
+  onRun: (routineId: UUID) => Promise<void>;
 }) {
   const { colors } = useAppTheme();
   const { service, catalog, routine } = resource;
@@ -759,6 +768,20 @@ function RoutineEditorForm({
       }
     } catch (actionError) {
       setError(errorText(actionError));
+    }
+  };
+
+  const startRoutine = async () => {
+    if (!routine) return;
+    lastAction.current = startRoutine;
+    setBusy(true);
+    setError(null);
+    try {
+      await onRun(routine.id);
+    } catch (actionError) {
+      setError(errorText(actionError));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -1004,7 +1027,7 @@ function RoutineEditorForm({
           <AppButton
             disabled={busy || routine.steps.length === 0}
             label="Run routine"
-            onPress={() => onRun(routine.id)}
+            onPress={() => void startRoutine()}
             style={{ height: 54, width: '100%' }}
             testID="run-routine"
           />

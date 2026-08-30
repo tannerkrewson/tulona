@@ -15,7 +15,7 @@ export function AccessibleTextInput({ label, testID, ...inputProps }: Accessible
         (candidate) => candidate.getAttribute('data-testid') === testID
       );
       if (!input) return false;
-      input.setAttribute('aria-label', label);
+      if (input.getAttribute('aria-label') !== label) input.setAttribute('aria-label', label);
       return true;
     };
     applyLabel();
