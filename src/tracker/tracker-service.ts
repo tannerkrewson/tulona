@@ -50,8 +50,22 @@ export interface HistoricalConfirmation {
 
 export type HistoricalConfirmationInput = HistoricalConfirmation | boolean;
 
+export type TrackerMutationKind =
+  'insert' | 'edit' | 'reassign' | 'adjust-latest' | 'delete' | 'merge';
+
+export interface TrackerMutation {
+  kind: TrackerMutationKind;
+  previous: TimeTransition | null;
+  current: TimeTransition | null;
+  /** Activities whose derived interval boundaries may have changed. */
+  affectedActivityIds?: UUID[];
+}
+
+export type TrackerMutationListener = (mutation: TrackerMutation) => Promise<unknown>;
+
 export interface TrackerServiceOptions {
   now?: () => TimestampInput;
+  onMutation?: TrackerMutationListener;
 }
 
 export interface TrackerServiceApi {
@@ -173,12 +187,14 @@ function replaceInCollection(
 
 export class TrackerService implements TrackerServiceApi {
   private readonly now: () => TimestampInput;
+  private readonly onMutation: TrackerMutationListener | null;
 
   constructor(
     private readonly repository: TrackerRepositoryApi,
     options: TrackerServiceOptions = {}
   ) {
     this.now = options.now ?? (() => Date.now());
+    this.onMutation = options.onMutation ?? null;
   }
 
   async getActiveTransition(at: TimestampInput = this.now()): Promise<TimeTransition | null> {
@@ -272,7 +288,16 @@ export class TrackerService implements TrackerServiceApi {
     }
     if (nextTimestamp === latest.timestamp) return latest;
     const next = { ...latest, timestamp: nextTimestamp };
-    return this.replaceTransition(latest, next, 'tracker-transition-adjust-latest');
+    const result = await this.replaceTransition(latest, next, 'tracker-transition-adjust-latest');
+    await this.notifyMutation({
+      kind: 'adjust-latest',
+      previous: latest,
+      current: result,
+      affectedActivityIds: [previous?.activityId, latest.activityId].filter(
+        (value): value is UUID => value !== undefined && value !== null
+      ),
+    });
+    return result;
   }
 
   async adjustLatest(timestamp: TimestampInput): Promise<TimeTransition> {
@@ -329,6 +354,15 @@ export class TrackerService implements TrackerServiceApi {
         'tracker-transition-insert'
       );
     }
+    const prior = latestValidTransition(existing, timestampMs(transition.timestamp));
+    await this.notifyMutation({
+      kind: 'insert',
+      previous: null,
+      current: transition,
+      affectedActivityIds: [prior?.activityId, transition.activityId].filter(
+        (value): value is UUID => value !== undefined && value !== null
+      ),
+    });
     return transition;
   }
 
@@ -337,6 +371,14 @@ export class TrackerService implements TrackerServiceApi {
   }
 
   async editTransition(id: UUID, input: TransitionEditInput): Promise<TimeTransition> {
+    return this.editTransitionWithKind(id, input, 'edit');
+  }
+
+  private async editTransitionWithKind(
+    id: UUID,
+    input: TransitionEditInput,
+    mutationKind: Extract<TrackerMutationKind, 'edit' | 'reassign'>
+  ): Promise<TimeTransition> {
     assertUuid(id, 'Transition ID');
     const now = normalizeNow(this.now());
     const transitions = await this.readHistory(now);
@@ -358,11 +400,28 @@ export class TrackerService implements TrackerServiceApi {
     if (next.activityId !== null) assertUuid(next.activityId, 'Activity ID');
     if (JSON.stringify(current) === JSON.stringify(next)) return current;
     this.assertEditOrder(transitions, current, next, now);
-    return this.replaceTransition(current, next, 'tracker-transition-edit');
+    const result = await this.replaceTransition(current, next, 'tracker-transition-edit');
+    const prior = orderTransitions(transitions)
+      .filter(
+        (transition) =>
+          transition.id !== current.id &&
+          transition.status === 'recorded' &&
+          timestampMs(transition.timestamp) < timestampMs(next.timestamp)
+      )
+      .at(-1);
+    await this.notifyMutation({
+      kind: mutationKind,
+      previous: current,
+      current: result,
+      affectedActivityIds: [prior?.activityId, current.activityId, next.activityId].filter(
+        (value): value is UUID => value !== undefined && value !== null
+      ),
+    });
+    return result;
   }
 
   async reassignTransition(id: UUID, activityId: UUID | null): Promise<TimeTransition> {
-    return this.editTransition(id, { activityId });
+    return this.editTransitionWithKind(id, { activityId }, 'reassign');
   }
 
   async deleteTransition(
@@ -385,6 +444,10 @@ export class TrackerService implements TrackerServiceApi {
     const transitions = await this.readHistory(now);
     const target = transitions.find((transition) => transition.id === id);
     if (!target) validation(`Unknown transition "${id}"`);
+    const prior = orderTransitions(transitions)
+      .filter((transition) => transition.status === 'recorded' && transition.id !== target.id)
+      .filter((transition) => timestampMs(transition.timestamp) < timestampMs(target.timestamp))
+      .at(-1);
     const month = monthKey(target.timestamp);
     const collection = await this.repository.readMonth(month);
     await this.repository.writeCrossMonth(
@@ -398,6 +461,14 @@ export class TrackerService implements TrackerServiceApi {
       `tracker-transition-${operationKind.replace('tracker-transition-', '')}-${id}`,
       operationKind
     );
+    await this.notifyMutation({
+      kind: operationKind.endsWith('merge') ? 'merge' : 'delete',
+      previous: target,
+      current: null,
+      affectedActivityIds: [prior?.activityId, target.activityId].filter(
+        (value): value is UUID => value !== undefined && value !== null
+      ),
+    });
     return target;
   }
 
@@ -424,6 +495,10 @@ export class TrackerService implements TrackerServiceApi {
 
   private async readHistory(now: number): Promise<TimeTransition[]> {
     return this.repository.readRange(0, now);
+  }
+
+  private async notifyMutation(mutation: TrackerMutation): Promise<void> {
+    if (this.onMutation) await this.onMutation(mutation);
   }
 
   private assertInsertionOrder(

@@ -107,8 +107,12 @@ export class HabitRepository implements HabitRepositoryApi {
     const next: HabitDayState = {
       habitId,
       logicalDay: logicalDay as HabitDayState['logicalDay'],
-      manual: signals.manual ?? existing?.manual ?? null,
-      automatic: signals.automatic ?? existing?.automatic ?? null,
+      manual: Object.prototype.hasOwnProperty.call(signals, 'manual')
+        ? (signals.manual ?? null)
+        : (existing?.manual ?? null),
+      automatic: Object.prototype.hasOwnProperty.call(signals, 'automatic')
+        ? (signals.automatic ?? null)
+        : (existing?.automatic ?? null),
       updatedAt,
     };
     await this.upsertDayState(next);

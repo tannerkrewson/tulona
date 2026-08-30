@@ -188,7 +188,7 @@ export const routineRunHistorySchema = z
   })
   .passthrough();
 
-const habitScheduleSchema = z.discriminatedUnion('kind', [
+const habitScheduleSchema = z.union([
   z.object({ kind: z.literal('daily') }).passthrough(),
   z
     .object({
@@ -199,21 +199,55 @@ const habitScheduleSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('weekdays') }).passthrough(),
   z
     .object({
+      kind: z.literal('weekly-count'),
+      timesPerWeek: z.number().int().min(1).max(7),
+    })
+    .passthrough(),
+  z
+    .object({
       kind: z.literal('interval'),
       everyDays: z.number().int().positive(),
       startDate: logicalDay,
     })
     .passthrough(),
 ]);
-const habitTriggerSchema = z.discriminatedUnion('kind', [
+const habitTriggerSchema = z.union([
   z
     .object({
       kind: z.literal('tracked-time'),
       activityId: uuid,
-      minimumMs: z.number().int().positive(),
+      minimumSeconds: z.number().positive().optional(),
+      minimumMs: z.number().positive().optional(),
     })
+    .refine(
+      ({ minimumSeconds, minimumMs }) => minimumSeconds === undefined || minimumMs === undefined,
+      { message: 'Habit trigger cannot define both minimumSeconds and minimumMs' }
+    )
     .passthrough(),
-  z.object({ kind: z.literal('routine-completion'), routineId: uuid }).passthrough(),
+  z
+    .object({
+      kind: z.literal('folder-time'),
+      folderId: uuid,
+      minimumSeconds: z.number().positive().optional(),
+      minimumMs: z.number().positive().optional(),
+    })
+    .refine(
+      ({ minimumSeconds, minimumMs }) => minimumSeconds === undefined || minimumMs === undefined,
+      { message: 'Habit trigger cannot define both minimumSeconds and minimumMs' }
+    )
+    .passthrough(),
+  z
+    .object({
+      kind: z.literal('routine-completion'),
+      routineId: uuid,
+      minimumSeconds: z.number().positive().optional(),
+      minimumMs: z.number().positive().optional(),
+    })
+    .refine(
+      ({ minimumSeconds, minimumMs }) => minimumSeconds === undefined || minimumMs === undefined,
+      { message: 'Habit trigger cannot define both minimumSeconds and minimumMs' }
+    )
+    .passthrough(),
 ]);
 export const habitSchema = z
   .object({
