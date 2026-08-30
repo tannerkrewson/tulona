@@ -12,16 +12,24 @@ import {
   operationJournalKey,
 } from '../src/data/index';
 import type { AsyncStorageLike } from '../src/data/index';
-import type { ActiveRoutine, Activity, Habit, RoutineRunHistory } from '../src/domain/index';
+import type {
+  ActiveRoutine,
+  Activity,
+  Habit,
+  RoutineRunHistory,
+  Transition,
+} from '../src/domain/index';
 
 class MemoryStorage implements AsyncStorageLike {
   readonly values = new Map<string, string>();
+  failOnKey: string | null = null;
 
   async getItem(key: string): Promise<string | null> {
     return this.values.get(key) ?? null;
   }
 
   async setItem(key: string, value: string): Promise<void> {
+    if (this.failOnKey === key) throw new Error(`write unavailable for ${key}`);
     this.values.set(key, value);
   }
 
@@ -58,6 +66,34 @@ async function run(): Promise<void> {
   assert(
     (await catalog.readActivities())[0].archivedAt !== null,
     'catalog repository must retain archived records'
+  );
+  const metadataAfterActivation = JSON.parse((await database.read('tulona:metadata')) ?? '{}') as {
+    activeDatasetId?: string;
+  };
+  assert(
+    metadataAfterActivation.activeDatasetId === namespace.datasetId,
+    'activation must persist the active dataset in global metadata'
+  );
+  assert(
+    (await database.read(namespace.key('catalog'))) !== null &&
+      (await database.read('catalog')) === null,
+    'catalog data must be stored under the dataset namespace'
+  );
+  const otherNamespace = await manager.create(
+    'Other dataset',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  );
+  const otherCatalog = new CatalogRepository(database, otherNamespace);
+  await otherCatalog.write({ folders: [], activities: [], routines: [] });
+  assert(
+    (await catalog.readActivities()).length === 1 &&
+      (await otherCatalog.readActivities()).length === 0,
+    'dataset repositories must not read another dataset namespace'
+  );
+  assert(
+    (await manager.list()).find((entry) => entry.metadata.id === namespace.datasetId)?.active ===
+      true,
+    'dataset listing must identify the persisted active dataset'
   );
 
   const habit: Habit = {
@@ -150,6 +186,61 @@ async function run(): Promise<void> {
   assert(
     (await tracker.readMonth('2026-09')).transitions.length === 1,
     'journaled tracker operation is idempotent'
+  );
+
+  const interruptedAugust: Transition = {
+    id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    activityId: activity.id,
+    timestamp: '2026-08-20T12:00:00.000Z',
+    source: 'manual',
+    status: 'recorded',
+    createdAt: '2026-08-20T12:00:00.000Z',
+    correctionOfId: null,
+    note: null,
+  };
+  const interruptedSeptember = {
+    ...interruptedAugust,
+    id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    timestamp: '2026-09-20T12:00:00.000Z',
+    createdAt: '2026-09-20T12:00:00.000Z',
+  };
+  storage.failOnKey = namespace.key('tracker', '2026-09');
+  try {
+    await tracker.upsertTransitions(
+      [interruptedAugust, interruptedSeptember],
+      'interrupted-cross-month',
+      'tracker-test'
+    );
+    throw new Error('interrupted cross-month write should fail');
+  } catch {
+    assert(
+      (await tracker.readMonth('2026-08')).transitions.length === 2 &&
+        (await tracker.readMonth('2026-09')).transitions.length === 1,
+      'an interrupted month-crossing edit must expose only the committed first bucket'
+    );
+  }
+  storage.failOnKey = null;
+  const crossMonthRecovery = await tracker.recoverJournal();
+  assert(
+    crossMonthRecovery.recovered.includes('interrupted-cross-month'),
+    'journal recovery must resume an interrupted month-crossing edit'
+  );
+  assert(
+    (await tracker.readMonth('2026-08')).transitions.length === 2 &&
+      (await tracker.readMonth('2026-09')).transitions.length === 2,
+    'recovered month-crossing edits must contain both buckets exactly once'
+  );
+  await tracker.upsertTransitions(
+    [interruptedAugust, interruptedSeptember],
+    'interrupted-cross-month',
+    'tracker-test'
+  );
+  const repeatedCrossMonthRecovery = await tracker.recoverJournal();
+  assert(
+    repeatedCrossMonthRecovery.recovered.length === 0 &&
+      (await tracker.readMonth('2026-08')).transitions.length === 2 &&
+      (await tracker.readMonth('2026-09')).transitions.length === 2,
+    'replaying a recovered month-crossing edit must not duplicate transitions'
   );
 
   const settings = new SettingsRepository(database, namespace);
