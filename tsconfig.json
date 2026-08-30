@@ -1,0 +1,27 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@/*": ["./*"],
+      "@app/*": ["app/*"],
+      "@data": ["src/data/index.ts"],
+      "@data/*": ["src/data/*"],
+      "@domain": ["src/domain/index.ts"],
+      "@domain/*": ["src/domain/*"],
+      "@icons": ["src/icons/index.ts"],
+      "@icons/*": ["src/icons/*"],
+      "@tests/*": ["tests/*"],
+      "@theme": ["src/theme/index.ts"],
+      "@theme/*": ["src/theme/*"],
+      "@ui": ["src/ui/index.ts"],
+      "@ui/*": ["src/ui/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+}

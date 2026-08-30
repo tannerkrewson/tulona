@@ -1,0 +1,10 @@
+.expo
+dist
+node_modules
+web-build
+.beads
+.agents
+.claude
+.codex
+AGENTS.md
+CLAUDE.md

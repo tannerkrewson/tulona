@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "Tulona",
+    "slug": "tulona",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "tulona",
+    "plugins": ["expo-router", "expo-audio", "expo-document-picker", "expo-asset"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
