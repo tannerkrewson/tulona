@@ -1,21 +1,18 @@
 import { Button, Column, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { formatCountdownMs, type ActiveRoutine, type RoutineStepStatus } from '@domain';
 import { AppIcon, type IconName } from '@icons';
 import { useAppTheme, type ThemeColors } from '@theme';
-import { Screen } from '@ui';
+import { errorText, Screen } from '@ui';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { routineTiming } from './routine-engine';
 import { loadRoutineRuntime, type RoutineRuntime } from './routine-runtime';
 
 export interface RoutineRunnerScreenProps {
   routineId: string;
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function absoluteTime(timestamp: string | null): string {
@@ -39,9 +36,11 @@ function statusColor(status: RoutineStepStatus, colors: ThemeColors): string {
 function RunnerError({
   message,
   title = 'Routine unavailable',
+  children,
 }: {
   message: string | null;
   title?: string;
+  children?: ReactNode;
 }) {
   const { colors } = useAppTheme();
   if (!message) return null;
@@ -61,6 +60,7 @@ function RunnerError({
         {title}
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
+      {children}
     </Column>
   );
 }
@@ -77,6 +77,9 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const [stepsOpen, setStepsOpen] = useState(false);
   const [addTimeOpen, setAddTimeOpen] = useState(false);
   const recovering = useRef(false);
+  const lastAction = useRef<
+    ((nextRuntime: RoutineRuntime) => Promise<ActiveRoutine | void>) | null
+  >(null);
 
   const routeRecovered = useCallback(
     (next: ActiveRoutine | null): boolean => {
@@ -103,8 +106,9 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     [router, routineId]
   );
 
-  useEffect(() => {
+  const restore = useCallback(() => {
     let cancelled = false;
+    setLoadError(null);
     void loadRoutineRuntime()
       .then(async (nextRuntime) => {
         const restored = await nextRuntime.routineService.recover();
@@ -123,6 +127,18 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
       cancelled = true;
     };
   }, [routeRecovered]);
+
+  useEffect(() => {
+    let disposed = false;
+    let cleanup: (() => void) | undefined;
+    void Promise.resolve().then(() => {
+      if (!disposed) cleanup = restore();
+    });
+    return () => {
+      disposed = true;
+      cleanup?.();
+    };
+  }, [restore]);
 
   useEffect(() => {
     if (!runtime) return undefined;
@@ -148,11 +164,17 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     return () => clearInterval(timer);
   }, [runtime, busy, routeRecovered, routineId]);
 
+  const finalizeCompletion = async (nextRuntime: RoutineRuntime): Promise<void> => {
+    await nextRuntime.routineService.finalizeCompletion();
+    router.replace('/routine-chooser');
+  };
+
   const runAction = async (
     action: (nextRuntime: RoutineRuntime) => Promise<ActiveRoutine | void>,
     onComplete?: (result: ActiveRoutine | void) => void
   ) => {
     if (!runtime) return;
+    lastAction.current = action;
     setBusy(true);
     setActionError(null);
     try {
@@ -166,8 +188,9 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
       const result = await action(runtime);
       if (result) {
         if (result.status === 'awaiting-next-activity') {
-          await runtime.routineService.finalizeCompletion();
-          router.replace('/routine-chooser');
+          // Retry the finalization itself if the process loses the durable write window.
+          lastAction.current = finalizeCompletion;
+          await finalizeCompletion(runtime);
         } else {
           setActive(result);
         }
@@ -180,6 +203,12 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     }
   };
 
+  const retry = () => {
+    const action = lastAction.current;
+    if (action) void runAction(action);
+    else restore();
+  };
+
   if (!active || !runtime) {
     return (
       <Screen scrollable={false}>
@@ -188,7 +217,13 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           <Text textStyle={{ color: colors.text, fontSize: 24, fontWeight: '700' }}>
             Routine runner
           </Text>
-          <RunnerError message={loadError ?? 'Restoring the persisted routine...'} />
+          <RunnerError message={loadError ?? 'Restoring the persisted routine...'}>
+            <RecoveryActions
+              onBack={() => router.replace('/(tabs)')}
+              onRetry={restore}
+              testID="routine-recovery"
+            />
+          </RunnerError>
         </Column>
       </Screen>
     );
@@ -199,7 +234,12 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   if (!currentStep) {
     return (
       <Screen scrollable={false}>
-        <RunnerError message="The active routine has no current step." />
+        <RunnerError message="The active routine has no current step.">
+          <RecoveryActions
+            onBack={() => router.replace('/(tabs)')}
+            testID="routine-step-recovery"
+          />
+        </RunnerError>
       </Screen>
     );
   }
@@ -315,7 +355,13 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
                 : 'No deadline'}
           </Text>
         </Column>
-        <RunnerError message={actionErrorMessage} title="Routine action failed" />
+        <RunnerError message={actionErrorMessage} title="Routine action failed">
+          <RecoveryActions
+            onBack={() => router.replace('/(tabs)')}
+            onRetry={retry}
+            testID="routine-action-recovery"
+          />
+        </RunnerError>
         <Column spacing={12} style={{ width: '100%' }}>
           <Button
             disabled={busy || active.status === 'paused'}

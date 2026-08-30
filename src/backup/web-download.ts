@@ -12,6 +12,13 @@ export function csvFilename(date: Date = new Date()): string {
   return `life-tracker-intervals-${year}-${month}-${day}.csv`;
 }
 
+export function rawDataFilename(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `tulona-raw-data-${year}-${month}-${day}.json`;
+}
+
 /** Web-only download transport. Serialization remains usable without a DOM. */
 export function downloadText(content: string, filename: string, mimeType: string): boolean {
   if (
@@ -38,4 +45,8 @@ export function downloadBackupJson(content: string, date: Date = new Date()): bo
 
 export function downloadIntervalsCsv(content: string, date: Date = new Date()): boolean {
   return downloadText(content, csvFilename(date), 'text/csv;charset=utf-8');
+}
+
+export function downloadRawDataJson(content: string, date: Date = new Date()): boolean {
+  return downloadText(content, rawDataFilename(date), 'application/json');
 }

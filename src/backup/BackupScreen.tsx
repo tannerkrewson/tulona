@@ -1,18 +1,16 @@
 import { Button, Column, Row, Text } from '@expo/ui';
 import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAppTheme } from '@theme';
-import { Screen } from '@ui';
+import { errorText, Screen } from '@ui';
+import { bootCoordinator } from '../orchestration';
 
 import { BackupImportError, type BackupImportResult } from './backup-import';
 import { downloadBackupJson, downloadIntervalsCsv } from './web-download';
 import { loadBackupRuntime, type BackupRuntime } from './backup-runtime';
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 function Summary({ result }: { result: BackupImportResult }) {
   const { colors } = useAppTheme();
@@ -46,7 +44,15 @@ function Summary({ result }: { result: BackupImportResult }) {
   );
 }
 
-function ErrorPanel({ message }: { message: string | null }) {
+function ErrorPanel({
+  message,
+  onRetry,
+  onBack,
+}: {
+  message: string | null;
+  onRetry?: () => void;
+  onBack?: () => void;
+}) {
   const { colors } = useAppTheme();
   if (!message) return null;
   return (
@@ -69,6 +75,7 @@ function ErrorPanel({ message }: { message: string | null }) {
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 13 }}>
         Your current data was not replaced.
       </Text>
+      <RecoveryActions onBack={onBack} onRetry={onRetry} testID="backup-recovery" />
     </Column>
   );
 }
@@ -82,8 +89,10 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
   const [importResult, setImportResult] = useState<BackupImportResult | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const lastAction = useRef<(() => Promise<void>) | null>(null);
 
   const exportJson = async () => {
+    lastAction.current = exportJson;
     setBusy(true);
     setError(null);
     setSuccess(null);
@@ -99,6 +108,7 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
   };
 
   const exportCsv = async () => {
+    lastAction.current = exportCsv;
     setBusy(true);
     setError(null);
     setSuccess(null);
@@ -114,6 +124,7 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
   };
 
   const importFile = async () => {
+    lastAction.current = importFile;
     setBusy(true);
     setError(null);
     setSuccess(null);
@@ -146,6 +157,7 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
   };
 
   const replace = async () => {
+    lastAction.current = replace;
     if (!importText) return;
     setBusy(true);
     setError(null);
@@ -155,6 +167,7 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
       setSuccess(`Data replaced safely in dataset ${result.datasetId}.`);
       setImportText(null);
       setImportResult(null);
+      bootCoordinator.reset();
     } catch (actionError) {
       setError(errorText(actionError));
     } finally {
@@ -213,7 +226,14 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
             Working...
           </Text>
         ) : null}
-        <ErrorPanel message={error} />
+        <ErrorPanel
+          message={error}
+          onBack={() => router.replace('/(tabs)')}
+          onRetry={() => {
+            const action = lastAction.current;
+            if (action) void action();
+          }}
+        />
         {success ? (
           <Text
             textStyle={{ color: colors.success.foreground, fontSize: 15 }}
@@ -283,11 +303,13 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
 
 export default function BackupScreen() {
   const { colors } = useAppTheme();
+  const router = useRouter();
   const [runtime, setRuntime] = useState<BackupRuntime | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let cancelled = false;
+    setLoadError(null);
     void loadBackupRuntime()
       .then((nextRuntime) => {
         if (!cancelled) setRuntime(nextRuntime);
@@ -299,6 +321,18 @@ export default function BackupScreen() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    let cleanup: (() => void) | undefined;
+    void Promise.resolve().then(() => {
+      if (!disposed) cleanup = load();
+    });
+    return () => {
+      disposed = true;
+      cleanup?.();
+    };
+  }, [load]);
 
   if (!runtime) {
     return (
@@ -314,6 +348,9 @@ export default function BackupScreen() {
         >
           {loadError ?? 'Loading backup tools...'}
         </Text>
+        {loadError ? (
+          <ErrorPanel message={loadError} onBack={() => router.replace('/(tabs)')} onRetry={load} />
+        ) : null}
       </Screen>
     );
   }

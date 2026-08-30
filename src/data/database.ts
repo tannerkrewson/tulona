@@ -138,7 +138,12 @@ export class AsyncStorageDatabase implements KeyValueDatabase {
   }
 
   async keys(): Promise<readonly string[]> {
-    if (!this.storage.getAllKeys) return [];
+    if (!this.storage.getAllKeys) {
+      throw new PersistenceError(
+        'read',
+        'Unable to enumerate storage keys because this storage adapter does not support key enumeration'
+      );
+    }
     try {
       return await this.storage.getAllKeys();
     } catch (error) {

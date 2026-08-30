@@ -1,17 +1,14 @@
 import { Button, Column, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { ActiveRoutine, CatalogCollection, RoutineDefinition } from '@domain';
 import { AppIcon, type IconName } from '@icons';
 import { useAppTheme } from '@theme';
-import { Screen } from '@ui';
+import { errorText, Screen } from '@ui';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { loadRoutineRuntime } from './routine-runtime';
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export default function RoutineCatalogScreen() {
   const { colors } = useAppTheme();
@@ -19,6 +16,8 @@ export default function RoutineCatalogScreen() {
   const [catalog, setCatalog] = useState<CatalogCollection | null>(null);
   const [active, setActive] = useState<ActiveRoutine | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const lastRoutine = useRef<RoutineDefinition | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,7 +37,7 @@ export default function RoutineCatalogScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadToken]);
 
   if (!catalog) {
     return (
@@ -59,6 +58,16 @@ export default function RoutineCatalogScreen() {
           >
             {error ?? 'Loading catalog...'}
           </Text>
+          {error ? (
+            <RecoveryActions
+              onBack={() => router.replace('/(tabs)')}
+              onRetry={() => {
+                setError(null);
+                setReloadToken((value) => value + 1);
+              }}
+              testID="routine-catalog-recovery"
+            />
+          ) : null}
         </Column>
       </Screen>
     );
@@ -76,6 +85,16 @@ export default function RoutineCatalogScreen() {
       description="Start a routine or continue the persisted current activity."
     >
       <Column spacing={14} style={{ width: '100%' }}>
+        {error ? (
+          <RecoveryActions
+            onBack={() => router.replace('/(tabs)')}
+            onRetry={() => {
+              if (lastRoutine.current) void startRoutine(lastRoutine.current);
+              else setReloadToken((value) => value + 1);
+            }}
+            testID="routine-catalog-action-recovery"
+          />
+        ) : null}
         {active?.status === 'awaiting-next-activity' ? (
           <Column
             spacing={8}
@@ -152,6 +171,8 @@ export default function RoutineCatalogScreen() {
   );
 
   async function startRoutine(routine: RoutineDefinition): Promise<void> {
+    lastRoutine.current = routine;
+    setError(null);
     try {
       const runtime = await loadRoutineRuntime();
       if (runtime.settings.alarmSettings.enabled && runtime.settings.alarmSettings.sound) {

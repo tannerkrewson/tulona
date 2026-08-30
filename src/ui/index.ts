@@ -13,3 +13,4 @@ export { IconPicker, searchIconCatalog, type IconPickerProps } from './IconPicke
 export { PlaceholderScreen, type PlaceholderScreenProps } from './PlaceholderScreen';
 export { ReorderControls, type ReorderControlsProps } from './ReorderControls';
 export { Screen, type ScreenProps } from './Screen';
+export { errorText } from './error-text';

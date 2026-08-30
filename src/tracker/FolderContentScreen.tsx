@@ -5,17 +5,21 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Activity, RoutineDefinition } from '@domain';
 import { isIconName, AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { ActivityTile, Screen } from '@ui';
+import { ActivityTile, errorText, Screen } from '@ui';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
-import { createTrackerStore } from './tracker-store';
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
+function ErrorPanel({
+  message,
+  onRetry,
+  onBack,
+}: {
+  message: string;
+  onRetry: () => void;
+  onBack?: () => void;
+}) {
   const { colors } = useAppTheme();
   return (
     <Column
@@ -34,7 +38,12 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
         Folder action failed
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
-      <Button label="Retry" onPress={onRetry} testID="retry-folder-action" />
+      <RecoveryActions
+        onBack={onBack}
+        onRetry={onRetry}
+        retryTestID="retry-folder-action"
+        testID="folder-recovery"
+      />
     </Column>
   );
 }
@@ -45,6 +54,7 @@ export interface FolderContentScreenProps {
 
 export function FolderContentScreen({ folderId }: FolderContentScreenProps) {
   const { colors } = useAppTheme();
+  const router = useRouter();
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -73,7 +83,7 @@ export function FolderContentScreen({ folderId }: FolderContentScreenProps) {
     return (
       <Screen title="Folder" description="Activities and routines in this folder">
         {loadError ? (
-          <ErrorPanel message={loadError} onRetry={load} />
+          <ErrorPanel message={loadError} onBack={() => router.back()} onRetry={load} />
         ) : (
           <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>Loading folder...</Text>
         )}
@@ -87,12 +97,8 @@ export function FolderContentScreen({ folderId }: FolderContentScreenProps) {
 function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderId: string }) {
   const { colors } = useAppTheme();
   const router = useRouter();
-  const [store] = useState(() =>
-    createTrackerStore(runtime.trackerService, {
-      initialRange: { startMs: Date.now() - 86_400_000, endMs: Date.now() },
-      catalogService: runtime.catalogService,
-    })
-  );
+  const store = runtime.trackerStore;
+  const settings = runtime.settings;
   const catalog = store((state) => state.catalog);
   const activeTransition = store((state) => state.activeTransition);
   const persistenceError = store((state) => state.persistenceError);
@@ -104,20 +110,26 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
 
   useFocusEffect(
     useCallback(() => {
+      setShowArchived(settings.showArchived);
+      store.getState().updateSettings(settings, Date.now());
       void store
         .getState()
         .hydrate()
         .catch(() => undefined);
       return undefined;
-    }, [store])
+    }, [settings, store])
   );
 
   if (!catalog) {
-    const message = persistenceError?.message;
+    const message = persistenceError ? errorText(persistenceError) : null;
     return (
       <Screen title="Folder" description="Activities and routines in this folder">
         {message ? (
-          <ErrorPanel message={message} onRetry={() => void store.getState().hydrate()} />
+          <ErrorPanel
+            message={message}
+            onBack={() => router.back()}
+            onRetry={() => void store.getState().hydrate()}
+          />
         ) : (
           <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>
             {loading ? 'Loading folder...' : 'No folder loaded yet.'}
@@ -131,7 +143,11 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
   if (!folder) {
     return (
       <Screen title="Folder" description="Activities and routines in this folder">
-        <ErrorPanel message="This folder no longer exists." onRetry={() => router.back()} />
+        <ErrorPanel
+          message="This folder no longer exists."
+          onBack={() => router.back()}
+          onRetry={() => router.back()}
+        />
       </Screen>
     );
   }
@@ -139,7 +155,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
   const children = [...catalog.activities, ...catalog.routines]
     .filter((item) => item.folderId === folder.id && (showArchived || item.archivedAt === null))
     .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name));
-  const visibleError = actionError ?? persistenceError?.message;
+  const visibleError = actionError ?? (persistenceError ? errorText(persistenceError) : null);
 
   const runAction = async (action: () => Promise<void>) => {
     setLastAction(() => action);
@@ -244,6 +260,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
         {visibleError ? (
           <ErrorPanel
             message={visibleError}
+            onBack={() => router.back()}
             onRetry={() => void (lastAction ? runAction(lastAction) : store.getState().hydrate())}
           />
         ) : null}

@@ -14,7 +14,7 @@ import type {
   DuplicateRoutineStepOptions,
   UpdateRoutineStepInput,
 } from '../catalog/catalog-service';
-import type { RoutineRepositoryApi } from '@data';
+import { PersistenceError, type RoutineRepositoryApi } from '@data';
 import {
   addRoutineTime as addRoutineTimeState,
   advanceRoutine as advanceRoutineState,
@@ -32,6 +32,8 @@ import {
   type RoutineTimestampInput,
 } from './routine-engine';
 import type { TrackerServiceApi } from '../tracker/tracker-service';
+
+const NEXT_ACTIVITY_NOTE = 'Next activity after routine';
 
 export interface StartRoutineOptions {
   id?: UUID;
@@ -111,6 +113,7 @@ export class RoutineService implements RoutineServiceApi {
   }
 
   async startRoutine(routineId: UUID, options: StartRoutineOptions = {}): Promise<ActiveRoutine> {
+    await this.ensureJournalRecovered();
     const existing = await this.routineRepository.readActive();
     if (existing) throw new Error('Cannot start a routine while another routine is active');
     const routine = await this.catalogService.getRoutine(routineId);
@@ -212,14 +215,28 @@ export class RoutineService implements RoutineServiceApi {
   async finalizeCancellation(
     at: RoutineTimestampInput = this.now()
   ): Promise<RoutineFinalizationResult> {
+    await this.ensureJournalRecovered();
     const current = activeRequired(await this.routineRepository.readActive());
     const active = current.status === 'cancelled' ? current : cancelRoutineState(current, at);
-    if (active !== current) await this.routineRepository.writeActive(active);
     if (active.status !== 'cancelled' || !active.completedAt) {
       throw new Error(`Routine is not cancellable: ${active.status}`);
     }
-    await this.stopRoutineAt(active, 'Routine cancelled');
     const run = routineRunHistory(active, 'cancelled');
+    if (active !== current) {
+      if (this.routineRepository.persistCancellation) {
+        await this.routineRepository.persistCancellation(active, run);
+      } else {
+        await this.routineRepository.writeActive(active);
+      }
+    }
+    return this.finalizePersistedCancellation(active, run);
+  }
+
+  private async finalizePersistedCancellation(
+    active: ActiveRoutine,
+    run: RoutineRunHistory
+  ): Promise<RoutineFinalizationResult> {
+    await this.stopRoutineAt(active, 'Routine cancelled');
     await this.routineRepository.finalize(active, run);
     return { activeRoutine: active, run };
   }
@@ -231,7 +248,28 @@ export class RoutineService implements RoutineServiceApi {
   }
 
   async selectNextActivity(activityId: UUID | null): Promise<TimeTransition> {
-    const active = await this.finalizeCompletion(this.now());
+    await this.ensureJournalRecovered();
+    const currentActive = await this.routineRepository.readActive();
+    if (!currentActive) {
+      const current = await this.trackerService.getActiveTransition(this.now());
+      if (current?.activityId === activityId) return current;
+      throw new Error('No active routine');
+    }
+    const existingAtCompletion =
+      currentActive?.status === 'awaiting-next-activity' && currentActive.completedAt
+        ? await this.transitionAt(currentActive.completedAt)
+        : null;
+    const active =
+      currentActive?.status === 'awaiting-next-activity' &&
+      existingAtCompletion !== null &&
+      existingAtCompletion.activityId !== null &&
+      (existingAtCompletion.activityId !== currentActive.routineId ||
+        existingAtCompletion.note === NEXT_ACTIVITY_NOTE)
+        ? {
+            activeRoutine: currentActive,
+            run: routineRunHistory(currentActive, 'completed'),
+          }
+        : await this.finalizeCompletion(this.now());
     const completedAt = active.activeRoutine.completedAt;
     if (!completedAt) throw new Error('Completed routine has no completion timestamp');
     const completionMs = timestampMs(completedAt);
@@ -246,7 +284,7 @@ export class RoutineService implements RoutineServiceApi {
                 activityId,
                 timestamp: completedAt,
                 source: 'routine',
-                note: 'Next activity after routine',
+                note: NEXT_ACTIVITY_NOTE,
               });
       } else if (current.activityId === activityId) {
         transition = current;
@@ -258,10 +296,13 @@ export class RoutineService implements RoutineServiceApi {
         id: active.activeRoutine.id,
         timestamp: completedAt,
         source: 'routine',
-        note: 'Next activity after routine',
+        note: NEXT_ACTIVITY_NOTE,
       });
     }
-    await this.routineRepository.clearActive();
+    await this.routineRepository.finalize(
+      active.activeRoutine,
+      routineRunHistory(active.activeRoutine, 'completed')
+    );
     return transition;
   }
 
@@ -270,16 +311,44 @@ export class RoutineService implements RoutineServiceApi {
   }
 
   async recover(at: RoutineTimestampInput = this.now()): Promise<ActiveRoutine | null> {
-    const recovery = await this.routineRepository.recoverJournal();
-    if (recovery.failed.length > 0) throw recovery.failed[0].error;
-    const active = await this.routineRepository.readActive();
-    if (!active) return null;
-    const result = catchUpRoutine(active, at);
-    if (JSON.stringify(result.activeRoutine) !== JSON.stringify(active))
-      await this.routineRepository.writeActive(result.activeRoutine);
-    if (result.activeRoutine.status === 'awaiting-next-activity')
-      await this.persistAwaitingCompletion(result.activeRoutine);
-    return result.activeRoutine;
+    try {
+      const recovery = await this.routineRepository.recoverJournal();
+      if (recovery.failed.length > 0) throw recovery.failed[0].error;
+      const active = await this.routineRepository.readActive();
+      if (!active) return null;
+      const result = catchUpRoutine(active, at);
+      if (JSON.stringify(result.activeRoutine) !== JSON.stringify(active))
+        await this.routineRepository.writeActive(result.activeRoutine);
+      if (result.activeRoutine.status === 'awaiting-next-activity') {
+        const completedAt = result.activeRoutine.completedAt;
+        if (!completedAt) throw new Error('Completed routine has no completion timestamp');
+        const nextActivity = await this.transitionAt(completedAt);
+        if (
+          nextActivity &&
+          nextActivity.activityId !== null &&
+          (nextActivity.activityId !== result.activeRoutine.routineId ||
+            nextActivity.note === NEXT_ACTIVITY_NOTE)
+        ) {
+          const run = routineRunHistory(result.activeRoutine, 'completed');
+          await this.routineRepository.finalize(result.activeRoutine, run);
+          return null;
+        }
+        await this.persistAwaitingCompletion(result.activeRoutine);
+      }
+      if (result.activeRoutine.status === 'cancelled') {
+        const run = routineRunHistory(result.activeRoutine, 'cancelled');
+        await this.finalizePersistedCancellation(result.activeRoutine, run);
+        return null;
+      }
+      return result.activeRoutine;
+    } catch (error) {
+      throw new PersistenceError(
+        'routine-recovery',
+        `Routine recovery failed: ${error instanceof Error ? error.message : String(error)}`,
+        undefined,
+        error
+      );
+    }
   }
 
   async getTiming(
@@ -321,6 +390,7 @@ export class RoutineService implements RoutineServiceApi {
   private async mutate(
     transform: (active: ActiveRoutine) => ActiveRoutine
   ): Promise<ActiveRoutine> {
+    await this.ensureJournalRecovered();
     const active = activeRequired(await this.routineRepository.readActive());
     const next = transform(active);
     await this.routineRepository.writeActive(next);
@@ -363,6 +433,27 @@ export class RoutineService implements RoutineServiceApi {
       source: 'routine',
       note,
     });
+  }
+
+  private async ensureJournalRecovered(): Promise<void> {
+    const recovery = await this.routineRepository.recoverJournal();
+    if (recovery.failed.length > 0) {
+      throw new PersistenceError(
+        'journal',
+        `Routine journal recovery failed: ${recovery.failed
+          .map(({ id, error }) => `${id}: ${error.message}`)
+          .join('; ')}`,
+        undefined,
+        recovery.failed
+      );
+    }
+  }
+
+  private async transitionAt(timestamp: IsoTimestamp): Promise<TimeTransition | null> {
+    const transition = await this.trackerService.getActiveTransition(timestamp);
+    return transition && timestampMs(transition.timestamp) === timestampMs(timestamp)
+      ? transition
+      : null;
   }
 }
 

@@ -32,6 +32,10 @@ export interface SettingsServiceApi {
   setShowArchived(showArchived: boolean): Promise<AppSettings>;
 }
 
+export interface SettingsServiceOptions {
+  onUpdated?: (settings: AppSettings) => void;
+}
+
 function copySettings(settings: AppSettings): AppSettings {
   return { ...settings, alarmSettings: { ...settings.alarmSettings } };
 }
@@ -137,7 +141,10 @@ function applyPatch(current: AppSettings, patch: SettingsPatch): AppSettings {
 
 /** Validated application actions over the dataset-scoped settings repository. */
 export class SettingsService implements SettingsServiceApi {
-  constructor(private readonly repository: SettingsRepositoryApi) {}
+  constructor(
+    private readonly repository: SettingsRepositoryApi,
+    private readonly options: SettingsServiceOptions = {}
+  ) {}
 
   async read(): Promise<AppSettings> {
     const settings = await this.repository.read();
@@ -152,6 +159,8 @@ export class SettingsService implements SettingsServiceApi {
     const current = await this.read();
     const next = applyPatch(current, patch);
     await this.repository.write(next);
+    // The validated value is safe to publish once the repository write succeeds.
+    this.options.onUpdated?.(next);
     return this.read();
   }
 
@@ -194,8 +203,11 @@ export class SettingsService implements SettingsServiceApi {
   }
 }
 
-export function createSettingsService(repository: SettingsRepositoryApi): SettingsService {
-  return new SettingsService(repository);
+export function createSettingsService(
+  repository: SettingsRepositoryApi,
+  options?: SettingsServiceOptions
+): SettingsService {
+  return new SettingsService(repository, options);
 }
 
 export { DEFAULT_SETTINGS };

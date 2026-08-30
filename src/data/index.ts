@@ -9,6 +9,7 @@ export * from './journal-types';
 export * from './keys';
 export * from './metadata';
 export * from './namespaces';
+export * from './raw-storage';
 export * from './routine-repository';
 export * from './settings-repository';
 export * from './tracker-repository';

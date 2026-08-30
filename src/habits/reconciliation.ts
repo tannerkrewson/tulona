@@ -103,7 +103,7 @@ function linkedHabitIds(
 
 export class HabitReconciliationService {
   private readonly catalog: HabitCatalogReferenceApi | null;
-  private readonly options: HabitReconciliationOptions;
+  private options: HabitReconciliationOptions;
 
   constructor(
     private readonly repository: HabitRepositoryApi,
@@ -118,6 +118,12 @@ export class HabitReconciliationService {
       this.catalog = null;
       this.options = catalogOrOptions ?? {};
     }
+  }
+
+  updateSettings(
+    settings: Pick<HabitReconciliationOptions, 'rolloverHour' | 'weekStartsOn'>
+  ): void {
+    this.options = { ...this.options, ...settings };
   }
 
   async reconcile(

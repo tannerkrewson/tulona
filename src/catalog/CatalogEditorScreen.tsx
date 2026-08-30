@@ -1,34 +1,21 @@
 import { Button, Column, Picker, Row, Text, TextInput } from '@expo/ui';
+import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import {
-  createAsyncStorageDatabase,
-  createCatalogRepository,
-  createDatasetManager,
-  PersistenceError,
-} from '@data';
 import type { Activity, CatalogCollection, Folder, UUID } from '@domain';
 import { AppIcon } from '@icons';
 import { iconCatalog, type IconName } from '@icons/icon-names';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { Screen } from '@ui';
+import { errorText, Screen } from '@ui';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import type { CatalogService } from './catalog-service';
-import { createCatalogService } from './catalog-service';
+import { loadRoutineRuntime } from '../routine/routine-runtime';
 
 const ROOT_VALUE = '__root__';
-const database = createAsyncStorageDatabase();
-const datasetManager = createDatasetManager(database);
-
 async function loadActiveCatalogService(): Promise<CatalogService> {
-  const namespace = await datasetManager.active();
-  if (!namespace) throw new PersistenceError('metadata', 'Create or activate a dataset first');
-  return createCatalogService(createCatalogRepository(database, namespace));
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return (await loadRoutineRuntime()).catalogService;
 }
 
 interface EditorResource {
@@ -48,6 +35,7 @@ export function CatalogEditorScreen({
   initialFolderId = null,
 }: CatalogEditorScreenProps) {
   const { colors } = useAppTheme();
+  const router = useRouter();
   const [resource, setResource] = useState<EditorResource | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
@@ -90,6 +78,16 @@ export function CatalogEditorScreen({
           >
             {loadError ?? 'Loading catalog...'}
           </Text>
+          {loadError ? (
+            <RecoveryActions
+              onBack={() => router.back()}
+              onRetry={() => {
+                setLoadError(null);
+                setVersion((current) => current + 1);
+              }}
+              testID="catalog-load-recovery"
+            />
+          ) : null}
         </Column>
       </Screen>
     );
@@ -104,6 +102,7 @@ export function CatalogEditorScreen({
         folders={resource.catalog.folders}
         initialFolderId={initialFolderId}
         service={resource.service}
+        onBack={() => router.back()}
         onChanged={refresh}
       />
     );
@@ -113,12 +112,21 @@ export function CatalogEditorScreen({
       key={`${id}-${version}`}
       folder={resource.catalog.folders.find((candidate) => candidate.id === id) ?? null}
       service={resource.service}
+      onBack={() => router.back()}
       onChanged={refresh}
     />
   );
 }
 
-function ActionError({ message }: { message: string | null }) {
+function ActionError({
+  message,
+  onRetry,
+  onBack,
+}: {
+  message: string | null;
+  onRetry?: () => void;
+  onBack?: () => void;
+}) {
   const { colors } = useAppTheme();
   if (!message) return null;
   return (
@@ -137,6 +145,7 @@ function ActionError({ message }: { message: string | null }) {
         Catalog action failed
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
+      <RecoveryActions onBack={onBack} onRetry={onRetry} testID="catalog-action-recovery" />
     </Column>
   );
 }
@@ -226,12 +235,14 @@ function ActivityEditor({
   initialFolderId,
   service,
   onChanged,
+  onBack,
 }: {
   activity: Activity | null;
   folders: readonly Folder[];
   initialFolderId: UUID | null;
   service: CatalogService;
   onChanged: () => void;
+  onBack: () => void;
 }) {
   const { colors } = useAppTheme();
   const [name, setName] = useState(activity?.name ?? '');
@@ -240,9 +251,11 @@ function ActivityEditor({
   const [folderId, setFolderId] = useState(activity?.folderId ?? initialFolderId ?? ROOT_VALUE);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const lastAction = useRef<(() => Promise<void>) | null>(null);
   const originalFolderId = activity?.folderId ?? null;
 
   const run = async (action: () => Promise<void>) => {
+    lastAction.current = action;
     setBusy(true);
     setError(null);
     try {
@@ -349,7 +362,13 @@ function ActivityEditor({
             onChange={setFolderId}
           />
         </Field>
-        <ActionError message={error} />
+        <ActionError
+          message={error}
+          onBack={onBack}
+          onRetry={() => {
+            if (lastAction.current) void run(lastAction.current);
+          }}
+        />
         <Button
           disabled={busy}
           label={busy ? 'Saving...' : 'Save activity'}
@@ -396,10 +415,12 @@ function FolderEditor({
   folder,
   service,
   onChanged,
+  onBack,
 }: {
   folder: Folder | null;
   service: CatalogService;
   onChanged: () => void;
+  onBack: () => void;
 }) {
   const { colors } = useAppTheme();
   const [name, setName] = useState(folder?.name ?? '');
@@ -407,8 +428,10 @@ function FolderEditor({
   const [iconName, setIconName] = useState(folder?.iconName ?? 'folder');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const lastAction = useRef<(() => Promise<void>) | null>(null);
 
   const run = async (action: () => Promise<void>) => {
+    lastAction.current = action;
     setBusy(true);
     setError(null);
     try {
@@ -503,7 +526,13 @@ function FolderEditor({
         <Field label="Curated icon">
           <IconPicker value={iconName} onChange={setIconName} />
         </Field>
-        <ActionError message={error} />
+        <ActionError
+          message={error}
+          onBack={onBack}
+          onRetry={() => {
+            if (lastAction.current) void run(lastAction.current);
+          }}
+        />
         <Button
           disabled={busy}
           label={busy ? 'Saving...' : 'Save folder'}

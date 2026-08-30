@@ -1,12 +1,12 @@
 import { Button, Column, Picker, Row, Text, TextInput } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { CatalogCollection, Habit, HabitSchedule, HabitTrigger, UUID } from '@domain';
 import { AppIcon, type IconName } from '@icons';
 import { useAppTheme } from '@theme';
-import { ColorPicker, IconPicker, Screen } from '@ui';
+import { ColorPicker, errorText, IconPicker, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { loadHabitStore } from './habit-runtime';
@@ -36,10 +36,6 @@ interface HabitDraft {
 interface HabitEditorResource {
   store: HabitStore;
   habit: Habit | null;
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function thresholdFromTrigger(trigger: HabitTrigger | null): string {
@@ -274,6 +270,7 @@ export function HabitEditorScreen({ id }: HabitEditorScreenProps) {
   const router = useRouter();
   const [resource, setResource] = useState<HabitEditorResource | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -289,12 +286,19 @@ export function HabitEditorScreen({ id }: HabitEditorScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, version]);
 
   if (!resource) {
     return (
       <Screen title={id === NEW_ID ? 'New habit' : 'Edit habit'}>
-        <HabitErrorMessage message={loadError} />
+        <HabitErrorMessage
+          message={loadError}
+          onBack={() => router.back()}
+          onRetry={() => {
+            setLoadError(null);
+            setVersion((current) => current + 1);
+          }}
+        />
         <Text
           textStyle={{
             color: loadError ? colors.danger.foreground : colors.textMuted,
@@ -334,10 +338,12 @@ function HabitEditorForm({
   const busy = store((state) => state.saving);
   const [draft, setDraft] = useState(() => draftFromHabit(habit));
   const [formError, setFormError] = useState<string | null>(null);
+  const lastAction = useRef<(() => Promise<unknown>) | null>(null);
   const update = (changes: Partial<HabitDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
 
   const save = async () => {
+    lastAction.current = save;
     setFormError(null);
     try {
       const input = inputFromDraft(draft);
@@ -548,7 +554,14 @@ function HabitEditorForm({
           ) : null}
         </Column>
 
-        <HabitErrorMessage message={formError ?? persistenceError?.message ?? null} />
+        <HabitErrorMessage
+          message={formError ?? (persistenceError ? errorText(persistenceError) : null)}
+          onBack={onCancel}
+          onRetry={() => {
+            const action = lastAction.current;
+            void (action ? action() : store.getState().refresh()).catch(() => undefined);
+          }}
+        />
         <Button
           disabled={busy}
           label={busy ? 'Saving...' : habit ? 'Save habit' : 'Create habit'}

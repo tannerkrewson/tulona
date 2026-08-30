@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import type { CatalogCollection, Habit, HabitDayState, LogicalDayKey } from '@domain';
+import type { AppSettings, CatalogCollection, Habit, HabitDayState, LogicalDayKey } from '@domain';
 import { logicalDayKey } from '@domain';
 import { PersistenceError } from '@data';
 import type { CatalogServiceApi } from '../catalog/catalog-service';
@@ -24,6 +24,7 @@ export interface HabitStoreState {
   loading: boolean;
   saving: boolean;
   persistenceError: PersistenceError | null;
+  updateSettings(settings: Pick<AppSettings, 'logicalDayRolloverHour' | 'weekStartsOn'>): void;
   hydrate(): Promise<void>;
   refresh(): Promise<void>;
   toggleManual(habitId: string, logicalDay?: LogicalDayKey): Promise<HabitDayState>;
@@ -74,8 +75,8 @@ function historyStart(
 /** Feature state only; durable habit state remains owned by HabitService. */
 export function createHabitStore(service: HabitServiceApi, options: HabitStoreOptions = {}) {
   const now = options.now ?? (() => Date.now());
-  const logicalDayRolloverHour = options.logicalDayRolloverHour ?? 0;
-  const weekStartsOn = options.weekStartsOn ?? 0;
+  let logicalDayRolloverHour = options.logicalDayRolloverHour ?? 0;
+  let weekStartsOn = options.weekStartsOn ?? 0;
 
   return create<HabitStoreState>((set, get) => {
     const readSnapshot = async (): Promise<HabitStoreSnapshot> => {
@@ -130,6 +131,15 @@ export function createHabitStore(service: HabitServiceApi, options: HabitStoreOp
           set({ loading: false, persistenceError: errorFrom(error) });
           throw error;
         }
+      },
+      updateSettings: (settings) => {
+        logicalDayRolloverHour = settings.logicalDayRolloverHour;
+        weekStartsOn = settings.weekStartsOn;
+        set({
+          logicalDayRolloverHour,
+          weekStartsOn,
+          today: dayFor(now(), logicalDayRolloverHour),
+        });
       },
       toggleManual: (habitId, logicalDay = get().today) => {
         const existing = get().states.find(

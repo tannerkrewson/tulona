@@ -1,15 +1,8 @@
-import {
-  createAsyncStorageDatabase,
-  createDatasetManager,
-  createSettingsRepository,
-  PersistenceError,
-} from '@data';
+import { PersistenceError } from '@data';
 
-import { createSettingsService, type SettingsService } from './settings-service';
-import { createSettingsStore, type SettingsStore } from './settings-store';
-
-const database = createAsyncStorageDatabase();
-const datasetManager = createDatasetManager(database);
+import { bootCoordinator } from '../orchestration/boot-coordinator';
+import type { SettingsService } from './settings-service';
+import type { SettingsStore } from './settings-store';
 
 export interface SettingsRuntime {
   settingsService: SettingsService;
@@ -17,12 +10,12 @@ export interface SettingsRuntime {
 }
 
 export async function loadSettingsRuntime(): Promise<SettingsRuntime> {
-  const namespace = await datasetManager.active();
-  if (!namespace) throw new PersistenceError('metadata', 'Create or activate a dataset first');
-  const settingsService = createSettingsService(createSettingsRepository(database, namespace));
-  const settingsStore = createSettingsStore(settingsService);
-  await settingsStore.getState().hydrate();
-  return { settingsService, settingsStore };
+  const result = await bootCoordinator.hydrate();
+  if (!result.runtime) throw new PersistenceError('metadata', 'Create or activate a dataset first');
+  return {
+    settingsService: result.runtime.services.settings,
+    settingsStore: result.runtime.stores.settings,
+  };
 }
 
 export async function loadSettingsStore(): Promise<SettingsStore> {

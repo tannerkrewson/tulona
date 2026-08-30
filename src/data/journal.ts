@@ -90,6 +90,17 @@ export class OperationJournal {
         );
       keys.add(change.key);
     }
+    const recovery = await this.recoverUnfinished();
+    if (recovery.failed.length > 0) {
+      throw new PersistenceError(
+        'journal',
+        `Cannot start journal operation while recovery is incomplete: ${recovery.failed
+          .map(({ id, error }) => `${id}: ${error.message}`)
+          .join('; ')}`,
+        undefined,
+        recovery.failed
+      );
+    }
     const id = operation.id ?? createId();
     const journalKey = operationJournalKey(id);
     const existingValue = await this.database.read(journalKey);

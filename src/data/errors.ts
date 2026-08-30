@@ -11,6 +11,7 @@ export type PersistenceErrorCategory =
   | 'metadata'
   | 'migration'
   | 'journal'
+  | 'routine-recovery'
   | 'conflict';
 
 export class PersistenceError extends Error {
