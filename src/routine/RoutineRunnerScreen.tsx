@@ -294,11 +294,10 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
               busy={busy}
               onCancel={() => setCancelConfirming(false)}
               onConfirm={() =>
-                void runAction(
-                  (nextRuntime) =>
-                    nextRuntime.routineService.cancelAndFinalize().then(() => undefined),
-                  () => router.replace('/(tabs)')
-                )
+                void runAction(async (nextRuntime) => {
+                  await nextRuntime.routineService.cancelAndFinalize();
+                  router.replace('/(tabs)');
+                })
               }
             />
           ) : (

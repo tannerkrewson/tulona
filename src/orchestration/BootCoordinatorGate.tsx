@@ -1,6 +1,6 @@
 import { Button, Column, Text } from '@expo/ui';
 import { usePathname, useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { downloadRawDataJson } from '../backup/web-download';
 import { errorText, Screen } from '@ui';
@@ -45,8 +45,10 @@ export function BootCoordinatorGate() {
   const pathname = usePathname();
   const [state, setState] = useState<GateState>({ kind: 'hydrating' });
   const [rawError, setRawError] = useState<string | null>(null);
+  const destinationApplied = useRef(false);
 
   const hydrate = useCallback(() => {
+    destinationApplied.current = false;
     setRawError(null);
     setState({ kind: 'hydrating' });
     void bootCoordinator
@@ -64,7 +66,8 @@ export function BootCoordinatorGate() {
   }, [hydrate]);
 
   useEffect(() => {
-    if (state.kind !== 'ready') return;
+    if (state.kind !== 'ready' || destinationApplied.current) return;
+    destinationApplied.current = true;
     const target = destinationAfterBoot(state.result.destination, pathname);
     if (target) router.replace(target as Href);
   }, [pathname, router, state]);

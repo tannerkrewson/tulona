@@ -93,7 +93,10 @@ export function CatalogEditorScreen({
     );
   }
 
-  const refresh = () => setVersion((current) => current + 1);
+  const refresh = () => {
+    setResource(null);
+    setVersion((current) => current + 1);
+  };
   if (kind === 'activity') {
     return (
       <ActivityEditor
@@ -315,6 +318,10 @@ function ActivityEditor({
     setError(null);
     try {
       await action();
+      if (!activity) {
+        onBack();
+        return;
+      }
       onChanged();
     } catch (actionError) {
       setError(errorText(actionError));
@@ -515,6 +522,10 @@ function FolderEditor({
     setError(null);
     try {
       await action();
+      if (!folder) {
+        onBack();
+        return;
+      }
       onChanged();
     } catch (actionError) {
       setError(errorText(actionError));
