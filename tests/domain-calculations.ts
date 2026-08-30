@@ -37,18 +37,41 @@ function transition(id: string, timestamp: string, activityId: string | null): T
 const id = createId();
 assert(isUuid(id), 'createId must return a UUID');
 
+// Build instants from local clock fields so the same local-time contract runs under UTC and EDT.
+function localTimestamp(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number
+): string {
+  return new Date(year, month - 1, day, hour, minute, second).toISOString();
+}
+
+const beforeRollover = localTimestamp(2026, 8, 29, 2, 59, 59);
+const atRollover = localTimestamp(2026, 8, 29, 3, 0, 0);
+const afterRollover = localTimestamp(2026, 8, 29, 3, 0, 1);
 assertEqual(
-  logicalDayKey('2026-08-29T02:59:59.000Z', { rolloverHour: 3 }),
+  logicalDayKey(beforeRollover, { rolloverHour: 3 }),
   '2026-08-28',
   'custom rollover before boundary'
 );
 assertEqual(
-  logicalDayKey('2026-08-29T03:00:00.000Z', { rolloverHour: 3 }),
+  logicalDayKey(atRollover, { rolloverHour: 3 }),
   '2026-08-29',
   'custom rollover at boundary'
 );
-const bounds = logicalDayBounds('2026-08-29T12:00:00.000Z');
-assertEqual(bounds.endMs - bounds.startMs, 24 * 60 * 60 * 1000, 'midnight logical day length');
+assertEqual(
+  logicalDayKey(afterRollover, { rolloverHour: 3 }),
+  '2026-08-29',
+  'custom rollover after boundary'
+);
+const bounds = logicalDayBounds(atRollover, { rolloverHour: 3 });
+assertEqual(bounds.key, '2026-08-29', 'custom rollover bounds key');
+assertEqual(new Date(bounds.startMs).getHours(), 3, 'custom rollover bounds start hour');
+assertEqual(new Date(bounds.endMs).getHours(), 3, 'custom rollover bounds end hour');
+assertEqual(bounds.endMs - bounds.startMs, 24 * 60 * 60 * 1000, 'logical day length');
 
 assertEqual(formatDuration(3_723_000), '1h 02m', 'duration formatting');
 assertEqual(formatCountdown(3_723_000), '1:02:03', 'countdown formatting');

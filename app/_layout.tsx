@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
+import Head from 'expo-router/head';
 
 import { registerServiceWorker } from '@/src/pwa/registerServiceWorker';
 import { RoutineStartupRestoration } from '@/src/routine/RoutineStartupRestoration';
@@ -11,6 +12,9 @@ export default function RootLayout() {
 
   return (
     <>
+      <Head>
+        <title>Tulona</title>
+      </Head>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="folder/[folderId]" />

@@ -1,13 +1,11 @@
-import {
-  AsyncStorageDatabase,
-  CatalogRepository,
-  DatasetManager,
-  RoutineRepository,
-  TrackerRepository,
-} from '../src/data';
+import { AsyncStorageDatabase } from '../src/data/database';
+import { CatalogRepository } from '../src/data/catalog-repository';
+import { DatasetManager } from '../src/data/namespaces';
+import { RoutineRepository } from '../src/data/routine-repository';
+import { TrackerRepository } from '../src/data/tracker-repository';
 import { CatalogService } from '../src/catalog/catalog-service';
-import { createRoutineService } from '../src/routine';
-import { createTrackerService } from '../src/tracker';
+import { createRoutineService } from '../src/routine/routine-service';
+import { createTrackerService } from '../src/tracker/tracker-service';
 import type { AsyncStorageLike } from '../src/data';
 
 const datasetId = '11111111-1111-4111-8111-111111111111';

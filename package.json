@@ -11,6 +11,10 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --check .",
+    "test:domain": "tsx tests/domain-calculations.ts",
+    "test:persistence": "tsx tests/persistence-checks.ts",
+    "test:tracker": "tsx tests/tracker-engine.ts",
+    "test:routine": "tsx tests/routine-service.ts",
     "web:export": "expo export --platform web --output-dir dist && node scripts/prepare-static-site.cjs",
     "pwa:generate": "workbox generateSW workbox.config.cjs",
     "pwa:validate": "node scripts/validate-pwa-build.cjs",
@@ -49,6 +53,7 @@
     "gh-pages": "6.3.0",
     "prettier": "3.9.6",
     "typescript": "~6.0.3",
+    "tsx": "4.23.13",
     "workbox-cli": "7.4.1"
   }
 }
