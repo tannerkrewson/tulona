@@ -1,6 +1,13 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 
+import { registerServiceWorker } from '@/src/pwa/registerServiceWorker';
+
 export default function RootLayout() {
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />

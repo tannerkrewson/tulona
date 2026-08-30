@@ -23,6 +23,33 @@ npm run format
 npm start
 ```
 
+## Static Web Deployment
+
+The production web artifact is a static Expo export followed by conservative
+Workbox generation. It does not require a backend or a server process:
+
+```bash
+npm run web:build
+```
+
+The default GitHub Pages project-site path is `/tulona`, matching this
+repository's remote name. Set `EXPO_BASE_URL` to a slash-prefixed project path
+when deploying a fork or another project site, for example
+`EXPO_BASE_URL=/another-name npm run web:build`. The same value configures Expo
+Router, generated asset URLs, the manifest links, Workbox precache URLs, and
+service-worker scope. `npm run deploy` builds the artifact and publishes `dist`
+to `gh-pages` with `--nojekyll`.
+
+The export also copies the root shell to `404.html`. GitHub Pages can use that
+static fallback for direct reloads of nested or dynamic routes; no backend
+rewrite process is required.
+
+The generated service worker precaches local HTML, JavaScript, CSS, fonts,
+icons, manifest data, and bundled audio. It has no arbitrary remote runtime
+cache. Workbox leaves new workers waiting, so an active routine is not
+replaced in the middle of a session; a later safe navigation activates the
+update.
+
 ## Universal UI Convention
 
 Feature screens should render through `Screen` from `@ui`. `Screen` owns the

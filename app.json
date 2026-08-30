@@ -6,12 +6,25 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "tulona",
+    "primaryColor": "#102033",
     "plugins": ["expo-router", "expo-audio", "expo-document-picker", "expo-asset"],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "baseUrl": "/tulona"
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png",
+      "name": "Tulona",
+      "shortName": "Tulona",
+      "lang": "en",
+      "themeColor": "#102033",
+      "backgroundColor": "#F4F1EA",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "./",
+      "scope": "./"
     }
   }
 }
