@@ -28,6 +28,7 @@ export interface RoutineRepositoryApi {
   writeActive(activeRoutine: ActiveRoutine): Promise<void>;
   clearActive(): Promise<void>;
   readHistory(month: MonthKey): Promise<RoutineHistoryCollection>;
+  writeHistory(collection: RoutineHistoryCollection): Promise<void>;
   appendHistory(run: RoutineRunHistory, operationId?: string): Promise<void>;
   persistAwaiting?(
     activeRoutine: ActiveRoutine,
@@ -248,9 +249,9 @@ export class RoutineRepository implements RoutineRepositoryApi {
     return this.journal.recoverUnfinished();
   }
 
-  private async writeHistory(
+  async writeHistory(
     history: RoutineHistoryCollection,
-    operationId: string
+    operationId = `routine-history-${history.month}`
   ): Promise<void> {
     const result = routineHistoryCollectionSchema.safeParse(history);
     if (!result.success)

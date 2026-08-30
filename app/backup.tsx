@@ -1,11 +1,5 @@
-import { PlaceholderScreen } from '@ui';
+import BackupScreen from '../src/backup/BackupScreen';
 
-export default function BackupScreen() {
-  return (
-    <PlaceholderScreen
-      title="Backup"
-      iconName="upload"
-      description="Backup and restore will appear here."
-    />
-  );
+export default function BackupRoute() {
+  return <BackupScreen />;
 }
