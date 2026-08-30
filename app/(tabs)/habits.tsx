@@ -1,11 +1,5 @@
-import { PlaceholderScreen } from '@ui';
+import HabitListScreen from '../../src/habits/HabitListScreen';
 
 export default function HabitsScreen() {
-  return (
-    <PlaceholderScreen
-      title="Habits"
-      iconName="heart"
-      description="Your habit list will appear here."
-    />
-  );
+  return <HabitListScreen />;
 }
