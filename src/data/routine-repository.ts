@@ -10,7 +10,7 @@ import type { KeyValueDatabase } from './database';
 import { DatasetStore } from './dataset-store';
 import { PersistenceError } from './errors';
 import { OperationJournal } from './journal';
-import type { RecoveryReport } from './journal';
+import type { JournalChange, RecoveryReport } from './journal';
 import type { DatasetNamespace } from './namespaces';
 
 function emptyHistory(month: MonthKey): RoutineHistoryCollection {
@@ -34,6 +34,7 @@ export interface RoutineRepositoryApi {
     run: RoutineRunHistory,
     operationId?: string
   ): Promise<void>;
+  prepareActiveWrite?(activeRoutine: ActiveRoutine): JournalChange;
   recoverJournal(): Promise<RecoveryReport>;
 }
 
@@ -61,6 +62,19 @@ export class RoutineRepository implements RoutineRepositoryApi {
     await this.store.remove(this.namespace, 'active-routine');
   }
 
+  prepareActiveWrite(activeRoutine: ActiveRoutine): JournalChange {
+    const parsed = activeRoutineSchema.safeParse(activeRoutine);
+    if (!parsed.success)
+      throw new PersistenceError(
+        'validation',
+        `Active routine failed validation: ${parsed.error.message}`
+      );
+    return {
+      key: this.namespace.key('active-routine'),
+      newValue: JSON.stringify(parsed.data),
+    };
+  }
+
   async readHistory(month: MonthKey): Promise<RoutineHistoryCollection> {
     const normalizedMonth = validateMonth(month);
     return (
@@ -84,7 +98,10 @@ export class RoutineRepository implements RoutineRepositoryApi {
     const current = await this.readHistory(month);
     const existing = current.runs.find((candidate) => candidate.id === run.id);
     if (existing) {
-      if (JSON.stringify(existing) !== JSON.stringify(run))
+      if (
+        JSON.stringify(routineRunHistorySchema.parse(existing)) !==
+        JSON.stringify(routineRunHistorySchema.parse(run))
+      )
         throw new PersistenceError(
           'conflict',
           `Routine run "${run.id}" already has different history`
@@ -106,7 +123,10 @@ export class RoutineRepository implements RoutineRepositoryApi {
     const history = await this.readHistory(monthKey(run.completedAt));
     const existing = history.runs.find((candidate) => candidate.id === run.id);
     if (existing) {
-      if (JSON.stringify(existing) !== JSON.stringify(run))
+      if (
+        JSON.stringify(routineRunHistorySchema.parse(existing)) !==
+        JSON.stringify(routineRunHistorySchema.parse(run))
+      )
         throw new PersistenceError(
           'conflict',
           `Routine run "${run.id}" already has different history`

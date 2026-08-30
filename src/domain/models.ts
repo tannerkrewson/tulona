@@ -15,8 +15,11 @@ export type RecordStatus = 'active' | 'corrected' | 'superseded';
 export type TransitionSource =
   'manual' | 'routine' | 'automatic' | 'system' | 'import' | 'migration' | 'recovery';
 export type TransitionStatus = 'recorded' | 'corrected' | 'superseded';
-export type RoutineRunStatus = 'running' | 'paused' | 'completed' | 'abandoned';
+export type RoutineRunStatus =
+  'running' | 'paused' | 'awaiting-next-activity' | 'completed' | 'cancelled' | 'abandoned';
 export type RoutineStepStatus = 'pending' | 'active' | 'completed' | 'skipped';
+export type RoutineStepEndBehavior = 'overtime' | 'auto-advance' | 'autoAdvance';
+export type RoutineStepCompletionOutcome = 'done' | 'skipped' | 'autoAdvanced';
 export type HabitSignalSource = 'manual' | 'automatic';
 
 export interface Timestamps {
@@ -54,6 +57,9 @@ export interface RoutineStep extends Timestamps, Archivable {
   sortOrder: number;
   color: string | null;
   iconName: string | null;
+  /** Defaults to overtime for records written before end behavior was added. */
+  endBehavior?: RoutineStepEndBehavior;
+  notes?: string | null;
 }
 
 export interface RoutineDefinition extends Timestamps, Archivable {
@@ -100,6 +106,8 @@ export interface RoutineStepSnapshot {
   sortOrder: number;
   color: string | null;
   iconName: string | null;
+  endBehavior?: RoutineStepEndBehavior;
+  notes?: string | null;
 }
 
 export interface RoutineSnapshot {
@@ -115,6 +123,8 @@ export interface RoutineStepSession {
   startedAt: IsoTimestamp | null;
   completedAt: IsoTimestamp | null;
   addedTimeMs: number;
+  outcome?: RoutineStepCompletionOutcome;
+  plannedDurationMs?: number;
 }
 
 /** The one authoritative active routine object persisted by the repository. */
@@ -130,13 +140,16 @@ export interface ActiveRoutine {
   currentStepStartedAt: IsoTimestamp | null;
   pausedDurationMs: number;
   stepSessions: RoutineStepSession[];
+  currentStepDeadlineAt?: IsoTimestamp | null;
+  remainingMsWhenPaused?: number | null;
+  alarmFiredStepIds?: UUID[];
 }
 
 export interface RoutineRunHistory {
   id: UUID;
   routineId: UUID;
   routineSnapshot: RoutineSnapshot;
-  status: 'completed' | 'abandoned';
+  status: 'completed' | 'cancelled' | 'abandoned';
   startedAt: IsoTimestamp;
   completedAt: IsoTimestamp;
   durationMs: number;
@@ -180,6 +193,7 @@ export interface AlarmSettings {
   leadTimeMs: number;
   sound: boolean;
   vibration: boolean;
+  volume?: number;
 }
 
 export interface AppSettings {

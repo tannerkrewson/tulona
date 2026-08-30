@@ -31,6 +31,12 @@ export interface SwitchActivityOptions {
   id?: UUID;
 }
 
+/** A non-tracker value committed in the same journal as a tracker switch. */
+export interface TrackerCompanionChange {
+  key: string;
+  newValue: string | null;
+}
+
 export interface TransitionEditInput {
   activityId?: UUID | null;
   timestamp?: TimestampInput;
@@ -54,6 +60,11 @@ export interface TrackerServiceApi {
   switchActivity(
     activityId: UUID | null,
     timestampOrOptions?: TimestampInput | SwitchActivityOptions
+  ): Promise<TimeTransition>;
+  switchActivityWithCompanion?(
+    activityId: UUID | null,
+    options: SwitchActivityOptions,
+    companionChanges: readonly TrackerCompanionChange[]
   ): Promise<TimeTransition>;
   adjustLatestStart(timestamp: TimestampInput): Promise<TimeTransition>;
   adjustLatest(timestamp: TimestampInput): Promise<TimeTransition>;
@@ -205,6 +216,47 @@ export class TrackerService implements TrackerServiceApi {
     });
   }
 
+  async switchActivityWithCompanion(
+    activityId: UUID | null,
+    options: SwitchActivityOptions,
+    companionChanges: readonly TrackerCompanionChange[]
+  ): Promise<TimeTransition> {
+    if (activityId !== null) assertUuid(activityId, 'Activity ID');
+    const now = normalizeNow(this.now());
+    const timestamp = normalizeTimestamp(options.timestamp ?? now, 'Switch timestamp');
+    assertNotFuture(timestamp, now);
+    const current = latestValidTransition(
+      await this.readHistory(timestampMs(timestamp)),
+      timestampMs(timestamp)
+    );
+    if (current?.activityId === activityId && companionChanges.length === 0) return current;
+    if (current?.activityId === activityId) {
+      if (!this.repository.upsertTransitionsWithChanges) {
+        throw new PersistenceError(
+          'journal',
+          'The tracker repository cannot atomically commit a companion change'
+        );
+      }
+      await this.repository.upsertTransitionsWithChanges(
+        [],
+        companionChanges,
+        `tracker-companion-${options.id ?? createId()}`,
+        'tracker-routine-start'
+      );
+      return current;
+    }
+    return this.insertTransitionWithCompanion(
+      {
+        id: options.id,
+        activityId,
+        timestamp,
+        source: options.source ?? 'manual',
+        note: options.note,
+      },
+      companionChanges
+    );
+  }
+
   async adjustLatestStart(timestamp: TimestampInput): Promise<TimeTransition> {
     const now = normalizeNow(this.now());
     const nextTimestamp = normalizeTimestamp(timestamp, 'Adjusted start');
@@ -242,6 +294,13 @@ export class TrackerService implements TrackerServiceApi {
   }
 
   async insertTransition(input: TransitionInput): Promise<TimeTransition> {
+    return this.insertTransitionWithCompanion(input, []);
+  }
+
+  private async insertTransitionWithCompanion(
+    input: TransitionInput,
+    companionChanges: readonly TrackerCompanionChange[]
+  ): Promise<TimeTransition> {
     const now = normalizeNow(this.now());
     const transition = createTransition(input, normalizeTimestamp(now, 'Created at'));
     assertNotFuture(transition.timestamp, now);
@@ -250,11 +309,26 @@ export class TrackerService implements TrackerServiceApi {
       throw new PersistenceError('conflict', `Transition "${transition.id}" already exists`);
     }
     this.assertInsertionOrder(existing, transition, now);
-    await this.repository.upsertTransitions(
-      [transition],
-      `tracker-transition-insert-${transition.id}`,
-      'tracker-transition-insert'
-    );
+    if (companionChanges.length > 0) {
+      if (!this.repository.upsertTransitionsWithChanges) {
+        throw new PersistenceError(
+          'journal',
+          'The tracker repository cannot atomically commit a companion change'
+        );
+      }
+      await this.repository.upsertTransitionsWithChanges(
+        [transition],
+        companionChanges,
+        `tracker-transition-insert-${transition.id}`,
+        'tracker-routine-start'
+      );
+    } else {
+      await this.repository.upsertTransitions(
+        [transition],
+        `tracker-transition-insert-${transition.id}`,
+        'tracker-transition-insert'
+      );
+    }
     return transition;
   }
 

@@ -5,7 +5,7 @@ import type { KeyValueDatabase } from './database';
 import { DatasetStore } from './dataset-store';
 import { PersistenceError } from './errors';
 import { OperationJournal } from './journal';
-import type { RecoveryReport } from './journal';
+import type { JournalChange, RecoveryReport } from './journal';
 import type { DatasetNamespace } from './namespaces';
 
 function emptyMonth(month: MonthKey): TrackerMonthCollection {
@@ -56,6 +56,12 @@ export interface TrackerRepositoryApi {
   writeMonth(collection: TrackerMonthCollection): Promise<void>;
   upsertTransitions(
     transitions: readonly Transition[],
+    operationId?: string,
+    operationKind?: string
+  ): Promise<void>;
+  upsertTransitionsWithChanges?(
+    transitions: readonly Transition[],
+    companionChanges: readonly JournalChange[],
     operationId?: string,
     operationKind?: string
   ): Promise<void>;
@@ -172,6 +178,42 @@ export class TrackerRepository implements TrackerRepositoryApi {
     );
   }
 
+  async upsertTransitionsWithChanges(
+    transitions: readonly Transition[],
+    companionChanges: readonly JournalChange[],
+    operationId?: string,
+    operationKind = 'tracker-transition-with-companion'
+  ): Promise<void> {
+    if (transitions.length === 0 && companionChanges.length === 0) return;
+    const grouped = new Map<MonthKey, Transition[]>();
+    for (const transition of transitions) {
+      const month = monthKey(transition.timestamp);
+      grouped.set(month, [...(grouped.get(month) ?? []), transition]);
+    }
+    const nextCollections = await Promise.all(
+      [...grouped.entries()].map(async ([month, additions]) => {
+        const current = await this.readMonth(month);
+        const byId = new Map(current.transitions.map((transition) => [transition.id, transition]));
+        for (const transition of additions) byId.set(transition.id, transition);
+        const nextTransitions = sortTransitions([...byId.values()]);
+        return {
+          month,
+          collection: {
+            month,
+            transitions: nextTransitions,
+            latestTransitions: latestCache(nextTransitions),
+          },
+        };
+      })
+    );
+    await this.writeCollections(
+      nextCollections,
+      operationId ?? `tracker-companion-${Date.now()}-${createId()}`,
+      operationKind,
+      companionChanges
+    );
+  }
+
   async writeCrossMonth(
     collections: readonly TrackerMonthCollection[],
     operationId: string,
@@ -194,9 +236,10 @@ export class TrackerRepository implements TrackerRepositoryApi {
   private async writeCollections(
     collections: readonly { month: MonthKey; collection: TrackerMonthCollection }[],
     operationId: string,
-    operationKind = 'tracker-month-write'
+    operationKind = 'tracker-month-write',
+    companionChanges: readonly JournalChange[] = []
   ): Promise<void> {
-    const changes = [];
+    const changes: JournalChange[] = [];
     for (const { month, collection } of collections) {
       if (collection.transitions.some((transition) => monthKey(transition.timestamp) !== month)) {
         throw new PersistenceError(
@@ -220,6 +263,14 @@ export class TrackerRepository implements TrackerRepositoryApi {
         key: this.namespace.key('tracker', month),
         newValue: JSON.stringify(parsed.data),
       });
+    }
+    const keys = new Set(changes.map((change) => change.key));
+    for (const change of companionChanges) {
+      if (!change.key || keys.has(change.key)) {
+        throw new PersistenceError('validation', 'Companion journal changes must have unique keys');
+      }
+      keys.add(change.key);
+      changes.push(change);
     }
     await this.journal.run({
       id: operationId,
