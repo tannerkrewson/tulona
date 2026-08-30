@@ -1,3 +1,18 @@
+# Expo and Node output
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Generated native projects
+ios/
+android/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Beads / Dolt files (added by bd init)
 .dolt/
