@@ -39,9 +39,14 @@ interface EditorResource {
 export interface CatalogEditorScreenProps {
   kind: 'activity' | 'folder';
   id: string;
+  initialFolderId?: UUID | null;
 }
 
-export function CatalogEditorScreen({ kind, id }: CatalogEditorScreenProps) {
+export function CatalogEditorScreen({
+  kind,
+  id,
+  initialFolderId = null,
+}: CatalogEditorScreenProps) {
   const { colors } = useAppTheme();
   const [resource, setResource] = useState<EditorResource | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -97,6 +102,7 @@ export function CatalogEditorScreen({ kind, id }: CatalogEditorScreenProps) {
         key={`${id}-${version}`}
         activity={resource.catalog.activities.find((candidate) => candidate.id === id) ?? null}
         folders={resource.catalog.folders}
+        initialFolderId={initialFolderId}
         service={resource.service}
         onChanged={refresh}
       />
@@ -217,11 +223,13 @@ function FolderPicker({
 function ActivityEditor({
   activity,
   folders,
+  initialFolderId,
   service,
   onChanged,
 }: {
   activity: Activity | null;
   folders: readonly Folder[];
+  initialFolderId: UUID | null;
   service: CatalogService;
   onChanged: () => void;
 }) {
@@ -229,7 +237,7 @@ function ActivityEditor({
   const [name, setName] = useState(activity?.name ?? '');
   const [color, setColor] = useState(activity?.color ?? '');
   const [iconName, setIconName] = useState(activity?.iconName ?? '');
-  const [folderId, setFolderId] = useState(activity?.folderId ?? ROOT_VALUE);
+  const [folderId, setFolderId] = useState(activity?.folderId ?? initialFolderId ?? ROOT_VALUE);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const originalFolderId = activity?.folderId ?? null;
