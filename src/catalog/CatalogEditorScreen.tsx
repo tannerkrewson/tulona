@@ -1,4 +1,4 @@
-import { Button, Column, Picker, Row, Text, TextInput } from '@expo/ui';
+import { Column, Picker, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -6,8 +6,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { Activity, CatalogCollection, Folder, UUID } from '@domain';
 import { AppIcon } from '@icons';
 import { iconCatalog, type IconName } from '@icons/icon-names';
-import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { errorText, Screen } from '@ui';
+import { useAppTheme } from '@theme';
+import { AccessiblePicker, AccessibleTextInput, AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import type { CatalogService } from './catalog-service';
@@ -162,7 +162,8 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function IconPicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
-    <Picker
+    <AccessiblePicker
+      label="Icon"
       selectedValue={value}
       onValueChange={(next) => onChange(String(next))}
       testID="icon-picker"
@@ -171,7 +172,7 @@ function IconPicker({ value, onChange }: { value: string; onChange: (value: stri
       {iconCatalog.map((icon) => (
         <Picker.Item key={icon.name} label={icon.label} value={icon.name} />
       ))}
-    </Picker>
+    </AccessiblePicker>
   );
 }
 
@@ -190,7 +191,7 @@ function ColorPreview({ value }: { value: string }) {
           width: 42,
         }}
       />
-      <Text textStyle={{ color: getAccessibleTextColor(preview), fontSize: 14 }}>
+      <Text textStyle={{ color: colors.text, fontSize: 14 }}>
         {value || 'Default catalog color'}
       </Text>
     </Row>
@@ -212,7 +213,8 @@ function FolderPicker({
     (folder) => folder.archivedAt === null || folder.id === currentFolderId
   );
   return (
-    <Picker
+    <AccessiblePicker
+      label="Parent folder"
       selectedValue={value}
       onValueChange={(next) => onChange(String(next))}
       testID="folder-picker"
@@ -225,7 +227,59 @@ function FolderPicker({
           value={folder.id}
         />
       ))}
-    </Picker>
+    </AccessiblePicker>
+  );
+}
+
+function ArchiveConfirmation({
+  resourceLabel,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  resourceLabel: 'activity' | 'folder';
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <Column
+      spacing={8}
+      style={{
+        backgroundColor: colors.warning.background,
+        borderColor: colors.warning.foreground,
+        borderRadius: 14,
+        borderWidth: 1,
+        padding: 14,
+        width: '100%',
+      }}
+      testID={`archive-${resourceLabel}-confirmation`}
+    >
+      <Text textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}>
+        {`Archive this ${resourceLabel}?`}
+      </Text>
+      <Text textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}>
+        It will be hidden from active catalog views but retained for history. You can restore it
+        later.
+      </Text>
+      <Column spacing={8} style={{ width: '100%' }}>
+        <AppButton
+          disabled={busy}
+          label={`Yes, archive ${resourceLabel}`}
+          onPress={onConfirm}
+          style={{ height: 48, width: '100%' }}
+          testID={`confirm-archive-${resourceLabel}`}
+        />
+        <AppButton
+          disabled={busy}
+          label={`Keep ${resourceLabel}`}
+          onPress={onCancel}
+          style={{ height: 48, width: '100%' }}
+          variant="outlined"
+        />
+      </Column>
+    </Column>
   );
 }
 
@@ -252,6 +306,7 @@ function ActivityEditor({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
+  const [confirmingArchive, setConfirmingArchive] = useState(false);
   const originalFolderId = activity?.folderId ?? null;
 
   const run = async (action: () => Promise<void>) => {
@@ -316,11 +371,13 @@ function ActivityEditor({
           </Text>
         </Row>
         <Field label="Name">
-          <TextInput
+          <AccessibleTextInput
             defaultValue={name}
+            label="Activity name"
             onChangeText={setName}
             placeholder="Activity name"
             returnKeyType="done"
+            placeholderTextColor={colors.textMuted}
             testID="activity-name"
             style={{
               borderColor: colors.border,
@@ -334,10 +391,13 @@ function ActivityEditor({
           />
         </Field>
         <Field label="Standalone color">
-          <TextInput
+          <AccessibleTextInput
             defaultValue={color}
+            label="Activity color"
             onChangeText={setColor}
             placeholder="#176B87"
+            placeholderTextColor={colors.textMuted}
+            returnKeyType="done"
             testID="activity-color"
             style={{
               borderColor: colors.border,
@@ -369,40 +429,58 @@ function ActivityEditor({
             if (lastAction.current) void run(lastAction.current);
           }}
         />
-        <Button
+        <AppButton
           disabled={busy}
           label={busy ? 'Saving...' : 'Save activity'}
           onPress={save}
+          style={{ height: 52, width: '100%' }}
           testID="save-activity"
         />
         {activity ? (
           <>
-            <Row alignment="center" spacing={10}>
-              <Button
+            <Column spacing={8} style={{ width: '100%' }}>
+              <AppButton
                 disabled={busy || activity.archivedAt !== null}
                 label="Move Up"
                 onPress={() => run(async () => void (await service.reorderItem(activity.id, 'up')))}
+                style={{ height: 48, width: '100%' }}
                 variant="outlined"
               />
-              <Button
+              <AppButton
                 disabled={busy || activity.archivedAt !== null}
                 label="Move Down"
                 onPress={() =>
                   run(async () => void (await service.reorderItem(activity.id, 'down')))
                 }
+                style={{ height: 48, width: '100%' }}
                 variant="outlined"
               />
-            </Row>
-            <Button
+            </Column>
+            {confirmingArchive ? (
+              <ArchiveConfirmation
+                busy={busy}
+                onCancel={() => setConfirmingArchive(false)}
+                onConfirm={() =>
+                  void run(async () => {
+                    await service.archiveActivity(activity.id);
+                    setConfirmingArchive(false);
+                  })
+                }
+                resourceLabel="activity"
+              />
+            ) : null}
+            <AppButton
               disabled={busy}
               label={activity.archivedAt === null ? 'Archive activity' : 'Restore activity'}
-              onPress={() =>
-                run(async () => {
-                  if (activity.archivedAt === null) await service.archiveActivity(activity.id);
-                  else await service.restoreActivity(activity.id);
-                })
-              }
-              variant="text"
+              onPress={() => {
+                if (activity.archivedAt === null) setConfirmingArchive(true);
+                else
+                  void run(async () => {
+                    await service.restoreActivity(activity.id);
+                  });
+              }}
+              style={{ height: 48, width: '100%' }}
+              variant="outlined"
             />
           </>
         ) : null}
@@ -429,6 +507,7 @@ function FolderEditor({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
+  const [confirmingArchive, setConfirmingArchive] = useState(false);
 
   const run = async (action: () => Promise<void>) => {
     lastAction.current = action;
@@ -488,11 +567,13 @@ function FolderEditor({
           </Text>
         </Row>
         <Field label="Name">
-          <TextInput
+          <AccessibleTextInput
             defaultValue={name}
+            label="Folder name"
             onChangeText={setName}
             placeholder="Folder name"
             returnKeyType="done"
+            placeholderTextColor={colors.textMuted}
             testID="folder-name"
             style={{
               borderColor: colors.border,
@@ -506,10 +587,13 @@ function FolderEditor({
           />
         </Field>
         <Field label="Folder color">
-          <TextInput
+          <AccessibleTextInput
             defaultValue={color}
+            label="Folder color"
             onChangeText={setColor}
             placeholder="#176B87"
+            placeholderTextColor={colors.textMuted}
+            returnKeyType="done"
             testID="folder-color"
             style={{
               borderColor: colors.border,
@@ -533,42 +617,60 @@ function FolderEditor({
             if (lastAction.current) void run(lastAction.current);
           }}
         />
-        <Button
+        <AppButton
           disabled={busy}
           label={busy ? 'Saving...' : 'Save folder'}
           onPress={save}
+          style={{ height: 52, width: '100%' }}
           testID="save-folder"
         />
         {folder ? (
           <>
-            <Row alignment="center" spacing={10}>
-              <Button
+            <Column spacing={8} style={{ width: '100%' }}>
+              <AppButton
                 disabled={busy || folder.archivedAt !== null}
                 label="Move Up"
                 onPress={() =>
                   run(async () => void (await service.reorderFolders(folder.id, 'up')))
                 }
+                style={{ height: 48, width: '100%' }}
                 variant="outlined"
               />
-              <Button
+              <AppButton
                 disabled={busy || folder.archivedAt !== null}
                 label="Move Down"
                 onPress={() =>
                   run(async () => void (await service.reorderFolders(folder.id, 'down')))
                 }
+                style={{ height: 48, width: '100%' }}
                 variant="outlined"
               />
-            </Row>
-            <Button
+            </Column>
+            {confirmingArchive ? (
+              <ArchiveConfirmation
+                busy={busy}
+                onCancel={() => setConfirmingArchive(false)}
+                onConfirm={() =>
+                  void run(async () => {
+                    await service.archiveFolder(folder.id);
+                    setConfirmingArchive(false);
+                  })
+                }
+                resourceLabel="folder"
+              />
+            ) : null}
+            <AppButton
               disabled={busy}
               label={folder.archivedAt === null ? 'Archive folder' : 'Restore folder'}
-              onPress={() =>
-                run(async () => {
-                  if (folder.archivedAt === null) await service.archiveFolder(folder.id);
-                  else await service.restoreFolder(folder.id);
-                })
-              }
-              variant="text"
+              onPress={() => {
+                if (folder.archivedAt === null) setConfirmingArchive(true);
+                else
+                  void run(async () => {
+                    await service.restoreFolder(folder.id);
+                  });
+              }}
+              style={{ height: 48, width: '100%' }}
+              variant="outlined"
             />
           </>
         ) : null}

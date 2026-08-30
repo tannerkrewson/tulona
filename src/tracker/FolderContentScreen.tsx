@@ -1,11 +1,11 @@
-import { Button, Column, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { Activity, RoutineDefinition } from '@domain';
 import { isIconName, AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { ActivityTile, errorText, Screen } from '@ui';
+import { ActivityTile, AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
@@ -220,42 +220,47 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
           </Column>
         </Row>
         <Column spacing={8} style={{ width: '100%' }}>
-          <Row alignment="center" spacing={8}>
-            <Button
+          <Column spacing={8} style={{ width: '100%' }}>
+            <AppButton
               disabled={busy}
               label="Add activity"
               onPress={() => router.push(`/activity/new?folderId=${folder.id}`)}
+              style={{ height: 50, width: '100%' }}
               testID="folder-add-activity"
             />
-            <Button
+            <AppButton
               disabled={busy}
               label="Add routine"
               onPress={() => router.push(`/routine-edit/new?folderId=${folder.id}`)}
+              style={{ height: 50, width: '100%' }}
               testID="folder-add-routine"
               variant="outlined"
             />
-            <Button
+            <AppButton
               disabled={busy}
               label="Edit folder"
               onPress={() => router.push(`/folder-edit/${folder.id}`)}
+              style={{ height: 50, width: '100%' }}
               testID="folder-edit"
               variant="outlined"
             />
-          </Row>
-          <Row alignment="center" spacing={8}>
-            <Button
+          </Column>
+          <Column spacing={8} style={{ width: '100%' }}>
+            <AppButton
               disabled={busy}
               label="Back to tracker"
               onPress={() => router.back()}
-              variant="text"
+              style={{ height: 48, width: '100%' }}
+              variant="outlined"
             />
-            <Button
+            <AppButton
               label={showArchived ? 'Hide archived' : 'Show archived'}
               onPress={() => setShowArchived((visible) => !visible)}
+              style={{ height: 48, width: '100%' }}
               testID="folder-toggle-archived"
               variant="outlined"
             />
-          </Row>
+          </Column>
         </Column>
         {visibleError ? (
           <ErrorPanel
@@ -291,7 +296,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
                   testID={`folder-child-${item.id}`}
                 />
                 {active ? (
-                  <Row alignment="center" spacing={8}>
+                  <Column spacing={8} style={{ width: '100%' }}>
                     <Text
                       textStyle={{
                         color: colors.active.foreground,
@@ -301,7 +306,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
                     >
                       Active now
                     </Text>
-                    <Button
+                    <AppButton
                       disabled={busy}
                       label="Edit"
                       onPress={() =>
@@ -309,11 +314,12 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
                           `/${item.kind === 'routine' ? 'routine-edit' : 'activity'}/${item.id}`
                         )
                       }
-                      variant="text"
+                      style={{ height: 48, width: '100%' }}
+                      variant="outlined"
                     />
-                  </Row>
+                  </Column>
                 ) : (
-                  <Button
+                  <AppButton
                     disabled={busy}
                     label="Edit"
                     onPress={() =>
@@ -321,7 +327,8 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
                         `/${item.kind === 'routine' ? 'routine-edit' : 'activity'}/${item.id}`
                       )
                     }
-                    variant="text"
+                    style={{ height: 48, width: '100%' }}
+                    variant="outlined"
                   />
                 )}
               </Column>

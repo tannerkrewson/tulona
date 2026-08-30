@@ -1,9 +1,9 @@
-import { Button, Column, Text } from '@expo/ui';
+import { Column, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAppTheme } from '@theme';
-import { errorText, Screen } from '@ui';
+import { AppButton, errorText, Screen } from '@ui';
 import { bootCoordinator } from '../orchestration';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
@@ -126,7 +126,7 @@ export default function OnboardingScreen() {
           <Text textStyle={{ color: colors.textMuted, fontSize: 15, lineHeight: 22 }}>
             Create a blank workspace and add only the activities, routines, and habits you want.
           </Text>
-          <Button
+          <AppButton
             disabled={busy || service === null || status === 'complete'}
             label="Start empty"
             onPress={() => void choose('empty')}
@@ -151,7 +151,7 @@ export default function OnboardingScreen() {
             Add a small editable set for morning routine, work, exercise, eating, errands, and
             leisure, including TV, video games, and reading.
           </Text>
-          <Button
+          <AppButton
             disabled={busy || service === null || status === 'complete'}
             label="Add starter activities"
             onPress={() => void choose('starter')}
@@ -159,7 +159,7 @@ export default function OnboardingScreen() {
           />
         </Column>
         {status === 'complete' ? (
-          <Button
+          <AppButton
             disabled={busy}
             label="Continue to Tulona"
             onPress={() => router.replace('/(tabs)')}

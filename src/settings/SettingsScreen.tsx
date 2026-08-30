@@ -1,10 +1,10 @@
-import { Button, Column, Picker, Text } from '@expo/ui';
+import { Column, Picker, Text } from '@expo/ui';
 import { useIsFocused, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import type { AppSettings } from '@domain';
 import { useAppTheme } from '@theme';
-import { errorText, Screen } from '@ui';
+import { AccessiblePicker, AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { loadSettingsStore } from './settings-runtime';
@@ -57,7 +57,7 @@ function Field({
   const { colors } = useAppTheme(themeMode);
   return (
     <Column spacing={6} style={{ width: '100%' }}>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>{label}</Text>
+      <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>{label}</Text>
       {children}
     </Column>
   );
@@ -148,7 +148,7 @@ export default function SettingsScreen() {
             />
           ) : null}
           {noDataset ? (
-            <Button
+            <AppButton
               label="Set up this device"
               onPress={() => router.push('/onboarding')}
               testID="open-onboarding"
@@ -203,7 +203,8 @@ function SettingsContent({
           title="Appearance"
         >
           <Field label="Theme" themeMode={settings.appearance}>
-            <Picker
+            <AccessiblePicker
+              label="Theme"
               selectedValue={settings.appearance}
               onValueChange={(value) =>
                 run(() =>
@@ -215,7 +216,7 @@ function SettingsContent({
               <Picker.Item label="Use device setting" value="system" />
               <Picker.Item label="Light" value="light" />
               <Picker.Item label="Dark" value="dark" />
-            </Picker>
+            </AccessiblePicker>
           </Field>
         </SettingSection>
         <SettingSection
@@ -224,7 +225,8 @@ function SettingsContent({
           title="Time boundaries"
         >
           <Field label="Logical day starts at" themeMode={settings.appearance}>
-            <Picker
+            <AccessiblePicker
+              label="Logical day starts at"
               selectedValue={String(settings.logicalDayRolloverHour)}
               onValueChange={(value) =>
                 run(() => store.getState().setLogicalDayRolloverHour(Number(value)))
@@ -242,10 +244,11 @@ function SettingsContent({
                   value={String(hour)}
                 />
               ))}
-            </Picker>
+            </AccessiblePicker>
           </Field>
           <Field label="Week starts on" themeMode={settings.appearance}>
-            <Picker
+            <AccessiblePicker
+              label="Week starts on"
               selectedValue={String(settings.weekStartsOn)}
               onValueChange={(value) => run(() => store.getState().setWeekStartsOn(Number(value)))}
               testID="settings-week-start"
@@ -255,7 +258,7 @@ function SettingsContent({
                   <Picker.Item key={label} label={label} value={String(day)} />
                 )
               )}
-            </Picker>
+            </AccessiblePicker>
           </Field>
         </SettingSection>
         <SettingSection
@@ -264,7 +267,8 @@ function SettingsContent({
           title="Routine alarm"
         >
           <Field label="Alarm" themeMode={settings.appearance}>
-            <Picker
+            <AccessiblePicker
+              label="Alarm"
               selectedValue={settings.alarmSettings.enabled ? 'enabled' : 'disabled'}
               onValueChange={(value) =>
                 run(() => store.getState().setRoutineAlarmEnabled(value === 'enabled'))
@@ -273,10 +277,11 @@ function SettingsContent({
             >
               <Picker.Item label="Disabled" value="disabled" />
               <Picker.Item label="Enabled" value="enabled" />
-            </Picker>
+            </AccessiblePicker>
           </Field>
           <Field label="Volume" themeMode={settings.appearance}>
-            <Picker
+            <AccessiblePicker
+              label="Volume"
               selectedValue={String(settings.alarmSettings.volume ?? 1)}
               onValueChange={(value) =>
                 run(() => store.getState().setRoutineAlarmVolume(Number(value)))
@@ -290,7 +295,7 @@ function SettingsContent({
                   value={String(volume)}
                 />
               ))}
-            </Picker>
+            </AccessiblePicker>
           </Field>
         </SettingSection>
         <SettingSection
@@ -299,7 +304,8 @@ function SettingsContent({
           title="Routine defaults"
         >
           <Field label="When reopening a routine" themeMode={settings.appearance}>
-            <Picker
+            <AccessiblePicker
+              label="When reopening a routine"
               selectedValue={settings.defaultRoutineBehavior}
               onValueChange={(value) =>
                 run(() =>
@@ -312,7 +318,7 @@ function SettingsContent({
             >
               <Picker.Item label="Resume where I left off" value="resume" />
               <Picker.Item label="Restart the current step" value="restart" />
-            </Picker>
+            </AccessiblePicker>
           </Field>
         </SettingSection>
         <SettingSection
@@ -321,7 +327,8 @@ function SettingsContent({
           title="Catalog visibility"
         >
           <Field label="Archived activities and routines" themeMode={settings.appearance}>
-            <Picker
+            <AccessiblePicker
+              label="Archived activities and routines"
               selectedValue={settings.showArchived ? 'shown' : 'hidden'}
               onValueChange={(value) =>
                 run(() => store.getState().setShowArchived(value === 'shown'))
@@ -330,13 +337,14 @@ function SettingsContent({
             >
               <Picker.Item label="Hide archived" value="hidden" />
               <Picker.Item label="Show archived" value="shown" />
-            </Picker>
+            </AccessiblePicker>
           </Field>
         </SettingSection>
-        <Button
+        <AppButton
           disabled={saving}
           label="Backup & restore"
           onPress={() => router.push('/backup')}
+          style={{ height: 52, width: '100%' }}
           testID="open-backup"
         />
       </Column>

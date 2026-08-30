@@ -1,10 +1,11 @@
-import { Button, Column, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
-import { errorText, Screen } from '@ui';
+import { AppButton, errorText, Screen } from '@ui';
 import { bootCoordinator } from '../orchestration';
 
 import { BackupImportError, type BackupImportResult } from './backup-import';
@@ -28,6 +29,17 @@ function Summary({ result }: { result: BackupImportResult }) {
       }}
       testID="backup-import-summary"
     >
+      <Row alignment="center" spacing={8}>
+        <AppIcon
+          accessibilityLabel="Backup ready"
+          color={colors.success.foreground}
+          name="check-circle-2"
+          size={20}
+        />
+        <Text textStyle={{ color: colors.success.foreground, fontSize: 15, fontWeight: '700' }}>
+          Valid backup
+        </Text>
+      </Row>
       <Text textStyle={{ color: colors.success.foreground, fontSize: 15, fontWeight: '700' }}>
         Backup is valid and ready to restore
       </Text>
@@ -68,9 +80,17 @@ function ErrorPanel({
       }}
       testID="backup-error"
     >
-      <Text textStyle={{ color: colors.danger.foreground, fontSize: 15, fontWeight: '700' }}>
-        Backup action failed
-      </Text>
+      <Row alignment="center" spacing={8}>
+        <AppIcon
+          accessibilityLabel="Backup error"
+          color={colors.danger.foreground}
+          name="circle"
+          size={18}
+        />
+        <Text textStyle={{ color: colors.danger.foreground, fontSize: 15, fontWeight: '700' }}>
+          Backup action failed
+        </Text>
+      </Row>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 13 }}>
         Your current data was not replaced.
@@ -181,6 +201,12 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
       description="Export a copy or validate a backup before replacing this device's data."
     >
       <Column spacing={14} style={{ width: '100%' }}>
+        <AppButton
+          label="Back to settings"
+          onPress={() => router.back()}
+          style={{ height: 48, width: '100%' }}
+          variant="outlined"
+        />
         <Column
           spacing={10}
           style={{
@@ -200,24 +226,27 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
             JSON restores the complete dataset. CSV is a read-only analysis export of derived
             intervals.
           </Text>
-          <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-            <Button
+          <Column spacing={8} style={{ width: '100%' }}>
+            <AppButton
               disabled={busy}
               label="Export JSON"
               onPress={() => void exportJson()}
+              style={{ height: 50, width: '100%' }}
               testID="export-json"
             />
-            <Button
+            <AppButton
               disabled={busy}
               label="Export CSV"
               onPress={() => void exportCsv()}
+              style={{ height: 50, width: '100%' }}
               testID="export-csv"
             />
-          </Row>
-          <Button
+          </Column>
+          <AppButton
             disabled={busy}
             label="Choose JSON backup"
             onPress={() => void importFile()}
+            style={{ height: 50, width: '100%' }}
             testID="import-json"
           />
         </Column>
@@ -235,12 +264,28 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
           }}
         />
         {success ? (
-          <Text
-            textStyle={{ color: colors.success.foreground, fontSize: 15 }}
+          <Column
+            spacing={6}
+            style={{
+              backgroundColor: colors.success.background,
+              borderColor: colors.success.foreground,
+              borderRadius: 14,
+              borderWidth: 1,
+              padding: 14,
+              width: '100%',
+            }}
             testID="backup-success"
           >
-            {success}
-          </Text>
+            <Row alignment="center" spacing={8}>
+              <AppIcon
+                accessibilityLabel="Backup completed"
+                color={colors.success.foreground}
+                name="check-circle-2"
+                size={18}
+              />
+              <Text textStyle={{ color: colors.success.foreground, fontSize: 15 }}>{success}</Text>
+            </Row>
+          </Column>
         ) : null}
         {importResult ? <Summary result={importResult} /> : null}
         {importResult && importText ? (
@@ -260,37 +305,40 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
               <Text
                 textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}
               >
-                Replace current data?
+                Replace all current data?
               </Text>
               <Text textStyle={{ color: colors.warning.foreground, fontSize: 14 }}>
-                This creates and verifies a new dataset before switching the active data. The
-                current dataset is retained until activation succeeds.
+                This switches this device to the selected backup after it is verified. Your current
+                dataset will be retained, but this action changes which data is active.
               </Text>
-              <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-                <Button
+              <Column spacing={8} style={{ width: '100%' }}>
+                <AppButton
                   disabled={busy}
-                  label="Confirm replacement"
+                  label="Yes, replace current data"
                   onPress={() => void replace()}
+                  style={{ height: 50, width: '100%' }}
                   testID="confirm-replace"
                 />
-                <Button
+                <AppButton
                   label="Cancel"
                   onPress={() => setConfirming(false)}
+                  style={{ height: 48, width: '100%' }}
                   testID="cancel-replace"
                 />
-              </Row>
+              </Column>
             </Column>
           ) : (
-            <Button
+            <AppButton
               disabled={busy}
               label="Replace current data"
               onPress={() => setConfirming(true)}
+              style={{ height: 52, width: '100%' }}
               testID="replace-current-data"
             />
           )
         ) : null}
         {success?.startsWith('Data replaced') ? (
-          <Button
+          <AppButton
             label="Reload active dataset"
             onPress={() => router.replace('/(tabs)')}
             testID="reload-after-restore"

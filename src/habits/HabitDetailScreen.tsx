@@ -1,4 +1,4 @@
-import { Button, Column, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 
@@ -11,7 +11,7 @@ import {
 } from '@domain';
 import { AppIcon, normalizeIconName } from '@icons';
 import { useAppTheme } from '@theme';
-import { errorText, Screen } from '@ui';
+import { AppButton, errorText, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { formatHabitSchedule, habitCompletionLabel, habitSignalSummary } from './habit-format';
@@ -116,6 +116,7 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
   const busy = store((state) => state.saving);
   const persistenceError = store((state) => state.persistenceError);
   const lastAction = useRef<(() => Promise<unknown>) | null>(null);
+  const [confirmingArchive, setConfirmingArchive] = useState(false);
 
   if (!habit) {
     return (
@@ -159,19 +160,21 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
             void (action ? action() : store.getState().refresh()).catch(() => undefined);
           }}
         />
-        <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-          <Button
+        <Column spacing={8} style={{ width: '100%' }}>
+          <AppButton
             label="Back to habits"
             onPress={() => router.back()}
+            style={{ height: 48, width: '100%' }}
             testID="back-to-habits"
             variant="outlined"
           />
-          <Button
+          <AppButton
             label="Edit"
             onPress={() => router.push(`/habit/${habit.id}?edit=1`)}
+            style={{ height: 50, width: '100%' }}
             testID="edit-habit"
           />
-        </Row>
+        </Column>
         {archived ? (
           <Column
             spacing={4}
@@ -219,8 +222,11 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
                 size={28}
               />
             </Column>
-            <Column spacing={4} style={{ width: '75%' }}>
-              <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
+            <Column spacing={4}>
+              <Text
+                numberOfLines={2}
+                textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}
+              >
                 {habit.name}
               </Text>
               <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
@@ -272,10 +278,22 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
           today={today}
         />
 
-        <Button
+        {!archived && confirmingArchive ? (
+          <ArchiveHabitConfirmation
+            busy={busy}
+            onCancel={() => setConfirmingArchive(false)}
+            onConfirm={() => {
+              void changeArchiveState().then(() => setConfirmingArchive(false));
+            }}
+          />
+        ) : null}
+        <AppButton
           disabled={busy}
           label={busy ? 'Saving...' : archived ? 'Restore habit' : 'Archive habit'}
-          onPress={() => void changeArchiveState()}
+          onPress={() => {
+            if (archived) void changeArchiveState();
+            else setConfirmingArchive(true);
+          }}
           style={{ height: 48, width: '100%' }}
           testID={archived ? 'restore-habit' : 'archive-habit'}
           variant={archived ? 'outlined' : 'text'}
@@ -301,6 +319,56 @@ function StatCard({ label, value }: { label: string; value: string }) {
     >
       <Text textStyle={{ color: colors.primary, fontSize: 26, fontWeight: '700' }}>{value}</Text>
       <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>{label}</Text>
+    </Column>
+  );
+}
+
+function ArchiveHabitConfirmation({
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <Column
+      spacing={8}
+      style={{
+        backgroundColor: colors.warning.background,
+        borderColor: colors.warning.foreground,
+        borderRadius: 14,
+        borderWidth: 1,
+        padding: 14,
+        width: '100%',
+      }}
+      testID="archive-habit-confirmation"
+    >
+      <Text textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}>
+        Archive this habit?
+      </Text>
+      <Text textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}>
+        It will be hidden from the active list while its history is retained. You can restore it
+        later.
+      </Text>
+      <Column spacing={8} style={{ width: '100%' }}>
+        <AppButton
+          disabled={busy}
+          label="Yes, archive habit"
+          onPress={onConfirm}
+          style={{ height: 48, width: '100%' }}
+          testID="confirm-archive-habit"
+        />
+        <AppButton
+          disabled={busy}
+          label="Keep habit"
+          onPress={onCancel}
+          style={{ height: 48, width: '100%' }}
+          variant="outlined"
+        />
+      </Column>
     </Column>
   );
 }
@@ -379,6 +447,7 @@ function HistoryGrid({
                   }}
                 >
                   <AppIcon
+                    accessibilityLabel={`${day}: ${complete ? 'Completed' : scheduled ? 'Not completed' : 'Not scheduled'}`}
                     color={complete ? colors.success.foreground : colors.textMuted}
                     name={complete ? 'check' : 'circle'}
                     size={14}
@@ -389,7 +458,7 @@ function HistoryGrid({
           })}
         </Row>
       ))}
-      <Row alignment="center" spacing={12}>
+      <Column spacing={8} style={{ width: '100%' }}>
         <Row alignment="center" spacing={4}>
           <AppIcon color={colors.success.foreground} name="check" size={14} />
           <Text textStyle={{ color: colors.textMuted, fontSize: 12 }}>Completed</Text>
@@ -398,7 +467,11 @@ function HistoryGrid({
           <AppIcon color={colors.textMuted} name="circle" size={14} />
           <Text textStyle={{ color: colors.textMuted, fontSize: 12 }}>Not completed</Text>
         </Row>
-      </Row>
+        <Row alignment="center" spacing={4}>
+          <AppIcon color={colors.textMuted} name="circle" size={14} />
+          <Text textStyle={{ color: colors.textMuted, fontSize: 12 }}>Not scheduled</Text>
+        </Row>
+      </Column>
     </Column>
   );
 }

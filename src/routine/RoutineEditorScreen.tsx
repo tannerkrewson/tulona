@@ -1,4 +1,4 @@
-import { Button, Column, Picker, Row, Text, TextInput } from '@expo/ui';
+import { Column, Picker, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -15,8 +15,8 @@ import type {
 import { createId } from '@domain';
 import { AppIcon } from '@icons';
 import { iconCatalog, type IconName } from '@icons/icon-names';
-import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { errorText, Screen } from '@ui';
+import { useAppTheme } from '@theme';
+import { AccessiblePicker, AccessibleTextInput, AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import type { CatalogService, CreateRoutineStepInput } from '../catalog/catalog-service';
@@ -136,6 +136,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function Input({
+  label,
   value,
   onChangeText,
   placeholder,
@@ -144,18 +145,20 @@ function Input({
   keyboardType = 'default',
   width,
 }: {
+  label: string;
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
   testID: string;
   multiline?: boolean;
   keyboardType?: 'default' | 'numeric';
-  width?: number;
+  width?: number | '100%';
 }) {
   const { colors } = useAppTheme();
   return (
-    <TextInput
+    <AccessibleTextInput
       defaultValue={value}
+      label={label}
       onChangeText={onChangeText}
       placeholder={placeholder}
       keyboardType={keyboardType}
@@ -171,6 +174,8 @@ function Input({
         paddingVertical: 10,
         width: width ?? '100%',
       }}
+      placeholderTextColor={colors.textMuted}
+      returnKeyType={multiline ? 'default' : 'next'}
       textStyle={{ color: colors.text, fontSize: 16 }}
     />
   );
@@ -220,7 +225,12 @@ function FolderPicker({
   onChange: (value: string) => void;
 }) {
   return (
-    <Picker selectedValue={value} onValueChange={onChange} testID="routine-folder-picker">
+    <AccessiblePicker
+      label="Parent folder"
+      selectedValue={value}
+      onValueChange={onChange}
+      testID="routine-folder-picker"
+    >
       <Picker.Item label="Root" value={ROOT_VALUE} />
       {folders
         .filter((folder) => folder.archivedAt === null || folder.id === currentFolderId)
@@ -231,7 +241,7 @@ function FolderPicker({
             value={folder.id}
           />
         ))}
-    </Picker>
+    </AccessiblePicker>
   );
 }
 
@@ -239,18 +249,20 @@ function IconPicker({
   value,
   onChange,
   testID,
+  label,
 }: {
   value: string;
   onChange: (value: string) => void;
   testID: string;
+  label: string;
 }) {
   return (
-    <Picker selectedValue={value} onValueChange={onChange} testID={testID}>
+    <AccessiblePicker label={label} selectedValue={value} onValueChange={onChange} testID={testID}>
       <Picker.Item label="No icon" value="" />
       {iconCatalog.map((icon) => (
         <Picker.Item key={icon.name} label={icon.label} value={icon.name} />
       ))}
-    </Picker>
+    </AccessiblePicker>
   );
 }
 
@@ -269,7 +281,7 @@ function ColorPreview({ value }: { value: string }) {
           width: 38,
         }}
       />
-      <Text textStyle={{ color: getAccessibleTextColor(preview), fontSize: 14 }}>
+      <Text textStyle={{ color: colors.text, fontSize: 14 }}>
         {value || 'Default catalog color'}
       </Text>
     </Row>
@@ -318,6 +330,7 @@ function StepForm({
       </Text>
       <Field label="Step title">
         <Input
+          label="Step title"
           value={draft.title}
           onChangeText={(title) => update({ title })}
           placeholder="What will you do?"
@@ -325,7 +338,8 @@ function StepForm({
         />
       </Field>
       <Field label="Activity tracked by this step">
-        <Picker
+        <AccessiblePicker
+          label="Activity tracked by this step"
           selectedValue={draft.activityId}
           onValueChange={(activityId) => update({ activityId })}
           testID="step-activity-picker"
@@ -338,48 +352,59 @@ function StepForm({
               value={activity.id}
             />
           ))}
-        </Picker>
+        </AccessiblePicker>
       </Field>
       <Field label="Curated step icon">
         <IconPicker
+          label="Step icon"
           value={draft.iconName}
           onChange={(iconName) => update({ iconName })}
           testID="step-icon-picker"
         />
       </Field>
       <Field label="Duration">
-        <Row alignment="center" spacing={8}>
-          <Input
-            value={draft.hours}
-            onChangeText={(hours) => update({ hours })}
-            placeholder="0"
-            testID="step-hours"
-            keyboardType="numeric"
-            width={58}
-          />
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>hours</Text>
-          <Input
-            value={draft.minutes}
-            onChangeText={(minutes) => update({ minutes })}
-            placeholder="0"
-            testID="step-minutes"
-            keyboardType="numeric"
-            width={58}
-          />
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>min</Text>
-          <Input
-            value={draft.seconds}
-            onChangeText={(seconds) => update({ seconds })}
-            placeholder="0"
-            testID="step-seconds"
-            keyboardType="numeric"
-            width={58}
-          />
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>sec</Text>
-        </Row>
+        <Column spacing={8} style={{ width: '100%' }}>
+          <Row alignment="center" spacing={8}>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>Hours</Text>
+            <Input
+              label="Step hours"
+              value={draft.hours}
+              onChangeText={(hours) => update({ hours })}
+              placeholder="0"
+              testID="step-hours"
+              keyboardType="numeric"
+              width={100}
+            />
+          </Row>
+          <Row alignment="center" spacing={8}>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>Minutes</Text>
+            <Input
+              label="Step minutes"
+              value={draft.minutes}
+              onChangeText={(minutes) => update({ minutes })}
+              placeholder="0"
+              testID="step-minutes"
+              keyboardType="numeric"
+              width={100}
+            />
+          </Row>
+          <Row alignment="center" spacing={8}>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>Seconds</Text>
+            <Input
+              label="Step seconds"
+              value={draft.seconds}
+              onChangeText={(seconds) => update({ seconds })}
+              placeholder="0"
+              testID="step-seconds"
+              keyboardType="numeric"
+              width={100}
+            />
+          </Row>
+        </Column>
       </Field>
       <Field label="When time expires">
-        <Picker
+        <AccessiblePicker
+          label="When time expires"
           selectedValue={draft.endBehavior}
           onValueChange={(endBehavior) =>
             update({ endBehavior: endBehavior as RoutineStepEndBehavior })
@@ -388,10 +413,11 @@ function StepForm({
         >
           <Picker.Item label="Keep running into overtime" value="overtime" />
           <Picker.Item label="Auto-advance to the next step" value="auto-advance" />
-        </Picker>
+        </AccessiblePicker>
       </Field>
       <Field label="Notes">
         <Input
+          label="Step notes"
           value={draft.notes}
           onChangeText={(notes) => update({ notes })}
           placeholder="Optional step notes"
@@ -400,21 +426,23 @@ function StepForm({
         />
       </Field>
       <ErrorMessage message={error} onBack={onCancel} onRetry={onRetry} />
-      <Row alignment="center" spacing={10}>
-        <Button
+      <Column spacing={8} style={{ width: '100%' }}>
+        <AppButton
           disabled={busy}
           label={busy ? 'Saving...' : 'Save step'}
           onPress={onSave}
+          style={{ height: 50, width: '100%' }}
           testID="save-step"
         />
-        <Button
+        <AppButton
           disabled={busy}
           label="Cancel"
           onPress={onCancel}
+          style={{ height: 48, width: '100%' }}
           variant="outlined"
           testID="cancel-step"
         />
-      </Row>
+      </Column>
     </Column>
   );
 }
@@ -454,9 +482,14 @@ function StepRow({
       }}
       testID={`routine-step-${step.id}`}
     >
-      <Row alignment="center" spacing={12}>
-        <AppIcon name={(step.iconName || 'timer') as IconName} color={colors.primary} size={25} />
-        <Column spacing={3} style={{ width: '100%' }}>
+      <Row alignment="center" spacing={12} style={{ width: '100%' }}>
+        <AppIcon
+          accessibilityLabel={`Icon for step ${index + 1}`}
+          name={(step.iconName || 'timer') as IconName}
+          color={colors.primary}
+          size={25}
+        />
+        <Column spacing={3}>
           <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
             {`${index + 1}. ${step.name || 'Untitled step'}`}
           </Text>
@@ -470,39 +503,98 @@ function StepRow({
           {step.notes}
         </Text>
       ) : null}
-      <Row alignment="center" spacing={8}>
-        <Button disabled={busy} label="Edit" onPress={onEdit} testID={`edit-step-${step.id}`} />
-        <Button
+      <Column spacing={8} style={{ width: '100%' }}>
+        <AppButton
+          disabled={busy}
+          label="Edit"
+          onPress={onEdit}
+          style={{ height: 48, width: '100%' }}
+          testID={`edit-step-${step.id}`}
+        />
+        <AppButton
           disabled={busy}
           label="Duplicate"
           onPress={onDuplicate}
+          style={{ height: 48, width: '100%' }}
           variant="outlined"
           testID={`duplicate-step-${step.id}`}
         />
-        <Button
+        <AppButton
           disabled={busy}
           label="Delete"
           onPress={onDelete}
-          variant="text"
+          style={{ height: 48, width: '100%' }}
+          variant="outlined"
           testID={`delete-step-${step.id}`}
         />
-      </Row>
-      <Row alignment="center" spacing={8}>
-        <Button
+      </Column>
+      <Column spacing={8} style={{ width: '100%' }}>
+        <AppButton
           disabled={busy || index === 0}
           label="Move Up"
           onPress={() => onMove('up')}
+          style={{ height: 48, width: '100%' }}
           variant="outlined"
           testID={`move-step-up-${step.id}`}
         />
-        <Button
+        <AppButton
           disabled={busy || index === count - 1}
           label="Move Down"
           onPress={() => onMove('down')}
+          style={{ height: 48, width: '100%' }}
           variant="outlined"
           testID={`move-step-down-${step.id}`}
         />
-      </Row>
+      </Column>
+    </Column>
+  );
+}
+
+function DeleteStepConfirmation({
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <Column
+      spacing={8}
+      style={{
+        backgroundColor: colors.warning.background,
+        borderColor: colors.warning.foreground,
+        borderRadius: 14,
+        borderWidth: 1,
+        padding: 14,
+        width: '100%',
+      }}
+      testID="delete-step-confirmation"
+    >
+      <Text textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}>
+        Delete this step?
+      </Text>
+      <Text textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}>
+        This removes the step from the routine. Confirm only if you want to discard its settings.
+      </Text>
+      <Column spacing={8} style={{ width: '100%' }}>
+        <AppButton
+          disabled={busy}
+          label="Yes, delete step"
+          onPress={onConfirm}
+          style={{ height: 48, width: '100%' }}
+          testID="confirm-delete-step"
+        />
+        <AppButton
+          disabled={busy}
+          label="Keep step"
+          onPress={onCancel}
+          style={{ height: 48, width: '100%' }}
+          variant="outlined"
+        />
+      </Column>
     </Column>
   );
 }
@@ -586,6 +678,7 @@ function RoutineEditorForm({
   const [newSteps, setNewSteps] = useState<StepDraft[]>([]);
   const [editingStepId, setEditingStepId] = useState<UUID | null>(null);
   const [draft, setDraft] = useState<StepDraft | null>(null);
+  const [deleteStepId, setDeleteStepId] = useState<UUID | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
@@ -727,6 +820,7 @@ function RoutineEditorForm({
         </Row>
         <Field label="Routine name">
           <Input
+            label="Routine name"
             value={name}
             onChangeText={setName}
             placeholder="Routine name"
@@ -735,6 +829,7 @@ function RoutineEditorForm({
         </Field>
         <Field label="Standalone color">
           <Input
+            label="Routine color"
             value={color}
             onChangeText={setColor}
             placeholder="#176B87"
@@ -743,7 +838,12 @@ function RoutineEditorForm({
           <ColorPreview value={color} />
         </Field>
         <Field label="Routine icon">
-          <IconPicker value={iconName} onChange={setIconName} testID="routine-icon-picker" />
+          <IconPicker
+            label="Routine icon"
+            value={iconName}
+            onChange={setIconName}
+            testID="routine-icon-picker"
+          />
         </Field>
         <Field label="Root or folder placement">
           <FolderPicker
@@ -760,24 +860,26 @@ function RoutineEditorForm({
             if (lastAction.current) void lastAction.current();
           }}
         />
-        <Button
+        <AppButton
           disabled={busy}
           label={busy ? 'Saving...' : routine ? 'Save routine' : 'Create routine'}
           onPress={() => void saveRoutine()}
+          style={{ height: 52, width: '100%' }}
           testID="save-routine"
         />
       </Column>
 
       <Column spacing={12} style={{ width: '100%' }}>
-        <Row alignment="center" spacing={10}>
+        <Column spacing={10} style={{ width: '100%' }}>
           <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>Steps</Text>
-          <Button
+          <AppButton
             disabled={busy || draft !== null}
             label="Add step"
             onPress={startAdd}
+            style={{ height: 50, width: '100%' }}
             testID="add-routine-step"
           />
-        </Row>
+        </Column>
         {draft && !editingStepId ? (
           <StepForm
             draft={draft}
@@ -793,74 +895,89 @@ function RoutineEditorForm({
             }}
           />
         ) : null}
-        {steps.map((step, index) =>
-          editingStepId === step.id && draft ? (
-            <StepForm
-              key={step.id}
-              draft={draft}
-              activities={activities}
-              onChange={setDraft}
-              onSave={() => void saveStep()}
-              onCancel={() => {
-                setDraft(null);
-                setEditingStepId(null);
-              }}
-              busy={busy}
-              error={error}
-              onRetry={() => {
-                const action = lastAction.current;
-                if (action) void run(action);
-              }}
-            />
-          ) : (
-            <StepRow
-              key={step.id}
-              step={step}
-              index={index}
-              count={steps.length}
-              busy={busy}
-              onEdit={() => {
-                setError(null);
-                setEditingStepId(step.id);
-                setDraft(draftFromStep(step));
-              }}
-              onDuplicate={() =>
-                routine
-                  ? void run(async () => {
-                      await service.duplicateRoutineStep(routine.id, step.id);
-                    })
-                  : setNewSteps((current) => [
-                      ...current,
-                      { ...draftFromStep(step), id: createId(), title: `${step.name ?? ''} copy` },
-                    ])
-              }
-              onDelete={() =>
-                routine
-                  ? void run(async () => {
+        {steps.map((step, index) => (
+          <Column key={step.id} spacing={8} style={{ width: '100%' }}>
+            {editingStepId === step.id && draft ? (
+              <StepForm
+                draft={draft}
+                activities={activities}
+                onChange={setDraft}
+                onSave={() => void saveStep()}
+                onCancel={() => {
+                  setDraft(null);
+                  setEditingStepId(null);
+                }}
+                busy={busy}
+                error={error}
+                onRetry={() => {
+                  const action = lastAction.current;
+                  if (action) void run(action);
+                }}
+              />
+            ) : (
+              <StepRow
+                step={step}
+                index={index}
+                count={steps.length}
+                busy={busy}
+                onEdit={() => {
+                  setError(null);
+                  setEditingStepId(step.id);
+                  setDraft(draftFromStep(step));
+                }}
+                onDuplicate={() =>
+                  routine
+                    ? void run(async () => {
+                        await service.duplicateRoutineStep(routine.id, step.id);
+                      })
+                    : setNewSteps((current) => [
+                        ...current,
+                        {
+                          ...draftFromStep(step),
+                          id: createId(),
+                          title: `${step.name ?? ''} copy`,
+                        },
+                      ])
+                }
+                onDelete={() => setDeleteStepId(step.id)}
+                onMove={(direction) =>
+                  routine
+                    ? void run(async () => {
+                        await service.reorderRoutineStep(routine.id, step.id, direction);
+                      })
+                    : setNewSteps((current) => {
+                        const from = index;
+                        const to = direction === 'up' ? from - 1 : from + 1;
+                        if (to < 0 || to >= current.length) return current;
+                        const next = [...current];
+                        const [moved] = next.splice(from, 1);
+                        if (moved) next.splice(to, 0, moved);
+                        return next;
+                      })
+                }
+              />
+            )}
+            {deleteStepId === step.id ? (
+              <DeleteStepConfirmation
+                busy={busy}
+                onCancel={() => setDeleteStepId(null)}
+                onConfirm={() => {
+                  if (routine) {
+                    void run(async () => {
                       await service.deleteRoutineStep(routine.id, step.id);
-                    })
-                  : setNewSteps((current) =>
+                      setDeleteStepId(null);
+                    });
+                  } else {
+                    setNewSteps((current) =>
                       current.filter((candidate) => candidate.id !== step.id)
-                    )
-              }
-              onMove={(direction) =>
-                routine
-                  ? void run(async () => {
-                      await service.reorderRoutineStep(routine.id, step.id, direction);
-                    })
-                  : setNewSteps((current) => {
-                      const from = index;
-                      const to = direction === 'up' ? from - 1 : from + 1;
-                      if (to < 0 || to >= current.length) return current;
-                      const next = [...current];
-                      const [moved] = next.splice(from, 1);
-                      if (moved) next.splice(to, 0, moved);
-                      return next;
-                    })
-              }
-            />
-          )
-        )}
+                    );
+                    setDeleteStepId(null);
+                  }
+                }}
+              />
+            ) : null}
+          </Column>
+        ))}
         {steps.length === 0 ? (
           <Column
             spacing={6}
@@ -884,24 +1001,27 @@ function RoutineEditorForm({
       </Column>
       {routine ? (
         <Column spacing={10} style={{ width: '100%' }}>
-          <Button
+          <AppButton
             disabled={busy || routine.steps.length === 0}
             label="Run routine"
             onPress={() => onRun(routine.id)}
+            style={{ height: 54, width: '100%' }}
             testID="run-routine"
           />
-          <Button
+          <AppButton
             disabled={busy || routine.archivedAt !== null}
             label="Move routine up"
             onPress={() => void run(async () => void (await service.reorderItem(routine.id, 'up')))}
+            style={{ height: 48, width: '100%' }}
             variant="outlined"
           />
-          <Button
+          <AppButton
             disabled={busy || routine.archivedAt !== null}
             label="Move routine down"
             onPress={() =>
               void run(async () => void (await service.reorderItem(routine.id, 'down')))
             }
+            style={{ height: 48, width: '100%' }}
             variant="outlined"
           />
         </Column>

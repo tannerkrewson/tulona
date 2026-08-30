@@ -1,5 +1,5 @@
 import { Column, Host, ScrollView, Text } from '@expo/ui';
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { StyleSheet } from 'react-native';
 
 import { useAppTheme, type ThemeMode } from '@theme';
@@ -19,6 +19,12 @@ const hostStyles = StyleSheet.create({
   },
 });
 
+const contentStyle = {
+  alignSelf: 'center',
+  maxWidth: 760,
+  width: '100%',
+} as ComponentProps<typeof Column>['style'];
+
 /** The cross-platform screen boundary for feature content. */
 export function AppScreen({
   children,
@@ -34,10 +40,10 @@ export function AppScreen({
       alignment="start"
       spacing={16}
       style={{
+        ...contentStyle,
         backgroundColor: colors.background,
-        paddingHorizontal: 24,
+        paddingHorizontal: 16,
         paddingVertical: 24,
-        width: '100%',
       }}
     >
       {title ? (

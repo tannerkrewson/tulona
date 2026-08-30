@@ -1,11 +1,11 @@
-import { Button, Column, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 import { useIsFocused, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 
 import type { Habit, HabitDayState } from '@domain';
 import { AppIcon, normalizeIconName } from '@icons';
 import { useAppTheme } from '@theme';
-import { EmptyState, errorText, Screen } from '@ui';
+import { AppButton, EmptyState, errorText, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { formatHabitSchedule, habitCompletionLabel, habitSignalSummary } from './habit-format';
@@ -106,13 +106,18 @@ function HabitListContent({ store }: { store: HabitStore }) {
             void (action ? action() : store.getState().refresh()).catch(() => undefined);
           }}
         />
-        <Row alignment="center" spacing={10} style={{ width: '100%' }}>
-          <Column spacing={3} style={{ width: '65%' }}>
+        <Column spacing={10} style={{ width: '100%' }}>
+          <Column spacing={3}>
             <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>Today</Text>
             <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>{today}</Text>
           </Column>
-          <Button label="New habit" onPress={() => router.push('/habit/new')} testID="new-habit" />
-        </Row>
+          <AppButton
+            label="New habit"
+            onPress={() => router.push('/habit/new')}
+            style={{ height: 50, width: '100%' }}
+            testID="new-habit"
+          />
+        </Column>
         {activeHabits.length === 0 ? (
           <EmptyState
             actionLabel="Create your first habit"
@@ -220,8 +225,11 @@ function HabitListItem({
             size={24}
           />
         </Column>
-        <Column spacing={4} style={{ width: '75%' }}>
-          <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
+        <Column spacing={4}>
+          <Text
+            numberOfLines={2}
+            textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}
+          >
             {habit.name}
           </Text>
           <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
@@ -245,24 +253,26 @@ function HabitListItem({
           {habitCompletionLabel(state ?? null)}
         </Text>
       </Row>
-      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-        <AppIcon color={colors.primary} name="flame" size={17} />
-        <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
-          {`${streak.current} ${streakUnit}${streak.current === 1 ? '' : 's'} current streak`}
-        </Text>
+      <Column spacing={6} style={{ width: '100%' }}>
+        <Row alignment="center" spacing={8}>
+          <AppIcon color={colors.primary} name="flame" size={17} />
+          <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
+            {`${streak.current} ${streakUnit}${streak.current === 1 ? '' : 's'} current streak`}
+          </Text>
+        </Row>
         <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
           {`Signals: ${habitSignalSummary(state ?? null)}`}
         </Text>
-      </Row>
+      </Column>
       <Column spacing={8} style={{ width: '100%' }}>
-        <Button
+        <AppButton
           disabled={saving}
           label={saving ? 'Saving...' : toggleLabel}
           onPress={() => void onToggle()}
           style={{ height: 48, width: '100%' }}
           testID={`toggle-habit-${habit.id}`}
         />
-        <Button
+        <AppButton
           label="View details"
           onPress={onDetails}
           style={{ height: 46, width: '100%' }}
