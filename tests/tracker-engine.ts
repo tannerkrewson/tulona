@@ -1,12 +1,12 @@
+import { createTrackerStore } from '../src/tracker/tracker-store';
+import { createTrackerService, type TrackerServiceApi } from '../src/tracker/tracker-service';
 import {
-  createTrackerService,
-  createTrackerStore,
   latestValidTransition,
   materializeTransitionIntervals,
   queryTransitions,
-  type TrackerServiceApi,
-} from '../src/tracker';
-import { PersistenceError, type TrackerRepositoryApi } from '../src/data';
+} from '../src/tracker/tracker-engine';
+import { PersistenceError } from '../src/data/errors';
+import type { TrackerRepositoryApi } from '../src/data/tracker-repository';
 import type { MonthKey, TimeTransition, TrackerMonthCollection, Transition } from '../src/domain';
 
 const ids = {
