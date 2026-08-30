@@ -1,11 +1,8 @@
-import { PlaceholderScreen } from '@ui';
+import { useLocalSearchParams } from 'expo-router';
+
+import { FolderContentScreen } from '../../src/tracker/FolderContentScreen';
 
 export default function FolderScreen() {
-  return (
-    <PlaceholderScreen
-      title="Folder"
-      iconName="folder"
-      description="Folder contents will appear here."
-    />
-  );
+  const { folderId } = useLocalSearchParams<{ folderId: string }>();
+  return <FolderContentScreen folderId={folderId} />;
 }

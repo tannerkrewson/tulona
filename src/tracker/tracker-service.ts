@@ -9,8 +9,8 @@ import {
   type TrackerMonthCollection,
   type UUID,
 } from '@domain';
-import type { TrackerRepositoryApi } from '@data';
-import { PersistenceError } from '@data';
+import type { TrackerRepositoryApi } from '@data/tracker-repository';
+import { PersistenceError } from '@data/errors';
 
 import {
   latestValidTransition,

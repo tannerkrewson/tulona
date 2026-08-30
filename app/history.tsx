@@ -1,11 +1,5 @@
-import { PlaceholderScreen } from '@ui';
+import HistoryScreen from '../src/tracker/HistoryScreen';
 
-export default function HistoryScreen() {
-  return (
-    <PlaceholderScreen
-      title="History"
-      iconName="clock"
-      description="Daily history will appear here."
-    />
-  );
+export default function HistoryRoute() {
+  return <HistoryScreen />;
 }

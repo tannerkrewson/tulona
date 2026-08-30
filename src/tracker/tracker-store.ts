@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 
 import type { CatalogCollection, TimeInterval, TimeTransition } from '@domain';
-import { PersistenceError, type CatalogRepositoryApi } from '@data';
+import { PersistenceError } from '@data/errors';
+import type { CatalogRepositoryApi } from '@data/catalog-repository';
+import type { CatalogServiceApi } from '../catalog/catalog-service';
 
 import type {
   HistoricalConfirmationInput,
@@ -37,7 +39,11 @@ export interface TrackerStoreState {
   insertTransition(
     input: Parameters<TrackerServiceApi['insertTransition']>[0]
   ): Promise<TimeTransition>;
+  insertMissedSwitch(
+    input: Parameters<TrackerServiceApi['insertMissedSwitch']>[0]
+  ): Promise<TimeTransition>;
   editTransition(id: string, input: TransitionEditInput): Promise<TimeTransition>;
+  reassignTransition(id: string, activityId: string | null): Promise<TimeTransition>;
   deleteTransition(id: string, confirmation: HistoricalConfirmationInput): Promise<TimeTransition>;
   mergeTransition(id: string, confirmation: HistoricalConfirmationInput): Promise<TimeTransition>;
   mergeTransitions(id: string, confirmation: HistoricalConfirmationInput): Promise<TimeTransition>;
@@ -47,6 +53,7 @@ export interface TrackerStoreOptions {
   initialRange: TrackerRange;
   now?: () => number;
   catalogRepository?: CatalogRepositoryApi;
+  catalogService?: Pick<CatalogServiceApi, 'read'>;
 }
 
 function errorFrom(error: unknown): PersistenceError {
@@ -101,11 +108,14 @@ export function createTrackerStore(service: TrackerServiceApi, options: TrackerS
       hydrate: async () => {
         set({ loading: true, persistenceError: null });
         try {
-          const catalog = options.catalogRepository
-            ? await options.catalogRepository.read()
-            : get().catalog;
+          const catalog = options.catalogService
+            ? await options.catalogService.read()
+            : options.catalogRepository
+              ? await options.catalogRepository.read()
+              : get().catalog;
           const query = await service.query(get().selectedRange, now());
-          set({ catalog, loading: false, ...applyQuery(query) });
+          const activeTransition = await service.getActiveTransition(now());
+          set({ catalog, loading: false, ...applyQuery(query), activeTransition });
         } catch (error) {
           set({ loading: false, persistenceError: errorFrom(error) });
           throw error;
@@ -115,7 +125,8 @@ export function createTrackerStore(service: TrackerServiceApi, options: TrackerS
         set({ loading: true, persistenceError: null });
         try {
           const query = await service.query(get().selectedRange, currentNowMs);
-          set({ loading: false, ...applyQuery(query) });
+          const activeTransition = await service.getActiveTransition(currentNowMs);
+          set({ loading: false, ...applyQuery(query), activeTransition });
         } catch (error) {
           set({ loading: false, persistenceError: errorFrom(error) });
           throw error;
@@ -128,7 +139,10 @@ export function createTrackerStore(service: TrackerServiceApi, options: TrackerS
       adjustLatestStart: (timestamp) => runMutation(() => service.adjustLatestStart(timestamp)),
       adjustLatest: (timestamp) => runMutation(() => service.adjustLatest(timestamp)),
       insertTransition: (input) => runMutation(() => service.insertTransition(input)),
+      insertMissedSwitch: (input) => runMutation(() => service.insertMissedSwitch(input)),
       editTransition: (id, input) => runMutation(() => service.editTransition(id, input)),
+      reassignTransition: (id, activityId) =>
+        runMutation(() => service.reassignTransition(id, activityId)),
       deleteTransition: (id, confirmation) =>
         runMutation(() => service.deleteTransition(id, confirmation)),
       mergeTransition: (id, confirmation) =>

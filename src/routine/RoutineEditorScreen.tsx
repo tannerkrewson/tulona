@@ -50,6 +50,7 @@ type EditableStep = Pick<
 
 export interface RoutineEditorScreenProps {
   id: string;
+  initialFolderId?: UUID | null;
 }
 
 function errorText(error: unknown): string {
@@ -498,7 +499,7 @@ function StepRow({
   );
 }
 
-export function RoutineEditorScreen({ id }: RoutineEditorScreenProps) {
+export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEditorScreenProps) {
   const router = useRouter();
   const [resource, setResource] = useState<EditorResource | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -536,6 +537,7 @@ export function RoutineEditorScreen({ id }: RoutineEditorScreenProps) {
   return (
     <RoutineEditorForm
       key={`${id}-${version}`}
+      initialFolderId={initialFolderId}
       resource={resource}
       onChanged={() => setVersion((current) => current + 1)}
       onCreated={(routineId) => router.replace(`/routine-edit/${routineId}`)}
@@ -546,11 +548,13 @@ export function RoutineEditorScreen({ id }: RoutineEditorScreenProps) {
 
 function RoutineEditorForm({
   resource,
+  initialFolderId,
   onChanged,
   onCreated,
   onRun,
 }: {
   resource: EditorResource;
+  initialFolderId: UUID | null;
   onChanged: () => void;
   onCreated: (routineId: UUID) => void;
   onRun: (routineId: UUID) => void;
@@ -560,7 +564,7 @@ function RoutineEditorForm({
   const [name, setName] = useState(routine?.name ?? '');
   const [color, setColor] = useState(routine?.color ?? '');
   const [iconName, setIconName] = useState(routine?.iconName ?? '');
-  const [folderId, setFolderId] = useState(routine?.folderId ?? ROOT_VALUE);
+  const [folderId, setFolderId] = useState(routine?.folderId ?? initialFolderId ?? ROOT_VALUE);
   const [newSteps, setNewSteps] = useState<StepDraft[]>([]);
   const [editingStepId, setEditingStepId] = useState<UUID | null>(null);
   const [draft, setDraft] = useState<StepDraft | null>(null);
