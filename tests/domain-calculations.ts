@@ -9,6 +9,7 @@ import {
   sortByOrder,
   createId,
   isUuid,
+  timestampMs,
 } from '../src/domain';
 import type { Transition } from '../src/domain';
 
@@ -52,6 +53,8 @@ function localTimestamp(
 const beforeRollover = localTimestamp(2026, 8, 29, 2, 59, 59);
 const atRollover = localTimestamp(2026, 8, 29, 3, 0, 0);
 const afterRollover = localTimestamp(2026, 8, 29, 3, 0, 1);
+const atMidnight = localTimestamp(2026, 8, 29, 0, 0, 0);
+assertEqual(logicalDayKey(atMidnight), '2026-08-29', 'midnight rollover boundary');
 assertEqual(
   logicalDayKey(beforeRollover, { rolloverHour: 3 }),
   '2026-08-28',
@@ -94,6 +97,34 @@ assertEqual(intervals.length, 2, 'future transitions must not create intervals')
 assertEqual(intervals[0].startMs, 0, 'prior transition must establish range state');
 assertEqual(intervals[0].endMs, 5_000, 'first interval ends at next transition');
 assertEqual(intervals[1].endMs, 8_000, 'last interval ends at now');
+
+const crossingMidnight = materializeIntervals(
+  [
+    transition('before-midnight', localTimestamp(2026, 8, 29, 23, 30, 0), 'a'),
+    transition('after-midnight', localTimestamp(2026, 8, 30, 0, 30, 0), 'b'),
+  ],
+  {
+    startMs: timestampMs(localTimestamp(2026, 8, 29, 23, 45, 0)),
+    endMs: timestampMs(localTimestamp(2026, 8, 30, 0, 45, 0)),
+    nowMs: timestampMs(localTimestamp(2026, 8, 30, 1, 0, 0)),
+  }
+);
+assertEqual(crossingMidnight.length, 2, 'midnight clipping keeps both derived intervals');
+assertEqual(
+  crossingMidnight[0].startMs,
+  timestampMs(localTimestamp(2026, 8, 29, 23, 45, 0)),
+  'midnight clipping uses the requested range start'
+);
+assertEqual(
+  crossingMidnight[0].endMs,
+  timestampMs(localTimestamp(2026, 8, 30, 0, 30, 0)),
+  'midnight clipping ends at the next transition'
+);
+assertEqual(
+  crossingMidnight[1].endMs,
+  timestampMs(localTimestamp(2026, 8, 30, 0, 45, 0)),
+  'midnight clipping uses the requested range end'
+);
 
 const ordered = sortByOrder([
   { sortOrder: 1, id: 'b' },

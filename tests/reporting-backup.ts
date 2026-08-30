@@ -307,6 +307,20 @@ async function backupChecks(): Promise<void> {
     (await repository.read(oldNamespace)).transitions.length === 1,
     'old data remains retained after activation'
   );
+  const reloadedManager = new DatasetManager(database);
+  const reloadedNamespace = await reloadedManager.active();
+  assert(
+    reloadedNamespace?.datasetId === ids.newDataset,
+    'a fresh dataset manager hydrates the replacement as active'
+  );
+  const repeated = await replacement.replaceCurrentData(serializeBackup(backup), {
+    datasetId: ids.newDataset,
+  });
+  assert(repeated.datasetId === ids.newDataset, 'repeating an activated replacement is idempotent');
+  assert(
+    (await repository.read(reloadedNamespace)).transitions.length === 1,
+    'repeating an activated replacement does not duplicate transitions'
+  );
 }
 
 void Promise.all([reportingChecks(), backupChecks()]).catch((error: unknown) => {
