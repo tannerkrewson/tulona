@@ -29,6 +29,11 @@ export interface RoutineRepositoryApi {
   clearActive(): Promise<void>;
   readHistory(month: MonthKey): Promise<RoutineHistoryCollection>;
   appendHistory(run: RoutineRunHistory, operationId?: string): Promise<void>;
+  persistAwaiting?(
+    activeRoutine: ActiveRoutine,
+    run: RoutineRunHistory,
+    operationId?: string
+  ): Promise<void>;
   finalize(
     activeRoutine: ActiveRoutine,
     run: RoutineRunHistory,
@@ -112,6 +117,82 @@ export class RoutineRepository implements RoutineRepositoryApi {
       { month, runs: [...current.runs, run] },
       operationId ?? `routine-history-${run.id}`
     );
+  }
+
+  /** Persists completion history while retaining the chooser's active state. */
+  async persistAwaiting(
+    activeRoutine: ActiveRoutine,
+    run: RoutineRunHistory,
+    operationId = `routine-awaiting-${run.id}`
+  ): Promise<void> {
+    const parsedActive = activeRoutineSchema.safeParse(activeRoutine);
+    if (!parsedActive.success)
+      throw new PersistenceError(
+        'validation',
+        `Active routine failed validation: ${parsedActive.error.message}`
+      );
+    const parsedRun = routineRunHistorySchema.safeParse(run);
+    if (!parsedRun.success)
+      throw new PersistenceError(
+        'validation',
+        `Routine history failed validation: ${parsedRun.error.message}`
+      );
+    if (activeRoutine.status !== 'awaiting-next-activity' || run.status !== 'completed') {
+      throw new PersistenceError(
+        'validation',
+        'Only completed routines can be retained while awaiting the next activity'
+      );
+    }
+
+    const currentActive = await this.readActive();
+    const history = await this.readHistory(monthKey(run.completedAt));
+    const existing = history.runs.find((candidate) => candidate.id === run.id);
+    if (existing) {
+      if (
+        JSON.stringify(routineRunHistorySchema.parse(existing)) !==
+        JSON.stringify(routineRunHistorySchema.parse(run))
+      )
+        throw new PersistenceError(
+          'conflict',
+          `Routine run "${run.id}" already has different history`
+        );
+      if (!currentActive || currentActive.id !== activeRoutine.id) return;
+    }
+    if (currentActive && currentActive.id !== activeRoutine.id) {
+      throw new PersistenceError(
+        'conflict',
+        'Cannot retain a routine other than the persisted active routine'
+      );
+    }
+    if (!currentActive) {
+      throw new PersistenceError(
+        'conflict',
+        'Cannot retain a completed routine without an active routine'
+      );
+    }
+    if (run.routineId !== activeRoutine.routineId) {
+      throw new PersistenceError(
+        'conflict',
+        'Routine history does not match the active routine definition'
+      );
+    }
+
+    const month = monthKey(run.completedAt);
+    const historyValue = JSON.stringify(
+      routineHistoryCollectionSchema.parse(
+        existing ? history : { month, runs: [...history.runs, run] }
+      )
+    );
+    const activeValue = JSON.stringify(activeRoutineSchema.parse(activeRoutine));
+    await this.journal.run({
+      id: operationId,
+      datasetId: this.namespace.datasetId,
+      kind: 'routine-awaiting-next-activity',
+      changes: [
+        { key: this.namespace.key('routine-history', month), newValue: historyValue },
+        { key: this.namespace.key('active-routine'), newValue: activeValue },
+      ],
+    });
   }
 
   async finalize(

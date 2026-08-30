@@ -1,9 +1,11 @@
 import {
+  timestampMs,
   toTimestamp,
   type ActiveRoutine,
   type IsoTimestamp,
   type RoutineRunHistory,
   type RoutineStep,
+  type TimeTransition,
   type UUID,
 } from '@domain';
 import type {
@@ -42,6 +44,13 @@ export interface RoutineServiceOptions {
   now?: () => RoutineTimestampInput;
 }
 
+export type RoutineFinalizationStatus = 'completed' | 'cancelled';
+
+export interface RoutineFinalizationResult {
+  activeRoutine: ActiveRoutine;
+  run: RoutineRunHistory;
+}
+
 export interface RoutineServiceApi {
   getActive(): Promise<ActiveRoutine | null>;
   startRoutine(routineId: UUID, options?: StartRoutineOptions): Promise<ActiveRoutine>;
@@ -54,6 +63,14 @@ export interface RoutineServiceApi {
   skip(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   advance(action?: RoutineStepAction, at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   cancel(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
+  finalize(
+    status?: RoutineFinalizationStatus,
+    at?: RoutineTimestampInput
+  ): Promise<RoutineFinalizationResult>;
+  finalizeCompletion(at?: RoutineTimestampInput): Promise<RoutineFinalizationResult>;
+  finalizeCancellation(at?: RoutineTimestampInput): Promise<RoutineFinalizationResult>;
+  cancelAndFinalize(at?: RoutineTimestampInput): Promise<RoutineFinalizationResult>;
+  selectNextActivity(activityId: UUID | null): Promise<TimeTransition>;
   markAlarmFired(stepId: UUID): Promise<ActiveRoutine>;
   recover(at?: RoutineTimestampInput): Promise<ActiveRoutine | null>;
   getTiming(at?: RoutineTimestampInput): Promise<ReturnType<typeof routineTiming> | null>;
@@ -174,6 +191,80 @@ export class RoutineService implements RoutineServiceApi {
     return this.mutate((active) => cancelRoutineState(active, at));
   }
 
+  async finalize(
+    status: RoutineFinalizationStatus = 'completed',
+    at: RoutineTimestampInput = this.now()
+  ): Promise<RoutineFinalizationResult> {
+    return status === 'completed' ? this.finalizeCompletion(at) : this.finalizeCancellation(at);
+  }
+
+  async finalizeCompletion(
+    at: RoutineTimestampInput = this.now()
+  ): Promise<RoutineFinalizationResult> {
+    const active = await this.recover(at);
+    if (!active) throw new Error('No active routine');
+    if (active.status !== 'awaiting-next-activity') {
+      throw new Error(`Routine is not complete: ${active.status}`);
+    }
+    return this.persistAwaitingCompletion(active);
+  }
+
+  async finalizeCancellation(
+    at: RoutineTimestampInput = this.now()
+  ): Promise<RoutineFinalizationResult> {
+    const current = activeRequired(await this.routineRepository.readActive());
+    const active = current.status === 'cancelled' ? current : cancelRoutineState(current, at);
+    if (active !== current) await this.routineRepository.writeActive(active);
+    if (active.status !== 'cancelled' || !active.completedAt) {
+      throw new Error(`Routine is not cancellable: ${active.status}`);
+    }
+    await this.stopRoutineAt(active, 'Routine cancelled');
+    const run = routineRunHistory(active, 'cancelled');
+    await this.routineRepository.finalize(active, run);
+    return { activeRoutine: active, run };
+  }
+
+  async cancelAndFinalize(
+    at: RoutineTimestampInput = this.now()
+  ): Promise<RoutineFinalizationResult> {
+    return this.finalizeCancellation(at);
+  }
+
+  async selectNextActivity(activityId: UUID | null): Promise<TimeTransition> {
+    const active = await this.finalizeCompletion(this.now());
+    const completedAt = active.activeRoutine.completedAt;
+    if (!completedAt) throw new Error('Completed routine has no completion timestamp');
+    const completionMs = timestampMs(completedAt);
+    const current = await this.trackerService.getActiveTransition(completedAt);
+    let transition: TimeTransition;
+    if (current && timestampMs(current.timestamp) === completionMs) {
+      if (current.activityId === null) {
+        transition =
+          activityId === null
+            ? current
+            : await this.trackerService.editTransition(current.id, {
+                activityId,
+                timestamp: completedAt,
+                source: 'routine',
+                note: 'Next activity after routine',
+              });
+      } else if (current.activityId === activityId) {
+        transition = current;
+      } else {
+        throw new Error('A next activity was already recorded for this routine');
+      }
+    } else {
+      transition = await this.trackerService.switchActivity(activityId, {
+        id: active.activeRoutine.id,
+        timestamp: completedAt,
+        source: 'routine',
+        note: 'Next activity after routine',
+      });
+    }
+    await this.routineRepository.clearActive();
+    return transition;
+  }
+
   async markAlarmFired(stepId: UUID): Promise<ActiveRoutine> {
     return this.mutate((active) => markRoutineAlarmFired(active, stepId));
   }
@@ -184,9 +275,10 @@ export class RoutineService implements RoutineServiceApi {
     const active = await this.routineRepository.readActive();
     if (!active) return null;
     const result = catchUpRoutine(active, at);
-    if (JSON.stringify(result.activeRoutine) !== JSON.stringify(active)) {
+    if (JSON.stringify(result.activeRoutine) !== JSON.stringify(active))
       await this.routineRepository.writeActive(result.activeRoutine);
-    }
+    if (result.activeRoutine.status === 'awaiting-next-activity')
+      await this.persistAwaitingCompletion(result.activeRoutine);
     return result.activeRoutine;
   }
 
@@ -233,6 +325,44 @@ export class RoutineService implements RoutineServiceApi {
     const next = transform(active);
     await this.routineRepository.writeActive(next);
     return next;
+  }
+
+  private async persistAwaitingCompletion(
+    active: ActiveRoutine
+  ): Promise<RoutineFinalizationResult> {
+    const run = routineRunHistory(active, 'completed');
+    if (this.routineRepository.persistAwaiting) {
+      await this.routineRepository.persistAwaiting(active, run);
+    } else {
+      await this.routineRepository.appendHistory(run);
+      await this.routineRepository.writeActive(active);
+    }
+    await this.stopRoutineAt(active, 'Routine completed; awaiting next activity');
+    return { activeRoutine: active, run };
+  }
+
+  private async stopRoutineAt(active: ActiveRoutine, note: string): Promise<TimeTransition> {
+    if (!active.completedAt) throw new Error('Routine has no completion timestamp');
+    const completionMs = timestampMs(active.completedAt);
+    const current = await this.trackerService.getActiveTransition(active.completedAt);
+    if (current && timestampMs(current.timestamp) === completionMs) {
+      if (current.activityId === null) return current;
+      if (current.activityId !== active.routineId) {
+        throw new Error('A tracker transition already exists at routine completion');
+      }
+      return this.trackerService.editTransition(current.id, {
+        activityId: null,
+        timestamp: active.completedAt,
+        source: 'routine',
+        note,
+      });
+    }
+    return this.trackerService.switchActivity(null, {
+      id: active.id,
+      timestamp: active.completedAt,
+      source: 'routine',
+      note,
+    });
   }
 }
 

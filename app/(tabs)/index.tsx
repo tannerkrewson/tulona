@@ -1,11 +1,5 @@
-import { PlaceholderScreen } from '@ui';
+import RoutineCatalogScreen from '../../src/routine/RoutineCatalogScreen';
 
 export default function TrackerScreen() {
-  return (
-    <PlaceholderScreen
-      title="Tracker"
-      iconName="activity"
-      description="Your activity catalog will appear here."
-    />
-  );
+  return <RoutineCatalogScreen />;
 }

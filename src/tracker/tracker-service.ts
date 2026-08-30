@@ -545,13 +545,16 @@ export class TrackerService implements TrackerServiceApi {
     next: TimeTransition,
     kind: string
   ): Promise<TimeTransition> {
+    const operationId = `${kind}-${current.id}-${encodeURIComponent(
+      [next.activityId ?? 'none', next.timestamp, next.source, next.note ?? ''].join('|')
+    )}`;
     const oldMonth = monthKey(current.timestamp);
     const newMonth = monthKey(next.timestamp);
     if (oldMonth === newMonth) {
       const collection = await this.repository.readMonth(oldMonth);
       await this.repository.writeCrossMonth(
         [replaceInCollection(collection, current, next)],
-        `${kind}-${current.id}`,
+        operationId,
         kind
       );
       return next;
@@ -575,7 +578,7 @@ export class TrackerService implements TrackerServiceApi {
           latestTransitions: [],
         },
       ],
-      `${kind}-${current.id}`,
+      operationId,
       kind
     );
     return next;
