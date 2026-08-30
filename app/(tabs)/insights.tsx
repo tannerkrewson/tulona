@@ -1,11 +1,5 @@
-import { PlaceholderScreen } from '@ui';
+import InsightsScreen from '../../src/reporting/InsightsScreen';
 
-export default function InsightsScreen() {
-  return (
-    <PlaceholderScreen
-      title="Insights"
-      iconName="bar-chart-3"
-      description="Your time reports will appear here."
-    />
-  );
+export default function InsightsRoute() {
+  return <InsightsScreen />;
 }

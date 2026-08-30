@@ -6,6 +6,7 @@ export interface AsyncStorageLike {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
   removeItem(key: string): Promise<void>;
+  getAllKeys?(): Promise<readonly string[]>;
   multiGet?(keys: readonly string[]): Promise<readonly (readonly [string, string | null])[]>;
   multiSet?(entries: readonly (readonly [string, string])[]): Promise<void>;
   multiRemove?(keys: readonly string[]): Promise<void>;
@@ -19,6 +20,8 @@ export interface KeyValueDatabase {
   multiWrite(entries: readonly (readonly [string, string])[]): Promise<void>;
   multiRemove(keys: readonly string[]): Promise<void>;
   verify(key: string, expectedValue: string | null): Promise<void>;
+  /** Used only by repository boundaries that need to enumerate a dataset. */
+  keys?(): Promise<readonly string[]>;
 }
 
 function errorMessage(error: unknown): string {
@@ -130,6 +133,20 @@ export class AsyncStorageDatabase implements KeyValueDatabase {
         `Storage verification failed for key "${key}"`,
         key,
         { expectedValue, actualValue }
+      );
+    }
+  }
+
+  async keys(): Promise<readonly string[]> {
+    if (!this.storage.getAllKeys) return [];
+    try {
+      return await this.storage.getAllKeys();
+    } catch (error) {
+      throw new PersistenceError(
+        'read',
+        `Unable to enumerate storage keys: ${errorMessage(error)}`,
+        undefined,
+        error
       );
     }
   }

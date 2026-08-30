@@ -1,4 +1,5 @@
 export * from './catalog-repository';
+export * from './backup-repository';
 export * from './database';
 export * from './dataset-store';
 export * from './errors';
