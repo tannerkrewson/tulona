@@ -1,4 +1,4 @@
-import { monthKey, trackerMonthCollectionSchema } from '@domain';
+import { createId, monthKey, trackerMonthCollectionSchema } from '@domain';
 import type { MonthKey, Transition, TrackerMonthCollection } from '@domain';
 
 import type { KeyValueDatabase } from './database';
@@ -54,10 +54,15 @@ export interface TrackerRepositoryApi {
   readMonths(start: MonthKey, end: MonthKey): Promise<Transition[]>;
   readRange(startMs: number, endMs: number): Promise<Transition[]>;
   writeMonth(collection: TrackerMonthCollection): Promise<void>;
-  upsertTransitions(transitions: readonly Transition[], operationId?: string): Promise<void>;
+  upsertTransitions(
+    transitions: readonly Transition[],
+    operationId?: string,
+    operationKind?: string
+  ): Promise<void>;
   writeCrossMonth(
     collections: readonly TrackerMonthCollection[],
-    operationId: string
+    operationId: string,
+    operationKind?: string
   ): Promise<void>;
   recoverJournal(): Promise<RecoveryReport>;
 }
@@ -87,7 +92,10 @@ export class TrackerRepository implements TrackerRepositoryApi {
   }
 
   async readMonths(start: MonthKey, end: MonthKey): Promise<Transition[]> {
-    const months = monthKeys(validateMonth(start), validateMonth(end));
+    const normalizedStart = validateMonth(start);
+    const normalizedEnd = validateMonth(end);
+    if (normalizedStart > normalizedEnd) throw new RangeError('Tracker month range is reversed');
+    const months = monthKeys(normalizedStart, normalizedEnd);
     if (months.length === 0) return [];
     const collections = await Promise.all(months.map((month) => this.readMonth(month)));
     return sortTransitions(collections.flatMap((collection) => collection.transitions));
@@ -115,20 +123,26 @@ export class TrackerRepository implements TrackerRepositoryApi {
         'A tracker month cannot contain transitions from another month'
       );
     }
-    const transitions = sortTransitions(collection.transitions);
-    await this.store.write(this.namespace, 'tracker', trackerMonthCollectionSchema, {
-      ...collection,
-      month: normalizedMonth,
-      transitions,
-      latestTransitions: sortTransitions(
-        collection.latestTransitions.length
-          ? collection.latestTransitions
-          : latestCache(transitions)
-      ),
-    });
+    await this.writeCollections(
+      [
+        {
+          month: normalizedMonth,
+          collection: {
+            ...collection,
+            month: normalizedMonth,
+            latestTransitions: [],
+          },
+        },
+      ],
+      `tracker-month-write-${normalizedMonth}-${createId()}`
+    );
   }
 
-  async upsertTransitions(transitions: readonly Transition[], operationId?: string): Promise<void> {
+  async upsertTransitions(
+    transitions: readonly Transition[],
+    operationId?: string,
+    operationKind?: string
+  ): Promise<void> {
     if (transitions.length === 0) return;
     const grouped = new Map<MonthKey, Transition[]>();
     for (const transition of transitions) {
@@ -153,19 +167,24 @@ export class TrackerRepository implements TrackerRepositoryApi {
     );
     await this.writeCollections(
       nextCollections,
-      operationId ?? `tracker-upsert-${Date.now()}-${transitions[0].id}`
+      operationId ?? `tracker-upsert-${Date.now()}-${transitions[0].id}`,
+      operationKind
     );
   }
 
   async writeCrossMonth(
     collections: readonly TrackerMonthCollection[],
-    operationId: string
+    operationId: string,
+    operationKind = 'tracker-month-write'
   ): Promise<void> {
     const nextCollections = collections.map((collection) => ({
       month: validateMonth(collection.month),
       collection,
     }));
-    await this.writeCollections(nextCollections, operationId);
+    if (new Set(nextCollections.map(({ month }) => month)).size !== nextCollections.length) {
+      throw new PersistenceError('validation', 'A cross-month operation cannot repeat a month');
+    }
+    await this.writeCollections(nextCollections, operationId, operationKind);
   }
 
   async recoverJournal(): Promise<RecoveryReport> {
@@ -174,7 +193,8 @@ export class TrackerRepository implements TrackerRepositoryApi {
 
   private async writeCollections(
     collections: readonly { month: MonthKey; collection: TrackerMonthCollection }[],
-    operationId: string
+    operationId: string,
+    operationKind = 'tracker-month-write'
   ): Promise<void> {
     const changes = [];
     for (const { month, collection } of collections) {
@@ -188,11 +208,7 @@ export class TrackerRepository implements TrackerRepositoryApi {
         ...collection,
         month,
         transitions: sortTransitions(collection.transitions),
-        latestTransitions: sortTransitions(
-          collection.latestTransitions.length
-            ? collection.latestTransitions
-            : latestCache(collection.transitions)
-        ),
+        latestTransitions: latestCache(collection.transitions),
       };
       const parsed = trackerMonthCollectionSchema.safeParse(normalized);
       if (!parsed.success)
@@ -208,7 +224,7 @@ export class TrackerRepository implements TrackerRepositoryApi {
     await this.journal.run({
       id: operationId,
       datasetId: this.namespace.datasetId,
-      kind: 'tracker-month-write',
+      kind: operationKind,
       changes,
     });
   }
