@@ -1,12 +1,12 @@
-import { Button, Column, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import type { ActiveRoutine, CatalogCollection, UUID } from '@domain';
 import { AppIcon, type IconName } from '@icons';
 import { useAppTheme } from '@theme';
-import { errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
+import { AppButton, errorText, Screen } from '@ui';
 
 import { loadRoutineRuntime, type RoutineRuntime } from './routine-runtime';
 
@@ -149,8 +149,11 @@ export function NextActivityChooserScreen() {
           >
             <AppIcon name="repeat" color={colors.active.foreground} size={23} />
           </Column>
-          <Column spacing={3} style={{ width: '100%' }}>
-            <Text textStyle={{ color: colors.text, fontSize: 25, fontWeight: '700' }}>
+          <Column spacing={3}>
+            <Text
+              numberOfLines={2}
+              textStyle={{ color: colors.text, fontSize: 25, fontWeight: '700' }}
+            >
               What are you doing now?
             </Text>
             <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
@@ -163,10 +166,11 @@ export function NextActivityChooserScreen() {
           now.
         </Text>
         {folderId !== null ? (
-          <Button
+          <AppButton
             disabled={busy}
             label="Back to root"
             onPress={() => setFolderId(null)}
+            style={{ height: 48, width: '100%' }}
             variant="outlined"
             testID="chooser-back"
           />
@@ -226,11 +230,12 @@ export function NextActivityChooserScreen() {
             testID="chooser-action-recovery"
           />
         </ChooserError>
-        <Button
+        <AppButton
           disabled={busy}
           label="Decide later"
           onPress={() => router.replace('/(tabs)')}
-          variant="text"
+          style={{ height: 48, width: '100%' }}
+          variant="outlined"
           testID="chooser-decide-later"
         />
       </Column>
@@ -255,18 +260,29 @@ function ChooserItem({
 }) {
   const { colors } = useAppTheme();
   return (
-    <Row alignment="center" spacing={12}>
-      <AppIcon name={iconName} color={colors.primary} size={24} />
-      <Column spacing={2} style={{ width: '100%' }}>
-        <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{label}</Text>
-        <Button
-          disabled={disabled}
-          label={actionLabel}
-          onPress={onPress}
-          variant="outlined"
-          testID={testID}
-        />
-      </Column>
-    </Row>
+    <Column
+      spacing={8}
+      style={{
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
+        borderRadius: 14,
+        borderWidth: 1,
+        padding: 14,
+        width: '100%',
+      }}
+    >
+      <Row alignment="center" spacing={10}>
+        <AppIcon name={iconName} color={colors.primary} size={24} />
+        <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>{label}</Text>
+      </Row>
+      <AppButton
+        disabled={disabled}
+        label={actionLabel}
+        onPress={onPress}
+        style={{ height: 50, width: '100%' }}
+        variant="outlined"
+        testID={testID}
+      />
+    </Column>
   );
 }

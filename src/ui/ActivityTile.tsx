@@ -1,9 +1,10 @@
-import { Button, Column, Row, Spacer, Text } from '@expo/ui';
+import { Column, Row, Spacer, Text } from '@expo/ui';
 
 import { AppIcon, isIconName, type IconName } from '@icons';
 import { getAccessibleTextColor, getActivityStateVisual, useAppTheme } from '@theme';
 
 import { DurationText } from './DurationText';
+import { AppButton } from './AppButton';
 
 export interface ActivityTileProps {
   name: string;
@@ -39,7 +40,7 @@ export function ActivityTile({
     active === undefined ? null : getActivityStateVisual(colors, active ? 'active' : 'inactive');
 
   return (
-    <Button
+    <AppButton
       disabled={disabled}
       onPress={onPress}
       style={{
@@ -106,6 +107,6 @@ export function ActivityTile({
         <Spacer flexible />
         {durationMs != null ? <DurationText durationMs={durationMs} /> : null}
       </Row>
-    </Button>
+    </AppButton>
   );
 }

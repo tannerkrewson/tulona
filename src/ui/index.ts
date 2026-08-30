@@ -1,4 +1,7 @@
 export { ActivityTile, type ActivityTileProps } from './ActivityTile';
+export { AccessiblePicker, type AccessiblePickerProps } from './AccessiblePicker';
+export { AccessibleTextInput, type AccessibleTextInputProps } from './AccessibleTextInput';
+export { AppButton } from './AppButton';
 export { AppScreen, type AppScreenProps } from './AppScreen';
 export {
   ColorPicker,

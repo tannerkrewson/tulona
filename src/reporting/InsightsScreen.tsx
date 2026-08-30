@@ -1,4 +1,4 @@
-import { Button, Column, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 import { useIsFocused, useRouter } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 
@@ -10,7 +10,7 @@ import {
   type LogicalDayKey,
 } from '@domain';
 import { useAppTheme } from '@theme';
-import { errorText, Screen } from '@ui';
+import { AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import type { DailyReport, ReportFolder, ReportItem, WeeklyReport } from './reporting-service';
@@ -66,7 +66,7 @@ function ProportionalRow({ item, maxMs }: { item: ReportItem | ReportFolder; max
           </Text>
         </Column>
         <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-          {formatDuration(item.durationMs)}
+          {`${formatDuration(item.durationMs)} · ${Math.round(percentage)}% of the largest item`}
         </Text>
       </Row>
       <Column
@@ -143,29 +143,19 @@ function DayReport({ report }: { report: DailyReport }) {
           <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>No intervals recorded.</Text>
         ) : (
           report.timeline.map((entry) => (
-            <Row
-              alignment="center"
-              key={`${entry.transitionId}-${entry.startMs}`}
-              spacing={10}
-              style={{ width: '100%' }}
-            >
-              <Column style={{ width: '30%' }}>
+            <Column key={`${entry.transitionId}-${entry.startMs}`} spacing={4}>
+              <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
+                {entry.name}
+              </Text>
+              <Row alignment="center" spacing={8}>
                 <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-                  {readableTime(entry.startMs)}
-                </Text>
-                <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-                  {readableTime(entry.endMs)}
-                </Text>
-              </Column>
-              <Column spacing={2} style={{ width: '65%' }}>
-                <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
-                  {entry.name}
+                  {`${readableTime(entry.startMs)} to ${readableTime(entry.endMs)}`}
                 </Text>
                 <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
                   {formatDuration(entry.durationMs)}
                 </Text>
-              </Column>
-            </Row>
+              </Row>
+            </Column>
           ))
         )}
       </ReportCard>
@@ -252,12 +242,13 @@ function InsightsContent({
     <Screen title="Insights" description="See where your time went, by logical day or week.">
       <Column spacing={14} style={{ width: '100%' }}>
         <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-          <Button
+          <AppButton
             label="Previous"
             onPress={() => setDay(shiftDay(day, view === 'day' ? -1 : -7, rolloverHour))}
+            style={{ height: 48 }}
             testID="insights-previous"
           />
-          <Button
+          <AppButton
             label="Today"
             onPress={() =>
               void runtime.reportingService
@@ -265,19 +256,36 @@ function InsightsContent({
                 .then((today) => setDay(today.logicalDay))
                 .catch((todayError: unknown) => setError(errorText(todayError)))
             }
+            style={{ height: 48 }}
             testID="insights-today"
           />
-          <Button
+          <AppButton
             label="Next"
             onPress={() => setDay(shiftDay(day, view === 'day' ? 1 : 7, rolloverHour))}
+            style={{ height: 48 }}
             testID="insights-next"
           />
         </Row>
         <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>{readableDay(day)}</Text>
         <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-          <Button label="Day view" onPress={() => setView('day')} testID="insights-day-view" />
-          <Button label="Week view" onPress={() => setView('week')} testID="insights-week-view" />
+          <AppButton
+            label="Day view"
+            onPress={() => setView('day')}
+            style={{ height: 48 }}
+            testID="insights-day-view"
+            variant={view === 'day' ? 'filled' : 'outlined'}
+          />
+          <AppButton
+            label="Week view"
+            onPress={() => setView('week')}
+            style={{ height: 48 }}
+            testID="insights-week-view"
+            variant={view === 'week' ? 'filled' : 'outlined'}
+          />
         </Row>
+        <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+          {`Showing ${view === 'day' ? 'day' : 'week'} view`}
+        </Text>
         {error ? (
           <ReportCard testID="insights-error">
             <Text textStyle={{ color: colors.danger.foreground, fontSize: 15, fontWeight: '700' }}>

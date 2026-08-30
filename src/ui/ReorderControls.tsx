@@ -1,7 +1,9 @@
-import { Button, Row, Text } from '@expo/ui';
+import { Row, Text } from '@expo/ui';
 
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
+
+import { AppButton } from './AppButton';
 
 export interface ReorderControlsProps {
   onMoveUp?: () => void;
@@ -27,7 +29,7 @@ export function ReorderControls({
 
   return (
     <Row alignment="center" spacing={10} testID={testID}>
-      <Button
+      <AppButton
         disabled={disabled || !upEnabled}
         onPress={onMoveUp}
         style={{
@@ -44,8 +46,8 @@ export function ReorderControls({
           <AppIcon accessibilityLabel="Move up" color={colors.text} name="chevron-up" size={18} />
           <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>Move up</Text>
         </Row>
-      </Button>
-      <Button
+      </AppButton>
+      <AppButton
         disabled={disabled || !downEnabled}
         onPress={onMoveDown}
         style={{
@@ -67,7 +69,7 @@ export function ReorderControls({
           />
           <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>Move down</Text>
         </Row>
-      </Button>
+      </AppButton>
     </Row>
   );
 }

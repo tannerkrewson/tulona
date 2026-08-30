@@ -1,9 +1,9 @@
-import { Button, Column, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 
 import { timestampMs, type CatalogCollection, type TimeTransition } from '@domain';
 import { AppIcon, isIconName } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { DurationText } from '@ui';
+import { AppButton, DurationText } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 
@@ -140,7 +140,12 @@ export function CurrentActivityHeader({
       <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
         {`Started at ${formatStartedAt(activeTransition.timestamp)}`}
       </Text>
-      <Button label="Adjust start" onPress={onAdjustStart} testID="adjust-start" />
+      <AppButton
+        label="Adjust start"
+        onPress={onAdjustStart}
+        style={{ height: 52, width: '100%' }}
+        testID="adjust-start"
+      />
     </Column>
   );
 }

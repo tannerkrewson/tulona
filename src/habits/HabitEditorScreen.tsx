@@ -1,4 +1,4 @@
-import { Button, Column, Picker, Row, Text, TextInput } from '@expo/ui';
+import { Column, Picker, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -6,7 +6,15 @@ import { useEffect, useRef, useState } from 'react';
 import type { CatalogCollection, Habit, HabitSchedule, HabitTrigger, UUID } from '@domain';
 import { AppIcon, type IconName } from '@icons';
 import { useAppTheme } from '@theme';
-import { ColorPicker, errorText, IconPicker, Screen } from '@ui';
+import {
+  AccessiblePicker,
+  AccessibleTextInput,
+  AppButton,
+  ColorPicker,
+  errorText,
+  IconPicker,
+  Screen,
+} from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { loadHabitStore } from './habit-runtime';
@@ -148,6 +156,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function Input({
+  label,
   value,
   onChangeText,
   placeholder,
@@ -155,6 +164,7 @@ function Input({
   multiline = false,
   keyboardType = 'default',
 }: {
+  label: string;
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
@@ -164,13 +174,16 @@ function Input({
 }) {
   const { colors } = useAppTheme();
   return (
-    <TextInput
+    <AccessibleTextInput
       defaultValue={value}
       keyboardType={keyboardType}
+      label={label}
       multiline={multiline}
       numberOfLines={multiline ? 3 : undefined}
       onChangeText={onChangeText}
       placeholder={placeholder}
+      placeholderTextColor={colors.textMuted}
+      returnKeyType={multiline ? 'default' : 'next'}
       style={{
         backgroundColor: colors.surface,
         borderColor: colors.border,
@@ -194,30 +207,46 @@ function WeekdayPicker({
   onChange: (day: number) => void;
 }) {
   const { colors } = useAppTheme();
+  const rows = [weekdayLabels.slice(0, 4), weekdayLabels.slice(4)];
   return (
-    <Row alignment="center" spacing={5} style={{ width: '100%' }}>
-      {weekdayLabels.map((label, day) => {
-        const active = selected.includes(day);
-        return (
-          <Button
-            key={label}
-            label={label}
-            onPress={() => onChange(day)}
-            style={{
-              backgroundColor: active ? colors.active.background : colors.surface,
-              borderColor: active ? colors.focus : colors.border,
-              borderRadius: 10,
-              borderWidth: active ? 2 : 1,
-              height: 46,
-              paddingHorizontal: 2,
-              width: 42,
-            }}
-            testID={`habit-weekday-${day}`}
-            variant="outlined"
-          />
-        );
-      })}
-    </Row>
+    <Column spacing={8} style={{ width: '100%' }}>
+      {rows.map((row, rowIndex) => (
+        <Row
+          alignment="center"
+          key={`weekday-row-${rowIndex}`}
+          spacing={8}
+          style={{ width: '100%' }}
+        >
+          {row.map((label, rowDay) => {
+            const day = rowIndex === 0 ? rowDay : rowDay + 4;
+            const active = selected.includes(day);
+            return (
+              <AppButton
+                key={label}
+                label={label}
+                onPress={() => onChange(day)}
+                style={{
+                  backgroundColor: active ? colors.active.background : colors.surface,
+                  borderColor: active ? colors.focus : colors.border,
+                  borderRadius: 10,
+                  borderWidth: active ? 2 : 1,
+                  height: 46,
+                  paddingHorizontal: 2,
+                  width: 58,
+                }}
+                testID={`habit-weekday-${day}`}
+                variant="outlined"
+              />
+            );
+          })}
+        </Row>
+      ))}
+      <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
+        {selected.length > 0
+          ? `Selected: ${selected.map((day) => weekdayLabels[day]).join(', ')}`
+          : 'No weekdays selected.'}
+      </Text>
+    </Column>
   );
 }
 
@@ -244,7 +273,8 @@ function TriggerTargetPicker({
     kind === 'tracked-time' ? 'an activity' : kind === 'folder-time' ? 'a folder' : 'a routine';
 
   return (
-    <Picker
+    <AccessiblePicker
+      label={`Source ${label}`}
       selectedValue={value}
       onValueChange={(next) => onChange(String(next))}
       testID="habit-trigger-target"
@@ -257,7 +287,7 @@ function TriggerTargetPicker({
           value={candidate.id}
         />
       ))}
-    </Picker>
+    </AccessiblePicker>
   );
 }
 
@@ -397,6 +427,7 @@ function HabitEditorForm({
           </Row>
           <Field label="Name">
             <Input
+              label="Habit name"
               onChangeText={(name) => update({ name })}
               placeholder="Habit name"
               testID="habit-name"
@@ -405,6 +436,7 @@ function HabitEditorForm({
           </Field>
           <Field label="Description (optional)">
             <Input
+              label="Habit description"
               multiline
               onChangeText={(description) => update({ description })}
               placeholder="What makes this habit useful?"
@@ -441,7 +473,8 @@ function HabitEditorForm({
         >
           <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>Schedule</Text>
           <Field label="Repeat">
-            <Picker
+            <AccessiblePicker
+              label="Repeat"
               selectedValue={draft.scheduleKind}
               onValueChange={(next) => update({ scheduleKind: String(next) as ScheduleKind })}
               testID="habit-schedule"
@@ -451,7 +484,7 @@ function HabitEditorForm({
               <Picker.Item label="Selected weekdays" value="weekly" />
               <Picker.Item label="N times per week" value="weekly-count" />
               <Picker.Item label="Every N days" value="interval" />
-            </Picker>
+            </AccessiblePicker>
           </Field>
           {draft.scheduleKind === 'weekly' ? (
             <Field label="Days">
@@ -460,7 +493,8 @@ function HabitEditorForm({
           ) : null}
           {draft.scheduleKind === 'weekly-count' ? (
             <Field label="Times per week">
-              <Picker
+              <AccessiblePicker
+                label="Times per week"
                 selectedValue={draft.timesPerWeek}
                 onValueChange={(next) => update({ timesPerWeek: String(next) })}
                 testID="habit-times-per-week"
@@ -472,13 +506,14 @@ function HabitEditorForm({
                     value={value}
                   />
                 ))}
-              </Picker>
+              </AccessiblePicker>
             </Field>
           ) : null}
           {draft.scheduleKind === 'interval' ? (
             <>
               <Field label="Every number of days">
                 <Input
+                  label="Interval every number of days"
                   keyboardType="numeric"
                   onChangeText={(intervalEveryDays) => update({ intervalEveryDays })}
                   placeholder="2"
@@ -488,6 +523,7 @@ function HabitEditorForm({
               </Field>
               <Field label="Start date (YYYY-MM-DD)">
                 <Input
+                  label="Interval start date"
                   onChangeText={(intervalStartDate) => update({ intervalStartDate })}
                   placeholder="2026-08-30"
                   testID="habit-interval-start"
@@ -518,7 +554,8 @@ function HabitEditorForm({
             </Text>
           </Column>
           <Field label="Trigger source">
-            <Picker
+            <AccessiblePicker
+              label="Trigger source"
               selectedValue={draft.triggerKind}
               onValueChange={(next) =>
                 update({ triggerKind: String(next) as TriggerKind, triggerId: '' })
@@ -529,7 +566,7 @@ function HabitEditorForm({
               <Picker.Item label="Tracked activity time" value="tracked-time" />
               <Picker.Item label="Folder time" value="folder-time" />
               <Picker.Item label="Routine completion time" value="routine-completion" />
-            </Picker>
+            </AccessiblePicker>
           </Field>
           {draft.triggerKind !== 'none' ? (
             <>
@@ -543,6 +580,7 @@ function HabitEditorForm({
               </Field>
               <Field label="Threshold in seconds (optional)">
                 <Input
+                  label="Automatic trigger threshold in seconds"
                   keyboardType="numeric"
                   onChangeText={(thresholdSeconds) => update({ thresholdSeconds })}
                   placeholder="1"
@@ -562,14 +600,14 @@ function HabitEditorForm({
             void (action ? action() : store.getState().refresh()).catch(() => undefined);
           }}
         />
-        <Button
+        <AppButton
           disabled={busy}
           label={busy ? 'Saving...' : habit ? 'Save habit' : 'Create habit'}
           onPress={() => void save()}
           style={{ height: 50, width: '100%' }}
           testID="save-habit"
         />
-        <Button
+        <AppButton
           disabled={busy}
           label="Cancel"
           onPress={onCancel}

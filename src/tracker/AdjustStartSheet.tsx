@@ -1,4 +1,4 @@
-import { Button, Column, Row, Text, TextInput } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 import { useState } from 'react';
 
 import {
@@ -10,8 +10,8 @@ import {
 } from '@domain';
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
-import { errorText } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
+import { AccessibleTextInput, AppButton, errorText } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 
@@ -133,36 +133,36 @@ export function AdjustStartSheet({
         </Column>
       </Row>
       <Column spacing={8} style={{ width: '100%' }}>
-        {[START_CHOICES.slice(0, 3), START_CHOICES.slice(3)].map((row, rowIndex) => (
-          <Row key={rowIndex} alignment="center" spacing={8}>
-            {row.map((choice) => {
-              const candidateMs = nowMs - choice.minutes * MINUTE;
-              const disabled = previousMs !== null && candidateMs < previousMs;
-              return (
-                <Button
-                  key={choice.minutes}
-                  disabled={busy || disabled}
-                  label={choice.label}
-                  onPress={() => {
-                    setSelectedMinutes(choice.minutes);
-                    setError(null);
-                  }}
-                  testID={`adjust-start-${choice.minutes}`}
-                  variant={selectedMinutes === choice.minutes ? 'filled' : 'outlined'}
-                />
-              );
-            })}
-          </Row>
-        ))}
+        {START_CHOICES.map((choice) => {
+          const candidateMs = nowMs - choice.minutes * MINUTE;
+          const disabled = previousMs !== null && candidateMs < previousMs;
+          return (
+            <AppButton
+              key={choice.minutes}
+              disabled={busy || disabled}
+              label={choice.label}
+              onPress={() => {
+                setSelectedMinutes(choice.minutes);
+                setError(null);
+              }}
+              style={{ height: 48, width: '100%' }}
+              testID={`adjust-start-${choice.minutes}`}
+              variant={selectedMinutes === choice.minutes ? 'filled' : 'outlined'}
+            />
+          );
+        })}
       </Column>
       <Column spacing={6} style={{ width: '100%' }}>
         <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>
           Exact time
         </Text>
-        <TextInput
+        <AccessibleTextInput
+          enterKeyHint="done"
+          label="Exact start date and time"
           onChangeText={selectExact}
-          testID="adjust-start-exact-time"
           defaultValue={exactValue}
+          placeholder="YYYY-MM-DD HH:MM"
+          testID="adjust-start-exact-time"
           style={{
             borderColor: colors.border,
             borderRadius: 10,
@@ -232,22 +232,29 @@ export function AdjustStartSheet({
           />
         </Column>
       ) : null}
-      <Button
+      <AppButton
         disabled={busy || invalid}
         label={busy ? 'Saving boundary...' : error ? 'Try again' : 'Save adjusted start'}
         onPress={() => void apply()}
         testID="save-adjusted-start"
       />
-      <Row alignment="center" spacing={10}>
-        <Button
+      <Column spacing={8} style={{ width: '100%' }}>
+        <AppButton
           disabled={busy}
           label="History"
           onPress={onHistory}
+          style={{ height: 48, width: '100%' }}
           testID="open-history-from-adjust"
           variant="outlined"
         />
-        <Button disabled={busy} label="Close" onPress={onClose} variant="text" />
-      </Row>
+        <AppButton
+          disabled={busy}
+          label="Close"
+          onPress={onClose}
+          style={{ height: 48, width: '100%' }}
+          variant="outlined"
+        />
+      </Column>
     </Column>
   );
 }

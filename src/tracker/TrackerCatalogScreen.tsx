@@ -1,5 +1,5 @@
 import { AppState } from 'react-native';
-import { Button, Column, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -12,7 +12,7 @@ import type {
 } from '@domain';
 import { AppIcon, isIconName } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { ActivityTile, errorText, Screen } from '@ui';
+import { ActivityTile, AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
@@ -297,31 +297,35 @@ function TrackerCatalogContent({ runtime }: { runtime: RoutineRuntime }) {
           onRetry={retry}
         />
         <Column spacing={8} style={{ width: '100%' }}>
-          <Row alignment="center" spacing={8}>
-            <Button
+          <Column spacing={8} style={{ width: '100%' }}>
+            <AppButton
               disabled={busy}
               label="New activity"
               onPress={() => router.push('/activity/new')}
+              style={{ height: 50, width: '100%' }}
               testID="new-activity"
             />
-            <Button
+            <AppButton
               disabled={busy}
               label="New routine"
               onPress={() => router.push('/routine-edit/new')}
+              style={{ height: 50, width: '100%' }}
               testID="new-routine"
               variant="outlined"
             />
-            <Button
+            <AppButton
               disabled={busy}
               label="New folder"
               onPress={() => router.push('/folder-edit/new')}
+              style={{ height: 50, width: '100%' }}
               testID="new-folder"
               variant="outlined"
             />
-          </Row>
-          <Button
+          </Column>
+          <AppButton
             label={showArchived ? 'Hide archived' : 'Show archived'}
             onPress={() => setShowArchived((visible) => !visible)}
+            style={{ height: 48, width: '100%' }}
             testID="toggle-archived"
             variant="outlined"
           />
@@ -365,8 +369,8 @@ function TrackerCatalogContent({ runtime }: { runtime: RoutineRuntime }) {
                   }
                   testID={`catalog-item-${item.id}`}
                 />
-                <Row alignment="center" spacing={8}>
-                  <Button
+                <Column spacing={8} style={{ width: '100%' }}>
+                  <AppButton
                     disabled={busy}
                     label="Edit"
                     onPress={() =>
@@ -374,18 +378,20 @@ function TrackerCatalogContent({ runtime }: { runtime: RoutineRuntime }) {
                         `/${item.kind === 'routine' ? 'routine-edit' : 'activity'}/${item.id}`
                       )
                     }
-                    variant="text"
+                    style={{ height: 48, width: '100%' }}
+                    variant="outlined"
                   />
                   {active ? (
-                    <Button
+                    <AppButton
                       disabled={busy}
                       label="Adjust start"
                       onPress={() => store.getState().setSheet('adjust-start')}
+                      style={{ height: 48, width: '100%' }}
                       testID={`adjust-start-${item.id}`}
-                      variant="text"
+                      variant="outlined"
                     />
                   ) : null}
-                </Row>
+                </Column>
               </Column>
             );
           })}
@@ -439,7 +445,7 @@ function FolderTile({
   const color = folder.color ?? colors.primary;
   return (
     <Column spacing={7} style={{ width: '100%' }}>
-      <Button
+      <AppButton
         disabled={busy}
         onPress={onPress}
         style={{
@@ -476,8 +482,14 @@ function FolderTile({
           </Column>
           <AppIcon color={colors.textMuted} name="chevron-down" size={19} />
         </Row>
-      </Button>
-      <Button disabled={busy} label="Edit folder" onPress={onEdit} variant="text" />
+      </AppButton>
+      <AppButton
+        disabled={busy}
+        label="Edit folder"
+        onPress={onEdit}
+        style={{ height: 48, width: '100%' }}
+        variant="outlined"
+      />
     </Column>
   );
 }

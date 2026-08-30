@@ -1,11 +1,11 @@
-import { Button, Column, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { formatCountdownMs, type ActiveRoutine, type RoutineStepStatus } from '@domain';
 import { AppIcon, type IconName } from '@icons';
 import { useAppTheme, type ThemeColors } from '@theme';
-import { errorText, Screen } from '@ui';
+import { AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { routineTiming } from './routine-engine';
@@ -31,6 +31,13 @@ function statusColor(status: RoutineStepStatus, colors: ThemeColors): string {
   if (status === 'skipped') return colors.textMuted;
   if (status === 'active') return colors.primary;
   return colors.border;
+}
+
+function stepStatusLabel(status: RoutineStepStatus): string {
+  if (status === 'completed') return 'Completed';
+  if (status === 'skipped') return 'Skipped';
+  if (status === 'active') return 'Current';
+  return 'Not started';
 }
 
 function RunnerError({
@@ -76,6 +83,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const [busy, setBusy] = useState(false);
   const [stepsOpen, setStepsOpen] = useState(false);
   const [addTimeOpen, setAddTimeOpen] = useState(false);
+  const [cancelConfirming, setCancelConfirming] = useState(false);
   const recovering = useRef(false);
   const lastAction = useRef<
     ((nextRuntime: RoutineRuntime) => Promise<ActiveRoutine | void>) | null
@@ -260,8 +268,11 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           >
             <AppIcon name="repeat" color={colors.active.foreground} size={22} />
           </Column>
-          <Column spacing={3} style={{ width: '100%' }}>
-            <Text textStyle={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>
+          <Column spacing={3}>
+            <Text
+              numberOfLines={2}
+              textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}
+            >
               {active.routineSnapshot.name}
             </Text>
             <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
@@ -269,28 +280,38 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             </Text>
           </Column>
         </Row>
-        <Row alignment="center" spacing={10}>
-          <Button
+        <Column spacing={8} style={{ width: '100%' }}>
+          <AppButton
             disabled={busy}
             label="Steps"
             onPress={() => setStepsOpen(true)}
+            style={{ height: 48, width: '100%' }}
             variant="outlined"
             testID="open-routine-steps"
           />
-          <Button
-            disabled={busy}
-            label="Cancel routine"
-            onPress={() =>
-              void runAction(
-                (nextRuntime) =>
-                  nextRuntime.routineService.cancelAndFinalize().then(() => undefined),
-                () => router.replace('/(tabs)')
-              )
-            }
-            variant="text"
-            testID="cancel-routine"
-          />
-        </Row>
+          {cancelConfirming ? (
+            <CancelRoutineConfirmation
+              busy={busy}
+              onCancel={() => setCancelConfirming(false)}
+              onConfirm={() =>
+                void runAction(
+                  (nextRuntime) =>
+                    nextRuntime.routineService.cancelAndFinalize().then(() => undefined),
+                  () => router.replace('/(tabs)')
+                )
+              }
+            />
+          ) : (
+            <AppButton
+              disabled={busy}
+              label="Cancel routine"
+              onPress={() => setCancelConfirming(true)}
+              style={{ height: 48, width: '100%' }}
+              variant="outlined"
+              testID="cancel-routine"
+            />
+          )}
+        </Column>
         <Column
           alignment="center"
           spacing={18}
@@ -348,8 +369,8 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           >
             {active.status === 'paused'
               ? isOvertime
-                ? `Paused · over by ${formatCountdownMs(timing.overtimeMs)}`
-                : `Paused · ${countdown} remaining`
+                ? `Paused: over by ${formatCountdownMs(timing.overtimeMs)}`
+                : `Paused: ${countdown} remaining`
               : timing.deadlineAt
                 ? `Ends at ${absoluteTime(timing.deadlineAt)}`
                 : 'No deadline'}
@@ -363,14 +384,15 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           />
         </RunnerError>
         <Column spacing={12} style={{ width: '100%' }}>
-          <Button
+          <AppButton
             disabled={busy || active.status === 'paused'}
             label="Done"
             onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.done())}
+            style={{ height: 56, width: '100%' }}
             testID="routine-done"
           />
-          <Row alignment="center" spacing={10}>
-            <Button
+          <Column spacing={10} style={{ width: '100%' }}>
+            <AppButton
               disabled={busy}
               label={active.status === 'paused' ? 'Resume' : 'Pause'}
               onPress={() =>
@@ -380,21 +402,24 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
                     : nextRuntime.routineService.pause()
                 )
               }
+              style={{ height: 56, width: '100%' }}
               variant="outlined"
               testID={active.status === 'paused' ? 'routine-resume' : 'routine-pause'}
             />
-            <Button
+            <AppButton
               disabled={busy || active.status === 'paused'}
               label="Skip"
               onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.skip())}
+              style={{ height: 56, width: '100%' }}
               variant="outlined"
               testID="routine-skip"
             />
-          </Row>
-          <Button
+          </Column>
+          <AppButton
             disabled={busy}
             label="Add time"
             onPress={() => setAddTimeOpen((open) => !open)}
+            style={{ height: 52, width: '100%' }}
             variant="outlined"
             testID="open-add-time"
           />
@@ -451,18 +476,25 @@ function AddTimeSheet({
         Additions extend the persisted deadline without resetting the current countdown or overtime
         position.
       </Text>
-      <Row alignment="center" spacing={8}>
+      <Column spacing={8} style={{ width: '100%' }}>
         {options.map((option) => (
-          <Button
+          <AppButton
             key={option.value}
             disabled={busy}
             label={option.label}
             onPress={() => onAdd(option.value)}
+            style={{ height: 48, width: '100%' }}
             testID={`add-time-${option.value}`}
           />
         ))}
-      </Row>
-      <Button disabled={busy} label="Close" onPress={onClose} variant="text" />
+      </Column>
+      <AppButton
+        disabled={busy}
+        label="Close"
+        onPress={onClose}
+        style={{ height: 48, width: '100%' }}
+        variant="outlined"
+      />
     </Column>
   );
 }
@@ -482,9 +514,9 @@ function StepsSheet({ active, onClose }: { active: ActiveRoutine; onClose: () =>
       }}
       testID="routine-steps-sheet"
     >
-      <Row alignment="center" spacing={10}>
+      <Row alignment="center" spacing={10} style={{ width: '100%' }}>
         <AppIcon name="list-checks" color={colors.primary} size={24} />
-        <Column spacing={2} style={{ width: '100%' }}>
+        <Column spacing={2}>
           <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>Steps</Text>
           <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>Read-only progress</Text>
         </Column>
@@ -493,8 +525,9 @@ function StepsSheet({ active, onClose }: { active: ActiveRoutine; onClose: () =>
         const session = active.stepSessions.find((candidate) => candidate.stepId === step.id);
         const status = session?.status ?? 'pending';
         return (
-          <Row key={step.id} alignment="center" spacing={10}>
+          <Row key={step.id} alignment="center" spacing={10} style={{ width: '100%' }}>
             <AppIcon
+              accessibilityLabel={`${stepStatusLabel(status)} step`}
               name={
                 status === 'completed'
                   ? 'check-circle-2'
@@ -505,24 +538,80 @@ function StepsSheet({ active, onClose }: { active: ActiveRoutine; onClose: () =>
               color={statusColor(status, colors)}
               size={20}
             />
-            <Text
-              textStyle={{
-                color: colors.text,
-                fontSize: 15,
-                fontWeight: index === active.currentStepIndex ? '700' : '400',
-              }}
-            >
-              {`${index + 1}. ${step.name || 'Untitled step'}${index === active.currentStepIndex ? ' · Current' : ''}`}
-            </Text>
+            <Column spacing={2}>
+              <Text
+                textStyle={{
+                  color: colors.text,
+                  fontSize: 15,
+                  fontWeight: index === active.currentStepIndex ? '700' : '400',
+                }}
+              >
+                {`${index + 1}. ${step.name || 'Untitled step'}${index === active.currentStepIndex ? ' · Current' : ''}`}
+              </Text>
+              <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
+                {stepStatusLabel(status)}
+              </Text>
+            </Column>
           </Row>
         );
       })}
-      <Button
+      <AppButton
         label="Close steps"
         onPress={onClose}
+        style={{ height: 48, width: '100%' }}
         variant="outlined"
         testID="close-routine-steps"
       />
+    </Column>
+  );
+}
+
+function CancelRoutineConfirmation({
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <Column
+      spacing={8}
+      style={{
+        backgroundColor: colors.warning.background,
+        borderColor: colors.warning.foreground,
+        borderRadius: 14,
+        borderWidth: 1,
+        padding: 14,
+        width: '100%',
+      }}
+      testID="cancel-routine-confirmation"
+    >
+      <Text textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}>
+        Cancel this routine?
+      </Text>
+      <Text textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}>
+        The current routine will end and its progress will be finalized. This cannot be undone from
+        the runner.
+      </Text>
+      <Column spacing={8} style={{ width: '100%' }}>
+        <AppButton
+          disabled={busy}
+          label="Yes, cancel routine"
+          onPress={onConfirm}
+          style={{ height: 48, width: '100%' }}
+          testID="confirm-cancel-routine"
+        />
+        <AppButton
+          disabled={busy}
+          label="Keep running"
+          onPress={onCancel}
+          style={{ height: 48, width: '100%' }}
+          variant="outlined"
+        />
+      </Column>
     </Column>
   );
 }

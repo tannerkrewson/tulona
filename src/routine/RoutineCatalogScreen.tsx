@@ -1,11 +1,11 @@
-import { Button, Column, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 
 import type { ActiveRoutine, CatalogCollection, RoutineDefinition } from '@domain';
 import { AppIcon, type IconName } from '@icons';
 import { useAppTheme } from '@theme';
-import { errorText, Screen } from '@ui';
+import { AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { loadRoutineRuntime } from './routine-runtime';
@@ -113,7 +113,7 @@ export default function RoutineCatalogScreen() {
             <Text textStyle={{ color: colors.warning.foreground, fontSize: 14 }}>
               Choose the next activity to finish this transition.
             </Text>
-            <Button
+            <AppButton
               label="Open next-activity chooser"
               onPress={() => router.push('/routine-chooser')}
               testID="open-chooser-from-tracker"
@@ -132,24 +132,41 @@ export default function RoutineCatalogScreen() {
               width: '100%',
             }}
           >
-            <Text textStyle={{ color: colors.active.foreground, fontSize: 16, fontWeight: '700' }}>
-              {`${activeRoutine.routineSnapshot.name} is ${activeRoutine.status}`}
-            </Text>
-            <Button
+            <Row alignment="center" spacing={8}>
+              <AppIcon
+                accessibilityLabel="Active routine"
+                color={colors.active.foreground}
+                name="check-circle-2"
+                size={20}
+              />
+              <Column spacing={2}>
+                <Text
+                  textStyle={{ color: colors.active.foreground, fontSize: 16, fontWeight: '700' }}
+                >
+                  Active routine
+                </Text>
+                <Text textStyle={{ color: colors.active.foreground, fontSize: 14 }}>
+                  {`${activeRoutine.routineSnapshot.name} is ${activeRoutine.status}.`}
+                </Text>
+              </Column>
+            </Row>
+            <AppButton
               label="Return to runner"
               onPress={() => router.push(`/routine/${activeRoutine.routineId}`)}
+              style={{ height: 50, width: '100%' }}
               testID="return-to-runner"
             />
           </Column>
         ) : null}
-        <Row alignment="center" spacing={10}>
+        <Column spacing={10} style={{ width: '100%' }}>
           <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>Routines</Text>
-          <Button
+          <AppButton
             label="New routine"
             onPress={() => router.push('/routine-edit/new')}
+            style={{ height: 50, width: '100%' }}
             testID="new-routine"
           />
-        </Row>
+        </Column>
         {routines.map((routine) => (
           <RoutineCatalogItem
             key={routine.id}
@@ -214,13 +231,13 @@ function RoutineCatalogItem({
         width: '100%',
       }}
     >
-      <Row alignment="center" spacing={10}>
+      <Row alignment="center" spacing={10} style={{ width: '100%' }}>
         <AppIcon
           name={(routine.iconName || 'repeat') as IconName}
           color={colors.primary}
           size={25}
         />
-        <Column spacing={3} style={{ width: '100%' }}>
+        <Column spacing={3}>
           <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
             {routine.name}
           </Text>
@@ -229,21 +246,23 @@ function RoutineCatalogItem({
           </Text>
         </Column>
       </Row>
-      <Row alignment="center" spacing={8}>
-        <Button
+      <Column spacing={8} style={{ width: '100%' }}>
+        <AppButton
           disabled={disabled || routine.steps.length === 0}
           label="Start"
           onPress={onRun}
+          style={{ height: 52, width: '100%' }}
           testID={`start-routine-${routine.id}`}
         />
-        <Button
+        <AppButton
           disabled={disabled}
           label="Edit"
           onPress={onEdit}
+          style={{ height: 48, width: '100%' }}
           variant="outlined"
           testID={`edit-routine-${routine.id}`}
         />
-      </Row>
+      </Column>
     </Column>
   );
 }

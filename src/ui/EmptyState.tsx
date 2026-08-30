@@ -1,7 +1,9 @@
-import { Button, Column, Text } from '@expo/ui';
+import { Column, Text } from '@expo/ui';
 
 import { AppIcon, normalizeIconName, type IconName } from '@icons';
 import { useAppTheme } from '@theme';
+
+import { AppButton } from './AppButton';
 
 export interface EmptyStateProps {
   title: string;
@@ -52,7 +54,7 @@ export function EmptyState({
         </Text>
       ) : null}
       {actionLabel && onAction ? (
-        <Button
+        <AppButton
           label={actionLabel}
           onPress={onAction}
           testID={testID ? `${testID}-action` : undefined}

@@ -1,7 +1,9 @@
-import { Button, Column, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
+
+import { AppButton } from './AppButton';
 
 export interface ColorOption {
   readonly value: string;
@@ -68,12 +70,12 @@ export function ColorPicker({
   return (
     <Column spacing={10} style={{ width: '100%' }} testID={testID}>
       {allowClear ? (
-        <Button
+        <AppButton
           disabled={value == null}
           label="Use default color"
           onPress={() => onChange(null)}
           testID={testID ? `${testID}-clear` : undefined}
-          variant="text"
+          variant="outlined"
         />
       ) : null}
       <Column spacing={8} style={{ width: '100%' }}>
@@ -82,7 +84,7 @@ export function ColorPicker({
             {row.map((option) => {
               const selected = selectedValue === option.value.toLowerCase();
               return (
-                <Button
+                <AppButton
                   key={option.value}
                   onPress={() => onChange(option.value)}
                   style={{
@@ -110,6 +112,7 @@ export function ColorPicker({
                     >
                       {selected ? (
                         <AppIcon
+                          accessibilityLabel={`${option.label} selected`}
                           color={getAccessibleTextColor(option.value)}
                           name="check"
                           size={18}
@@ -125,7 +128,7 @@ export function ColorPicker({
                       </Text>
                     ) : null}
                   </Column>
-                </Button>
+                </AppButton>
               );
             })}
           </Row>

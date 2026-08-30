@@ -1,4 +1,4 @@
-import { Button, Column, Picker, Row, Text, TextInput } from '@expo/ui';
+import { Column, Picker, Row, Text } from '@expo/ui';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -16,8 +16,8 @@ import {
 } from '@domain';
 import { useAppTheme } from '@theme';
 import { AppIcon } from '@icons';
-import { errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
+import { AccessiblePicker, AccessibleTextInput, AppButton, errorText, Screen } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
@@ -313,29 +313,31 @@ function HistoryDay({
       description="Derived intervals for a logical day; corrections update the journal."
     >
       <Column spacing={16} style={{ width: '100%' }}>
-        <Row alignment="center" spacing={8}>
-          <Button
+        <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+          <AppButton
             disabled={busy}
             label="Previous day"
             onPress={() => onChangeDay(shiftDay(day, -1, rolloverHour))}
+            style={{ height: 48, width: '48%' }}
             testID="history-previous-day"
             variant="outlined"
           />
-          <Column alignment="center" spacing={2} style={{ width: '100%' }}>
-            <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>
-              {formatDate(day, rolloverHour)}
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>{day}</Text>
-          </Column>
-          <Button
+          <AppButton
             disabled={busy || futureDay}
             label="Next day"
             onPress={() => onChangeDay(shiftDay(day, 1, rolloverHour))}
+            style={{ height: 48, width: '48%' }}
             testID="history-next-day"
             variant="outlined"
           />
         </Row>
-        <Row alignment="center" spacing={10}>
+        <Column alignment="center" spacing={2} style={{ width: '100%' }}>
+          <Text textStyle={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>
+            {formatDate(day, rolloverHour)}
+          </Text>
+          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>{day}</Text>
+        </Column>
+        <Column spacing={10} style={{ width: '100%' }}>
           <Column
             spacing={2}
             style={{
@@ -344,7 +346,7 @@ function HistoryDay({
               borderRadius: 14,
               borderWidth: 1,
               padding: 14,
-              width: 180,
+              width: '100%',
             }}
           >
             <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>Tracked total</Text>
@@ -352,14 +354,15 @@ function HistoryDay({
               {formatDuration(totalMs)}
             </Text>
           </Column>
-          <Button
+          <AppButton
             disabled={busy || futureDay}
             label={insertOpen ? 'Close missed switch' : 'Insert missed switch'}
             onPress={() => setInsertOpen((open) => !open)}
+            style={{ height: 48, width: '100%' }}
             testID="toggle-missed-switch"
             variant="outlined"
           />
-        </Row>
+        </Column>
         {insertOpen ? (
           <InsertSwitchPanel
             activities={[...catalog.activities, ...catalog.routines]}
@@ -455,20 +458,22 @@ function HistoryDay({
                 ? 'The preceding state will continue across this transition. This cannot be undone from History.'
                 : 'The selected boundary will be removed so the preceding activity continues. Confirm to journal this change.'}
             </Text>
-            <Row alignment="center" spacing={8}>
-              <Button
+            <Column spacing={8} style={{ width: '100%' }}>
+              <AppButton
                 disabled={busy}
                 label={pending.kind === 'delete' ? 'Confirm delete' : 'Confirm merge'}
                 onPress={confirmPending}
+                style={{ height: 48, width: '100%' }}
                 testID={`confirm-${pending.kind}`}
               />
-              <Button
+              <AppButton
                 disabled={busy}
                 label="Cancel"
                 onPress={() => setPending(null)}
-                variant="text"
+                style={{ height: 48, width: '100%' }}
+                variant="outlined"
               />
-            </Row>
+            </Column>
           </Column>
         ) : null}
       </Column>
@@ -515,7 +520,9 @@ function InsertSwitchPanel({
       <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
         This adds one journaled transition at the selected past time.
       </Text>
-      <TextInput
+      <AccessibleTextInput
+        enterKeyHint="done"
+        label="Missed switch date and time"
         onChangeText={onTimeChange}
         testID="missed-switch-time"
         defaultValue={timeValue}
@@ -529,7 +536,8 @@ function InsertSwitchPanel({
         }}
         textStyle={{ color: colors.text, fontSize: 16 }}
       />
-      <Picker
+      <AccessiblePicker
+        label="Activity for missed switch"
         onValueChange={(next) => onActivityChange(String(next))}
         selectedValue={activityId}
         testID="missed-switch-activity"
@@ -542,15 +550,22 @@ function InsertSwitchPanel({
             value={item.id}
           />
         ))}
-      </Picker>
-      <Row alignment="center" spacing={8}>
-        <Button
+      </AccessiblePicker>
+      <Column spacing={8} style={{ width: '100%' }}>
+        <AppButton
           disabled={busy || activities.length === 0}
           label="Insert switch"
           onPress={onInsert}
+          style={{ height: 48, width: '100%' }}
         />
-        <Button disabled={busy} label="Cancel" onPress={onCancel} variant="text" />
-      </Row>
+        <AppButton
+          disabled={busy}
+          label="Cancel"
+          onPress={onCancel}
+          style={{ height: 48, width: '100%' }}
+          variant="outlined"
+        />
+      </Column>
     </Column>
   );
 }
@@ -608,10 +623,10 @@ function HistoryInterval({
     >
       <Row alignment="center" spacing={10}>
         <Column style={{ backgroundColor: color, borderRadius: 6, height: 38, width: 12 }} />
-        <Column spacing={3} style={{ width: '100%' }}>
+        <Column spacing={3}>
           <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '800' }}>{name}</Text>
           <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-            {`${formatTime(interval.startMs)} - ${formatTime(interval.endMs)} | ${formatDuration(duration)}`}
+            {`${formatTime(interval.startMs)} - ${formatTime(interval.endMs)} | ${formatDuration(duration)} | ${transition.activityId === null ? 'Stopped' : 'Recorded'}`}
           </Text>
         </Column>
         <AppIcon
@@ -634,7 +649,9 @@ function HistoryInterval({
           <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
             The preceding interval ends at this same time; the selected interval starts here.
           </Text>
-          <TextInput
+          <AccessibleTextInput
+            enterKeyHint="done"
+            label="Boundary date and time"
             onChangeText={onBoundaryChange}
             testID={`boundary-time-${transition.id}`}
             defaultValue={boundaryValue}
@@ -648,22 +665,30 @@ function HistoryInterval({
             }}
             textStyle={{ color: colors.text, fontSize: 16 }}
           />
-          <Row alignment="center" spacing={8}>
-            <Button
+          <Column spacing={8} style={{ width: '100%' }}>
+            <AppButton
               disabled={busy}
               label="Save boundary"
               onPress={onSave}
+              style={{ height: 48, width: '100%' }}
               testID={`save-boundary-${transition.id}`}
             />
-            <Button disabled={busy} label="Cancel" onPress={onCancelEdit} variant="text" />
-          </Row>
+            <AppButton
+              disabled={busy}
+              label="Cancel"
+              onPress={onCancelEdit}
+              style={{ height: 48, width: '100%' }}
+              variant="outlined"
+            />
+          </Column>
         </Column>
       ) : null}
       <Column spacing={6} style={{ width: '100%' }}>
         <Text textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>
           Reassign this transition
         </Text>
-        <Picker
+        <AccessiblePicker
+          label="Reassign transition activity"
           onValueChange={(next) => {
             const value = String(next);
             if (value !== (transition.activityId ?? NONE)) {
@@ -684,31 +709,34 @@ function HistoryInterval({
               value={item.id}
             />
           ))}
-        </Picker>
+        </AccessiblePicker>
       </Column>
-      <Row alignment="center" spacing={8}>
-        <Button
+      <Column spacing={8} style={{ width: '100%' }}>
+        <AppButton
           disabled={busy || editing}
           label="Edit boundary"
           onPress={onBeginEdit}
+          style={{ height: 48, width: '100%' }}
           testID={`open-boundary-${transition.id}`}
           variant="outlined"
         />
-        <Button
+        <AppButton
           disabled={busy || editing}
-          label="Delete"
+          label="Delete boundary"
           onPress={onDelete}
+          style={{ height: 48, width: '100%' }}
           testID={`delete-boundary-${transition.id}`}
-          variant="text"
+          variant="outlined"
         />
-        <Button
+        <AppButton
           disabled={busy || editing || !canMerge}
-          label="Merge"
+          label="Merge with previous"
           onPress={onMerge}
+          style={{ height: 48, width: '100%' }}
           testID={`merge-boundary-${transition.id}`}
-          variant="text"
+          variant="outlined"
         />
-      </Row>
+      </Column>
     </Column>
   );
 }

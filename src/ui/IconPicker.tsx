@@ -1,8 +1,11 @@
-import { Button, Column, Row, Text, TextInput } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 import { useState } from 'react';
 
 import { AppIcon, iconCatalog, isIconName, type IconMetadata, type IconName } from '@icons';
 import { useAppTheme } from '@theme';
+
+import { AccessibleTextInput } from './AccessibleTextInput';
+import { AppButton } from './AppButton';
 
 export interface IconPickerProps {
   value: string | null;
@@ -54,21 +57,24 @@ export function IconPicker({
       <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>
         Search icons
       </Text>
-      <TextInput
+      <AccessibleTextInput
         autoCapitalize="none"
         autoCorrect={false}
+        label="Search icons"
         onChangeText={setQuery}
         placeholder={searchPlaceholder}
+        placeholderTextColor={colors.textMuted}
+        returnKeyType="search"
         testID={`${rootTestID}-search`}
         textStyle={{ color: colors.text, fontSize: 16 }}
       />
       {allowClear ? (
-        <Button
+        <AppButton
           disabled={selectedName == null}
           label="No icon"
           onPress={() => onChange(null)}
           testID={`${rootTestID}-clear`}
-          variant="text"
+          variant="outlined"
         />
       ) : null}
       {rows.length > 0 ? (
@@ -78,7 +84,7 @@ export function IconPicker({
               {row.map((icon) => {
                 const selected = selectedName === icon.name;
                 return (
-                  <Button
+                  <AppButton
                     key={icon.name}
                     onPress={() => onChange(icon.name)}
                     style={{
@@ -95,7 +101,7 @@ export function IconPicker({
                   >
                     <Column alignment="center" spacing={5}>
                       <AppIcon
-                        accessibilityLabel={icon.label}
+                        accessibilityLabel={`${icon.label}${selected ? ' selected' : ''}`}
                         color={selected ? colors.active.foreground : colors.primary}
                         name={icon.name}
                         size={26}
@@ -118,7 +124,7 @@ export function IconPicker({
                         </Text>
                       ) : null}
                     </Column>
-                  </Button>
+                  </AppButton>
                 );
               })}
             </Row>
