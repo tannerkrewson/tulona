@@ -163,11 +163,32 @@ export type HabitSchedule =
   | { kind: 'daily' }
   | { kind: 'weekly'; daysOfWeek: number[] }
   | { kind: 'weekdays' }
+  | { kind: 'weekly-count'; timesPerWeek: number }
   | { kind: 'interval'; everyDays: number; startDate: LogicalDayKey };
 
 export type HabitTrigger =
-  | { kind: 'tracked-time'; activityId: UUID; minimumMs: number }
-  | { kind: 'routine-completion'; routineId: UUID };
+  | {
+      kind: 'tracked-time';
+      activityId: UUID;
+      /** Seconds of materialized activity time required; omitted means one second. */
+      minimumSeconds?: number;
+      /** Legacy persisted spelling accepted at the boundary; services normalize to seconds. */
+      minimumMs?: number;
+    }
+  | {
+      kind: 'folder-time';
+      folderId: UUID;
+      /** Seconds of materialized child time required; omitted means one second. */
+      minimumSeconds?: number;
+      minimumMs?: number;
+    }
+  | {
+      kind: 'routine-completion';
+      routineId: UUID;
+      /** Top-level routine time required; omitted means one second. */
+      minimumSeconds?: number;
+      minimumMs?: number;
+    };
 
 export interface Habit extends Timestamps, Archivable {
   id: UUID;
