@@ -28,6 +28,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     leadTimeMs: 0,
     sound: true,
     vibration: true,
+    volume: 1,
   },
   defaultRoutineBehavior: 'resume',
   showArchived: false,

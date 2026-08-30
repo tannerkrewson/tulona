@@ -3,6 +3,7 @@ import type { CatalogRepositoryApi } from '../data/catalog-repository';
 import {
   createId,
   isUuid,
+  normalizeRoutineStepOrder,
   routineStepSchema,
   sortByOrder,
   toTimestamp,
@@ -13,6 +14,7 @@ import {
   type IsoTimestamp,
   type RoutineDefinition,
   type RoutineSnapshot,
+  type RoutineStepEndBehavior,
   type RoutineStep,
   type TrackableItem,
   type UUID,
@@ -63,7 +65,33 @@ export interface UpdateActivityInput {
 export interface CreateRoutineInput extends CatalogStyleInput {
   id?: UUID;
   folderId?: UUID | null;
-  steps?: readonly RoutineStep[];
+  steps?: readonly (RoutineStep | CreateRoutineStepInput)[];
+}
+
+export interface CreateRoutineStepInput {
+  id?: UUID;
+  activityId: UUID;
+  name?: string | null;
+  durationMs: number;
+  endBehavior?: RoutineStepEndBehavior;
+  notes?: string | null;
+  color?: string | null;
+  iconName?: string | null;
+}
+
+export interface UpdateRoutineStepInput {
+  activityId?: UUID;
+  name?: string | null;
+  durationMs?: number;
+  endBehavior?: RoutineStepEndBehavior;
+  notes?: string | null;
+  color?: string | null;
+  iconName?: string | null;
+}
+
+export interface DuplicateRoutineStepOptions {
+  id?: UUID;
+  name?: string | null;
 }
 
 export interface UpdateRoutineInput {
@@ -113,6 +141,20 @@ export interface CatalogServiceApi {
   restoreRoutine(id: UUID): Promise<RoutineDefinition>;
   duplicateRoutine(id: UUID, options?: DuplicateRoutineOptions): Promise<RoutineDefinition>;
   snapshotRoutine(id: UUID, capturedAt?: IsoTimestamp): Promise<RoutineSnapshot>;
+  createRoutineStep(id: UUID, input: CreateRoutineStepInput): Promise<RoutineStep>;
+  addRoutineStep(id: UUID, input: CreateRoutineStepInput): Promise<RoutineStep>;
+  updateRoutineStep(
+    routineId: UUID,
+    stepId: UUID,
+    input: UpdateRoutineStepInput
+  ): Promise<RoutineStep>;
+  duplicateRoutineStep(
+    routineId: UUID,
+    stepId: UUID,
+    options?: DuplicateRoutineStepOptions
+  ): Promise<RoutineStep>;
+  deleteRoutineStep(routineId: UUID, stepId: UUID): Promise<RoutineStep>;
+  removeRoutineStep(routineId: UUID, stepId: UUID): Promise<RoutineStep>;
   reorderFolders(id: UUID, direction: OrderDirection): Promise<Folder[]>;
   reorderItem(id: UUID, direction: OrderDirection): Promise<CatalogCollection>;
   reorderRoutineStep(
@@ -153,6 +195,26 @@ function validateIcon(iconName: string | null | undefined): IconName | null {
   return iconName as IconName;
 }
 
+function validateDuration(durationMs: number): number {
+  if (!Number.isInteger(durationMs) || durationMs <= 0)
+    validation('Routine step duration must be a positive integer in milliseconds');
+  return durationMs;
+}
+
+function validateEndBehavior(
+  endBehavior: RoutineStepEndBehavior | undefined
+): RoutineStepEndBehavior {
+  if (endBehavior === undefined || endBehavior === 'overtime') return 'overtime';
+  if (endBehavior === 'auto-advance') return endBehavior;
+  if (endBehavior === 'autoAdvance') return 'auto-advance';
+  validation(`Unknown routine step end behavior "${String(endBehavior)}"`);
+}
+
+function validateStepNotes(notes: string | null | undefined): string | null {
+  if (notes === undefined || notes === null) return null;
+  return notes.trim() || null;
+}
+
 function assertCatalogInvariants(catalog: CatalogCollection): void {
   const ids = new Set<string>();
   const folders = new Set<string>();
@@ -175,6 +237,21 @@ function assertCatalogInvariants(catalog: CatalogCollection): void {
     ids.add(item.id);
     if (item.folderId !== null && !folders.has(item.folderId)) {
       validation(`Catalog item "${item.id}" references an unknown folder`);
+    }
+    if (item.kind === 'routine') {
+      const stepIds = new Set<string>();
+      for (const step of item.steps) {
+        if (stepIds.has(step.id)) validation(`Duplicate routine step ID "${step.id}"`);
+        stepIds.add(step.id);
+        if (!catalog.activities.some((activity) => activity.id === step.activityId)) {
+          validation(`Routine step "${step.id}" references an unknown activity`);
+        }
+        validateDuration(step.durationMs);
+        validateEndBehavior(step.endBehavior);
+        validateStepNotes(step.notes);
+        validateColor(step.color);
+        validateIcon(step.iconName);
+      }
     }
   }
 }
@@ -235,6 +312,8 @@ function snapshotSteps(routine: RoutineDefinition): RoutineSnapshot['steps'] {
     sortOrder: index,
     color: step.color,
     iconName: step.iconName,
+    endBehavior: validateEndBehavior(step.endBehavior),
+    notes: validateStepNotes(step.notes),
   }));
 }
 
@@ -443,7 +522,7 @@ export class CatalogService implements CatalogServiceApi {
     assertId(id, 'Routine ID');
     assertNewId(catalog, id);
     const now = this.timestamp();
-    const steps = this.validateSteps(catalog, input.steps ?? []);
+    const steps = this.validateSteps(catalog, input.steps ?? [], now);
     const routine: RoutineDefinition = {
       id,
       kind: 'routine',
@@ -517,6 +596,8 @@ export class CatalogService implements CatalogServiceApi {
       steps: source.steps.map((step) => ({
         ...step,
         id: createId(),
+        endBehavior: validateEndBehavior(step.endBehavior),
+        notes: validateStepNotes(step.notes),
         createdAt: now,
         updatedAt: now,
       })),
@@ -538,6 +619,164 @@ export class CatalogService implements CatalogServiceApi {
       steps: snapshotSteps(routine),
       capturedAt: timestamp,
     };
+  }
+
+  async createRoutineStep(id: UUID, input: CreateRoutineStepInput): Promise<RoutineStep> {
+    const catalog = await this.read();
+    const routine = catalog.routines.find((candidate) => candidate.id === id);
+    if (!routine) throw new PersistenceError('validation', `Unknown routine "${id}"`);
+    const stepId = input.id ?? createId();
+    assertId(stepId, 'Routine step ID');
+    if (routine.steps.some((step) => step.id === stepId)) {
+      throw new PersistenceError('conflict', `Routine step ID "${stepId}" already exists`);
+    }
+    if (!catalog.activities.some((activity) => activity.id === input.activityId)) {
+      validation(`Routine step "${stepId}" references an unknown activity`);
+    }
+    const now = this.timestamp();
+    const step: RoutineStep = {
+      id: stepId,
+      activityId: input.activityId,
+      name: input.name === undefined ? null : validateStepNotes(input.name),
+      durationMs: validateDuration(input.durationMs),
+      sortOrder: routine.steps.length,
+      color: validateColor(input.color),
+      iconName: validateIcon(input.iconName),
+      endBehavior: validateEndBehavior(input.endBehavior),
+      notes: validateStepNotes(input.notes),
+      createdAt: now,
+      updatedAt: now,
+      archivedAt: null,
+    };
+    const nextRoutine: RoutineDefinition = {
+      ...routine,
+      steps: normalizeRoutineStepOrder([...routine.steps, step]),
+      updatedAt: now,
+    };
+    await this.write({
+      ...catalog,
+      routines: catalog.routines.map((candidate) =>
+        candidate.id === id ? nextRoutine : candidate
+      ),
+    });
+    return nextRoutine.steps.find((candidate) => candidate.id === stepId) as RoutineStep;
+  }
+
+  async addRoutineStep(id: UUID, input: CreateRoutineStepInput): Promise<RoutineStep> {
+    return this.createRoutineStep(id, input);
+  }
+
+  async updateRoutineStep(
+    routineId: UUID,
+    stepId: UUID,
+    input: UpdateRoutineStepInput
+  ): Promise<RoutineStep> {
+    const catalog = await this.read();
+    const routine = catalog.routines.find((candidate) => candidate.id === routineId);
+    if (!routine) throw new PersistenceError('validation', `Unknown routine "${routineId}"`);
+    const current = routine.steps.find((step) => step.id === stepId);
+    if (!current) throw new PersistenceError('validation', `Unknown routine step "${stepId}"`);
+    const activityId = input.activityId ?? current.activityId;
+    if (!catalog.activities.some((activity) => activity.id === activityId)) {
+      validation(`Routine step "${stepId}" references an unknown activity`);
+    }
+    const nextStep: RoutineStep = {
+      ...current,
+      activityId,
+      name: input.name === undefined ? current.name : validateStepNotes(input.name),
+      durationMs:
+        input.durationMs === undefined ? current.durationMs : validateDuration(input.durationMs),
+      color: input.color === undefined ? current.color : validateColor(input.color),
+      iconName: input.iconName === undefined ? current.iconName : validateIcon(input.iconName),
+      endBehavior:
+        input.endBehavior === undefined
+          ? validateEndBehavior(current.endBehavior)
+          : validateEndBehavior(input.endBehavior),
+      notes:
+        input.notes === undefined
+          ? validateStepNotes(current.notes)
+          : validateStepNotes(input.notes),
+      updatedAt: this.timestamp(),
+    };
+    const nextRoutine = {
+      ...routine,
+      steps: normalizeRoutineStepOrder(
+        routine.steps.map((step) => (step.id === stepId ? nextStep : step))
+      ),
+      updatedAt: nextStep.updatedAt,
+    };
+    await this.write({
+      ...catalog,
+      routines: catalog.routines.map((candidate) =>
+        candidate.id === routineId ? nextRoutine : candidate
+      ),
+    });
+    return nextStep;
+  }
+
+  async duplicateRoutineStep(
+    routineId: UUID,
+    stepId: UUID,
+    options: DuplicateRoutineStepOptions = {}
+  ): Promise<RoutineStep> {
+    const catalog = await this.read();
+    const routine = catalog.routines.find((candidate) => candidate.id === routineId);
+    if (!routine) throw new PersistenceError('validation', `Unknown routine "${routineId}"`);
+    const source = routine.steps.find((step) => step.id === stepId);
+    if (!source) throw new PersistenceError('validation', `Unknown routine step "${stepId}"`);
+    const duplicateId = options.id ?? createId();
+    assertId(duplicateId, 'Routine step ID');
+    if (routine.steps.some((step) => step.id === duplicateId)) {
+      throw new PersistenceError('conflict', `Routine step ID "${duplicateId}" already exists`);
+    }
+    const ordered = normalizeRoutineStepOrder(sortByOrder(routine.steps));
+    const sourceIndex = ordered.findIndex((step) => step.id === stepId);
+    const now = this.timestamp();
+    const duplicate: RoutineStep = {
+      ...source,
+      id: duplicateId,
+      name: options.name === undefined ? source.name : validateStepNotes(options.name),
+      sortOrder: sourceIndex + 1,
+      endBehavior: validateEndBehavior(source.endBehavior),
+      notes: validateStepNotes(source.notes),
+      createdAt: now,
+      updatedAt: now,
+      archivedAt: null,
+    };
+    const steps = [...ordered];
+    steps.splice(sourceIndex + 1, 0, duplicate);
+    const nextRoutine = { ...routine, steps: normalizeRoutineStepOrder(steps), updatedAt: now };
+    await this.write({
+      ...catalog,
+      routines: catalog.routines.map((candidate) =>
+        candidate.id === routineId ? nextRoutine : candidate
+      ),
+    });
+    return nextRoutine.steps.find((step) => step.id === duplicateId) as RoutineStep;
+  }
+
+  async deleteRoutineStep(routineId: UUID, stepId: UUID): Promise<RoutineStep> {
+    const catalog = await this.read();
+    const routine = catalog.routines.find((candidate) => candidate.id === routineId);
+    if (!routine) throw new PersistenceError('validation', `Unknown routine "${routineId}"`);
+    const deleted = routine.steps.find((step) => step.id === stepId);
+    if (!deleted) throw new PersistenceError('validation', `Unknown routine step "${stepId}"`);
+    const nextRoutine = {
+      ...routine,
+      steps: normalizeRoutineStepOrder(routine.steps.filter((step) => step.id !== stepId)),
+      updatedAt: this.timestamp(),
+    };
+    await this.write({
+      ...catalog,
+      routines: catalog.routines.map((candidate) =>
+        candidate.id === routineId ? nextRoutine : candidate
+      ),
+    });
+    return deleted;
+  }
+
+  async removeRoutineStep(routineId: UUID, stepId: UUID): Promise<RoutineStep> {
+    return this.deleteRoutineStep(routineId, stepId);
   }
 
   async reorderFolders(id: UUID, direction: OrderDirection): Promise<Folder[]> {
@@ -616,16 +855,43 @@ export class CatalogService implements CatalogServiceApi {
     await this.repository.write(catalog);
   }
 
-  private validateSteps(catalog: CatalogCollection, steps: readonly RoutineStep[]): RoutineStep[] {
+  private validateSteps(
+    catalog: CatalogCollection,
+    steps: readonly (RoutineStep | CreateRoutineStepInput)[],
+    createdAt: IsoTimestamp
+  ): RoutineStep[] {
     const activities = new Set(catalog.activities.map((activity) => activity.id));
     const seen = new Set<string>();
-    const parsed = steps.map((step) => {
-      const result = routineStepSchema.safeParse(step);
+    const parsed = steps.map((step, index) => {
+      const candidate: RoutineStep =
+        'createdAt' in step
+          ? step
+          : {
+              id: step.id ?? createId(),
+              activityId: step.activityId,
+              name: step.name ?? null,
+              durationMs: step.durationMs,
+              sortOrder: index,
+              color: step.color ?? null,
+              iconName: step.iconName ?? null,
+              endBehavior: step.endBehavior,
+              notes: step.notes ?? null,
+              createdAt,
+              updatedAt: createdAt,
+              archivedAt: null,
+            };
+      const normalizedStep = {
+        ...candidate,
+        endBehavior: validateEndBehavior(candidate.endBehavior),
+        notes: validateStepNotes(candidate.notes),
+      };
+      const result = routineStepSchema.safeParse(normalizedStep);
       if (!result.success) validation(`Routine step failed validation: ${result.error.message}`);
-      if (seen.has(step.id)) validation(`Duplicate routine step ID "${step.id}"`);
-      seen.add(step.id);
-      if (!activities.has(step.activityId))
-        validation(`Routine step "${step.id}" references an unknown activity`);
+      if (seen.has(candidate.id)) validation(`Duplicate routine step ID "${candidate.id}"`);
+      seen.add(candidate.id);
+      if (!activities.has(candidate.activityId))
+        validation(`Routine step "${candidate.id}" references an unknown activity`);
+      validateDuration(candidate.durationMs);
       return result.data as RoutineStep;
     });
     return sortByOrder(parsed).map((step, index) => ({ ...step, sortOrder: index }));

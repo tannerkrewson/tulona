@@ -80,6 +80,8 @@ const routineStepShape = {
   sortOrder: z.number().int().nonnegative(),
   color: z.string().nullable(),
   iconName: z.string().nullable(),
+  endBehavior: z.enum(['overtime', 'auto-advance', 'autoAdvance']).default('overtime'),
+  notes: z.string().nullable().default(null),
   ...timestamps,
   archivedAt: nullableArchivedAt,
 };
@@ -122,6 +124,8 @@ export const routineStepSnapshotSchema = z
     sortOrder: z.number().int().nonnegative(),
     color: z.string().nullable(),
     iconName: z.string().nullable(),
+    endBehavior: z.enum(['overtime', 'auto-advance', 'autoAdvance']).default('overtime'),
+    notes: z.string().nullable().default(null),
   })
   .passthrough();
 export const routineSnapshotSchema = z
@@ -140,6 +144,8 @@ export const routineStepSessionSchema = z
     startedAt: isoTimestamp.nullable(),
     completedAt: isoTimestamp.nullable(),
     addedTimeMs: z.number().int().nonnegative(),
+    outcome: z.enum(['done', 'skipped', 'autoAdvanced']).optional(),
+    plannedDurationMs: z.number().int().positive().optional(),
   })
   .passthrough();
 
@@ -148,7 +154,14 @@ export const activeRoutineSchema = z
     id: uuid,
     routineId: uuid,
     routineSnapshot: routineSnapshotSchema,
-    status: z.enum(['running', 'paused', 'completed', 'abandoned']),
+    status: z.enum([
+      'running',
+      'paused',
+      'awaiting-next-activity',
+      'completed',
+      'cancelled',
+      'abandoned',
+    ]),
     startedAt: isoTimestamp,
     pausedAt: isoTimestamp.nullable(),
     completedAt: isoTimestamp.nullable(),
@@ -156,6 +169,9 @@ export const activeRoutineSchema = z
     currentStepStartedAt: isoTimestamp.nullable(),
     pausedDurationMs: z.number().int().nonnegative(),
     stepSessions: z.array(routineStepSessionSchema),
+    currentStepDeadlineAt: isoTimestamp.nullable().default(null),
+    remainingMsWhenPaused: z.number().int().nullable().default(null),
+    alarmFiredStepIds: z.array(uuid).default([]),
   })
   .passthrough();
 
@@ -164,7 +180,7 @@ export const routineRunHistorySchema = z
     id: uuid,
     routineId: uuid,
     routineSnapshot: routineSnapshotSchema,
-    status: z.enum(['completed', 'abandoned']),
+    status: z.enum(['completed', 'cancelled', 'abandoned']),
     startedAt: isoTimestamp,
     completedAt: isoTimestamp,
     durationMs: z.number().int().nonnegative(),
@@ -230,6 +246,7 @@ export const alarmSettingsSchema = z
     leadTimeMs: z.number().int().nonnegative(),
     sound: z.boolean(),
     vibration: z.boolean(),
+    volume: z.number().min(0).max(1).default(1),
   })
   .passthrough();
 export const appSettingsSchema = z
