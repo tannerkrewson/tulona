@@ -229,7 +229,9 @@ function validateSemantics(backup: LifeTrackerBackup): string[] {
   for (const routine of backup.catalog.routines) {
     duplicateIds(routine.steps, 'routine step', errors);
     for (const step of routine.steps) {
-      if (!activityIds.has(step.activityId)) {
+      if (routine.trackingMode === 'steps' && step.activityId === null) {
+        errors.push(`Step-tracked routine "${routine.id}" step "${step.id}" requires an activity`);
+      } else if (step.activityId !== null && !activityIds.has(step.activityId)) {
         errors.push(`Routine step "${step.id}" references unknown activity "${step.activityId}"`);
       }
     }
@@ -320,7 +322,9 @@ function validateSnapshot(
 ): Set<string> {
   const stepIds = duplicateIds(snapshot.steps, `${label} step`, errors);
   for (const step of snapshot.steps) {
-    if (!activityIds.has(step.activityId)) {
+    if (snapshot.trackingMode === 'steps' && step.activityId === null) {
+      errors.push(`${label} step "${step.id}" requires an activity`);
+    } else if (step.activityId !== null && !activityIds.has(step.activityId)) {
       errors.push(`${label} step "${step.id}" references unknown activity "${step.activityId}"`);
     }
   }

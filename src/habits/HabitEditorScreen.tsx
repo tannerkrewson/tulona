@@ -320,7 +320,7 @@ export function HabitEditorScreen({ id }: HabitEditorScreenProps) {
 
   if (!resource) {
     return (
-      <Screen title={id === NEW_ID ? 'New habit' : 'Edit habit'}>
+      <Screen onBack={() => router.back()} title={id === NEW_ID ? 'New habit' : 'Edit habit'}>
         <HabitErrorMessage
           message={loadError}
           onBack={() => router.back()}
@@ -345,6 +345,7 @@ export function HabitEditorScreen({ id }: HabitEditorScreenProps) {
     <HabitEditorForm
       habit={resource.habit}
       store={resource.store}
+      onBack={() => router.back()}
       onCancel={() => router.back()}
       onSaved={(habit) => router.replace(`/habit/${habit.id}`)}
     />
@@ -354,11 +355,13 @@ export function HabitEditorScreen({ id }: HabitEditorScreenProps) {
 function HabitEditorForm({
   habit,
   store,
+  onBack,
   onCancel,
   onSaved,
 }: {
   habit: Habit | null;
   store: HabitStore;
+  onBack: () => void;
   onCancel: () => void;
   onSaved: (habit: Habit) => void;
 }) {
@@ -395,6 +398,7 @@ function HabitEditorForm({
 
   return (
     <Screen
+      onBack={onBack}
       title={habit ? 'Edit habit' : 'New habit'}
       description="Choose a simple schedule and optionally connect evidence from your tracker."
     >

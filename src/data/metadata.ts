@@ -5,7 +5,7 @@ import type { KeyValueDatabase } from './database';
 import { PersistenceError } from './errors';
 import { GLOBAL_METADATA_KEY } from './keys';
 
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 export const CURRENT_METADATA_VERSION = 1;
 
 export interface MetadataLoadResult {

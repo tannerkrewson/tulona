@@ -11,6 +11,7 @@ import type { AsyncStorageLike } from '../src/data';
 const datasetId = '11111111-1111-4111-8111-111111111111';
 const routineId = '22222222-2222-4222-8222-222222222222';
 const activityId = '33333333-3333-4333-8333-333333333333';
+const secondActivityId = '88888888-8888-4888-8888-888888888888';
 const runId = '44444444-4444-4444-8444-444444444444';
 const transitionId = '55555555-5555-4555-8555-555555555555';
 const startedAt = '2026-08-30T00:00:00.000Z';
@@ -60,7 +61,10 @@ async function rejects(action: () => Promise<unknown>, message: string): Promise
   throw new Error(message);
 }
 
-async function createServices(storage: MemoryStorage) {
+async function createServices(
+  storage: MemoryStorage,
+  trackingMode: 'overall' | 'steps' = 'overall'
+) {
   let currentNow = startedAt;
   const database = new AsyncStorageDatabase(storage);
   const manager = new DatasetManager(database);
@@ -69,9 +73,11 @@ async function createServices(storage: MemoryStorage) {
   const catalogRepository = new CatalogRepository(database, namespace);
   const catalogService = new CatalogService(catalogRepository, { now: () => startedAt });
   await catalogService.createActivity({ id: activityId, name: 'Focus' });
+  await catalogService.createActivity({ id: secondActivityId, name: 'Reset' });
   await catalogService.createRoutine({
     id: routineId,
     name: 'Focus block',
+    trackingMode,
     steps: [{ activityId, durationMs: 60_000, endBehavior: 'overtime', notes: 'Deep work' }],
   });
   const trackerRepository = new TrackerRepository(database, namespace);
@@ -342,6 +348,42 @@ async function run(): Promise<void> {
       (run) => run.id === chooserCrashRun.id
     ).length === 1,
     'chooser crash recovery writes one completion history record'
+  );
+
+  const stepTracked = await createServices(new MemoryStorage(), 'steps');
+  await stepTracked.catalogService.createRoutineStep(routineId, {
+    activityId: secondActivityId,
+    durationMs: 30_000,
+    name: 'Reset step',
+  });
+  const stepRun = await stepTracked.routineService.startRoutine(routineId, {
+    id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+    startedAt,
+  });
+  assert(
+    (await stepTracked.trackerService.getActiveTransition(startedAt))?.activityId === activityId,
+    'step-tracked routines start with the first step activity'
+  );
+  stepTracked.setNow(at(2_000));
+  await stepTracked.routineService.skip(at(1_000));
+  assert(
+    (await stepTracked.trackerService.getActiveTransition(at(1_000)))?.activityId ===
+      secondActivityId,
+    'step completion switches tracker attribution to the next step'
+  );
+  const stepCompleted = await stepTracked.routineService.done(at(2_000));
+  assert(
+    stepCompleted.status === 'awaiting-next-activity',
+    'step routine completion awaits chooser'
+  );
+  assert(
+    (await stepTracked.trackerService.getActiveTransition(at(2_000)))?.activityId === null,
+    'step routine completion stops step attribution'
+  );
+  await stepTracked.routineService.finalizeCompletion(at(2_000));
+  assert(
+    stepRun.id === 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+    'step run persists its supplied ID'
   );
 }
 

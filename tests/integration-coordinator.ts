@@ -181,6 +181,7 @@ async function activeDatasetHydratesInOrder(): Promise<void> {
         id: ids.routine,
         kind: 'routine',
         name: 'Focus routine',
+        trackingMode: 'overall',
         folderId: null,
         sortOrder: 0,
         color: null,
@@ -191,7 +192,7 @@ async function activeDatasetHydratesInOrder(): Promise<void> {
         steps: [
           {
             id: ids.step,
-            activityId: ids.activity,
+            activityId: null,
             name: 'Focus step',
             durationMs: 60_000,
             sortOrder: 0,

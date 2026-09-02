@@ -5,6 +5,7 @@ import {
   type IsoTimestamp,
   type RoutineRunHistory,
   type RoutineStep,
+  type RoutineTrackingMode,
   type TimeTransition,
   type UUID,
 } from '@domain';
@@ -34,6 +35,19 @@ import {
 import type { TrackerServiceApi } from '../tracker/tracker-service';
 
 const NEXT_ACTIVITY_NOTE = 'Next activity after routine';
+
+function routineTrackingMode(active: ActiveRoutine): RoutineTrackingMode {
+  return active.routineSnapshot.trackingMode;
+}
+
+function routineOwnsActivity(active: ActiveRoutine, activityId: UUID): boolean {
+  if (routineTrackingMode(active) === 'overall') return activityId === active.routineId;
+  return active.routineSnapshot.steps.some((step) => step.activityId === activityId);
+}
+
+function orderedSnapshotSteps(active: ActiveRoutine) {
+  return [...active.routineSnapshot.steps].sort((left, right) => left.sortOrder - right.sortOrder);
+}
 
 export interface StartRoutineOptions {
   id?: UUID;
@@ -124,6 +138,13 @@ export class RoutineService implements RoutineServiceApi {
       throw new Error('A routine needs at least one startable step');
     }
     const active = startRoutineState(snapshot, startedAt, { id: options.id });
+    const initialActivityId =
+      routineTrackingMode(active) === 'overall'
+        ? routineId
+        : (active.routineSnapshot.steps[0]?.activityId ?? null);
+    if (initialActivityId === null) {
+      throw new Error('Step-tracked routines require an activity for every step');
+    }
     const companion = this.routineRepository.prepareActiveWrite?.(active);
     const transitionOptions = {
       id: options.transitionId,
@@ -132,7 +153,7 @@ export class RoutineService implements RoutineServiceApi {
       note: options.note ?? null,
     };
     if (this.trackerService.switchActivityWithCompanion && companion) {
-      await this.trackerService.switchActivityWithCompanion(routineId, transitionOptions, [
+      await this.trackerService.switchActivityWithCompanion(initialActivityId, transitionOptions, [
         companion,
       ]);
       return active;
@@ -141,7 +162,7 @@ export class RoutineService implements RoutineServiceApi {
     // Older adapters can still leave a clean state if tracker startup fails.
     await this.routineRepository.writeActive(active);
     try {
-      await this.trackerService.switchActivity(routineId, transitionOptions);
+      await this.trackerService.switchActivity(initialActivityId, transitionOptions);
     } catch (error) {
       await this.routineRepository.clearActive();
       throw error;
@@ -263,7 +284,7 @@ export class RoutineService implements RoutineServiceApi {
       currentActive?.status === 'awaiting-next-activity' &&
       existingAtCompletion !== null &&
       existingAtCompletion.activityId !== null &&
-      (existingAtCompletion.activityId !== currentActive.routineId ||
+      (!routineOwnsActivity(currentActive, existingAtCompletion.activityId) ||
         existingAtCompletion.note === NEXT_ACTIVITY_NOTE)
         ? {
             activeRoutine: currentActive,
@@ -319,6 +340,7 @@ export class RoutineService implements RoutineServiceApi {
       const result = catchUpRoutine(active, at);
       if (JSON.stringify(result.activeRoutine) !== JSON.stringify(active))
         await this.routineRepository.writeActive(result.activeRoutine);
+      await this.synchronizeStepTracking(active, result.activeRoutine);
       if (result.activeRoutine.status === 'awaiting-next-activity') {
         const completedAt = result.activeRoutine.completedAt;
         if (!completedAt) throw new Error('Completed routine has no completion timestamp');
@@ -326,7 +348,7 @@ export class RoutineService implements RoutineServiceApi {
         if (
           nextActivity &&
           nextActivity.activityId !== null &&
-          (nextActivity.activityId !== result.activeRoutine.routineId ||
+          (!routineOwnsActivity(result.activeRoutine, nextActivity.activityId) ||
             nextActivity.note === NEXT_ACTIVITY_NOTE)
         ) {
           const run = routineRunHistory(result.activeRoutine, 'completed');
@@ -394,7 +416,73 @@ export class RoutineService implements RoutineServiceApi {
     const active = activeRequired(await this.routineRepository.readActive());
     const next = transform(active);
     await this.routineRepository.writeActive(next);
+    await this.synchronizeStepTracking(active, next);
     return next;
+  }
+
+  private async synchronizeStepTracking(
+    previous: ActiveRoutine,
+    next: ActiveRoutine
+  ): Promise<void> {
+    if (routineTrackingMode(next) !== 'steps') return;
+    const previousSessions = new Map(
+      previous.stepSessions.map((session) => [session.stepId, session.completedAt])
+    );
+    const steps = orderedSnapshotSteps(next);
+    const completed = next.stepSessions
+      .filter(
+        (session) =>
+          session.completedAt !== null &&
+          previousSessions.get(session.stepId) !== session.completedAt
+      )
+      .sort((left, right) => timestampMs(left.completedAt!) - timestampMs(right.completedAt!));
+
+    for (const session of completed) {
+      const stepIndex = steps.findIndex((step) => step.id === session.stepId);
+      const nextStep = stepIndex < 0 ? undefined : steps[stepIndex + 1];
+      const activityId = next.status === 'cancelled' ? null : (nextStep?.activityId ?? null);
+      await this.switchRoutineActivity(activityId, session.completedAt!, previous);
+    }
+
+    if (
+      (next.status === 'running' || next.status === 'paused') &&
+      next.currentStepStartedAt !== null
+    ) {
+      const currentStep = steps[next.currentStepIndex];
+      if (currentStep?.activityId !== null && currentStep?.activityId !== undefined) {
+        await this.switchRoutineActivity(currentStep.activityId, next.currentStepStartedAt, next);
+      }
+    } else if (
+      (next.status === 'awaiting-next-activity' || next.status === 'cancelled') &&
+      next.completedAt !== null
+    ) {
+      await this.switchRoutineActivity(null, next.completedAt, next);
+    }
+  }
+
+  private async switchRoutineActivity(
+    activityId: UUID | null,
+    timestamp: IsoTimestamp,
+    previous: ActiveRoutine
+  ): Promise<void> {
+    const current = await this.trackerService.getActiveTransition(timestamp);
+    if (current?.activityId === activityId) return;
+    if (
+      current &&
+      timestampMs(current.timestamp) === timestampMs(timestamp) &&
+      (current.activityId === null || routineOwnsActivity(previous, current.activityId))
+    ) {
+      await this.trackerService.editTransition(current.id, {
+        activityId,
+        source: 'routine',
+        timestamp,
+      });
+      return;
+    }
+    await this.trackerService.switchActivity(activityId, {
+      source: 'routine',
+      timestamp,
+    });
   }
 
   private async persistAwaitingCompletion(
@@ -417,7 +505,7 @@ export class RoutineService implements RoutineServiceApi {
     const current = await this.trackerService.getActiveTransition(active.completedAt);
     if (current && timestampMs(current.timestamp) === completionMs) {
       if (current.activityId === null) return current;
-      if (current.activityId !== active.routineId) {
+      if (!routineOwnsActivity(active, current.activityId)) {
         throw new Error('A tracker transition already exists at routine completion');
       }
       return this.trackerService.editTransition(current.id, {

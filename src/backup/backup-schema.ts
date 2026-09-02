@@ -23,7 +23,7 @@ import type {
 
 export const BACKUP_FORMAT = 'life-tracker-backup' as const;
 export const CURRENT_BACKUP_VERSION = 1 as const;
-export const CURRENT_BACKUP_SCHEMA_VERSION = 1 as const;
+export const CURRENT_BACKUP_SCHEMA_VERSION = 2 as const;
 
 /** The portable, dataset-scoped backup document. UI state is intentionally absent. */
 export interface LifeTrackerBackup {

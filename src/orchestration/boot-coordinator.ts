@@ -208,6 +208,12 @@ export class BootCoordinator {
     return exportRawStorage(this.database);
   }
 
+  async clearAllData(): Promise<void> {
+    if (this.inFlight) throw new Error('Cannot clear local data while hydration is running');
+    await this.datasetManager.clearAll();
+    this.reset();
+  }
+
   private async hydrateOnce(): Promise<BootHydrationResult> {
     let metadataResult;
     try {

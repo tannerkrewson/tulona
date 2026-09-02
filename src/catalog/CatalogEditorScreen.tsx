@@ -65,7 +65,11 @@ export function CatalogEditorScreen({
   const title = kind === 'activity' ? 'Activity editor' : 'Folder editor';
   if (!resource) {
     return (
-      <Screen title={title} description="Catalog changes are stored on this device.">
+      <Screen
+        onBack={() => router.back()}
+        title={title}
+        description="Catalog changes are stored on this device."
+      >
         <Column
           spacing={12}
           style={{
@@ -322,6 +326,7 @@ function ActivityEditor({
 
   return (
     <Screen
+      onBack={onBack}
       title={activity ? 'Edit activity' : 'New activity'}
       description="Choose a root or one-level folder placement."
     >
@@ -504,6 +509,7 @@ function FolderEditor({
 
   return (
     <Screen
+      onBack={onBack}
       title={folder ? 'Edit folder' : 'New folder'}
       description="Folders stay at one level; catalog items can be placed inside them."
     >

@@ -142,13 +142,31 @@ async function run(): Promise<void> {
     name: 'Second child',
     folderId: folder.id,
   });
-  await service.createRoutine({
+  const overallRoutine = await service.createRoutine({
     id: ids.routine,
     name: 'Focus routine',
+    trackingMode: 'overall',
     folderId: folder.id,
     steps: [step(ids.step, rootActivity.id, 10), step(ids.secondStep, childActivity.id, 3)],
   });
-  await service.createRoutine({ id: ids.rootRoutine, name: 'Root routine' });
+  assert(
+    overallRoutine.steps.every((routineStep) => routineStep.activityId === null),
+    'overall routines do not retain per-step activities'
+  );
+  await service.createRoutine({
+    id: ids.rootRoutine,
+    name: 'Root routine',
+    trackingMode: 'overall',
+  });
+  await rejects(
+    () =>
+      service.createRoutine({
+        name: 'Incomplete step routine',
+        trackingMode: 'steps',
+        steps: [{ durationMs: 60_000 }],
+      }),
+    'step-tracked routines require an activity for every step'
+  );
 
   const childResolution = await service.resolveItem(childActivity.id);
   assert(

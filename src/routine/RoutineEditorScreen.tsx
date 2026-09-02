@@ -10,6 +10,7 @@ import type {
   RoutineDefinition,
   RoutineStep,
   RoutineStepEndBehavior,
+  RoutineTrackingMode,
   UUID,
 } from '@domain';
 import { createId } from '@domain';
@@ -20,6 +21,7 @@ import {
   AccessibleTextInput,
   AppButton,
   ColorPicker,
+  DurationPicker,
   errorText,
   IconPicker,
   Screen,
@@ -73,7 +75,7 @@ function durationParts(durationMs: number): Pick<StepDraft, 'hours' | 'minutes' 
 function draftFromStep(step: EditableStep): StepDraft {
   return {
     id: step.id,
-    activityId: step.activityId,
+    activityId: step.activityId ?? '',
     title: step.name ?? '',
     iconName: step.iconName ?? '',
     ...durationParts(step.durationMs),
@@ -85,9 +87,9 @@ function draftFromStep(step: EditableStep): StepDraft {
   };
 }
 
-function emptyDraft(activities: readonly Activity[]): StepDraft {
+function emptyDraft(activities: readonly Activity[], trackingMode: RoutineTrackingMode): StepDraft {
   return {
-    activityId: activities[0]?.id ?? '',
+    activityId: trackingMode === 'steps' ? (activities[0]?.id ?? '') : '',
     title: '',
     iconName: '',
     hours: '0',
@@ -119,11 +121,16 @@ function durationFromDraft(draft: StepDraft): number {
   return durationMs;
 }
 
-function inputFromDraft(draft: StepDraft): CreateRoutineStepInput {
-  if (!draft.activityId) throw new Error('Choose an activity for this step');
+function inputFromDraft(
+  draft: StepDraft,
+  trackingMode: RoutineTrackingMode
+): CreateRoutineStepInput {
+  if (trackingMode === 'steps' && !draft.activityId) {
+    throw new Error('Choose an activity for this step');
+  }
   return {
     ...(draft.id ? { id: draft.id } : {}),
-    activityId: draft.activityId as UUID,
+    activityId: trackingMode === 'steps' ? (draft.activityId as UUID) : null,
     name: draft.title.trim() || null,
     durationMs: durationFromDraft(draft),
     endBehavior: draft.endBehavior,
@@ -255,6 +262,7 @@ function FolderPicker({
 function StepForm({
   draft,
   activities,
+  trackingMode,
   onChange,
   onSave,
   onCancel,
@@ -264,6 +272,7 @@ function StepForm({
 }: {
   draft: StepDraft;
   activities: readonly Activity[];
+  trackingMode: RoutineTrackingMode;
   onChange: (draft: StepDraft) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -301,23 +310,29 @@ function StepForm({
           testID="step-title"
         />
       </Field>
-      <Field label="Activity tracked by this step">
-        <AccessiblePicker
-          label="Activity tracked by this step"
-          selectedValue={draft.activityId}
-          onValueChange={(activityId) => update({ activityId })}
-          testID="step-activity-picker"
-        >
-          <Picker.Item label="Choose an activity" value="" />
-          {availableActivities.map((activity) => (
-            <Picker.Item
-              key={activity.id}
-              label={activity.archivedAt ? `${activity.name} (archived)` : activity.name}
-              value={activity.id}
-            />
-          ))}
-        </AccessiblePicker>
-      </Field>
+      {trackingMode === 'steps' ? (
+        <Field label="Activity tracked by this step">
+          <AccessiblePicker
+            label="Activity tracked by this step"
+            selectedValue={draft.activityId}
+            onValueChange={(activityId) => update({ activityId })}
+            testID="step-activity-picker"
+          >
+            <Picker.Item label="Choose an activity" value="" />
+            {availableActivities.map((activity) => (
+              <Picker.Item
+                key={activity.id}
+                label={activity.archivedAt ? `${activity.name} (archived)` : activity.name}
+                value={activity.id}
+              />
+            ))}
+          </AccessiblePicker>
+        </Field>
+      ) : (
+        <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+          This routine tracks continuously. Each step is part of the same routine activity.
+        </Text>
+      )}
       <Field label="Step icon">
         <IconPicker
           value={draft.iconName || null}
@@ -326,44 +341,15 @@ function StepForm({
         />
       </Field>
       <Field label="Duration">
-        <Column spacing={8} style={{ width: '100%' }}>
-          <Row alignment="center" spacing={8}>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>Hours</Text>
-            <Input
-              label="Step hours"
-              value={draft.hours}
-              onChangeText={(hours) => update({ hours })}
-              placeholder="0"
-              testID="step-hours"
-              keyboardType="numeric"
-              width={100}
-            />
-          </Row>
-          <Row alignment="center" spacing={8}>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>Minutes</Text>
-            <Input
-              label="Step minutes"
-              value={draft.minutes}
-              onChangeText={(minutes) => update({ minutes })}
-              placeholder="0"
-              testID="step-minutes"
-              keyboardType="numeric"
-              width={100}
-            />
-          </Row>
-          <Row alignment="center" spacing={8}>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>Seconds</Text>
-            <Input
-              label="Step seconds"
-              value={draft.seconds}
-              onChangeText={(seconds) => update({ seconds })}
-              placeholder="0"
-              testID="step-seconds"
-              keyboardType="numeric"
-              width={100}
-            />
-          </Row>
-        </Column>
+        <DurationPicker
+          hours={Number(draft.hours) || 0}
+          minutes={Number(draft.minutes) || 0}
+          onChange={({ hours, minutes, seconds }) =>
+            update({ hours: String(hours), minutes: String(minutes), seconds: String(seconds) })
+          }
+          seconds={Number(draft.seconds) || 0}
+          testID="step-duration"
+        />
       </Field>
       <Field label="When time expires">
         <AccessiblePicker
@@ -592,7 +578,7 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
 
   if (!resource) {
     return (
-      <Screen title={id === NEW_ID ? 'New routine' : 'Routine editor'}>
+      <Screen onBack={() => router.back()} title={id === NEW_ID ? 'New routine' : 'Routine editor'}>
         <ErrorMessage
           message={loadError ?? 'Loading routine editor...'}
           onRetry={() => {
@@ -617,6 +603,7 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
     <RoutineEditorForm
       key={`${id}-${version}`}
       initialFolderId={initialFolderId}
+      onBack={() => router.back()}
       resource={resource}
       onCancel={() => router.back()}
       onChanged={refresh}
@@ -629,6 +616,7 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
 function RoutineEditorForm({
   resource,
   initialFolderId,
+  onBack,
   onCancel,
   onChanged,
   onCreated,
@@ -636,6 +624,7 @@ function RoutineEditorForm({
 }: {
   resource: EditorResource;
   initialFolderId: UUID | null;
+  onBack: () => void;
   onCancel: () => void;
   onChanged: () => void;
   onCreated: (routineId: UUID) => void;
@@ -646,6 +635,9 @@ function RoutineEditorForm({
   const [name, setName] = useState(routine?.name ?? '');
   const [color, setColor] = useState(routine?.color ?? '');
   const [iconName, setIconName] = useState(routine?.iconName ?? '');
+  const [trackingMode, setTrackingMode] = useState<RoutineTrackingMode | ''>(
+    routine?.trackingMode ?? ''
+  );
   const [folderId, setFolderId] = useState(routine?.folderId ?? initialFolderId ?? ROOT_VALUE);
   const [newSteps, setNewSteps] = useState<StepDraft[]>([]);
   const [editingStepId, setEditingStepId] = useState<UUID | null>(null);
@@ -675,6 +667,7 @@ function RoutineEditorForm({
     setBusy(true);
     setError(null);
     try {
+      if (!trackingMode) throw new Error('Choose how this routine should track time');
       const selectedFolderId = folderId === ROOT_VALUE ? null : (folderId as UUID);
       if (routine) {
         await service.updateRoutine(routine.id, {
@@ -690,7 +683,8 @@ function RoutineEditorForm({
           color: color.trim() || null,
           iconName: iconName.trim() || null,
           folderId: selectedFolderId,
-          steps: newSteps.map(inputFromDraft),
+          trackingMode,
+          steps: newSteps.map((step) => inputFromDraft(step, trackingMode)),
         });
         onCreated(created.id);
       }
@@ -704,7 +698,8 @@ function RoutineEditorForm({
   const saveStep = async () => {
     if (!draft) return;
     try {
-      const input = inputFromDraft(draft);
+      if (!trackingMode) throw new Error('Choose how this routine should track time first');
+      const input = inputFromDraft(draft, trackingMode);
       if (routine && draft.id) {
         await run(async () => {
           await service.updateRoutineStep(routine.id, draft.id as UUID, input);
@@ -750,7 +745,11 @@ function RoutineEditorForm({
 
   const startAdd = () => {
     setError(null);
-    setDraft(emptyDraft(activities));
+    if (!trackingMode) {
+      setError('Choose how this routine should track time before adding steps');
+      return;
+    }
+    setDraft(emptyDraft(activities, trackingMode));
     setEditingStepId(null);
   };
 
@@ -758,7 +757,7 @@ function RoutineEditorForm({
     ? [...routine.steps].sort((left, right) => left.sortOrder - right.sortOrder)
     : newSteps.map((step, index) => ({
         id: step.id ?? createId(),
-        activityId: step.activityId as UUID,
+        activityId: trackingMode === 'steps' ? (step.activityId as UUID) : null,
         name: step.title || null,
         durationMs: (() => {
           try {
@@ -775,8 +774,15 @@ function RoutineEditorForm({
 
   return (
     <Screen
+      onBack={onBack}
       title={routine ? 'Edit routine' : 'New routine'}
-      description="Build an ordered sequence. Every step is tracked independently."
+      description={
+        trackingMode === 'steps'
+          ? 'Build an ordered sequence with one tracked activity per step.'
+          : trackingMode === 'overall'
+            ? 'Build an ordered sequence that runs as one continuous activity.'
+            : 'Choose how time should be tracked, then add steps.'
+      }
     >
       <Column
         spacing={18}
@@ -809,6 +815,26 @@ function RoutineEditorForm({
             testID="routine-name"
           />
         </Field>
+        <Field label="Track time by">
+          <AccessiblePicker
+            enabled={!routine && newSteps.length === 0 && draft === null}
+            label="Track time by"
+            selectedValue={trackingMode}
+            onValueChange={(value) => setTrackingMode(value as RoutineTrackingMode)}
+            testID="routine-tracking-mode"
+          >
+            <Picker.Item label="Choose a tracking mode" value="" />
+            <Picker.Item label="Entire routine" value="overall" />
+            <Picker.Item label="Each step" value="steps" />
+          </AccessiblePicker>
+          <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+            {trackingMode === 'steps'
+              ? 'Switch to each step activity as the routine progresses.'
+              : trackingMode === 'overall'
+                ? 'Keep one continuous activity for the entire routine.'
+                : 'Choose one mode before adding steps.'}
+          </Text>
+        </Field>
         <Field label="Standalone color">
           <ColorPicker
             onChange={(next) => setColor(next ?? '')}
@@ -839,7 +865,7 @@ function RoutineEditorForm({
           }}
         />
         <AppButton
-          disabled={busy}
+          disabled={busy || (!routine && !trackingMode)}
           label={busy ? 'Saving...' : routine ? 'Save routine' : 'Create routine'}
           onPress={() => void saveRoutine()}
           style={{ height: 52, width: '100%' }}
@@ -851,17 +877,23 @@ function RoutineEditorForm({
         <Column spacing={10} style={{ width: '100%' }}>
           <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>Steps</Text>
           <AppButton
-            disabled={busy || draft !== null}
+            disabled={busy || draft !== null || !trackingMode}
             label="Add step"
             onPress={startAdd}
             style={{ height: 50, width: '100%' }}
             testID="add-routine-step"
           />
+          {!trackingMode ? (
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+              Choose a tracking mode to start building steps.
+            </Text>
+          ) : null}
         </Column>
         {draft && !editingStepId ? (
           <StepForm
             draft={draft}
             activities={activities}
+            trackingMode={trackingMode as RoutineTrackingMode}
             onChange={setDraft}
             onSave={() => void saveStep()}
             onCancel={() => setDraft(null)}
@@ -879,6 +911,7 @@ function RoutineEditorForm({
               <StepForm
                 draft={draft}
                 activities={activities}
+                trackingMode={trackingMode as RoutineTrackingMode}
                 onChange={setDraft}
                 onSave={() => void saveStep()}
                 onCancel={() => {

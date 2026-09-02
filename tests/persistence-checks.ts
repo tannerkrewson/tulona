@@ -36,6 +36,10 @@ class MemoryStorage implements AsyncStorageLike {
   async removeItem(key: string): Promise<void> {
     this.values.delete(key);
   }
+
+  async getAllKeys(): Promise<readonly string[]> {
+    return [...this.values.keys()];
+  }
 }
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -307,10 +311,11 @@ async function run(): Promise<void> {
     routineSnapshot: {
       id: '77777777-7777-4777-8777-777777777777',
       name: 'Focus block',
+      trackingMode: 'overall',
       steps: [
         {
           id: '88888888-8888-4888-8888-888888888888',
-          activityId: activity.id,
+          activityId: null,
           name: 'Focus',
           durationMs: 60_000,
           sortOrder: 0,
@@ -374,6 +379,8 @@ async function run(): Promise<void> {
       'corrupt catalog errors are categorized'
     );
   }
+  await manager.clearAll();
+  assert(storage.values.size === 0, 'prototype data reset clears all Tulona storage keys');
 }
 
 run().catch((error: unknown) => {

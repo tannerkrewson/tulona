@@ -45,6 +45,7 @@ const month = z.string().refine((value) => {
 }, 'Expected a YYYY-MM month');
 const nullableArchivedAt = isoTimestamp.nullable();
 const timestamps = { createdAt: isoTimestamp, updatedAt: isoTimestamp };
+const routineTrackingMode = z.enum(['overall', 'steps']);
 
 export const folderSchema = z
   .object({
@@ -74,7 +75,7 @@ export const activitySchema = z
 
 const routineStepShape = {
   id: uuid,
-  activityId: uuid,
+  activityId: uuid.nullable(),
   name: z.string().nullable(),
   durationMs: z.number().int().positive(),
   sortOrder: z.number().int().nonnegative(),
@@ -96,11 +97,29 @@ export const routineDefinitionSchema = z
     sortOrder: z.number().int().nonnegative(),
     color: z.string().nullable(),
     iconName: z.string().nullable(),
+    trackingMode: routineTrackingMode,
     steps: z.array(routineStepSchema),
     ...timestamps,
     archivedAt: nullableArchivedAt,
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((routine, context) => {
+    routine.steps.forEach((step, index) => {
+      if (routine.trackingMode === 'steps' && step.activityId === null) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['steps', index, 'activityId'],
+          message: 'Step-tracked routines require an activity for every step',
+        });
+      } else if (routine.trackingMode === 'overall' && step.activityId !== null) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['steps', index, 'activityId'],
+          message: 'Overall routines cannot assign activities to individual steps',
+        });
+      }
+    });
+  });
 
 export const transitionSchema = z
   .object({
@@ -118,7 +137,7 @@ export const transitionSchema = z
 export const routineStepSnapshotSchema = z
   .object({
     id: uuid,
-    activityId: uuid,
+    activityId: uuid.nullable(),
     name: z.string().nullable(),
     durationMs: z.number().int().positive(),
     sortOrder: z.number().int().nonnegative(),
@@ -132,10 +151,28 @@ export const routineSnapshotSchema = z
   .object({
     id: uuid,
     name: z.string().min(1),
+    trackingMode: routineTrackingMode,
     steps: z.array(routineStepSnapshotSchema),
     capturedAt: isoTimestamp,
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((snapshot, context) => {
+    snapshot.steps.forEach((step, index) => {
+      if (snapshot.trackingMode === 'steps' && step.activityId === null) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['steps', index, 'activityId'],
+          message: 'Step-tracked routines require an activity for every step',
+        });
+      } else if (snapshot.trackingMode === 'overall' && step.activityId !== null) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['steps', index, 'activityId'],
+          message: 'Overall routines cannot assign activities to individual steps',
+        });
+      }
+    });
+  });
 
 export const routineStepSessionSchema = z
   .object({

@@ -46,6 +46,7 @@ export function BootCoordinatorGate() {
   const pathname = usePathname();
   const [state, setState] = useState<GateState>({ kind: 'hydrating' });
   const [rawError, setRawError] = useState<string | null>(null);
+  const [clearConfirming, setClearConfirming] = useState(false);
   const destinationApplied = useRef(false);
 
   const hydrate = useCallback(() => {
@@ -59,6 +60,11 @@ export function BootCoordinatorGate() {
   }, []);
 
   const retry = hydrate;
+
+  const clearLocalData = () => {
+    setRawError(null);
+    void bootCoordinator.clearAllData().catch((error: unknown) => setRawError(errorText(error)));
+  };
 
   useEffect(() => {
     const unsubscribe = bootCoordinator.subscribeToReset(hydrate);
@@ -140,6 +146,33 @@ export function BootCoordinatorGate() {
           testID="boot-export-raw"
           variant="outlined"
         />
+        {clearConfirming ? (
+          <Column spacing={8} style={{ width: '100%' }}>
+            <Text
+              textStyle={{ color: colors.danger.foreground, fontSize: 14, textAlign: 'center' }}
+            >
+              Clear all local data and restart with an empty workspace?
+            </Text>
+            <Button
+              label="Yes, clear local data"
+              onPress={clearLocalData}
+              testID="boot-confirm-clear-local-data"
+            />
+            <Button
+              label="Cancel"
+              onPress={() => setClearConfirming(false)}
+              testID="boot-cancel-clear-local-data"
+              variant="outlined"
+            />
+          </Column>
+        ) : (
+          <Button
+            label="Clear local data"
+            onPress={() => setClearConfirming(true)}
+            testID="boot-clear-local-data"
+            variant="outlined"
+          />
+        )}
       </Column>
     </Screen>
   );

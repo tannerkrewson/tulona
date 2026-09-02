@@ -72,6 +72,7 @@ export function AccessiblePicker<T extends PickerItemValue>({
   ...pickerProps
 }: AccessiblePickerProps<T> & { children?: ReactNode }) {
   const { colors } = useAppTheme();
+  const pickerHeight = Platform.OS === 'ios' && pickerProps.appearance === 'wheel' ? 150 : 48;
   if (Platform.OS === 'web') {
     return (
       <WebPicker
@@ -94,7 +95,7 @@ export function AccessiblePicker<T extends PickerItemValue>({
         borderColor: colors.border,
         borderRadius: 10,
         borderWidth: 1,
-        height: 48,
+        height: pickerHeight,
         width: '100%',
       }}
     >
