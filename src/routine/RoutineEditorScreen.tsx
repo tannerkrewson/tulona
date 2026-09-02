@@ -14,9 +14,16 @@ import type {
 } from '@domain';
 import { createId } from '@domain';
 import { AppIcon } from '@icons';
-import { iconCatalog, type IconName } from '@icons/icon-names';
 import { useAppTheme } from '@theme';
-import { AccessiblePicker, AccessibleTextInput, AppButton, errorText, Screen } from '@ui';
+import {
+  AccessiblePicker,
+  AccessibleTextInput,
+  AppButton,
+  ColorPicker,
+  errorText,
+  IconPicker,
+  Screen,
+} from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import type { CatalogService, CreateRoutineStepInput } from '../catalog/catalog-service';
@@ -121,7 +128,7 @@ function inputFromDraft(draft: StepDraft): CreateRoutineStepInput {
     durationMs: durationFromDraft(draft),
     endBehavior: draft.endBehavior,
     notes: draft.notes.trim() || null,
-    iconName: (draft.iconName || null) as IconName | null,
+    iconName: draft.iconName.trim() || null,
   };
 }
 
@@ -245,49 +252,6 @@ function FolderPicker({
   );
 }
 
-function IconPicker({
-  value,
-  onChange,
-  testID,
-  label,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  testID: string;
-  label: string;
-}) {
-  return (
-    <AccessiblePicker label={label} selectedValue={value} onValueChange={onChange} testID={testID}>
-      <Picker.Item label="No icon" value="" />
-      {iconCatalog.map((icon) => (
-        <Picker.Item key={icon.name} label={icon.label} value={icon.name} />
-      ))}
-    </AccessiblePicker>
-  );
-}
-
-function ColorPreview({ value }: { value: string }) {
-  const { colors } = useAppTheme();
-  const preview = /^#[0-9a-f]{6}$/i.test(value) ? value : colors.surfaceMuted;
-  return (
-    <Row alignment="center" spacing={10}>
-      <Column
-        style={{
-          backgroundColor: preview,
-          borderColor: colors.border,
-          borderRadius: 10,
-          borderWidth: 1,
-          height: 38,
-          width: 38,
-        }}
-      />
-      <Text textStyle={{ color: colors.text, fontSize: 14 }}>
-        {value || 'Default catalog color'}
-      </Text>
-    </Row>
-  );
-}
-
 function StepForm({
   draft,
   activities,
@@ -354,11 +318,10 @@ function StepForm({
           ))}
         </AccessiblePicker>
       </Field>
-      <Field label="Curated step icon">
+      <Field label="Step icon">
         <IconPicker
-          label="Step icon"
-          value={draft.iconName}
-          onChange={(iconName) => update({ iconName })}
+          value={draft.iconName || null}
+          onChange={(iconName) => update({ iconName: iconName ?? '' })}
           testID="step-icon-picker"
         />
       </Field>
@@ -485,7 +448,7 @@ function StepRow({
       <Row alignment="center" spacing={12} style={{ width: '100%' }}>
         <AppIcon
           accessibilityLabel={`Icon for step ${index + 1}`}
-          name={(step.iconName || 'timer') as IconName}
+          name={step.iconName || 'timer'}
           color={colors.primary}
           size={25}
         />
@@ -717,7 +680,7 @@ function RoutineEditorForm({
         await service.updateRoutine(routine.id, {
           name,
           color: color.trim() || null,
-          iconName: (iconName || null) as IconName | null,
+          iconName: iconName.trim() || null,
           folderId: selectedFolderId,
         });
         onChanged();
@@ -725,7 +688,7 @@ function RoutineEditorForm({
         const created = await service.createRoutine({
           name,
           color: color.trim() || null,
-          iconName: (iconName || null) as IconName | null,
+          iconName: iconName.trim() || null,
           folderId: selectedFolderId,
           steps: newSteps.map(inputFromDraft),
         });
@@ -805,7 +768,7 @@ function RoutineEditorForm({
           }
         })(),
         sortOrder: index,
-        iconName: step.iconName as IconName | null,
+        iconName: step.iconName || null,
         endBehavior: step.endBehavior,
         notes: step.notes || null,
       }));
@@ -827,11 +790,7 @@ function RoutineEditorForm({
         }}
       >
         <Row alignment="center" spacing={12}>
-          <AppIcon
-            name={(iconName || 'repeat') as IconName}
-            color={color || colors.primary}
-            size={30}
-          />
+          <AppIcon name={iconName || 'repeat'} color={color || colors.primary} size={30} />
           <Column spacing={3} style={{ width: '100%' }}>
             <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
               {name || 'Untitled routine'}
@@ -851,20 +810,16 @@ function RoutineEditorForm({
           />
         </Field>
         <Field label="Standalone color">
-          <Input
-            label="Routine color"
-            value={color}
-            onChangeText={setColor}
-            placeholder="#176B87"
+          <ColorPicker
+            onChange={(next) => setColor(next ?? '')}
             testID="routine-color"
+            value={color || null}
           />
-          <ColorPreview value={color} />
         </Field>
         <Field label="Routine icon">
           <IconPicker
-            label="Routine icon"
-            value={iconName}
-            onChange={setIconName}
+            value={iconName || null}
+            onChange={(next) => setIconName(next ?? '')}
             testID="routine-icon-picker"
           />
         </Field>

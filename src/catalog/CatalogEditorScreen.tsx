@@ -5,9 +5,16 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { Activity, CatalogCollection, Folder, UUID } from '@domain';
 import { AppIcon } from '@icons';
-import { iconCatalog, type IconName } from '@icons/icon-names';
 import { useAppTheme } from '@theme';
-import { AccessiblePicker, AccessibleTextInput, AppButton, errorText, Screen } from '@ui';
+import {
+  AccessiblePicker,
+  AccessibleTextInput,
+  AppButton,
+  ColorPicker,
+  errorText,
+  IconPicker,
+  Screen,
+} from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import type { CatalogService } from './catalog-service';
@@ -163,44 +170,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function IconPicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return (
-    <AccessiblePicker
-      label="Icon"
-      selectedValue={value}
-      onValueChange={(next) => onChange(String(next))}
-      testID="icon-picker"
-    >
-      <Picker.Item label="No icon" value="" />
-      {iconCatalog.map((icon) => (
-        <Picker.Item key={icon.name} label={icon.label} value={icon.name} />
-      ))}
-    </AccessiblePicker>
-  );
-}
-
-function ColorPreview({ value }: { value: string }) {
-  const { colors } = useAppTheme();
-  const preview = /^#[0-9a-f]{6}$/i.test(value) ? value : colors.surfaceMuted;
-  return (
-    <Row alignment="center" spacing={10}>
-      <Column
-        style={{
-          backgroundColor: preview,
-          borderColor: colors.border,
-          borderRadius: 10,
-          borderWidth: 1,
-          height: 42,
-          width: 42,
-        }}
-      />
-      <Text textStyle={{ color: colors.text, fontSize: 14 }}>
-        {value || 'Default catalog color'}
-      </Text>
-    </Row>
-  );
-}
-
 function FolderPicker({
   folders,
   currentFolderId,
@@ -337,7 +306,7 @@ function ActivityEditor({
         const nextInput = {
           name,
           color: color.trim() || null,
-          iconName: iconName as IconName | null,
+          iconName: iconName.trim() || null,
           ...(selectedFolderId !== originalFolderId ? { folderId: selectedFolderId } : {}),
         };
         await service.updateActivity(activity.id, nextInput);
@@ -345,7 +314,7 @@ function ActivityEditor({
         await service.createActivity({
           name,
           color: color.trim() || null,
-          iconName: iconName as IconName | null,
+          iconName: iconName.trim() || null,
           folderId: selectedFolderId,
         });
       }
@@ -368,11 +337,7 @@ function ActivityEditor({
         }}
       >
         <Row alignment="center" spacing={12}>
-          <AppIcon
-            name={(iconName || 'activity') as IconName}
-            color={color || colors.primary}
-            size={28}
-          />
+          <AppIcon name={iconName || 'activity'} color={color || colors.primary} size={28} />
           <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
             {activity?.name ?? 'New activity'}
           </Text>
@@ -398,28 +363,14 @@ function ActivityEditor({
           />
         </Field>
         <Field label="Standalone color">
-          <AccessibleTextInput
-            defaultValue={color}
-            label="Activity color"
-            onChangeText={setColor}
-            placeholder="#176B87"
-            placeholderTextColor={colors.textMuted}
-            returnKeyType="done"
+          <ColorPicker
+            onChange={(next) => setColor(next ?? '')}
             testID="activity-color"
-            style={{
-              borderColor: colors.border,
-              borderRadius: 10,
-              borderWidth: 1,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              width: '100%',
-            }}
-            textStyle={{ color: colors.text, fontSize: 16 }}
+            value={color || null}
           />
-          <ColorPreview value={color} />
         </Field>
-        <Field label="Curated icon">
-          <IconPicker value={iconName} onChange={setIconName} />
+        <Field label="Icon">
+          <IconPicker value={iconName || null} onChange={(next) => setIconName(next ?? '')} />
         </Field>
         <Field label="Placement">
           <FolderPicker
@@ -540,13 +491,13 @@ function FolderEditor({
         await service.updateFolder(folder.id, {
           name,
           color: color.trim() || null,
-          iconName: iconName as IconName | null,
+          iconName: iconName.trim() || null,
         });
       } else {
         await service.createFolder({
           name,
           color: color.trim() || null,
-          iconName: iconName as IconName | null,
+          iconName: iconName.trim() || null,
         });
       }
     });
@@ -568,11 +519,7 @@ function FolderEditor({
         }}
       >
         <Row alignment="center" spacing={12}>
-          <AppIcon
-            name={(iconName || 'folder') as IconName}
-            color={color || colors.primary}
-            size={28}
-          />
+          <AppIcon name={iconName || 'folder'} color={color || colors.primary} size={28} />
           <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
             {folder?.name ?? 'New folder'}
           </Text>
@@ -598,28 +545,14 @@ function FolderEditor({
           />
         </Field>
         <Field label="Folder color">
-          <AccessibleTextInput
-            defaultValue={color}
-            label="Folder color"
-            onChangeText={setColor}
-            placeholder="#176B87"
-            placeholderTextColor={colors.textMuted}
-            returnKeyType="done"
+          <ColorPicker
+            onChange={(next) => setColor(next ?? '')}
             testID="folder-color"
-            style={{
-              borderColor: colors.border,
-              borderRadius: 10,
-              borderWidth: 1,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              width: '100%',
-            }}
-            textStyle={{ color: colors.text, fontSize: 16 }}
+            value={color || null}
           />
-          <ColorPreview value={color} />
         </Field>
-        <Field label="Curated icon">
-          <IconPicker value={iconName} onChange={setIconName} />
+        <Field label="Icon">
+          <IconPicker value={iconName || null} onChange={(next) => setIconName(next ?? '')} />
         </Field>
         <ActionError
           message={error}

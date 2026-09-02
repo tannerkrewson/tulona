@@ -204,6 +204,11 @@ async function run(): Promise<void> {
     reorderedSteps[0]?.id === ids.secondStep && reorderedSteps[0].sortOrder === 0,
     'routine steps must support integer Move Down ordering'
   );
+  const emojiActivity = await service.createActivity({
+    name: 'Emoji activity',
+    iconName: '😀',
+  });
+  assert(emojiActivity.iconName === '😀', 'catalog records must persist system emoji values');
   repository.catalog = {
     ...repository.catalog,
     folders: repository.catalog.folders.map((item, index) => ({

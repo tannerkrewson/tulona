@@ -59,8 +59,9 @@ import {
   type LucideIcon,
   type LucideProps,
 } from 'lucide-react-native';
+import { Text } from 'react-native';
 
-import { getIconMetadata, type IconName } from './icon-names';
+import { getIconMetadata, isEmoji, isIconName, type IconName, type IconValue } from './icon-names';
 
 export const iconRegistry: Readonly<Record<IconName, LucideIcon>> = {
   activity: Activity,
@@ -123,14 +124,33 @@ export const iconRegistry: Readonly<Record<IconName, LucideIcon>> = {
 };
 
 export interface AppIconProps extends Omit<LucideProps, 'name'> {
-  name: IconName;
+  name: IconValue;
   accessibilityLabel?: string;
 }
 
 /** Renders a curated data name without leaking icon components into domain data. */
 export function AppIcon({ name, accessibilityLabel, ...props }: AppIconProps) {
-  const Icon = iconRegistry[name] ?? iconRegistry.activity;
-  const label = accessibilityLabel ?? getIconMetadata(name).label;
+  if (isEmoji(name)) {
+    const size = typeof props.size === 'number' ? props.size : 24;
+    return (
+      <Text
+        accessibilityLabel={accessibilityLabel ?? `${name} emoji`}
+        accessibilityRole="image"
+        style={{
+          color: props.color,
+          fontSize: size,
+          lineHeight: size * 1.2,
+          textAlign: 'center',
+        }}
+      >
+        {name}
+      </Text>
+    );
+  }
+
+  const iconName = isIconName(name) ? name : 'activity';
+  const Icon = iconRegistry[iconName];
+  const label = accessibilityLabel ?? getIconMetadata(iconName).label;
 
   return <Icon {...props} role="img" accessibilityLabel={label} aria-label={label} />;
 }

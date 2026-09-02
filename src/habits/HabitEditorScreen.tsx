@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import type { CatalogCollection, Habit, HabitSchedule, HabitTrigger, UUID } from '@domain';
-import { AppIcon, type IconName } from '@icons';
+import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
 import {
   AccessiblePicker,
@@ -139,7 +139,7 @@ function inputFromDraft(draft: HabitDraft) {
     name: draft.name,
     description: draft.description.trim() || null,
     color: draft.color,
-    iconName: draft.iconName as IconName | null,
+    iconName: draft.iconName,
     schedule: scheduleFromDraft(draft),
     trigger: triggerFromDraft(draft),
   };
@@ -413,7 +413,7 @@ function HabitEditorForm({
           <Row alignment="center" spacing={12}>
             <AppIcon
               color={draft.color ?? colors.primary}
-              name={(draft.iconName ?? 'heart') as IconName}
+              name={draft.iconName ?? 'heart'}
               size={30}
             />
             <Column spacing={3} style={{ width: '75%' }}>

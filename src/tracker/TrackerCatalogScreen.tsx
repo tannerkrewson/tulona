@@ -10,7 +10,7 @@ import type {
   RoutineDefinition,
   TimeTransition,
 } from '@domain';
-import { AppIcon, isIconName } from '@icons';
+import { AppIcon, isIconValue } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 import { ActivityTile, AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -354,7 +354,7 @@ function TrackerCatalogContent({ runtime }: { runtime: RoutineRuntime }) {
                   color={resolved?.displayColor}
                   disabled={busy || item.archivedAt !== null}
                   iconName={
-                    isIconName(item.iconName)
+                    isIconValue(item.iconName)
                       ? item.iconName
                       : item.kind === 'routine'
                         ? 'repeat'
@@ -468,7 +468,7 @@ function FolderTile({
             <AppIcon
               accessibilityLabel={`${folder.name} folder icon`}
               color={getAccessibleTextColor(color)}
-              name={isIconName(folder.iconName) ? folder.iconName : 'folder'}
+              name={isIconValue(folder.iconName) ? folder.iconName : 'folder'}
               size={24}
             />
           </Column>

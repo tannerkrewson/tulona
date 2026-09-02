@@ -4,6 +4,7 @@ import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 
 import { AppButton } from './AppButton';
+import { ColorPickerPlatform } from './ColorPickerPlatform';
 
 export interface ColorOption {
   readonly value: string;
@@ -66,6 +67,7 @@ export function ColorPicker({
   );
   const rows = chunkOptions(availableOptions, columnCount);
   const selectedValue = value?.toLowerCase();
+  const rootTestID = testID ?? 'color-picker';
 
   return (
     <Column spacing={10} style={{ width: '100%' }} testID={testID}>
@@ -78,6 +80,7 @@ export function ColorPicker({
           variant="outlined"
         />
       ) : null}
+      <ColorPickerPlatform onChange={onChange} testID={`${rootTestID}-custom`} value={value} />
       <Column spacing={8} style={{ width: '100%' }}>
         {rows.map((row, rowIndex) => (
           <Row key={`color-row-${rowIndex}`} alignment="center" spacing={8}>

@@ -18,7 +18,7 @@ import {
 import type { HabitRepositoryApi } from '@data';
 
 import { PersistenceError } from '../data/errors';
-import { iconNames, type IconName } from '../icons/icon-names';
+import { isIconValue } from '../icons/icon-names';
 import { isHabitScheduledDay } from './schedule';
 import { normalizeHabitTrigger, type HabitCatalogReferenceApi } from './trigger';
 
@@ -126,10 +126,10 @@ function validateColor(value: string | null | undefined): string | null {
   return normalized.toUpperCase();
 }
 
-function validateIcon(value: string | null | undefined): IconName | null {
+function validateIcon(value: string | null | undefined): string | null {
   if (value === undefined || value === null || value === '') return null;
-  if (!iconNames.includes(value as IconName)) validation(`Unknown habit icon "${value}"`);
-  return value as IconName;
+  if (!isIconValue(value)) validation(`Unknown habit icon "${value}"`);
+  return value;
 }
 
 function validateSchedule(schedule: HabitSchedule): HabitSchedule {

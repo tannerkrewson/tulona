@@ -1,7 +1,7 @@
 import { Column, Row, Text } from '@expo/ui';
 
 import { timestampMs, type CatalogCollection, type TimeTransition } from '@domain';
-import { AppIcon, isIconName } from '@icons';
+import { AppIcon, isIconValue } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 import { AppButton, DurationText } from '@ui';
 
@@ -109,7 +109,7 @@ export function CurrentActivityHeader({
           <AppIcon
             accessibilityLabel={`${item?.name ?? 'Current activity'} icon`}
             color={getAccessibleTextColor(color)}
-            name={isIconName(item?.iconName) ? item.iconName : 'activity'}
+            name={isIconValue(item?.iconName) ? item.iconName : 'activity'}
             size={29}
           />
         </Column>
