@@ -67,6 +67,7 @@ const iconDefinitions = [
 ] as const;
 
 export type IconName = (typeof iconDefinitions)[number]['name'];
+export type IconValue = string;
 
 export const iconNames: readonly IconName[] = iconDefinitions.map(({ name }) => name);
 export const iconCatalog: readonly IconMetadata[] = iconDefinitions;
@@ -75,14 +76,33 @@ export function isIconName(value: unknown): value is IconName {
   return typeof value === 'string' && iconNames.includes(value as IconName);
 }
 
+/** Accepts system emoji sequences while rejecting ordinary text values. */
+export function isEmoji(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim() === value &&
+    value.length > 0 &&
+    /\p{Extended_Pictographic}/u.test(value) &&
+    !/[\p{Letter}]/u.test(value)
+  );
+}
+
+export function isIconValue(value: unknown): value is IconValue {
+  return isIconName(value) || isEmoji(value);
+}
+
 /** Returns null for values read from records that are not in the curated set. */
 export function parseIconName(value: unknown): IconName | null {
   return isIconName(value) ? value : null;
 }
 
-/** Resolves an optional persisted value to a safe icon for rendering. */
-export function normalizeIconName(value: unknown, fallback: IconName = 'activity'): IconName {
-  return isIconName(value) ? value : fallback;
+/** Resolves an optional persisted value to a safe Lucide icon or system emoji. */
+export function normalizeIconName(value: unknown, fallback: IconValue = 'activity'): IconValue {
+  return isIconValue(value) ? value : fallback;
+}
+
+export function normalizeIconValue(value: unknown, fallback: IconValue = 'activity'): IconValue {
+  return isIconValue(value) ? value : fallback;
 }
 
 export function getIconMetadata(name: unknown): IconMetadata {

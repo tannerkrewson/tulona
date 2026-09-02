@@ -1,6 +1,6 @@
 import { Column, Row, Spacer, Text } from '@expo/ui';
 
-import { AppIcon, isIconName, type IconName } from '@icons';
+import { AppIcon, isIconValue, type IconValue } from '@icons';
 import { getAccessibleTextColor, getActivityStateVisual, useAppTheme } from '@theme';
 
 import { DurationText } from './DurationText';
@@ -8,7 +8,7 @@ import { AppButton } from './AppButton';
 
 export interface ActivityTileProps {
   name: string;
-  iconName?: IconName | string | null;
+  iconName?: IconValue | null;
   color?: string | null;
   durationMs?: number | null;
   supportingText?: string;
@@ -34,7 +34,7 @@ export function ActivityTile({
   testID,
 }: ActivityTileProps) {
   const { colors } = useAppTheme();
-  const resolvedIconName = isIconName(iconName) ? iconName : 'activity';
+  const resolvedIconName = isIconValue(iconName) ? iconName : 'activity';
   const accent = isHexColor(color) ? color : colors.primary;
   const stateVisual =
     active === undefined ? null : getActivityStateVisual(colors, active ? 'active' : 'inactive');

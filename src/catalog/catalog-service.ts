@@ -19,7 +19,7 @@ import {
   type TrackableItem,
   type UUID,
 } from '../domain';
-import { iconNames, type IconName } from '../icons/icon-names';
+import { isIconValue } from '../icons/icon-names';
 
 import {
   moveDown,
@@ -189,10 +189,10 @@ function validateColor(color: string | null | undefined): string | null {
   return normalized.toUpperCase();
 }
 
-function validateIcon(iconName: string | null | undefined): IconName | null {
+function validateIcon(iconName: string | null | undefined): string | null {
   if (iconName === undefined || iconName === null || iconName === '') return null;
-  if (!iconNames.includes(iconName as IconName)) validation(`Unknown catalog icon "${iconName}"`);
-  return iconName as IconName;
+  if (!isIconValue(iconName)) validation(`Unknown catalog icon "${iconName}"`);
+  return iconName;
 }
 
 function validateDuration(durationMs: number): number {

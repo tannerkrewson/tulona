@@ -3,7 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { Activity, RoutineDefinition } from '@domain';
-import { isIconName, AppIcon } from '@icons';
+import { AppIcon, isIconValue } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 import { ActivityTile, AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -206,7 +206,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
             <AppIcon
               accessibilityLabel={`${folder.name} folder icon`}
               color={getAccessibleTextColor(folder.color ?? colors.primary)}
-              name={isIconName(folder.iconName) ? folder.iconName : 'folder'}
+              name={isIconValue(folder.iconName) ? folder.iconName : 'folder'}
               size={27}
             />
           </Column>
@@ -280,7 +280,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
                   color={resolved?.displayColor}
                   disabled={busy || item.archivedAt !== null}
                   iconName={
-                    isIconName(item.iconName)
+                    isIconValue(item.iconName)
                       ? item.iconName
                       : item.kind === 'routine'
                         ? 'repeat'

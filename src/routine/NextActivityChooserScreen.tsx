@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import type { ActiveRoutine, CatalogCollection, UUID } from '@domain';
-import { AppIcon, type IconName } from '@icons';
+import { AppIcon, type IconValue } from '@icons';
 import { useAppTheme } from '@theme';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { AppButton, errorText, Screen } from '@ui';
@@ -179,7 +179,7 @@ export function NextActivityChooserScreen() {
         {visibleFolders.map((folder) => (
           <ChooserItem
             key={folder.id}
-            iconName={(folder.iconName || 'folder') as IconName}
+            iconName={folder.iconName || 'folder'}
             label={folder.name}
             actionLabel="Open folder"
             disabled={busy}
@@ -190,9 +190,7 @@ export function NextActivityChooserScreen() {
         {items.map((item) => (
           <ChooserItem
             key={item.id}
-            iconName={
-              (item.iconName || (item.kind === 'routine' ? 'repeat' : 'activity')) as IconName
-            }
+            iconName={item.iconName || (item.kind === 'routine' ? 'repeat' : 'activity')}
             label={item.name}
             actionLabel="Choose"
             disabled={busy}
@@ -251,7 +249,7 @@ function ChooserItem({
   onPress,
   testID,
 }: {
-  iconName: IconName;
+  iconName: IconValue;
   label: string;
   actionLabel: string;
   disabled: boolean;

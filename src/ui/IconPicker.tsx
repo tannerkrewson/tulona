@@ -1,20 +1,30 @@
 import { Column, Row, Text } from '@expo/ui';
 import { useState } from 'react';
 
-import { AppIcon, iconCatalog, isIconName, type IconMetadata, type IconName } from '@icons';
+import {
+  AppIcon,
+  iconCatalog,
+  isEmoji,
+  isIconName,
+  type IconMetadata,
+  type IconValue,
+} from '@icons';
 import { useAppTheme } from '@theme';
 
 import { AccessibleTextInput } from './AccessibleTextInput';
 import { AppButton } from './AppButton';
+import { EmojiPickerPlatform } from './EmojiPickerPlatform';
 
 export interface IconPickerProps {
-  value: string | null;
-  onChange: (value: IconName | null) => void;
+  value: IconValue | null;
+  onChange: (value: IconValue | null) => void;
   columns?: number;
   allowClear?: boolean;
   searchPlaceholder?: string;
   testID?: string;
 }
+
+type PickerMode = 'emoji' | 'lucide';
 
 export function searchIconCatalog(query: string): readonly IconMetadata[] {
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -35,32 +45,34 @@ function chunkIcons(icons: readonly IconMetadata[], columns: number): IconMetada
   return rows;
 }
 
-/** Searchable icon-name picker with stable, large targets and a compact grid. */
-export function IconPicker({
+function LucideIconGrid({
   value,
   onChange,
-  columns = 3,
-  allowClear = true,
-  searchPlaceholder = 'Search icons',
-  testID,
-}: IconPickerProps) {
+  columns,
+  rootTestID,
+  searchPlaceholder,
+}: {
+  value: IconValue | null;
+  onChange: (value: IconValue) => void;
+  columns: number;
+  rootTestID: string;
+  searchPlaceholder: string;
+}) {
   const { colors } = useAppTheme();
-  const columnCount = Number.isInteger(columns) && columns > 0 ? columns : 3;
   const [query, setQuery] = useState('');
   const matchingIcons = searchIconCatalog(query);
-  const rows = chunkIcons(matchingIcons, columnCount);
+  const rows = chunkIcons(matchingIcons, columns);
   const selectedName = isIconName(value) ? value : null;
-  const rootTestID = testID ?? 'icon-picker';
 
   return (
-    <Column spacing={10} style={{ width: '100%' }} testID={testID}>
+    <Column spacing={10} style={{ width: '100%' }}>
       <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>
-        Search icons
+        Search Lucide icons
       </Text>
       <AccessibleTextInput
         autoCapitalize="none"
         autoCorrect={false}
-        label="Search icons"
+        label="Search Lucide icons"
         onChangeText={setQuery}
         placeholder={searchPlaceholder}
         placeholderTextColor={colors.textMuted}
@@ -68,15 +80,6 @@ export function IconPicker({
         testID={`${rootTestID}-search`}
         textStyle={{ color: colors.text, fontSize: 16 }}
       />
-      {allowClear ? (
-        <AppButton
-          disabled={selectedName == null}
-          label="No icon"
-          onPress={() => onChange(null)}
-          testID={`${rootTestID}-clear`}
-          variant="outlined"
-        />
-      ) : null}
       {rows.length > 0 ? (
         <Column spacing={8} style={{ width: '100%' }} testID={`${rootTestID}-grid`}>
           {rows.map((row, rowIndex) => (
@@ -134,6 +137,70 @@ export function IconPicker({
         <Text testID={`${rootTestID}-empty`} textStyle={{ color: colors.textMuted, fontSize: 15 }}>
           No matching icons
         </Text>
+      )}
+    </Column>
+  );
+}
+
+/** Combines system emoji selection with every Lucide icon in the app registry. */
+export function IconPicker({
+  value,
+  onChange,
+  columns = 3,
+  allowClear = true,
+  searchPlaceholder = 'Search icons',
+  testID,
+}: IconPickerProps) {
+  const { colors } = useAppTheme();
+  const columnCount = Number.isInteger(columns) && columns > 0 ? columns : 3;
+  const [mode, setMode] = useState<PickerMode>(() => (isEmoji(value) ? 'emoji' : 'lucide'));
+  const rootTestID = testID ?? 'icon-picker';
+
+  return (
+    <Column spacing={10} style={{ width: '100%' }} testID={testID}>
+      <Row spacing={8} style={{ width: '100%' }}>
+        <AppButton
+          label="Emoji"
+          onPress={() => setMode('emoji')}
+          style={{
+            backgroundColor: mode === 'emoji' ? colors.primary : colors.surface,
+            borderColor: colors.border,
+            width: '48%',
+          }}
+          testID={`${rootTestID}-emoji-tab`}
+          variant={mode === 'emoji' ? 'filled' : 'outlined'}
+        />
+        <AppButton
+          label="Lucide icons"
+          onPress={() => setMode('lucide')}
+          style={{
+            backgroundColor: mode === 'lucide' ? colors.primary : colors.surface,
+            borderColor: colors.border,
+            width: '48%',
+          }}
+          testID={`${rootTestID}-lucide-tab`}
+          variant={mode === 'lucide' ? 'filled' : 'outlined'}
+        />
+      </Row>
+      {allowClear ? (
+        <AppButton
+          disabled={value == null}
+          label="No icon"
+          onPress={() => onChange(null)}
+          testID={`${rootTestID}-clear`}
+          variant="outlined"
+        />
+      ) : null}
+      {mode === 'emoji' ? (
+        <EmojiPickerPlatform onChange={onChange} testID={rootTestID} value={value} />
+      ) : (
+        <LucideIconGrid
+          columns={columnCount}
+          onChange={onChange}
+          rootTestID={rootTestID}
+          searchPlaceholder={searchPlaceholder}
+          value={value}
+        />
       )}
     </Column>
   );

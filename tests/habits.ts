@@ -250,6 +250,12 @@ async function run(): Promise<void> {
     trigger: { kind: 'tracked-time', activityId: ids.activity },
   });
   assert(created.trigger?.minimumSeconds === 1, 'habit creation persists the default threshold');
+  const emojiHabit = await habitService.create({
+    name: 'Emoji habit',
+    iconName: '🌿',
+    schedule: { kind: 'daily' },
+  });
+  assert(emojiHabit.iconName === '🌿', 'habit records must persist system emoji values');
   await habitService.setManualCompletion(ids.habit, '2026-08-30', true);
   await habitService.setAutomaticCompletion(ids.habit, '2026-08-30', false);
   await habitService.setAutomaticCompletion(ids.habit, '2026-08-30', true);

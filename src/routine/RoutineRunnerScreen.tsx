@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { formatCountdownMs, type ActiveRoutine, type RoutineStepStatus } from '@domain';
-import { AppIcon, type IconName } from '@icons';
+import { AppIcon } from '@icons';
 import { useAppTheme, type ThemeColors } from '@theme';
 import { AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -326,7 +326,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           testID="current-routine-step"
         >
           <AppIcon
-            name={(currentStep.iconName || 'timer') as IconName}
+            name={currentStep.iconName || 'timer'}
             color={isOvertime ? colors.warning.foreground : colors.primary}
             size={84}
           />
