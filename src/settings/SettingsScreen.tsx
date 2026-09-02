@@ -6,6 +6,7 @@ import type { AppSettings } from '@domain';
 import { useAppTheme, useThemePreference } from '@theme';
 import { AccessiblePicker, AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
+import { bootCoordinator } from '../orchestration/boot-coordinator';
 
 import { loadSettingsStore } from './settings-runtime';
 import type { SettingsStore } from './settings-store';
@@ -90,6 +91,62 @@ function ActionError({ store, onBack }: { store: SettingsStore; onBack: () => vo
   );
 }
 
+function PrototypeDataReset({ onCleared }: { onCleared: () => void }) {
+  const { colors } = useAppTheme();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const clearData = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await bootCoordinator.clearAllData();
+      onCleared();
+    } catch (clearError) {
+      setError(errorText(clearError));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Column spacing={10} testID="prototype-data-reset">
+      {error ? (
+        <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{error}</Text>
+      ) : null}
+      {confirming ? (
+        <Column spacing={8}>
+          <Text textStyle={{ color: colors.danger.foreground, fontSize: 14, lineHeight: 20 }}>
+            This removes every dataset, routine, activity, habit, setting, and history record from
+            this device.
+          </Text>
+          <AppButton
+            disabled={busy}
+            label={busy ? 'Clearing...' : 'Yes, clear all local data'}
+            onPress={() => void clearData()}
+            testID="confirm-clear-local-data"
+          />
+          <AppButton
+            disabled={busy}
+            label="Cancel"
+            onPress={() => setConfirming(false)}
+            variant="outlined"
+            testID="cancel-clear-local-data"
+          />
+        </Column>
+      ) : (
+        <AppButton
+          disabled={busy}
+          label="Clear all local data"
+          onPress={() => setConfirming(true)}
+          variant="outlined"
+          testID="clear-local-data"
+        />
+      )}
+    </Column>
+  );
+}
+
 export default function SettingsScreen() {
   const { colors } = useAppTheme();
   const focused = useIsFocused();
@@ -136,6 +193,12 @@ export default function SettingsScreen() {
               testID="open-onboarding"
             />
           ) : null}
+          <SettingSection
+            description="Use this prototype reset after intentionally breaking a local data schema."
+            title="Prototype data"
+          >
+            <PrototypeDataReset onCleared={() => router.replace('/onboarding')} />
+          </SettingSection>
         </Column>
       </Screen>
     );
@@ -320,6 +383,12 @@ function SettingsContent({
           style={{ height: 52, width: '100%' }}
           testID="open-backup"
         />
+        <SettingSection
+          description="Use this prototype reset after intentionally breaking a local data schema."
+          title="Prototype data"
+        >
+          <PrototypeDataReset onCleared={() => router.replace('/onboarding')} />
+        </SettingSection>
       </Column>
     </Screen>
   );

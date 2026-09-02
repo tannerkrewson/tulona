@@ -18,9 +18,6 @@ const ids = {
   first: '22222222-2222-4222-8222-222222222222',
   second: '33333333-3333-4333-8333-333333333333',
   third: '44444444-4444-4444-8444-444444444444',
-  firstActivity: '55555555-5555-4555-8555-555555555555',
-  secondActivity: '66666666-6666-4666-8666-666666666666',
-  thirdActivity: '77777777-7777-4777-8777-777777777777',
 };
 
 const start = '2026-08-30T00:00:00.000Z';
@@ -32,15 +29,15 @@ function assert(condition: unknown, message: string): asserts condition {
 function snapshot(
   behaviors: readonly ('overtime' | 'auto-advance')[] = ['overtime']
 ): RoutineSnapshot {
-  const activityIds = [ids.firstActivity, ids.secondActivity, ids.thirdActivity];
   const stepIds = [ids.first, ids.second, ids.third];
   return {
     id: ids.routine,
     name: 'Routine',
+    trackingMode: 'overall',
     capturedAt: start,
     steps: behaviors.map((endBehavior, index) => ({
       id: stepIds[index],
-      activityId: activityIds[index],
+      activityId: null,
       name: `Step ${index + 1}`,
       durationMs: (index + 1) * 1_000,
       sortOrder: index,

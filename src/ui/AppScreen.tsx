@@ -3,8 +3,10 @@ import type { ComponentProps, ReactNode } from 'react';
 import { StyleSheet } from 'react-native';
 
 import { useAppTheme } from '@theme';
+import { AppButton } from './AppButton';
 
 export interface AppScreenProps {
+  onBack?: () => void;
   children: ReactNode;
   title?: string;
   description?: string;
@@ -26,6 +28,7 @@ const contentStyle = {
 
 /** The cross-platform screen boundary for feature content. */
 export function AppScreen({
+  onBack,
   children,
   title,
   description,
@@ -45,6 +48,9 @@ export function AppScreen({
         paddingTop: 22,
       }}
     >
+      {onBack ? (
+        <AppButton label="Back" onPress={onBack} testID="screen-back" variant="text" />
+      ) : null}
       {title ? (
         <Text textStyle={{ color: colors.text, fontSize: 30, fontWeight: '700' }}>{title}</Text>
       ) : null}

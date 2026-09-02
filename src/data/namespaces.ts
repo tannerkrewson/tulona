@@ -37,7 +37,7 @@ function assertWritableMetadata(
 export class DatasetManager {
   private readonly metadataRepository: MetadataRepository;
 
-  constructor(database: KeyValueDatabase) {
+  constructor(private readonly database: KeyValueDatabase) {
     this.metadataRepository = new MetadataRepository(database);
   }
 
@@ -141,6 +141,18 @@ export class DatasetManager {
     const result = await this.metadataRepository.load();
     assertWritableMetadata(result.status, result.error);
     return result.metadata;
+  }
+
+  /** Prototype-only escape hatch for clearing data after an intentional schema break. */
+  async clearAll(): Promise<void> {
+    if (!this.database.keys) {
+      throw new PersistenceError(
+        'read',
+        'Unable to clear local data because storage key enumeration is unavailable'
+      );
+    }
+    const keys = await this.database.keys();
+    if (keys.length > 0) await this.database.multiRemove(keys);
   }
 }
 

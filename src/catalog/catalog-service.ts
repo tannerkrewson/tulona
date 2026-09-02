@@ -14,6 +14,7 @@ import {
   type IsoTimestamp,
   type RoutineDefinition,
   type RoutineSnapshot,
+  type RoutineTrackingMode,
   type RoutineStepEndBehavior,
   type RoutineStep,
   type TrackableItem,
@@ -65,12 +66,13 @@ export interface UpdateActivityInput {
 export interface CreateRoutineInput extends CatalogStyleInput {
   id?: UUID;
   folderId?: UUID | null;
+  trackingMode: RoutineTrackingMode;
   steps?: readonly (RoutineStep | CreateRoutineStepInput)[];
 }
 
 export interface CreateRoutineStepInput {
   id?: UUID;
-  activityId: UUID;
+  activityId?: UUID | null;
   name?: string | null;
   durationMs: number;
   endBehavior?: RoutineStepEndBehavior;
@@ -80,7 +82,7 @@ export interface CreateRoutineStepInput {
 }
 
 export interface UpdateRoutineStepInput {
-  activityId?: UUID;
+  activityId?: UUID | null;
   name?: string | null;
   durationMs?: number;
   endBehavior?: RoutineStepEndBehavior;
@@ -201,6 +203,12 @@ function validateDuration(durationMs: number): number {
   return durationMs;
 }
 
+function validateTrackingMode(mode: RoutineTrackingMode): RoutineTrackingMode {
+  if (mode === 'overall') return mode;
+  if (mode === 'steps') return mode;
+  validation(`Unknown routine tracking mode "${String(mode)}"`);
+}
+
 function validateEndBehavior(
   endBehavior: RoutineStepEndBehavior | undefined
 ): RoutineStepEndBehavior {
@@ -239,11 +247,21 @@ function assertCatalogInvariants(catalog: CatalogCollection): void {
       validation(`Catalog item "${item.id}" references an unknown folder`);
     }
     if (item.kind === 'routine') {
+      const trackingMode = validateTrackingMode(item.trackingMode);
       const stepIds = new Set<string>();
       for (const step of item.steps) {
         if (stepIds.has(step.id)) validation(`Duplicate routine step ID "${step.id}"`);
         stepIds.add(step.id);
-        if (!catalog.activities.some((activity) => activity.id === step.activityId)) {
+        if (trackingMode === 'steps' && step.activityId === null) {
+          validation(`Step-tracked routine "${item.id}" requires an activity for every step`);
+        }
+        if (trackingMode === 'overall' && step.activityId !== null) {
+          validation(`Overall routine "${item.id}" cannot assign activities to individual steps`);
+        }
+        if (
+          step.activityId !== null &&
+          !catalog.activities.some((activity) => activity.id === step.activityId)
+        ) {
           validation(`Routine step "${step.id}" references an unknown activity`);
         }
         validateDuration(step.durationMs);
@@ -306,7 +324,7 @@ function nextFolderOrder(catalog: CatalogCollection): number {
 function snapshotSteps(routine: RoutineDefinition): RoutineSnapshot['steps'] {
   return sortByOrder(routine.steps).map((step, index) => ({
     id: step.id,
-    activityId: step.activityId,
+    activityId: routine.trackingMode === 'overall' ? null : step.activityId,
     name: step.name,
     durationMs: step.durationMs,
     sortOrder: index,
@@ -522,7 +540,8 @@ export class CatalogService implements CatalogServiceApi {
     assertId(id, 'Routine ID');
     assertNewId(catalog, id);
     const now = this.timestamp();
-    const steps = this.validateSteps(catalog, input.steps ?? [], now);
+    const trackingMode = validateTrackingMode(input.trackingMode);
+    const steps = this.validateSteps(catalog, input.steps ?? [], now, trackingMode);
     const routine: RoutineDefinition = {
       id,
       kind: 'routine',
@@ -531,6 +550,7 @@ export class CatalogService implements CatalogServiceApi {
       sortOrder: nextSiblingOrder(catalog, folderId),
       color: validateColor(input.color),
       iconName: validateIcon(input.iconName),
+      trackingMode,
       steps,
       createdAt: now,
       updatedAt: now,
@@ -596,6 +616,7 @@ export class CatalogService implements CatalogServiceApi {
       steps: source.steps.map((step) => ({
         ...step,
         id: createId(),
+        activityId: source.trackingMode === 'overall' ? null : step.activityId,
         endBehavior: validateEndBehavior(step.endBehavior),
         notes: validateStepNotes(step.notes),
         createdAt: now,
@@ -616,6 +637,7 @@ export class CatalogService implements CatalogServiceApi {
     return {
       id: routine.id,
       name: routine.name,
+      trackingMode: routine.trackingMode,
       steps: snapshotSteps(routine),
       capturedAt: timestamp,
     };
@@ -630,13 +652,17 @@ export class CatalogService implements CatalogServiceApi {
     if (routine.steps.some((step) => step.id === stepId)) {
       throw new PersistenceError('conflict', `Routine step ID "${stepId}" already exists`);
     }
-    if (!catalog.activities.some((activity) => activity.id === input.activityId)) {
+    const activityId = routine.trackingMode === 'overall' ? null : (input.activityId ?? null);
+    if (routine.trackingMode === 'steps' && activityId === null) {
+      validation(`Step-tracked routine "${id}" requires an activity for every step`);
+    }
+    if (activityId !== null && !catalog.activities.some((activity) => activity.id === activityId)) {
       validation(`Routine step "${stepId}" references an unknown activity`);
     }
     const now = this.timestamp();
     const step: RoutineStep = {
       id: stepId,
-      activityId: input.activityId,
+      activityId,
       name: input.name === undefined ? null : validateStepNotes(input.name),
       durationMs: validateDuration(input.durationMs),
       sortOrder: routine.steps.length,
@@ -676,8 +702,16 @@ export class CatalogService implements CatalogServiceApi {
     if (!routine) throw new PersistenceError('validation', `Unknown routine "${routineId}"`);
     const current = routine.steps.find((step) => step.id === stepId);
     if (!current) throw new PersistenceError('validation', `Unknown routine step "${stepId}"`);
-    const activityId = input.activityId ?? current.activityId;
-    if (!catalog.activities.some((activity) => activity.id === activityId)) {
+    const activityId =
+      routine.trackingMode === 'overall'
+        ? null
+        : input.activityId === undefined
+          ? current.activityId
+          : input.activityId;
+    if (routine.trackingMode === 'steps' && activityId === null) {
+      validation(`Step-tracked routine "${routineId}" requires an activity for every step`);
+    }
+    if (activityId !== null && !catalog.activities.some((activity) => activity.id === activityId)) {
       validation(`Routine step "${stepId}" references an unknown activity`);
     }
     const nextStep: RoutineStep = {
@@ -858,7 +892,8 @@ export class CatalogService implements CatalogServiceApi {
   private validateSteps(
     catalog: CatalogCollection,
     steps: readonly (RoutineStep | CreateRoutineStepInput)[],
-    createdAt: IsoTimestamp
+    createdAt: IsoTimestamp,
+    trackingMode: RoutineTrackingMode
   ): RoutineStep[] {
     const activities = new Set(catalog.activities.map((activity) => activity.id));
     const seen = new Set<string>();
@@ -868,7 +903,7 @@ export class CatalogService implements CatalogServiceApi {
           ? step
           : {
               id: step.id ?? createId(),
-              activityId: step.activityId,
+              activityId: step.activityId ?? null,
               name: step.name ?? null,
               durationMs: step.durationMs,
               sortOrder: index,
@@ -882,6 +917,7 @@ export class CatalogService implements CatalogServiceApi {
             };
       const normalizedStep = {
         ...candidate,
+        activityId: trackingMode === 'overall' ? null : candidate.activityId,
         endBehavior: validateEndBehavior(candidate.endBehavior),
         notes: validateStepNotes(candidate.notes),
       };
@@ -889,7 +925,10 @@ export class CatalogService implements CatalogServiceApi {
       if (!result.success) validation(`Routine step failed validation: ${result.error.message}`);
       if (seen.has(candidate.id)) validation(`Duplicate routine step ID "${candidate.id}"`);
       seen.add(candidate.id);
-      if (!activities.has(candidate.activityId))
+      if (trackingMode === 'steps' && candidate.activityId === null) {
+        validation(`Step-tracked routine requires an activity for step "${candidate.id}"`);
+      }
+      if (candidate.activityId !== null && !activities.has(candidate.activityId))
         validation(`Routine step "${candidate.id}" references an unknown activity`);
       validateDuration(candidate.durationMs);
       return result.data as RoutineStep;

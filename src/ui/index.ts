@@ -11,6 +11,7 @@ export {
   type ColorPickerProps,
 } from './ColorPicker';
 export { DurationText, formatDuration, type DurationTextProps } from './DurationText';
+export { DurationPicker, type DurationPickerProps, type DurationValue } from './DurationPicker';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { IconPicker, searchIconCatalog, type IconPickerProps } from './IconPicker';
 export { ReorderControls, type ReorderControlsProps } from './ReorderControls';

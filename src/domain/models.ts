@@ -18,6 +18,7 @@ export type TransitionStatus = 'recorded' | 'corrected' | 'superseded';
 export type RoutineRunStatus =
   'running' | 'paused' | 'awaiting-next-activity' | 'completed' | 'cancelled' | 'abandoned';
 export type RoutineStepStatus = 'pending' | 'active' | 'completed' | 'skipped';
+export type RoutineTrackingMode = 'overall' | 'steps';
 export type RoutineStepEndBehavior = 'overtime' | 'auto-advance' | 'autoAdvance';
 export type RoutineStepCompletionOutcome = 'done' | 'skipped' | 'autoAdvanced';
 export type HabitSignalSource = 'manual' | 'automatic';
@@ -51,7 +52,7 @@ export interface Activity extends Timestamps, Archivable {
 
 export interface RoutineStep extends Timestamps, Archivable {
   id: UUID;
-  activityId: UUID;
+  activityId: UUID | null;
   name: string | null;
   durationMs: number;
   sortOrder: number;
@@ -70,6 +71,7 @@ export interface RoutineDefinition extends Timestamps, Archivable {
   sortOrder: number;
   color: string | null;
   iconName: string | null;
+  trackingMode: RoutineTrackingMode;
   steps: RoutineStep[];
 }
 
@@ -100,7 +102,7 @@ export interface TimeInterval {
 
 export interface RoutineStepSnapshot {
   id: UUID;
-  activityId: UUID;
+  activityId: UUID | null;
   name: string | null;
   durationMs: number;
   sortOrder: number;
@@ -113,6 +115,7 @@ export interface RoutineStepSnapshot {
 export interface RoutineSnapshot {
   id: UUID;
   name: string;
+  trackingMode: RoutineTrackingMode;
   steps: RoutineStepSnapshot[];
   capturedAt: IsoTimestamp;
 }
