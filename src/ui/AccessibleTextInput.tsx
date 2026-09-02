@@ -2,12 +2,21 @@ import { TextInput, type TextInputProps } from '@expo/ui';
 import { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 
+import { useAppTheme } from '@theme';
+
 export interface AccessibleTextInputProps extends TextInputProps {
   label: string;
 }
 
 /** Associates the visible field label with Expo's cross-platform text input. */
-export function AccessibleTextInput({ label, testID, ...inputProps }: AccessibleTextInputProps) {
+export function AccessibleTextInput({
+  label,
+  testID,
+  textStyle,
+  ...inputProps
+}: AccessibleTextInputProps) {
+  const { colors } = useAppTheme();
+
   useEffect(() => {
     if (typeof document === 'undefined' || !testID) return;
     const applyLabel = () => {
@@ -45,7 +54,16 @@ export function AccessibleTextInput({ label, testID, ...inputProps }: Accessible
       <TextInput
         {...inputProps}
         testID={testID}
-        style={{ height: 48, width: '100%', ...inputProps.style }}
+        style={{
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          borderRadius: 10,
+          borderWidth: 1,
+          height: 48,
+          width: '100%',
+          ...inputProps.style,
+        }}
+        textStyle={{ color: colors.text, ...textStyle }}
       />
     </View>
   );

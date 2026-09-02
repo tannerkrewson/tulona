@@ -90,7 +90,7 @@ export function IconPicker({
                     style={{
                       backgroundColor: selected ? colors.active.background : colors.surface,
                       borderColor: selected ? colors.focus : colors.border,
-                      borderRadius: 12,
+                      borderRadius: 10,
                       borderWidth: selected ? 2 : 1,
                       height: 84,
                       paddingHorizontal: 6,

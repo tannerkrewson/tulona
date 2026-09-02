@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { downloadRawDataJson } from '../backup/web-download';
 import { errorText, Screen } from '@ui';
-import { useAppTheme } from '@theme';
+import { useAppTheme, useThemePreference } from '@theme';
 
 import {
   bootCoordinator,
@@ -41,6 +41,7 @@ function stageLabel(error: unknown): string {
 
 export function BootCoordinatorGate() {
   const { colors } = useAppTheme();
+  const { setAppearance } = useThemePreference();
   const router = useRouter();
   const pathname = usePathname();
   const [state, setState] = useState<GateState>({ kind: 'hydrating' });
@@ -71,6 +72,11 @@ export function BootCoordinatorGate() {
     const target = destinationAfterBoot(state.result.destination, pathname);
     if (target) router.replace(target as Href);
   }, [pathname, router, state]);
+
+  useEffect(() => {
+    if (state.kind !== 'ready') return;
+    setAppearance(state.result.runtime?.settings.appearance ?? 'system');
+  }, [setAppearance, state]);
 
   if (state.kind === 'ready') return null;
   if (state.kind === 'hydrating') {

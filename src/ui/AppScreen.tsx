@@ -2,14 +2,13 @@ import { Column, Host, ScrollView, Text } from '@expo/ui';
 import type { ComponentProps, ReactNode } from 'react';
 import { StyleSheet } from 'react-native';
 
-import { useAppTheme, type ThemeMode } from '@theme';
+import { useAppTheme } from '@theme';
 
 export interface AppScreenProps {
   children: ReactNode;
   title?: string;
   description?: string;
   scrollable?: boolean;
-  themeMode?: ThemeMode;
   testID?: string;
 }
 
@@ -21,7 +20,7 @@ const hostStyles = StyleSheet.create({
 
 const contentStyle = {
   alignSelf: 'center',
-  maxWidth: 760,
+  maxWidth: 720,
   width: '100%',
 } as ComponentProps<typeof Column>['style'];
 
@@ -31,10 +30,9 @@ export function AppScreen({
   title,
   description,
   scrollable = true,
-  themeMode = 'system',
   testID,
 }: AppScreenProps) {
-  const { colorScheme, colors } = useAppTheme(themeMode);
+  const { colorScheme, colors } = useAppTheme();
   const content = (
     <Column
       alignment="start"
@@ -42,15 +40,16 @@ export function AppScreen({
       style={{
         ...contentStyle,
         backgroundColor: colors.background,
-        paddingHorizontal: 16,
-        paddingVertical: 24,
+        paddingBottom: 32,
+        paddingHorizontal: 20,
+        paddingTop: 22,
       }}
     >
       {title ? (
-        <Text textStyle={{ color: colors.text, fontSize: 32, fontWeight: '700' }}>{title}</Text>
+        <Text textStyle={{ color: colors.text, fontSize: 30, fontWeight: '700' }}>{title}</Text>
       ) : null}
       {description ? (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 16, lineHeight: 24 }}>
+        <Text textStyle={{ color: colors.textMuted, fontSize: 15, lineHeight: 22 }}>
           {description}
         </Text>
       ) : null}

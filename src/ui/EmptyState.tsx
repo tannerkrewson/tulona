@@ -32,10 +32,10 @@ export function EmptyState({
       style={{
         backgroundColor: colors.surface,
         borderColor: colors.border,
-        borderRadius: 16,
+        borderRadius: 14,
         borderWidth: 1,
-        paddingHorizontal: 24,
-        paddingVertical: 28,
+        paddingHorizontal: 20,
+        paddingVertical: 24,
         width: '100%',
       }}
       testID={testID}

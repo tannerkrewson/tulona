@@ -1,5 +1,6 @@
 import { useColorScheme } from 'react-native';
 
+import { useThemePreference } from './ThemeProvider';
 import {
   getThemeColors,
   resolveColorScheme,
@@ -14,12 +15,14 @@ export interface AppTheme {
   readonly colors: ThemeColors;
 }
 
-export function useAppTheme(mode: ThemeMode = 'system'): AppTheme {
+export function useAppTheme(mode?: ThemeMode): AppTheme {
+  const { appearance } = useThemePreference();
   const systemColorScheme = useColorScheme();
-  const colorScheme = resolveColorScheme(mode, systemColorScheme);
+  const resolvedMode = mode ?? appearance;
+  const colorScheme = resolveColorScheme(resolvedMode, systemColorScheme);
 
   return {
-    mode,
+    mode: resolvedMode,
     colorScheme,
     colors: getThemeColors(colorScheme),
   };

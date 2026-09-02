@@ -9,6 +9,7 @@ export {
   type ThemeMode,
 } from './colors';
 export { useAppTheme, type AppTheme } from './useAppTheme';
+export { ThemeProvider, useThemePreference } from './ThemeProvider';
 export {
   getActivityStateVisual,
   type ActivityStateVisual,

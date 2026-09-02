@@ -10,8 +10,12 @@ export default function RootHtml({ children }: { children: ReactNode }) {
         <title>Tulona</title>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-        <meta name="theme-color" content="#102033" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
+        />
+        <meta name="color-scheme" content="light dark" />
+        <meta name="theme-color" content="#F5F5F5" />
         <link rel="manifest" href={basePathAsset('manifest.json')} />
         <link rel="icon" href={basePathAsset('favicon.png')} />
         <link rel="apple-touch-icon" href={basePathAsset('icons/apple-touch-icon.png')} />
@@ -50,7 +54,7 @@ export default function RootHtml({ children }: { children: ReactNode }) {
             height: auto;
             padding: 8px 12px;
             background: #ffffff;
-            color: #102033;
+            color: #171717;
             z-index: 1000;
           }
         `}</style>

@@ -3,7 +3,7 @@ import { useIsFocused, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import type { AppSettings } from '@domain';
-import { useAppTheme } from '@theme';
+import { useAppTheme, useThemePreference } from '@theme';
 import { AccessiblePicker, AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
@@ -14,28 +14,26 @@ function SettingSection({
   title,
   description,
   children,
-  themeMode,
 }: {
   title: string;
   description: string;
   children: ReactNode;
-  themeMode?: AppSettings['appearance'];
 }) {
-  const { colors } = useAppTheme(themeMode);
+  const { colors } = useAppTheme();
   return (
     <Column
       spacing={12}
       style={{
         backgroundColor: colors.surface,
         borderColor: colors.border,
-        borderRadius: 18,
+        borderRadius: 14,
         borderWidth: 1,
-        padding: 18,
+        padding: 16,
         width: '100%',
       }}
     >
       <Column spacing={3}>
-        <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>{title}</Text>
+        <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{title}</Text>
         <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
           {description}
         </Text>
@@ -45,16 +43,8 @@ function SettingSection({
   );
 }
 
-function Field({
-  label,
-  children,
-  themeMode,
-}: {
-  label: string;
-  children: ReactNode;
-  themeMode?: AppSettings['appearance'];
-}) {
-  const { colors } = useAppTheme(themeMode);
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  const { colors } = useAppTheme();
   return (
     <Column spacing={6} style={{ width: '100%' }}>
       <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>{label}</Text>
@@ -63,16 +53,8 @@ function Field({
   );
 }
 
-function ActionError({
-  store,
-  onBack,
-  themeMode,
-}: {
-  store: SettingsStore;
-  onBack: () => void;
-  themeMode?: AppSettings['appearance'];
-}) {
-  const { colors } = useAppTheme(themeMode);
+function ActionError({ store, onBack }: { store: SettingsStore; onBack: () => void }) {
+  const { colors } = useAppTheme();
   const error = store((state) => state.persistenceError);
   if (!error) return null;
   return (
@@ -171,7 +153,8 @@ function SettingsContent({
 }) {
   const settings = store((state) => state.settings);
   const saving = store((state) => state.saving);
-  const { colors } = useAppTheme(settings?.appearance);
+  const { colors } = useAppTheme();
+  const { setAppearance: setThemeAppearance } = useThemePreference();
   if (!settings) {
     return (
       <Screen title="Settings" description="Preferences are stored on this device.">
@@ -180,35 +163,29 @@ function SettingsContent({
     );
   }
 
-  const run = (action: () => Promise<AppSettings>) => {
+  const run = (action: () => Promise<AppSettings>, onSuccess?: (settings: AppSettings) => void) => {
     if (saving) return;
-    void action().catch(() => undefined);
+    void action()
+      .then((nextSettings) => onSuccess?.(nextSettings))
+      .catch(() => undefined);
   };
 
   return (
     <Screen
       description="Preferences are stored on this device and applied to new feature queries."
-      themeMode={settings.appearance}
       title="Settings"
     >
       <Column spacing={14} style={{ width: '100%' }}>
-        <ActionError
-          onBack={() => router.replace('/(tabs)')}
-          store={store}
-          themeMode={settings.appearance}
-        />
-        <SettingSection
-          description="Choose how Tulona looks on this device."
-          themeMode={settings.appearance}
-          title="Appearance"
-        >
-          <Field label="Theme" themeMode={settings.appearance}>
+        <ActionError onBack={() => router.replace('/(tabs)')} store={store} />
+        <SettingSection description="Choose how Tulona looks on this device." title="Appearance">
+          <Field label="Theme">
             <AccessiblePicker
               label="Theme"
               selectedValue={settings.appearance}
               onValueChange={(value) =>
-                run(() =>
-                  store.getState().setAppearance(String(value) as AppSettings['appearance'])
+                run(
+                  () => store.getState().setAppearance(String(value) as AppSettings['appearance']),
+                  (nextSettings) => setThemeAppearance(nextSettings.appearance)
                 )
               }
               testID="settings-appearance"
@@ -221,10 +198,9 @@ function SettingsContent({
         </SettingSection>
         <SettingSection
           description="A new logical day starts locally at this hour. Midnight is the default."
-          themeMode={settings.appearance}
           title="Time boundaries"
         >
-          <Field label="Logical day starts at" themeMode={settings.appearance}>
+          <Field label="Logical day starts at">
             <AccessiblePicker
               label="Logical day starts at"
               selectedValue={String(settings.logicalDayRolloverHour)}
@@ -246,7 +222,7 @@ function SettingsContent({
               ))}
             </AccessiblePicker>
           </Field>
-          <Field label="Week starts on" themeMode={settings.appearance}>
+          <Field label="Week starts on">
             <AccessiblePicker
               label="Week starts on"
               selectedValue={String(settings.weekStartsOn)}
@@ -263,10 +239,9 @@ function SettingsContent({
         </SettingSection>
         <SettingSection
           description="Foreground sound is best-effort and never schedules background notifications."
-          themeMode={settings.appearance}
           title="Routine alarm"
         >
-          <Field label="Alarm" themeMode={settings.appearance}>
+          <Field label="Alarm">
             <AccessiblePicker
               label="Alarm"
               selectedValue={settings.alarmSettings.enabled ? 'enabled' : 'disabled'}
@@ -279,7 +254,7 @@ function SettingsContent({
               <Picker.Item label="Enabled" value="enabled" />
             </AccessiblePicker>
           </Field>
-          <Field label="Volume" themeMode={settings.appearance}>
+          <Field label="Volume">
             <AccessiblePicker
               label="Volume"
               selectedValue={String(settings.alarmSettings.volume ?? 1)}
@@ -300,10 +275,9 @@ function SettingsContent({
         </SettingSection>
         <SettingSection
           description="Choose what the routine surface should do with a saved active routine."
-          themeMode={settings.appearance}
           title="Routine defaults"
         >
-          <Field label="When reopening a routine" themeMode={settings.appearance}>
+          <Field label="When reopening a routine">
             <AccessiblePicker
               label="When reopening a routine"
               selectedValue={settings.defaultRoutineBehavior}
@@ -323,10 +297,9 @@ function SettingsContent({
         </SettingSection>
         <SettingSection
           description="Archived records are retained for history and can be shown in catalog views."
-          themeMode={settings.appearance}
           title="Catalog visibility"
         >
-          <Field label="Archived activities and routines" themeMode={settings.appearance}>
+          <Field label="Archived activities and routines">
             <AccessiblePicker
               label="Archived activities and routines"
               selectedValue={settings.showArchived ? 'shown' : 'hidden'}

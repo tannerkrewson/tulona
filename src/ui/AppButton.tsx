@@ -1,6 +1,12 @@
 import { Button as ExpoButton, type ButtonProps } from '@expo/ui';
 
-/** Gives every shared button a comfortable target without changing Expo's interaction colors. */
+/** Gives every shared button a consistent, native-sized surface. */
 export function AppButton({ variant = 'filled', style, ...props }: ButtonProps) {
-  return <ExpoButton {...props} style={{ height: 48, ...style }} variant={variant} />;
+  return (
+    <ExpoButton
+      {...props}
+      style={{ borderRadius: 12, height: 48, paddingHorizontal: 16, ...style }}
+      variant={variant}
+    />
+  );
 }

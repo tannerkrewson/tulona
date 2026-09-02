@@ -2,6 +2,8 @@ import { Picker, type PickerItemValue, type PickerProps } from '@expo/ui';
 import { Children, isValidElement, type ReactNode } from 'react';
 import { Platform, View } from 'react-native';
 
+import { useAppTheme } from '@theme';
+
 export interface AccessiblePickerProps<T extends PickerItemValue> extends PickerProps<T> {
   label: string;
 }
@@ -25,6 +27,7 @@ function WebPicker<T extends PickerItemValue>({
   enabled = true,
   testID,
 }: AccessiblePickerProps<T> & { children?: ReactNode }) {
+  const { colorScheme, colors } = useAppTheme();
   const items = pickerItems<T>(children);
   return (
     <select
@@ -35,11 +38,25 @@ function WebPicker<T extends PickerItemValue>({
         const item = items[event.currentTarget.selectedIndex];
         if (item) onValueChange(item.value);
       }}
-      style={{ height: 48, width: '100%' }}
+      style={{
+        backgroundColor: colors.surface,
+        border: `1px solid ${colors.border}`,
+        borderRadius: 10,
+        color: colors.text,
+        colorScheme,
+        fontSize: 16,
+        height: 48,
+        padding: '0 12px',
+        width: '100%',
+      }}
       value={String(selectedValue)}
     >
       {items.map((item) => (
-        <option key={String(item.value)} value={String(item.value)}>
+        <option
+          key={String(item.value)}
+          style={{ backgroundColor: colors.surface, color: colors.text }}
+          value={String(item.value)}
+        >
           {item.label}
         </option>
       ))}
@@ -54,6 +71,7 @@ export function AccessiblePicker<T extends PickerItemValue>({
   testID,
   ...pickerProps
 }: AccessiblePickerProps<T> & { children?: ReactNode }) {
+  const { colors } = useAppTheme();
   if (Platform.OS === 'web') {
     return (
       <WebPicker
@@ -69,7 +87,17 @@ export function AccessiblePicker<T extends PickerItemValue>({
   }
 
   return (
-    <View accessibilityLabel={label} style={{ height: 48, width: '100%' }}>
+    <View
+      accessibilityLabel={label}
+      style={{
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
+        borderRadius: 10,
+        borderWidth: 1,
+        height: 48,
+        width: '100%',
+      }}
+    >
       <Picker {...pickerProps} testID={testID}>
         {children}
       </Picker>

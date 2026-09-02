@@ -27,36 +27,36 @@ export interface ThemeColors {
 
 export const themeColors: Record<AppColorScheme, ThemeColors> = {
   light: {
-    background: '#F8FAFC',
+    background: '#F5F5F5',
     surface: '#FFFFFF',
-    surfaceMuted: '#F1F5F9',
-    border: '#CBD5E1',
-    text: '#102033',
-    textMuted: '#536174',
-    primary: '#176B87',
+    surfaceMuted: '#EEEEEE',
+    border: '#D4D4D4',
+    text: '#171717',
+    textMuted: '#666666',
+    primary: '#111111',
     onPrimary: '#FFFFFF',
-    focus: '#0F766E',
-    active: { background: '#DFF6F5', foreground: '#0F4C5C' },
-    inactive: { background: '#E2E8F0', foreground: '#334155' },
-    success: { background: '#DCFCE7', foreground: '#166534' },
-    warning: { background: '#FEF3C7', foreground: '#854D0E' },
-    danger: { background: '#FEE2E2', foreground: '#991B1B' },
+    focus: '#111111',
+    active: { background: '#E7E7E7', foreground: '#111111' },
+    inactive: { background: '#F0F0F0', foreground: '#666666' },
+    success: { background: '#E7E7E7', foreground: '#222222' },
+    warning: { background: '#EDEDED', foreground: '#333333' },
+    danger: { background: '#E5E5E5', foreground: '#1A1A1A' },
   },
   dark: {
-    background: '#0B1220',
-    surface: '#111C2E',
-    surfaceMuted: '#1E293B',
-    border: '#475569',
-    text: '#F8FAFC',
-    textMuted: '#CBD5E1',
-    primary: '#73D1D0',
-    onPrimary: '#082F49',
-    focus: '#5EEAD4',
-    active: { background: '#164E63', foreground: '#CCFBF1' },
-    inactive: { background: '#334155', foreground: '#E2E8F0' },
-    success: { background: '#14532D', foreground: '#BBF7D0' },
-    warning: { background: '#713F12', foreground: '#FEF3C7' },
-    danger: { background: '#7F1D1D', foreground: '#FECACA' },
+    background: '#000000',
+    surface: '#0D0D0D',
+    surfaceMuted: '#171717',
+    border: '#2A2A2A',
+    text: '#F5F5F5',
+    textMuted: '#A3A3A3',
+    primary: '#FFFFFF',
+    onPrimary: '#000000',
+    focus: '#FFFFFF',
+    active: { background: '#1F1F1F', foreground: '#FFFFFF' },
+    inactive: { background: '#111111', foreground: '#A3A3A3' },
+    success: { background: '#1C1C1C', foreground: '#F5F5F5' },
+    warning: { background: '#222222', foreground: '#E5E5E5' },
+    danger: { background: '#2A2A2A', foreground: '#FFFFFF' },
   },
 };
 
@@ -76,10 +76,10 @@ export function getThemeColors(colorScheme: AppColorScheme): ThemeColors {
 }
 
 /** Returns a readable foreground for a six-digit hex background. */
-export function getAccessibleTextColor(background: string): '#102033' | '#FFFFFF' {
+export function getAccessibleTextColor(background: string): '#111111' | '#FFFFFF' {
   const match = /^#([0-9a-f]{6})$/i.exec(background.trim());
   if (!match) {
-    return '#102033';
+    return '#111111';
   }
 
   const channels = [0, 2, 4].map(
@@ -90,5 +90,5 @@ export function getAccessibleTextColor(background: string): '#102033' | '#FFFFFF
     return total + linear * [0.2126, 0.7152, 0.0722][index];
   }, 0);
 
-  return luminance > 0.179 ? '#102033' : '#FFFFFF';
+  return luminance > 0.179 ? '#111111' : '#FFFFFF';
 }

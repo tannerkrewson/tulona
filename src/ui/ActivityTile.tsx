@@ -46,10 +46,10 @@ export function ActivityTile({
       style={{
         backgroundColor: stateVisual?.colors.background ?? colors.surface,
         borderColor: stateVisual?.colors.foreground ?? colors.border,
-        borderRadius: 16,
+        borderRadius: 14,
         borderWidth: 1,
-        height: 84,
-        paddingHorizontal: 14,
+        height: 76,
+        paddingHorizontal: 12,
         width: '100%',
       }}
       testID={testID}
@@ -61,8 +61,8 @@ export function ActivityTile({
           style={{
             backgroundColor: accent,
             borderRadius: 12,
-            height: 52,
-            width: 52,
+            height: 48,
+            width: 48,
           }}
         >
           <AppIcon
