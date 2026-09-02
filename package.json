@@ -33,8 +33,10 @@
     "expo-document-picker": "~57.0.1",
     "expo-linking": "~57.0.8",
     "expo-router": "~57.0.17",
+    "frimousse": "^0.3.0",
     "lucide-react-native": "1.37.0",
     "react": "19.2.3",
+    "react-colorful": "^5.8.1",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "react-native-reanimated": "4.5.1",
@@ -51,8 +53,8 @@
     "eslint-config-expo": "~57.0.2",
     "gh-pages": "6.3.0",
     "prettier": "3.9.6",
-    "typescript": "~6.0.3",
     "tsx": "4.23.13",
+    "typescript": "~6.0.3",
     "workbox-cli": "7.4.1"
   }
 }
