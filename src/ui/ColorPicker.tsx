@@ -90,7 +90,7 @@ export function ColorPicker({
                   style={{
                     backgroundColor: colors.surface,
                     borderColor: selected ? colors.focus : colors.border,
-                    borderRadius: 12,
+                    borderRadius: 10,
                     borderWidth: selected ? 2 : 1,
                     height: 72,
                     paddingHorizontal: 6,
@@ -104,7 +104,7 @@ export function ColorPicker({
                       style={{
                         backgroundColor: option.value,
                         borderColor: colors.border,
-                        borderRadius: 10,
+                        borderRadius: 8,
                         borderWidth: 1,
                         height: 36,
                         width: 36,

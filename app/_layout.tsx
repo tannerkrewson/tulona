@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { registerServiceWorker } from '@/src/pwa/registerServiceWorker';
 import { BootCoordinatorGate } from '@/src/orchestration';
+import { ThemeProvider } from '@theme';
 
 export default function RootLayout() {
   useEffect(() => {
@@ -12,28 +13,30 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <>
-      <Head>
-        <title>Tulona</title>
-      </Head>
-      <View role="main" style={{ flex: 1 }}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="folder/[folderId]" />
-          <Stack.Screen name="history" />
-          <Stack.Screen name="activity/[activityId]" />
-          <Stack.Screen name="routine/[routineId]" />
-          <Stack.Screen name="routine-edit/[routineId]" />
-          <Stack.Screen name="routine-chooser" />
-          <Stack.Screen name="habit/[habitId]" />
-          <Stack.Screen name="folder-edit/[folderId]" />
-          <Stack.Screen name="backup" />
-          <Stack.Screen name="onboarding" />
-        </Stack>
-        <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-          <BootCoordinatorGate />
+    <ThemeProvider>
+      <>
+        <Head>
+          <title>Tulona</title>
+        </Head>
+        <View role="main" style={{ flex: 1 }}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="folder/[folderId]" />
+            <Stack.Screen name="history" />
+            <Stack.Screen name="activity/[activityId]" />
+            <Stack.Screen name="routine/[routineId]" />
+            <Stack.Screen name="routine-edit/[routineId]" />
+            <Stack.Screen name="routine-chooser" />
+            <Stack.Screen name="habit/[habitId]" />
+            <Stack.Screen name="folder-edit/[folderId]" />
+            <Stack.Screen name="backup" />
+            <Stack.Screen name="onboarding" />
+          </Stack>
+          <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+            <BootCoordinatorGate />
+          </View>
         </View>
-      </View>
-    </>
+      </>
+    </ThemeProvider>
   );
 }

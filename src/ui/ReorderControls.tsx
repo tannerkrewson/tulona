@@ -34,7 +34,7 @@ export function ReorderControls({
         onPress={onMoveUp}
         style={{
           borderColor: colors.border,
-          borderRadius: 12,
+          borderRadius: 10,
           borderWidth: 1,
           height: 48,
           paddingHorizontal: 14,
@@ -52,7 +52,7 @@ export function ReorderControls({
         onPress={onMoveDown}
         style={{
           borderColor: colors.border,
-          borderRadius: 12,
+          borderRadius: 10,
           borderWidth: 1,
           height: 48,
           paddingHorizontal: 14,
