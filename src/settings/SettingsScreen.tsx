@@ -1,4 +1,4 @@
-import { Column, Picker, Text } from '@expo/ui';
+import { Column, Picker, Row, Slider, Switch, Text } from '@expo/ui';
 import { useIsFocused, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
@@ -241,23 +241,30 @@ function SettingsContent({
       <Column spacing={14} style={{ width: '100%' }}>
         <ActionError onBack={() => router.replace('/(tabs)')} store={store} />
         <SettingSection description="Choose how Tulona looks on this device." title="Appearance">
-          <Field label="Theme">
-            <AccessiblePicker
-              label="Theme"
-              selectedValue={settings.appearance}
-              onValueChange={(value) =>
-                run(
-                  () => store.getState().setAppearance(String(value) as AppSettings['appearance']),
-                  (nextSettings) => setThemeAppearance(nextSettings.appearance)
-                )
-              }
-              testID="settings-appearance"
-            >
-              <Picker.Item label="Use device setting" value="system" />
-              <Picker.Item label="Light" value="light" />
-              <Picker.Item label="Dark" value="dark" />
-            </AccessiblePicker>
-          </Field>
+          <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+            {(
+              [
+                { id: 'system', label: 'System' },
+                { id: 'light', label: 'Light' },
+                { id: 'dark', label: 'Dark' },
+              ] as const
+            ).map((option) => (
+              <AppButton
+                key={option.id}
+                disabled={saving}
+                label={option.label}
+                onPress={() =>
+                  run(
+                    () => store.getState().setAppearance(option.id),
+                    (nextSettings) => setThemeAppearance(nextSettings.appearance)
+                  )
+                }
+                style={{ height: 44, width: '32%' }}
+                testID={`settings-appearance-${option.id}`}
+                variant={settings.appearance === option.id ? 'filled' : 'outlined'}
+              />
+            ))}
+          </Row>
         </SettingSection>
         <SettingSection
           description="A new logical day starts locally at this hour. Midnight is the default."
@@ -304,37 +311,27 @@ function SettingsContent({
           description="Foreground sound is best-effort and never schedules background notifications."
           title="Routine alarm"
         >
-          <Field label="Alarm">
-            <AccessiblePicker
-              label="Alarm"
-              selectedValue={settings.alarmSettings.enabled ? 'enabled' : 'disabled'}
-              onValueChange={(value) =>
-                run(() => store.getState().setRoutineAlarmEnabled(value === 'enabled'))
-              }
-              testID="settings-alarm-enabled"
-            >
-              <Picker.Item label="Disabled" value="disabled" />
-              <Picker.Item label="Enabled" value="enabled" />
-            </AccessiblePicker>
-          </Field>
-          <Field label="Volume">
-            <AccessiblePicker
-              label="Volume"
-              selectedValue={String(settings.alarmSettings.volume ?? 1)}
-              onValueChange={(value) =>
-                run(() => store.getState().setRoutineAlarmVolume(Number(value)))
-              }
+          <Switch
+            disabled={saving}
+            label="Alarm"
+            onValueChange={(value) => run(() => store.getState().setRoutineAlarmEnabled(value))}
+            testID="settings-alarm-enabled"
+            value={settings.alarmSettings.enabled}
+          />
+          <Column spacing={6} style={{ width: '100%' }}>
+            <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
+              {`Volume · ${Math.round((settings.alarmSettings.volume ?? 1) * 100)}%`}
+            </Text>
+            <Slider
+              disabled={saving || !settings.alarmSettings.enabled}
+              max={1}
+              min={0}
+              onValueChange={(value) => run(() => store.getState().setRoutineAlarmVolume(value))}
+              step={0.25}
               testID="settings-alarm-volume"
-            >
-              {[0, 0.25, 0.5, 0.75, 1].map((volume) => (
-                <Picker.Item
-                  key={volume}
-                  label={`${Math.round(volume * 100)}%`}
-                  value={String(volume)}
-                />
-              ))}
-            </AccessiblePicker>
-          </Field>
+              value={settings.alarmSettings.volume ?? 1}
+            />
+          </Column>
         </SettingSection>
         <SettingSection
           description="Choose what the routine surface should do with a saved active routine."
@@ -362,19 +359,13 @@ function SettingsContent({
           description="Archived records are retained for history and can be shown in catalog views."
           title="Catalog visibility"
         >
-          <Field label="Archived activities and routines">
-            <AccessiblePicker
-              label="Archived activities and routines"
-              selectedValue={settings.showArchived ? 'shown' : 'hidden'}
-              onValueChange={(value) =>
-                run(() => store.getState().setShowArchived(value === 'shown'))
-              }
-              testID="settings-show-archived"
-            >
-              <Picker.Item label="Hide archived" value="hidden" />
-              <Picker.Item label="Show archived" value="shown" />
-            </AccessiblePicker>
-          </Field>
+          <Switch
+            disabled={saving}
+            label="Show archived activities and routines"
+            onValueChange={(value) => run(() => store.getState().setShowArchived(value))}
+            testID="settings-show-archived"
+            value={settings.showArchived}
+          />
         </SettingSection>
         <AppButton
           disabled={saving}

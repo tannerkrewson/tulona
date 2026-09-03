@@ -1,9 +1,10 @@
-import { Column, Host, ScrollView, Text } from '@expo/ui';
+import { Column, Host, Row, ScrollView, Text } from '@expo/ui';
 import type { ComponentProps, ReactNode } from 'react';
 import { StyleSheet } from 'react-native';
 
 import { useAppTheme } from '@theme';
 import { AppButton } from './AppButton';
+import { AppIcon } from '@icons';
 
 export interface AppScreenProps {
   onBack?: () => void;
@@ -49,7 +50,17 @@ export function AppScreen({
       }}
     >
       {onBack ? (
-        <AppButton label="Back" onPress={onBack} testID="screen-back" variant="text" />
+        <AppButton
+          onPress={onBack}
+          style={{ height: 42, paddingHorizontal: 0 }}
+          testID="screen-back"
+          variant="text"
+        >
+          <Row alignment="center" spacing={2}>
+            <AppIcon accessibilityLabel="Back" color={colors.primary} name="chevron-left" size={22} />
+            <Text textStyle={{ color: colors.primary, fontSize: 17 }}>Back</Text>
+          </Row>
+        </AppButton>
       ) : null}
       {title ? (
         <Text textStyle={{ color: colors.text, fontSize: 30, fontWeight: '700' }}>{title}</Text>

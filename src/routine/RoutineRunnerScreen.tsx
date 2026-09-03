@@ -390,7 +390,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             style={{ height: 56, width: '100%' }}
             testID="routine-done"
           />
-          <Column spacing={10} style={{ width: '100%' }}>
+          <Row alignment="center" spacing={8} style={{ width: '100%' }}>
             <AppButton
               disabled={busy}
               label={active.status === 'paused' ? 'Resume' : 'Pause'}
@@ -401,7 +401,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
                     : nextRuntime.routineService.pause()
                 )
               }
-              style={{ height: 56, width: '100%' }}
+              style={{ height: 48, width: '32%' }}
               variant="outlined"
               testID={active.status === 'paused' ? 'routine-resume' : 'routine-pause'}
             />
@@ -409,19 +409,19 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
               disabled={busy || active.status === 'paused'}
               label="Skip"
               onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.skip())}
-              style={{ height: 56, width: '100%' }}
+              style={{ height: 48, width: '32%' }}
               variant="outlined"
               testID="routine-skip"
             />
-          </Column>
-          <AppButton
-            disabled={busy}
-            label="Add time"
-            onPress={() => setAddTimeOpen((open) => !open)}
-            style={{ height: 52, width: '100%' }}
-            variant="outlined"
-            testID="open-add-time"
-          />
+            <AppButton
+              disabled={busy}
+              label="Add time"
+              onPress={() => setAddTimeOpen((open) => !open)}
+              style={{ height: 48, width: '32%' }}
+              variant="outlined"
+              testID="open-add-time"
+            />
+          </Row>
         </Column>
         {addTimeOpen ? (
           <AddTimeSheet
@@ -475,18 +475,30 @@ function AddTimeSheet({
         Additions extend the persisted deadline without resetting the current countdown or overtime
         position.
       </Text>
-      <Column spacing={8} style={{ width: '100%' }}>
-        {options.map((option) => (
+      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+        {options.slice(0, 2).map((option) => (
           <AppButton
             key={option.value}
             disabled={busy}
             label={option.label}
             onPress={() => onAdd(option.value)}
-            style={{ height: 48, width: '100%' }}
+            style={{ height: 48, width: '48%' }}
             testID={`add-time-${option.value}`}
           />
         ))}
-      </Column>
+      </Row>
+      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+        {options.slice(2).map((option) => (
+          <AppButton
+            key={option.value}
+            disabled={busy}
+            label={option.label}
+            onPress={() => onAdd(option.value)}
+            style={{ height: 48, width: '48%' }}
+            testID={`add-time-${option.value}`}
+          />
+        ))}
+      </Row>
       <AppButton
         disabled={busy}
         label="Close"
