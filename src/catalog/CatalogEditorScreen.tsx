@@ -573,9 +573,7 @@ function FolderEditor({
               canMoveUp
               canMoveDown
               disabled={busy || folder.archivedAt !== null}
-              onMoveUp={() =>
-                run(async () => void (await service.reorderFolders(folder.id, 'up')))
-              }
+              onMoveUp={() => run(async () => void (await service.reorderFolders(folder.id, 'up')))}
               onMoveDown={() =>
                 run(async () => void (await service.reorderFolders(folder.id, 'down')))
               }

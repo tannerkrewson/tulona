@@ -119,9 +119,7 @@ export function ColorPicker({
         })}
       </View>
       {selectedValue && !availableOptions.some((o) => o.value.toLowerCase() === selectedValue) ? (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-          {`Custom color ${value}`}
-        </Text>
+        <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>{`Custom color ${value}`}</Text>
       ) : null}
       <ColorPickerPlatform onChange={onChange} testID={`${rootTestID}-custom`} value={value} />
     </Column>
