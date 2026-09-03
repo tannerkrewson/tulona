@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { registerServiceWorker } from '@/src/pwa/registerServiceWorker';
 import { BootCoordinatorGate } from '@/src/orchestration';
+import { ActiveActivityBar } from '@/src/tracker';
 import { ThemeProvider } from '@theme';
 
 export default function RootLayout() {
@@ -34,6 +35,7 @@ export default function RootLayout() {
           </Stack>
           <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
             <BootCoordinatorGate />
+            <ActiveActivityBar />
           </View>
         </View>
       </>
