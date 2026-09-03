@@ -452,19 +452,44 @@ function StepRow({
           {step.notes}
         </Text>
       ) : null}
-      <Column spacing={8} style={{ width: '100%' }}>
+      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
         <AppButton
           disabled={busy}
           label="Edit"
           onPress={onEdit}
-          style={{ height: 48, width: '100%' }}
+          style={{ height: 44, width: '52%' }}
           testID={`edit-step-${step.id}`}
         />
+        <AppButton
+          disabled={busy || index === 0}
+          onPress={() => onMove('up')}
+          style={{ height: 44, paddingHorizontal: 0, width: 44 }}
+          variant="outlined"
+          testID={`move-step-up-${step.id}`}
+        >
+          <AppIcon accessibilityLabel="Move step up" color={colors.text} name="chevron-up" size={20} />
+        </AppButton>
+        <AppButton
+          disabled={busy || index === count - 1}
+          onPress={() => onMove('down')}
+          style={{ height: 44, paddingHorizontal: 0, width: 44 }}
+          variant="outlined"
+          testID={`move-step-down-${step.id}`}
+        >
+          <AppIcon
+            accessibilityLabel="Move step down"
+            color={colors.text}
+            name="chevron-down"
+            size={20}
+          />
+        </AppButton>
+      </Row>
+      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
         <AppButton
           disabled={busy}
           label="Duplicate"
           onPress={onDuplicate}
-          style={{ height: 48, width: '100%' }}
+          style={{ height: 44, width: '48%' }}
           variant="outlined"
           testID={`duplicate-step-${step.id}`}
         />
@@ -472,29 +497,11 @@ function StepRow({
           disabled={busy}
           label="Delete"
           onPress={onDelete}
-          style={{ height: 48, width: '100%' }}
+          style={{ height: 44, width: '48%' }}
           variant="outlined"
           testID={`delete-step-${step.id}`}
         />
-      </Column>
-      <Column spacing={8} style={{ width: '100%' }}>
-        <AppButton
-          disabled={busy || index === 0}
-          label="Move Up"
-          onPress={() => onMove('up')}
-          style={{ height: 48, width: '100%' }}
-          variant="outlined"
-          testID={`move-step-up-${step.id}`}
-        />
-        <AppButton
-          disabled={busy || index === count - 1}
-          label="Move Down"
-          onPress={() => onMove('down')}
-          style={{ height: 48, width: '100%' }}
-          variant="outlined"
-          testID={`move-step-down-${step.id}`}
-        />
-      </Column>
+      </Row>
     </Column>
   );
 }

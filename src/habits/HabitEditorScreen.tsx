@@ -2,6 +2,7 @@ import { Column, Picker, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 
 import type { CatalogCollection, Habit, HabitSchedule, HabitTrigger, UUID } from '@domain';
 import { AppIcon } from '@icons';
@@ -207,46 +208,30 @@ function WeekdayPicker({
   onChange: (day: number) => void;
 }) {
   const { colors } = useAppTheme();
-  const rows = [weekdayLabels.slice(0, 4), weekdayLabels.slice(4)];
   return (
-    <Column spacing={8} style={{ width: '100%' }}>
-      {rows.map((row, rowIndex) => (
-        <Row
-          alignment="center"
-          key={`weekday-row-${rowIndex}`}
-          spacing={8}
-          style={{ width: '100%' }}
-        >
-          {row.map((label, rowDay) => {
-            const day = rowIndex === 0 ? rowDay : rowDay + 4;
-            const active = selected.includes(day);
-            return (
-              <AppButton
-                key={label}
-                label={label}
-                onPress={() => onChange(day)}
-                style={{
-                  backgroundColor: active ? colors.active.background : colors.surface,
-                  borderColor: active ? colors.focus : colors.border,
-                  borderRadius: 10,
-                  borderWidth: active ? 2 : 1,
-                  height: 46,
-                  paddingHorizontal: 2,
-                  width: 58,
-                }}
-                testID={`habit-weekday-${day}`}
-                variant="outlined"
-              />
-            );
-          })}
-        </Row>
-      ))}
-      <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-        {selected.length > 0
-          ? `Selected: ${selected.map((day) => weekdayLabels[day]).join(', ')}`
-          : 'No weekdays selected.'}
-      </Text>
-    </Column>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, width: '100%' }}>
+      {weekdayLabels.map((label, day) => {
+        const active = selected.includes(day);
+        return (
+          <AppButton
+            key={label}
+            label={label}
+            onPress={() => onChange(day)}
+            style={{
+              backgroundColor: active ? colors.primary : colors.surface,
+              borderColor: active ? colors.primary : colors.border,
+              borderRadius: 999,
+              borderWidth: 1,
+              height: 40,
+              paddingHorizontal: 0,
+              width: 48,
+            }}
+            testID={`habit-weekday-${day}`}
+            variant={active ? 'filled' : 'outlined'}
+          />
+        );
+      })}
+    </View>
   );
 }
 

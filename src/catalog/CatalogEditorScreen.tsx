@@ -13,6 +13,7 @@ import {
   ColorPicker,
   errorText,
   IconPicker,
+  ReorderControls,
   Screen,
 } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -401,24 +402,16 @@ function ActivityEditor({
         />
         {activity ? (
           <>
-            <Column spacing={8} style={{ width: '100%' }}>
-              <AppButton
-                disabled={busy || activity.archivedAt !== null}
-                label="Move Up"
-                onPress={() => run(async () => void (await service.reorderItem(activity.id, 'up')))}
-                style={{ height: 48, width: '100%' }}
-                variant="outlined"
-              />
-              <AppButton
-                disabled={busy || activity.archivedAt !== null}
-                label="Move Down"
-                onPress={() =>
-                  run(async () => void (await service.reorderItem(activity.id, 'down')))
-                }
-                style={{ height: 48, width: '100%' }}
-                variant="outlined"
-              />
-            </Column>
+            <ReorderControls
+              canMoveUp
+              canMoveDown
+              disabled={busy || activity.archivedAt !== null}
+              onMoveUp={() => run(async () => void (await service.reorderItem(activity.id, 'up')))}
+              onMoveDown={() =>
+                run(async () => void (await service.reorderItem(activity.id, 'down')))
+              }
+              testID="activity-reorder"
+            />
             {confirmingArchive ? (
               <ArchiveConfirmation
                 busy={busy}
@@ -576,26 +569,18 @@ function FolderEditor({
         />
         {folder ? (
           <>
-            <Column spacing={8} style={{ width: '100%' }}>
-              <AppButton
-                disabled={busy || folder.archivedAt !== null}
-                label="Move Up"
-                onPress={() =>
-                  run(async () => void (await service.reorderFolders(folder.id, 'up')))
-                }
-                style={{ height: 48, width: '100%' }}
-                variant="outlined"
-              />
-              <AppButton
-                disabled={busy || folder.archivedAt !== null}
-                label="Move Down"
-                onPress={() =>
-                  run(async () => void (await service.reorderFolders(folder.id, 'down')))
-                }
-                style={{ height: 48, width: '100%' }}
-                variant="outlined"
-              />
-            </Column>
+            <ReorderControls
+              canMoveUp
+              canMoveDown
+              disabled={busy || folder.archivedAt !== null}
+              onMoveUp={() =>
+                run(async () => void (await service.reorderFolders(folder.id, 'up')))
+              }
+              onMoveDown={() =>
+                run(async () => void (await service.reorderFolders(folder.id, 'down')))
+              }
+              testID="folder-reorder"
+            />
             {confirmingArchive ? (
               <ArchiveConfirmation
                 busy={busy}

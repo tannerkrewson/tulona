@@ -1,5 +1,6 @@
 import { Column, Row, Text } from '@expo/ui';
 import { useState } from 'react';
+import { View } from 'react-native';
 
 import {
   formatDuration,
@@ -113,18 +114,18 @@ export function AdjustStartSheet({
       spacing={14}
       style={{
         backgroundColor: colors.surface,
-        borderColor: colors.primary,
-        borderRadius: 22,
-        borderWidth: 2,
-        padding: 20,
+        borderColor: colors.border,
+        borderRadius: 16,
+        borderWidth: 1,
+        padding: 16,
         width: '100%',
       }}
       testID="adjust-start-sheet"
     >
       <Row alignment="center" spacing={10}>
-        <AppIcon color={colors.primary} name="clock" size={25} />
+        <AppIcon color={colors.primary} name="clock" size={22} />
         <Column spacing={2} style={{ width: '100%' }}>
-          <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '800' }}>
+          <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
             Adjust start
           </Text>
           <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
@@ -132,7 +133,7 @@ export function AdjustStartSheet({
           </Text>
         </Column>
       </Row>
-      <Column spacing={8} style={{ width: '100%' }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, width: '100%' }}>
         {START_CHOICES.map((choice) => {
           const candidateMs = nowMs - choice.minutes * MINUTE;
           const disabled = previousMs !== null && candidateMs < previousMs;
@@ -145,13 +146,13 @@ export function AdjustStartSheet({
                 setSelectedMinutes(choice.minutes);
                 setError(null);
               }}
-              style={{ height: 48, width: '100%' }}
+              style={{ height: 40, paddingHorizontal: 14 }}
               testID={`adjust-start-${choice.minutes}`}
               variant={selectedMinutes === choice.minutes ? 'filled' : 'outlined'}
             />
           );
         })}
-      </Column>
+      </View>
       <Column spacing={6} style={{ width: '100%' }}>
         <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>
           Exact time
@@ -238,23 +239,23 @@ export function AdjustStartSheet({
         onPress={() => void apply()}
         testID="save-adjusted-start"
       />
-      <Column spacing={8} style={{ width: '100%' }}>
+      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
         <AppButton
           disabled={busy}
           label="History"
           onPress={onHistory}
-          style={{ height: 48, width: '100%' }}
+          style={{ height: 44, width: '48%' }}
           testID="open-history-from-adjust"
-          variant="outlined"
+          variant="text"
         />
         <AppButton
           disabled={busy}
           label="Close"
           onPress={onClose}
-          style={{ height: 48, width: '100%' }}
-          variant="outlined"
+          style={{ height: 44, width: '48%' }}
+          variant="text"
         />
-      </Column>
+      </Row>
     </Column>
   );
 }

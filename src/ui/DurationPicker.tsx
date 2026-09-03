@@ -68,39 +68,33 @@ export function DurationPicker({
   onChange,
   testID = 'duration-picker',
 }: DurationPickerProps) {
-  const { colors } = useAppTheme();
   const hourMaximum = Math.max(99, hours);
   return (
-    <Column spacing={8} style={{ width: '100%' }} testID={testID}>
-      <Row alignment="start" spacing={8} style={{ width: '100%' }}>
-        <Wheel
-          disabled={disabled}
-          label="Hours"
-          maximum={hourMaximum}
-          onChange={(next) => onChange({ hours: next, minutes, seconds })}
-          testID={`${testID}-hours`}
-          value={hours}
-        />
-        <Wheel
-          disabled={disabled}
-          label="Minutes"
-          maximum={59}
-          onChange={(next) => onChange({ hours, minutes: next, seconds })}
-          testID={`${testID}-minutes`}
-          value={minutes}
-        />
-        <Wheel
-          disabled={disabled}
-          label="Seconds"
-          maximum={59}
-          onChange={(next) => onChange({ hours, minutes, seconds: next })}
-          testID={`${testID}-seconds`}
-          value={seconds}
-        />
-      </Row>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 14 }} testID={`${testID}-summary`}>
-        {`Duration: ${hours}h ${padded(minutes)}m ${padded(seconds)}s`}
-      </Text>
-    </Column>
+    <Row alignment="start" spacing={8} style={{ width: '100%' }} testID={testID}>
+      <Wheel
+        disabled={disabled}
+        label="Hours"
+        maximum={hourMaximum}
+        onChange={(next) => onChange({ hours: next, minutes, seconds })}
+        testID={`${testID}-hours`}
+        value={hours}
+      />
+      <Wheel
+        disabled={disabled}
+        label="Minutes"
+        maximum={59}
+        onChange={(next) => onChange({ hours, minutes: next, seconds })}
+        testID={`${testID}-minutes`}
+        value={minutes}
+      />
+      <Wheel
+        disabled={disabled}
+        label="Seconds"
+        maximum={59}
+        onChange={(next) => onChange({ hours, minutes, seconds: next })}
+        testID={`${testID}-seconds`}
+        value={seconds}
+      />
+    </Row>
   );
 }
