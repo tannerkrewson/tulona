@@ -36,6 +36,7 @@ const settings: AppSettings = {
   logicalDayRolloverHour: 3,
   appearance: 'system',
   weekStartsOn: 1,
+  minimumActivityDurationMs: 0,
   alarmSettings: { enabled: false, leadTimeMs: 0, sound: true, vibration: true, volume: 1 },
   defaultRoutineBehavior: 'resume',
   showArchived: false,

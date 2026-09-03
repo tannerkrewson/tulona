@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router';
+import { View } from 'react-native';
 
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
@@ -22,7 +23,8 @@ export default function TabLayout() {
           paddingTop: 6,
           shadowOpacity: 0,
         },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '600', lineHeight: 16 },
+        tabBarBackground: () => <View style={{ backgroundColor: colors.surface, flex: 1 }} />,
+        tabBarLabelStyle: { flexShrink: 0, fontSize: 11, fontWeight: '600', lineHeight: 14 },
       }}
     >
       <Tabs.Screen

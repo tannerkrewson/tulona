@@ -23,6 +23,13 @@ export default function RootHtml({ children }: { children: ReactNode }) {
           dangerouslySetInnerHTML={{
             __html: `
               (() => {
+                const themeColor = document.querySelector('meta[name="theme-color"]');
+                const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+                const initialColor = prefersDark ? '#000000' : '#F5F5F5';
+                document.documentElement.style.backgroundColor = initialColor;
+                if (themeColor) {
+                  themeColor.setAttribute('content', initialColor);
+                }
                 const path = window.location.pathname;
                 if (!path.endsWith('.html')) return;
                 const withoutExtension = path.slice(0, -'.html'.length);

@@ -322,6 +322,9 @@ export class BootCoordinator {
           alarmSettings: { ...nextSettings.alarmSettings },
         });
         current.services.routineAlarm.setSettings(nextSettings.alarmSettings);
+        current.services.tracker.setMinimumActivityDurationMs(
+          nextSettings.minimumActivityDurationMs
+        );
         current.services.reconciliation.updateSettings({
           rolloverHour: nextSettings.logicalDayRolloverHour,
           weekStartsOn: nextSettings.weekStartsOn,
@@ -342,6 +345,7 @@ export class BootCoordinator {
     const reconciliationHolder: { current: HabitReconciliationService | null } = { current: null };
     const trackerService = createTrackerService(repositories.tracker, {
       now: this.now,
+      minimumActivityDurationMs: settings.minimumActivityDurationMs,
       onMutation: (mutation) =>
         reconciliationHolder.current
           ? reconciliationHolder.current.reconcileTrackerEdit(mutation)

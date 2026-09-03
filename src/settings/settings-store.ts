@@ -17,6 +17,7 @@ export interface SettingsStoreState {
   setAppearance(appearance: Appearance): Promise<AppSettings>;
   setLogicalDayRolloverHour(hour: number): Promise<AppSettings>;
   setWeekStartsOn(weekStartsOn: number): Promise<AppSettings>;
+  setMinimumActivityDurationMs(durationMs: number): Promise<AppSettings>;
   setRoutineAlarmEnabled(enabled: boolean): Promise<AppSettings>;
   setRoutineAlarmVolume(volume: number): Promise<AppSettings>;
   setDefaultRoutineBehavior(behavior: AppSettings['defaultRoutineBehavior']): Promise<AppSettings>;
@@ -75,6 +76,8 @@ export function createSettingsStore(service: SettingsServiceApi) {
       setLogicalDayRolloverHour: (hour) =>
         runMutation(() => service.setLogicalDayRolloverHour(hour)),
       setWeekStartsOn: (weekStartsOn) => runMutation(() => service.setWeekStartsOn(weekStartsOn)),
+      setMinimumActivityDurationMs: (durationMs) =>
+        runMutation(() => service.setMinimumActivityDurationMs(durationMs)),
       setRoutineAlarmEnabled: (enabled) =>
         runMutation(() => service.setRoutineAlarmEnabled(enabled)),
       setRoutineAlarmVolume: (volume) => runMutation(() => service.setRoutineAlarmVolume(volume)),

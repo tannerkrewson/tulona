@@ -66,6 +66,7 @@ export type TrackerMutationListener = (mutation: TrackerMutation) => Promise<unk
 export interface TrackerServiceOptions {
   now?: () => TimestampInput;
   onMutation?: TrackerMutationListener;
+  minimumActivityDurationMs?: number;
 }
 
 export interface TrackerServiceApi {
@@ -188,6 +189,7 @@ function replaceInCollection(
 export class TrackerService implements TrackerServiceApi {
   private readonly now: () => TimestampInput;
   private readonly onMutation: TrackerMutationListener | null;
+  private minimumActivityDurationMs: number;
 
   constructor(
     private readonly repository: TrackerRepositoryApi,
@@ -195,6 +197,13 @@ export class TrackerService implements TrackerServiceApi {
   ) {
     this.now = options.now ?? (() => Date.now());
     this.onMutation = options.onMutation ?? null;
+    this.minimumActivityDurationMs = validateMinimumActivityDuration(
+      options.minimumActivityDurationMs ?? 0
+    );
+  }
+
+  setMinimumActivityDurationMs(durationMs: number): void {
+    this.minimumActivityDurationMs = validateMinimumActivityDuration(durationMs);
   }
 
   async getActiveTransition(at: TimestampInput = this.now()): Promise<TimeTransition | null> {
@@ -222,6 +231,17 @@ export class TrackerService implements TrackerServiceApi {
       timestampMs(timestamp)
     );
     if (current?.activityId === activityId) return current;
+
+    if (
+      activityId === null &&
+      current?.activityId !== null &&
+      current &&
+      this.minimumActivityDurationMs > 0 &&
+      timestampMs(timestamp) - timestampMs(current.timestamp) < this.minimumActivityDurationMs
+    ) {
+      await this.removeTransition(current.id, true, 'tracker-transition-discard-short');
+      return current;
+    }
 
     return this.insertTransition({
       id: options.id,
@@ -591,6 +611,13 @@ function transitionTimeAtOrBefore(transition: TimeTransition, now: number): bool
   } catch {
     return false;
   }
+}
+
+function validateMinimumActivityDuration(value: number): number {
+  if (!Number.isInteger(value) || value < 0 || value > Number.MAX_SAFE_INTEGER) {
+    validation('Minimum activity duration must be a non-negative integer');
+  }
+  return value;
 }
 
 export function createTrackerService(

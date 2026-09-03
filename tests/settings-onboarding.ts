@@ -69,11 +69,13 @@ async function run(): Promise<void> {
   const defaults = await settingsService.read();
   assert(defaults.logicalDayRolloverHour === 0, 'settings default to midnight');
   assert(defaults.appearance === 'system', 'settings default to system appearance');
+  assert(defaults.minimumActivityDurationMs === 0, 'short activity filtering defaults to off');
   await settingsService.setLogicalDayRolloverHour(3);
   await settingsService.setWeekStartsOn(1);
   await settingsService.setRoutineAlarmEnabled(true);
   await settingsService.setRoutineAlarmVolume(0.5);
   await settingsService.setShowArchived(true);
+  await settingsService.setMinimumActivityDurationMs(5000);
   const updated = await settingsService.read();
   assert(updated.logicalDayRolloverHour === 3, 'settings service persists rollover changes');
   assert(updated.weekStartsOn === 1, 'settings service persists week-start changes');
@@ -82,6 +84,7 @@ async function run(): Promise<void> {
     'alarm settings persist'
   );
   assert(updated.showArchived, 'settings service persists archived visibility');
+  assert(updated.minimumActivityDurationMs === 5000, 'minimum activity duration persists');
   await assertRejects(
     () => settingsService.setLogicalDayRolloverHour(24),
     'invalid rollover values must be rejected before a write'

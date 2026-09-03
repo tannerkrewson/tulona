@@ -308,6 +308,30 @@ function SettingsContent({
           </Field>
         </SettingSection>
         <SettingSection
+          description="Stops shorter than this are discarded so accidental taps do not become history."
+          title="Short activity filter"
+        >
+          <Field label="Ignore activities shorter than">
+            <AccessiblePicker
+              label="Ignore activities shorter than"
+              selectedValue={String(settings.minimumActivityDurationMs)}
+              onValueChange={(value) =>
+                run(() => store.getState().setMinimumActivityDurationMs(Number(value)))
+              }
+              testID="settings-minimum-activity-duration"
+            >
+              <Picker.Item label="Off" value="0" />
+              <Picker.Item label="5 seconds" value="5000" />
+              <Picker.Item label="10 seconds" value="10000" />
+              <Picker.Item label="15 seconds" value="15000" />
+              <Picker.Item label="30 seconds" value="30000" />
+              <Picker.Item label="1 minute" value="60000" />
+              <Picker.Item label="2 minutes" value="120000" />
+              <Picker.Item label="5 minutes" value="300000" />
+            </AccessiblePicker>
+          </Field>
+        </SettingSection>
+        <SettingSection
           description="Foreground sound is best-effort and never schedules background notifications."
           title="Routine alarm"
         >
