@@ -467,7 +467,12 @@ function StepRow({
           variant="outlined"
           testID={`move-step-up-${step.id}`}
         >
-          <AppIcon accessibilityLabel="Move step up" color={colors.text} name="chevron-up" size={20} />
+          <AppIcon
+            accessibilityLabel="Move step up"
+            color={colors.text}
+            name="chevron-up"
+            size={20}
+          />
         </AppButton>
         <AppButton
           disabled={busy || index === count - 1}

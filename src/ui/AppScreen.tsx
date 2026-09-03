@@ -57,7 +57,12 @@ export function AppScreen({
           variant="text"
         >
           <Row alignment="center" spacing={2}>
-            <AppIcon accessibilityLabel="Back" color={colors.primary} name="chevron-left" size={22} />
+            <AppIcon
+              accessibilityLabel="Back"
+              color={colors.primary}
+              name="chevron-left"
+              size={22}
+            />
             <Text textStyle={{ color: colors.primary, fontSize: 17 }}>Back</Text>
           </Row>
         </AppButton>
