@@ -1,4 +1,5 @@
-import { Column, Row, Text } from '@expo/ui';
+import { Column, Text } from '@expo/ui';
+import { Pressable, View } from 'react-native';
 
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
@@ -31,6 +32,7 @@ export interface ColorPickerProps {
   onChange: (value: string | null) => void;
   options?: readonly ColorOption[];
   colors?: readonly string[];
+  /** Accepted for compatibility; the grid wraps to fill available width. */
   columns?: number;
   allowClear?: boolean;
   testID?: string;
@@ -40,103 +42,88 @@ export function isHexColor(value: string): boolean {
   return /^#[0-9a-f]{6}$/i.test(value.trim());
 }
 
-function chunkOptions(options: readonly ColorOption[], columns: number): ColorOption[][] {
-  const rows: ColorOption[][] = [];
-  for (let index = 0; index < options.length; index += columns) {
-    rows.push(options.slice(index, index + columns));
-  }
-  return rows;
-}
-
-/** A compact, accessible palette that returns persisted hex color values. */
+/**
+ * A simple preset swatch grid with one custom-color row.
+ * Selected state is a check on the swatch itself; no per-swatch text.
+ */
 export function ColorPicker({
   value,
   onChange,
   options,
   colors: colorValues,
-  columns = 4,
   allowClear = true,
   testID,
 }: ColorPickerProps) {
   const { colors } = useAppTheme();
-  const columnCount = Number.isInteger(columns) && columns > 0 ? columns : 4;
   const configuredOptions =
     options ?? colorValues?.map((color) => ({ value: color, label: color }));
   const availableOptions = (configuredOptions ?? defaultColorOptions).filter((option) =>
     isHexColor(option.value)
   );
-  const rows = chunkOptions(availableOptions, columnCount);
   const selectedValue = value?.toLowerCase();
   const rootTestID = testID ?? 'color-picker';
 
   return (
     <Column spacing={10} style={{ width: '100%' }} testID={testID}>
-      {allowClear ? (
-        <AppButton
-          disabled={value == null}
-          label="Use default color"
-          onPress={() => onChange(null)}
-          testID={testID ? `${testID}-clear` : undefined}
-          variant="outlined"
-        />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, width: '100%' }}>
+        {allowClear ? (
+          <AppButton
+            disabled={value == null}
+            label="Default"
+            onPress={() => onChange(null)}
+            style={{ height: 44, paddingHorizontal: 14 }}
+            testID={testID ? `${testID}-clear` : undefined}
+            variant={value == null ? 'filled' : 'outlined'}
+          />
+        ) : null}
+        {availableOptions.map((option) => {
+          const selected = selectedValue === option.value.toLowerCase();
+          return (
+            <Pressable
+              key={option.value}
+              accessibilityLabel={`${option.label}${selected ? ', selected' : ''}`}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              onPress={() => onChange(option.value)}
+              style={{
+                alignItems: 'center',
+                borderColor: selected ? colors.focus : 'transparent',
+                borderRadius: 22,
+                borderWidth: 2,
+                height: 44,
+                justifyContent: 'center',
+                width: 44,
+              }}
+              testID={`${rootTestID}-${option.value}`}
+            >
+              <Column
+                alignment="center"
+                style={{
+                  backgroundColor: option.value,
+                  borderRadius: 18,
+                  height: 36,
+                  width: 36,
+                }}
+              >
+                {selected ? (
+                  <AppIcon
+                    accessibilityLabel={`${option.label} selected`}
+                    color={getAccessibleTextColor(option.value)}
+                    name="check"
+                    size={18}
+                  />
+                ) : null}
+              </Column>
+            </Pressable>
+          );
+        })}
+      </View>
+      {selectedValue && !availableOptions.some((o) => o.value.toLowerCase() === selectedValue) ? (
+        <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
+          {`Custom color ${value}`}
+        </Text>
       ) : null}
       <ColorPickerPlatform onChange={onChange} testID={`${rootTestID}-custom`} value={value} />
-      <Column spacing={8} style={{ width: '100%' }}>
-        {rows.map((row, rowIndex) => (
-          <Row key={`color-row-${rowIndex}`} alignment="center" spacing={8}>
-            {row.map((option) => {
-              const selected = selectedValue === option.value.toLowerCase();
-              return (
-                <AppButton
-                  key={option.value}
-                  onPress={() => onChange(option.value)}
-                  style={{
-                    backgroundColor: colors.surface,
-                    borderColor: selected ? colors.focus : colors.border,
-                    borderRadius: 10,
-                    borderWidth: selected ? 2 : 1,
-                    height: 72,
-                    paddingHorizontal: 6,
-                    width: 58,
-                  }}
-                  variant="outlined"
-                >
-                  <Column alignment="center" spacing={4}>
-                    <Column
-                      alignment="center"
-                      style={{
-                        backgroundColor: option.value,
-                        borderColor: colors.border,
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        height: 36,
-                        width: 36,
-                      }}
-                    >
-                      {selected ? (
-                        <AppIcon
-                          accessibilityLabel={`${option.label} selected`}
-                          color={getAccessibleTextColor(option.value)}
-                          name="check"
-                          size={18}
-                        />
-                      ) : null}
-                    </Column>
-                    <Text numberOfLines={1} textStyle={{ color: colors.textMuted, fontSize: 10 }}>
-                      {option.label}
-                    </Text>
-                    {selected ? (
-                      <Text textStyle={{ color: colors.focus, fontSize: 9, fontWeight: '600' }}>
-                        Selected
-                      </Text>
-                    ) : null}
-                  </Column>
-                </AppButton>
-              );
-            })}
-          </Row>
-        ))}
-      </Column>
     </Column>
   );
 }

@@ -5,12 +5,11 @@ import { useEffect, useState } from 'react';
 
 import { timestampMs, type CatalogCollection, type TimeTransition } from '@domain';
 import { AppIcon } from '@icons';
-import { useAppTheme } from '@theme';
+import { getAccessibleTextColor, useAppTheme } from '@theme';
 import { DurationText, errorText } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
-import { ACTIVE_ACTIVITY_BACKGROUND, ACTIVE_ACTIVITY_FOREGROUND } from './ActivityRow';
 
 function isCatalogPath(pathname: string): boolean {
   return pathname === '/' || /^\/folder\/[^/]+$/.test(pathname);
@@ -106,6 +105,11 @@ function ActiveActivityBarContent({
   const name = resolved?.item.name ?? 'Current activity';
   const context = resolved?.folder?.name ?? 'Activities';
   const elapsedMs = Math.max(0, nowMs - timestampMs(activeTransition.timestamp));
+  const accent =
+    resolved?.displayColor && /^#[0-9a-f]{6}$/i.test(resolved.displayColor.trim())
+      ? resolved.displayColor
+      : colors.primary;
+  const onAccent = getAccessibleTextColor(accent);
 
   const pause = async () => {
     if (busy) return;
@@ -148,11 +152,11 @@ function ActiveActivityBarContent({
           accessibilityRole="button"
           disabled={busy}
           onPress={() => void pause()}
-          style={styles.pauseButton}
+          style={[styles.pauseButton, { backgroundColor: accent }]}
         >
           <AppIcon
             accessibilityLabel="Pause"
-            color={ACTIVE_ACTIVITY_FOREGROUND}
+            color={onAccent}
             name="pause"
             size={25}
             strokeWidth={3}
@@ -224,7 +228,6 @@ const styles = StyleSheet.create({
   },
   pauseButton: {
     alignItems: 'center',
-    backgroundColor: ACTIVE_ACTIVITY_BACKGROUND,
     justifyContent: 'center',
     width: 68,
   },
