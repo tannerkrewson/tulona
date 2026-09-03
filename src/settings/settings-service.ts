@@ -10,6 +10,7 @@ export type SettingsPatch = Partial<
     | 'logicalDayRolloverHour'
     | 'appearance'
     | 'weekStartsOn'
+    | 'minimumActivityDurationMs'
     | 'defaultRoutineBehavior'
     | 'showArchived'
   >
@@ -26,6 +27,7 @@ export interface SettingsServiceApi {
   setLogicalDayRolloverHour(hour: number): Promise<AppSettings>;
   setLogicalDayRollover(hour: number): Promise<AppSettings>;
   setWeekStartsOn(weekStartsOn: number): Promise<AppSettings>;
+  setMinimumActivityDurationMs(durationMs: number): Promise<AppSettings>;
   setRoutineAlarmEnabled(enabled: boolean): Promise<AppSettings>;
   setRoutineAlarmVolume(volume: number): Promise<AppSettings>;
   setDefaultRoutineBehavior(behavior: AppSettings['defaultRoutineBehavior']): Promise<AppSettings>;
@@ -104,6 +106,16 @@ function applyPatch(current: AppSettings, patch: SettingsPatch): AppSettings {
     ...(patch.weekStartsOn === undefined
       ? {}
       : { weekStartsOn: validateNumber(patch.weekStartsOn, 'Week start', 0, 6) }),
+    ...(patch.minimumActivityDurationMs === undefined
+      ? {}
+      : {
+          minimumActivityDurationMs: validateNumber(
+            patch.minimumActivityDurationMs,
+            'Minimum activity duration',
+            0,
+            Number.MAX_SAFE_INTEGER
+          ),
+        }),
     ...(patch.defaultRoutineBehavior === undefined
       ? {}
       : { defaultRoutineBehavior: validateBehavior(patch.defaultRoutineBehavior) }),
@@ -182,6 +194,10 @@ export class SettingsService implements SettingsServiceApi {
 
   async setWeekStartsOn(weekStartsOn: number): Promise<AppSettings> {
     return this.update({ weekStartsOn });
+  }
+
+  async setMinimumActivityDurationMs(durationMs: number): Promise<AppSettings> {
+    return this.update({ minimumActivityDurationMs: durationMs });
   }
 
   async setRoutineAlarmEnabled(enabled: boolean): Promise<AppSettings> {

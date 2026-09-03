@@ -192,6 +192,36 @@ async function run(): Promise<void> {
     'failed switch must not change the derived active state'
   );
 
+  const shortRepository = new MemoryTrackerRepository();
+  const shortStart = transition(
+    ids.inserted,
+    '2026-08-04T11:59:58.000Z',
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+  );
+  await shortRepository.upsertTransitions([shortStart]);
+  const shortService = createTrackerService(shortRepository, {
+    minimumActivityDurationMs: 5000,
+    now: () => now,
+  });
+  const discarded = await shortService.switchActivity(null);
+  assert(discarded.id === shortStart.id, 'short stop returns the discarded activity transition');
+  assert(
+    (await shortService.getActiveTransition()) === null &&
+      (await shortRepository.readMonth('2026-08')).transitions.length === 0,
+    'activities shorter than the configured threshold must leave no tracker entry'
+  );
+
+  const longRepository = new MemoryTrackerRepository();
+  await longRepository.upsertTransitions([
+    transition(ids.inserted, '2026-08-04T11:59:50.000Z', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'),
+  ]);
+  const longService = createTrackerService(longRepository, {
+    minimumActivityDurationMs: 5000,
+    now: () => now,
+  });
+  const recordedStop = await longService.switchActivity(null);
+  assert(recordedStop.activityId === null, 'long activities must persist a stopped state');
+
   const correctionRepository = new MemoryTrackerRepository();
   await correctionRepository.upsertTransitions([
     transition(ids.july, '2026-07-20T10:00:00.000Z', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),

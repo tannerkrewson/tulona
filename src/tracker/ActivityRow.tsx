@@ -30,7 +30,8 @@ export function ActivityRow({
   testID,
 }: ActivityRowProps) {
   const { colors } = useAppTheme();
-  const accent = isHexColor(color) ? color : colors.primary;
+  const configuredColor = item.color ?? color;
+  const accent = isHexColor(configuredColor) ? configuredColor.trim() : colors.primary;
   const onAccent = getAccessibleTextColor(accent);
 
   return (

@@ -225,6 +225,7 @@ export interface AppSettings {
   logicalDayRolloverHour: number;
   appearance: Appearance;
   weekStartsOn: number;
+  minimumActivityDurationMs: number;
   alarmSettings: AlarmSettings;
   defaultRoutineBehavior: 'resume' | 'restart';
   showArchived: boolean;

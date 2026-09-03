@@ -23,6 +23,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   logicalDayRolloverHour: 0,
   appearance: 'system',
   weekStartsOn: 0,
+  minimumActivityDurationMs: 0,
   alarmSettings: {
     enabled: false,
     leadTimeMs: 0,

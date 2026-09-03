@@ -326,6 +326,7 @@ export const appSettingsSchema = z
     logicalDayRolloverHour: z.number().int().min(0).max(23),
     appearance: z.enum(['system', 'light', 'dark']),
     weekStartsOn: z.number().int().min(0).max(6),
+    minimumActivityDurationMs: z.number().int().nonnegative().default(0),
     alarmSettings: alarmSettingsSchema,
     defaultRoutineBehavior: z.enum(['resume', 'restart']),
     showArchived: z.boolean(),

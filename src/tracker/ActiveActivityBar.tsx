@@ -105,9 +105,10 @@ function ActiveActivityBarContent({
   const name = resolved?.item.name ?? 'Current activity';
   const context = resolved?.folder?.name ?? 'Activities';
   const elapsedMs = Math.max(0, nowMs - timestampMs(activeTransition.timestamp));
+  const configuredColor = resolved?.item.color ?? resolved?.displayColor;
   const accent =
-    resolved?.displayColor && /^#[0-9a-f]{6}$/i.test(resolved.displayColor.trim())
-      ? resolved.displayColor
+    configuredColor && /^#[0-9a-f]{6}$/i.test(configuredColor.trim())
+      ? configuredColor.trim()
       : colors.primary;
   const onAccent = getAccessibleTextColor(accent);
 
