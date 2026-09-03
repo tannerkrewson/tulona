@@ -21,6 +21,7 @@ const iconDefinitions = [
   { name: 'check', label: 'Complete', keywords: ['done', 'finished'] },
   { name: 'check-circle-2', label: 'Completed', keywords: ['done', 'finished', 'success'] },
   { name: 'chevron-down', label: 'Down', keywords: ['lower', 'collapse', 'reorder'] },
+  { name: 'chevron-right', label: 'Next', keywords: ['forward', 'open', 'navigate'] },
   { name: 'chevron-up', label: 'Up', keywords: ['raise', 'expand', 'reorder'] },
   { name: 'circle', label: 'Inactive', keywords: ['empty', 'not active'] },
   { name: 'circle-dot', label: 'Current', keywords: ['selected', 'target', 'focus'] },
