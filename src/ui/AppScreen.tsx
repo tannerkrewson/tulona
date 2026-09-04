@@ -1,6 +1,7 @@
 import { Column, Host, Row, ScrollView, Text } from '@expo/ui';
 import type { ComponentProps, ReactNode } from 'react';
 import { StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@theme';
 import { AppButton } from './AppButton';
@@ -37,6 +38,7 @@ export function AppScreen({
   testID,
 }: AppScreenProps) {
   const { colorScheme, colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const content = (
     <Column
       alignment="start"
@@ -44,9 +46,9 @@ export function AppScreen({
       style={{
         ...contentStyle,
         backgroundColor: colors.background,
-        paddingBottom: 32,
-        paddingHorizontal: 20,
-        paddingTop: 22,
+        paddingLeft: 20 + insets.left,
+        paddingRight: 20 + insets.right,
+        paddingTop: 22 + insets.top,
       }}
     >
       {onBack ? (
@@ -82,6 +84,8 @@ export function AppScreen({
   return (
     <Host
       colorScheme={colorScheme}
+      // The tab navigator owns the bottom safe area; retain only screen-edge insets here.
+      ignoreSafeArea="all"
       seedColor={colors.primary}
       style={[hostStyles.host, { backgroundColor: colors.background }]}
       testID={testID}
