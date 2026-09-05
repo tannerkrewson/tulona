@@ -1,4 +1,5 @@
 import { Column, Text } from '@expo/ui';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { AppIcon } from '@icons';
@@ -61,7 +62,11 @@ export function ColorPicker({
     isHexColor(option.value)
   );
   const selectedValue = value?.toLowerCase();
+  const customSelected =
+    selectedValue != null &&
+    !availableOptions.some((option) => option.value.toLowerCase() === selectedValue);
   const rootTestID = testID ?? 'color-picker';
+  const [customPickerOpen, setCustomPickerOpen] = useState(false);
 
   return (
     <Column spacing={10} style={{ width: '100%' }} testID={testID}>
@@ -76,6 +81,27 @@ export function ColorPicker({
             variant={value == null ? 'filled' : 'outlined'}
           />
         ) : null}
+        <Pressable
+          accessibilityHint={
+            customPickerOpen ? 'Hides the custom color picker' : 'Opens the custom color picker'
+          }
+          accessibilityLabel={customSelected ? 'Custom color, selected' : 'Custom color'}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: customPickerOpen, selected: customSelected }}
+          onPress={() => setCustomPickerOpen((current) => !current)}
+          style={{
+            alignItems: 'center',
+            borderColor: customSelected ? colors.focus : colors.border,
+            borderRadius: 22,
+            borderWidth: 2,
+            height: 44,
+            justifyContent: 'center',
+            width: 44,
+          }}
+          testID={`${rootTestID}-custom-toggle`}
+        >
+          <Text textStyle={{ fontSize: 24, lineHeight: 28 }}>🌈</Text>
+        </Pressable>
         {availableOptions.map((option) => {
           const selected = selectedValue === option.value.toLowerCase();
           return (
@@ -121,7 +147,11 @@ export function ColorPicker({
       {selectedValue && !availableOptions.some((o) => o.value.toLowerCase() === selectedValue) ? (
         <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>{`Custom color ${value}`}</Text>
       ) : null}
-      <ColorPickerPlatform onChange={onChange} testID={`${rootTestID}-custom`} value={value} />
+      {customPickerOpen ? (
+        <Column spacing={8} style={{ width: '100%' }} testID={`${rootTestID}-custom-panel`}>
+          <ColorPickerPlatform onChange={onChange} testID={`${rootTestID}-custom`} value={value} />
+        </Column>
+      ) : null}
     </Column>
   );
 }
