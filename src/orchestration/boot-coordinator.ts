@@ -42,10 +42,7 @@ export type BootStage =
   'metadata' | 'journal' | 'settings' | 'catalog' | 'routine-recovery' | 'tracker' | 'habits';
 
 export type BootDestination =
-  | { kind: 'onboarding' }
-  | { kind: 'tabs' }
-  | { kind: 'runner'; routineId: UUID }
-  | { kind: 'chooser' };
+  { kind: 'tabs' } | { kind: 'runner'; routineId: UUID } | { kind: 'chooser' };
 
 /** Returns the navigation target, or null when a valid cold-start deep link should survive boot. */
 export function destinationAfterBoot(
@@ -53,20 +50,17 @@ export function destinationAfterBoot(
   pathname: string
 ): string | null {
   const target =
-    destination.kind === 'onboarding'
-      ? '/onboarding'
-      : destination.kind === 'tabs'
-        ? '/(tabs)'
-        : destination.kind === 'runner'
-          ? `/routine/${destination.routineId}`
-          : '/routine-chooser';
+    destination.kind === 'tabs'
+      ? '/(tabs)'
+      : destination.kind === 'runner'
+        ? `/routine/${destination.routineId}`
+        : '/routine-chooser';
   if (destination.kind === 'runner') return pathname === target ? null : target;
   if (destination.kind === 'chooser') return pathname === target ? null : target;
-  if (destination.kind === 'onboarding') return pathname === target ? null : target;
   if (pathname === '/(tabs)') return null;
   if (
     pathname !== '/' &&
-    /^(?:\/history|\/backup|\/insights|\/habits|\/settings|\/routine-chooser|\/onboarding|\/folder\/[^/]+|\/activity\/[^/]+|\/routine\/[^/]+|\/routine-edit\/[^/]+|\/folder-edit\/[^/]+|\/habit\/[^/]+)$/.test(
+    /^(?:\/history|\/backup|\/insights|\/habits|\/settings|\/routine-chooser|\/folder\/[^/]+|\/activity\/[^/]+|\/activity-session\/[^/]+|\/routine\/[^/]+|\/routine-edit\/[^/]+|\/folder-edit\/[^/]+|\/habit\/[^/]+)$/.test(
       pathname
     )
   ) {
@@ -252,22 +246,27 @@ export class BootCoordinator {
         );
       }
       const metadata = metadataResult.metadata;
-      if (!metadata.activeDatasetId) {
-        return {
-          metadata,
-          metadataStatus: metadataResult.status,
-          recoveredOperationIds,
-          namespace: null,
-          runtime: null,
-          activeRoutine: null,
-          currentTransition: null,
-          destination: { kind: 'onboarding' },
-        };
+      let namespace = activeDataset(metadata, this.datasetManager);
+      if (!namespace) {
+        const existing = metadata.datasets.find((dataset) => dataset.archivedAt === null);
+        namespace = existing
+          ? await this.datasetManager.activate(existing.id)
+          : await this.datasetManager
+              .create('My Tulona')
+              .then((created) => this.datasetManager.activate(created.datasetId));
+        metadataResult = await new MetadataRepository(this.database).load();
+        if (
+          metadataResult.status === 'recovered' ||
+          metadataResult.status === 'migration-required'
+        ) {
+          throw (
+            metadataResult.error ?? new PersistenceError('metadata', 'Metadata is not safe to use')
+          );
+        }
       }
-      const namespace = activeDataset(metadata, this.datasetManager);
       if (!namespace) throw new PersistenceError('metadata', 'An active dataset is required');
       return await this.hydrateDataset(
-        metadata,
+        metadataResult.metadata,
         metadataResult.status,
         namespace,
         recoveredOperationIds

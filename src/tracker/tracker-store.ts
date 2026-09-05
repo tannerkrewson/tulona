@@ -21,8 +21,6 @@ import type {
 } from './tracker-service';
 import type { TrackerQuery, TrackerRange } from './tracker-engine';
 
-export type TrackerSheet = 'adjust-start' | 'history' | null;
-
 export interface TrackerStoreState {
   catalog: CatalogCollection | null;
   selectedRange: TrackerRange;
@@ -30,14 +28,12 @@ export interface TrackerStoreState {
   intervals: TimeInterval[];
   activeTransition: TimeTransition | null;
   nowMs: number;
-  sheet: TrackerSheet;
   loading: boolean;
   persistenceError: PersistenceError | null;
   hydrate(): Promise<void>;
   refresh(nowMs?: number): Promise<void>;
   setRange(range: TrackerRange): void;
   updateSettings(settings: Pick<AppSettings, 'logicalDayRolloverHour'>, nowMs?: number): void;
-  setSheet(sheet: TrackerSheet): void;
   switchActivity(
     activityId: string | null,
     options?: SwitchActivityOptions
@@ -110,7 +106,6 @@ export function createTrackerStore(service: TrackerServiceApi, options: TrackerS
       intervals: [],
       activeTransition: null,
       nowMs: now(),
-      sheet: null,
       loading: false,
       persistenceError: null,
       hydrate: async () => {
@@ -146,7 +141,6 @@ export function createTrackerStore(service: TrackerServiceApi, options: TrackerS
         const bounds = logicalDayBounds(day, { rolloverHour: logicalDayRolloverHour });
         set({ selectedRange: { startMs: bounds.startMs, endMs: bounds.endMs } });
       },
-      setSheet: (sheet) => set({ sheet }),
       switchActivity: (activityId, switchOptions) =>
         runMutation(() => service.switchActivity(activityId, switchOptions)),
       adjustLatestStart: (timestamp) => runMutation(() => service.adjustLatestStart(timestamp)),

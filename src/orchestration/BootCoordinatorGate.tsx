@@ -21,8 +21,6 @@ type GateState =
 
 export function destinationPath(destination: BootDestination): Href {
   switch (destination.kind) {
-    case 'onboarding':
-      return '/onboarding';
     case 'tabs':
       return '/(tabs)';
     case 'runner':

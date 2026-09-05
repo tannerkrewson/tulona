@@ -283,6 +283,13 @@ function InsightsContent({
             variant={view === 'week' ? 'filled' : 'outlined'}
           />
         </Row>
+        <AppButton
+          label="History"
+          onPress={() => router.push('/history')}
+          style={{ height: 44 }}
+          testID="insights-history"
+          variant="outlined"
+        />
         <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
           {`Showing ${view === 'day' ? 'day' : 'week'} view`}
         </Text>

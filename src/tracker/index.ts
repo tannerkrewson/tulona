@@ -1,7 +1,7 @@
 export * from './tracker-engine';
 export * from './tracker-service';
 export * from './tracker-store';
-export { AdjustStartSheet, type AdjustStartSheetProps } from './AdjustStartSheet';
+export { ActivitySessionScreen, type ActivitySessionScreenProps } from './ActivitySessionScreen';
 export { FolderContentScreen, type FolderContentScreenProps } from './FolderContentScreen';
 export { default as ActivitiesScreen } from './ActivitiesScreen';
 export { FolderDetailScreen, type FolderDetailScreenProps } from './FolderDetailScreen';

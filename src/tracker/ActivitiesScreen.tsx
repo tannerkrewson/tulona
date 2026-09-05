@@ -2,24 +2,16 @@ import { Column, Row, Text } from '@expo/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type {
-  Activity,
-  CatalogCollection,
-  Folder,
-  RoutineDefinition,
-  TimeTransition,
-} from '@domain';
+import type { Activity, CatalogCollection, Folder, RoutineDefinition } from '@domain';
 import { useAppTheme } from '@theme';
 import { AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
-import { AdjustStartSheet } from './AdjustStartSheet';
 import { ActivityRow } from './ActivityRow';
 import { CatalogHeader } from './CatalogHeader';
 import { FolderRow } from './FolderRow';
-import { TrackerControls } from './TrackerControls';
 
 function sortedRootItems(catalog: CatalogCollection, showArchived: boolean) {
   return [...catalog.activities, ...catalog.routines]
@@ -139,7 +131,7 @@ export default function ActivitiesScreen() {
 
   if (!runtime) {
     return (
-      <Screen title="Activities" description="Your activity catalog">
+      <Screen title="tracker">
         {error ? (
           <CatalogError
             title="Activities unavailable"
@@ -166,12 +158,10 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
   const activeTransition = store((state) => state.activeTransition);
   const persistenceError = store((state) => state.persistenceError);
   const loading = store((state) => state.loading);
-  const sheet = store((state) => state.sheet);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const lastAction = useRef<(() => Promise<void>) | null>(null);
 
   useFocusEffect(
@@ -185,15 +175,9 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
     }, [settings, store])
   );
 
-  useEffect(() => {
-    if (!activeTransition) return undefined;
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [activeTransition]);
-
   if (!catalog) {
     return (
-      <Screen title="Activities" description="Your activity catalog">
+      <Screen title="tracker">
         <CatalogError
           title="Activities unavailable"
           message={
@@ -290,29 +274,8 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
             setEditMode((open) => !open);
             setCreateOpen(false);
           }}
-          title="Activities"
+          title="tracker"
         />
-        <TrackerControls
-          activeTransition={activeTransition}
-          onAdjustStart={() => store.getState().setSheet('adjust-start')}
-          onHistory={() => router.push('/history')}
-        />
-        {sheet === 'adjust-start' && activeTransition ? (
-          <AdjustStartSheet
-            activeTransition={activeTransition}
-            catalog={catalog}
-            nowMs={nowMs}
-            onAdjust={async (timestamp) => {
-              await store.getState().adjustLatestStart(timestamp);
-            }}
-            onClose={() => store.getState().setSheet(null)}
-            onHistory={() => {
-              store.getState().setSheet(null);
-              router.push('/history');
-            }}
-            previousTransition={previousTransition(store.getState().transitions, activeTransition)}
-          />
-        ) : null}
         {visibleError ? (
           <CatalogError
             title="Catalog action failed"
@@ -397,16 +360,4 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
       </Column>
     </Screen>
   );
-}
-
-function previousTransition(
-  transitions: readonly TimeTransition[],
-  active: TimeTransition | null
-): TimeTransition | null {
-  if (!active) return null;
-  const ordered = [...transitions]
-    .filter((transition) => transition.status === 'recorded')
-    .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
-  const index = ordered.findIndex((transition) => transition.id === active.id);
-  return index > 0 ? ordered[index - 1] : null;
 }

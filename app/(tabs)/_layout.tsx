@@ -3,9 +3,11 @@ import { View } from 'react-native';
 
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
+import { isIOSSafari } from '@ui';
 
 export default function TabLayout() {
   const { colors } = useAppTheme();
+  const iOSSafari = isIOSSafari();
 
   return (
     <Tabs
@@ -18,8 +20,12 @@ export default function TabLayout() {
           borderTopColor: colors.border,
           borderTopWidth: 1,
           elevation: 0,
-          height: 64,
-          paddingBottom: 6,
+          height: iOSSafari
+            ? ('calc(64px + env(safe-area-inset-bottom))' as unknown as number)
+            : 64,
+          paddingBottom: iOSSafari
+            ? ('calc(6px + env(safe-area-inset-bottom))' as unknown as number)
+            : 6,
           paddingTop: 6,
           shadowOpacity: 0,
         },

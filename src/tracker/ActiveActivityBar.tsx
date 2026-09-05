@@ -1,12 +1,12 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@expo/ui';
-import { usePathname } from 'expo-router';
+import { usePathname, useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 
 import { timestampMs, type CatalogCollection, type TimeTransition } from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { DurationText, errorText } from '@ui';
+import { DurationText, errorText, isIOSSafari } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
@@ -62,6 +62,8 @@ function ActiveActivityBarContent({
   runtime: RoutineRuntime;
 }) {
   const { colors } = useAppTheme();
+  const router = useRouter();
+  const iOSSafari = isIOSSafari();
   const [activeState, setActiveState] = useState<{
     catalog: CatalogCollection | null;
     activeTransition: TimeTransition | null;
@@ -144,6 +146,8 @@ function ActiveActivityBarContent({
             backgroundColor: colors.surface,
             borderColor: colors.border,
             bottom: pathname === '/' ? 82 : 14,
+            // Safari exposes the home-indicator inset through env(); desktop stays at zero.
+            paddingBottom: iOSSafari ? ('env(safe-area-inset-bottom)' as unknown as number) : 0,
           },
         ]}
         testID="active-activity-bar"
@@ -163,7 +167,13 @@ function ActiveActivityBarContent({
             strokeWidth={3}
           />
         </Pressable>
-        <View style={styles.info}>
+        <Pressable
+          accessibilityLabel={`Open ${name} session details`}
+          accessibilityRole="button"
+          onPress={() => router.push(`/activity-session/${activeTransition.id}` as Href)}
+          style={styles.info}
+          testID="active-activity-details"
+        >
           <View style={styles.infoRow}>
             <View style={styles.infoText}>
               <Text
@@ -192,7 +202,7 @@ function ActiveActivityBarContent({
               textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}
             />
           </View>
-        </View>
+        </Pressable>
       </View>
     </View>
   );

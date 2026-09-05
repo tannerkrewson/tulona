@@ -10,6 +10,7 @@ export {
 } from './colors';
 export { useAppTheme, type AppTheme } from './useAppTheme';
 export { ThemeProvider, useThemePreference } from './ThemeProvider';
+export { useSystemColorScheme } from './systemColorScheme';
 export {
   getActivityStateVisual,
   type ActivityStateVisual,

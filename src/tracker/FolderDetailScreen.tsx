@@ -2,17 +2,15 @@ import { Column, Text } from '@expo/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 
-import type { Activity, RoutineDefinition, TimeTransition } from '@domain';
+import type { Activity, RoutineDefinition } from '@domain';
 import { useAppTheme } from '@theme';
 import { AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
-import { AdjustStartSheet } from './AdjustStartSheet';
 import { ActivityRow } from './ActivityRow';
 import { CatalogHeader } from './CatalogHeader';
-import { TrackerControls } from './TrackerControls';
 
 export interface FolderDetailScreenProps {
   folderId: string;
@@ -47,7 +45,7 @@ export function FolderDetailScreen({ folderId }: FolderDetailScreenProps) {
 
   if (!runtime) {
     return (
-      <Screen title="Folder" description="Activities in this folder">
+      <Screen title="Folder">
         {loadError ? (
           <FolderError message={loadError} onBack={() => router.back()} onRetry={load} />
         ) : (
@@ -68,12 +66,10 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
   const activeTransition = store((state) => state.activeTransition);
   const persistenceError = store((state) => state.persistenceError);
   const loading = store((state) => state.loading);
-  const sheet = store((state) => state.sheet);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useFocusEffect(
     useCallback(() => {
@@ -86,15 +82,9 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
     }, [runtime.settings, store])
   );
 
-  useEffect(() => {
-    if (!activeTransition) return undefined;
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [activeTransition]);
-
   if (!catalog) {
     return (
-      <Screen title="Folder" description="Activities in this folder">
+      <Screen title="Folder">
         <FolderError
           message={
             persistenceError
@@ -113,7 +103,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
   const folder = catalog.folders.find((candidate) => candidate.id === folderId);
   if (!folder) {
     return (
-      <Screen title="Folder" description="Activities in this folder">
+      <Screen title="Folder">
         <FolderError
           message="This folder no longer exists."
           onBack={() => router.back()}
@@ -202,37 +192,6 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
           }}
           title={folder.name}
         />
-        {editMode ? (
-          <AppButton
-            disabled={busy}
-            label="Edit folder"
-            onPress={() => router.push(`/folder-edit/${folder.id}`)}
-            style={{ height: 46, width: '100%' }}
-            testID="folder-edit"
-            variant="outlined"
-          />
-        ) : null}
-        <TrackerControls
-          activeTransition={activeTransition}
-          onAdjustStart={() => store.getState().setSheet('adjust-start')}
-          onHistory={() => router.push('/history')}
-        />
-        {sheet === 'adjust-start' && activeTransition ? (
-          <AdjustStartSheet
-            activeTransition={activeTransition}
-            catalog={catalog}
-            nowMs={nowMs}
-            onAdjust={async (timestamp) => {
-              await store.getState().adjustLatestStart(timestamp);
-            }}
-            onClose={() => store.getState().setSheet(null)}
-            onHistory={() => {
-              store.getState().setSheet(null);
-              router.push('/history');
-            }}
-            previousTransition={previousTransition(store.getState().transitions, activeTransition)}
-          />
-        ) : null}
         {visibleError ? (
           <FolderError
             message={visibleError}
@@ -333,16 +292,4 @@ function FolderError({
       <RecoveryActions onBack={onBack} onRetry={onRetry} testID="folder-recovery" />
     </Column>
   );
-}
-
-function previousTransition(
-  transitions: readonly TimeTransition[],
-  active: TimeTransition | null
-): TimeTransition | null {
-  if (!active) return null;
-  const ordered = [...transitions]
-    .filter((transition) => transition.status === 'recorded')
-    .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
-  const index = ordered.findIndex((transition) => transition.id === active.id);
-  return index > 0 ? ordered[index - 1] : null;
 }

@@ -15,4 +15,5 @@ export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { IconPicker, searchIconCatalog, type IconPickerProps } from './IconPicker';
 export { ReorderControls, type ReorderControlsProps } from './ReorderControls';
 export { Screen, type ScreenProps } from './Screen';
+export { isIOSSafari } from './platform';
 export { errorText } from './error-text';
