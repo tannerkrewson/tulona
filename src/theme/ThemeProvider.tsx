@@ -27,9 +27,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.dataset.theme = colorScheme;
     root.style.colorScheme = colorScheme;
     root.style.backgroundColor = colors.background;
+    root.style.setProperty('--tulona-background', colors.background);
+    root.style.setProperty('--tulona-surface', colors.surface);
+    root.style.setProperty('--tulona-border', colors.border);
+    root.style.setProperty('--tulona-text', colors.text);
     document.body.style.backgroundColor = colors.background;
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors.background);
-  }, [colorScheme, colors.background]);
+  }, [colorScheme, colors.background, colors.border, colors.surface, colors.text]);
 
   return (
     <ThemePreferenceContext.Provider value={{ appearance, setAppearance }}>

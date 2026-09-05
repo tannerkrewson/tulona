@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
@@ -8,6 +8,11 @@ import { isIOSSafari } from '@ui';
 export default function TabLayout() {
   const { colors } = useAppTheme();
   const iOSSafari = isIOSSafari();
+  const webSurface =
+    Platform.OS === 'web' ? ('var(--tulona-surface)' as unknown as string) : colors.surface;
+  const webBorder =
+    Platform.OS === 'web' ? ('var(--tulona-border)' as unknown as string) : colors.border;
+  const safeAreaBottom = 'var(--tulona-safe-area-bottom)';
 
   return (
     <Tabs
@@ -16,20 +21,16 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
+          backgroundColor: webSurface,
+          borderTopColor: webBorder,
           borderTopWidth: 1,
           elevation: 0,
-          height: iOSSafari
-            ? ('calc(64px + env(safe-area-inset-bottom))' as unknown as number)
-            : 64,
-          paddingBottom: iOSSafari
-            ? ('calc(6px + env(safe-area-inset-bottom))' as unknown as number)
-            : 6,
+          height: iOSSafari ? (`calc(64px + ${safeAreaBottom})` as unknown as number) : 64,
+          paddingBottom: iOSSafari ? (`calc(6px + ${safeAreaBottom})` as unknown as number) : 6,
           paddingTop: 6,
           shadowOpacity: 0,
         },
-        tabBarBackground: () => <View style={{ backgroundColor: colors.surface, flex: 1 }} />,
+        tabBarBackground: () => <View style={{ backgroundColor: webSurface, flex: 1 }} />,
         tabBarLabelStyle: { flexShrink: 0, fontSize: 11, fontWeight: '600', lineHeight: 14 },
       }}
     >

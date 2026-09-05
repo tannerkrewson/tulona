@@ -26,7 +26,23 @@ export default function RootHtml({ children }: { children: ReactNode }) {
                 const themeColor = document.querySelector('meta[name="theme-color"]');
                 const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
                 const initialColor = prefersDark ? '#000000' : '#F5F5F5';
+                const initialTokens = prefersDark
+                  ? {
+                      '--tulona-background': '#000000',
+                      '--tulona-surface': '#0D0D0D',
+                      '--tulona-border': '#2A2A2A',
+                      '--tulona-text': '#F5F5F5',
+                    }
+                  : {
+                      '--tulona-background': '#F5F5F5',
+                      '--tulona-surface': '#FFFFFF',
+                      '--tulona-border': '#D4D4D4',
+                      '--tulona-text': '#171717',
+                    };
                 document.documentElement.style.backgroundColor = initialColor;
+                Object.entries(initialTokens).forEach(([property, value]) => {
+                  document.documentElement.style.setProperty(property, value);
+                });
                 if (themeColor) {
                   themeColor.setAttribute('content', initialColor);
                 }
@@ -63,6 +79,13 @@ export default function RootHtml({ children }: { children: ReactNode }) {
             background: #ffffff;
             color: #171717;
             z-index: 1000;
+          }
+          :root {
+            --tulona-background: #F5F5F5;
+            --tulona-surface: #FFFFFF;
+            --tulona-border: #D4D4D4;
+            --tulona-text: #171717;
+            --tulona-safe-area-bottom: env(safe-area-inset-bottom, 0px);
           }
         `}</style>
         <ScrollViewStyleReset />
