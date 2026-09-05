@@ -1,4 +1,5 @@
-import { Column, Row, Text } from '@expo/ui';
+import { Row, Text } from '@expo/ui';
+import { View } from 'react-native';
 
 import type { TrackableItem } from '@domain';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
@@ -51,12 +52,13 @@ export function ActivityRow({
       variant="outlined"
     >
       <Row alignment="center" spacing={12} style={{ width: '100%' }}>
-        <Column
-          alignment="center"
+        <View
           style={{
+            alignItems: 'center',
             backgroundColor: active ? onAccent : accent,
             borderRadius: 10,
             height: 40,
+            justifyContent: 'center',
             opacity: active ? 0.9 : 1,
             width: 40,
           }}
@@ -67,7 +69,7 @@ export function ActivityRow({
             name={active ? 'pause' : 'play'}
             size={20}
           />
-        </Column>
+        </View>
         <Text
           numberOfLines={1}
           textStyle={{

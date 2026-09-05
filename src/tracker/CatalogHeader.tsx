@@ -4,6 +4,8 @@ import { Pressable, View } from 'react-native';
 import { useAppTheme } from '@theme';
 import { AppButton } from '@ui';
 
+import { CatalogIconButton } from './CatalogIconButton';
+
 export interface CatalogCreateAction {
   label: string;
   onPress: () => void;
@@ -36,51 +38,6 @@ export function CatalogHeader({
 
   return (
     <View style={{ position: 'relative', width: '100%', zIndex: 10 }}>
-      <Column spacing={18} style={{ width: '100%' }}>
-        <Row alignment="center" style={{ width: '100%' }}>
-          {onBack ? (
-            <AppButton
-              label={backLabel}
-              onPress={onBack}
-              style={{ height: 42, paddingHorizontal: 0 }}
-              testID="catalog-back"
-              variant="text"
-            />
-          ) : (
-            <Text
-              numberOfLines={1}
-              textStyle={{ color: colors.text, fontSize: 38, fontWeight: '800', lineHeight: 44 }}
-            >
-              {title}
-            </Text>
-          )}
-          <Spacer flexible />
-          <AppButton
-            label={editMode ? 'Done' : 'Edit'}
-            onPress={onToggleEdit}
-            style={{ height: 42, paddingHorizontal: 10 }}
-            testID="catalog-edit"
-            variant="text"
-          />
-          <AppButton
-            label="+"
-            onPress={onToggleCreate}
-            style={{
-              backgroundColor: colors.primary,
-              borderRadius: 23,
-              height: 46,
-              paddingHorizontal: 0,
-              width: 46,
-            }}
-            testID="catalog-add"
-          />
-        </Row>
-        {onBack ? (
-          <Text textStyle={{ color: colors.text, fontSize: 38, fontWeight: '800', lineHeight: 44 }}>
-            {title}
-          </Text>
-        ) : null}
-      </Column>
       {createOpen ? (
         <Pressable
           accessibilityLabel="Dismiss create menu"
@@ -96,6 +53,45 @@ export function CatalogHeader({
           testID="catalog-create-backdrop"
         />
       ) : null}
+      <Column spacing={18} style={{ width: '100%' }}>
+        <Row alignment="center" style={{ width: '100%' }}>
+          {onBack ? (
+            <CatalogIconButton
+              icon="chevron-left"
+              label={backLabel}
+              onPress={onBack}
+              testID="catalog-back"
+            />
+          ) : (
+            <Text
+              numberOfLines={1}
+              textStyle={{ color: colors.text, fontSize: 38, fontWeight: '800', lineHeight: 44 }}
+            >
+              {title}
+            </Text>
+          )}
+          <Spacer flexible />
+          <CatalogIconButton
+            icon={editMode ? 'check' : 'pencil'}
+            label={editMode ? 'Done' : 'Edit'}
+            onPress={onToggleEdit}
+            testID="catalog-edit"
+          />
+          <CatalogIconButton
+            expanded={createOpen}
+            icon="plus"
+            label={createOpen ? 'Close add menu' : 'Add'}
+            onPress={onToggleCreate}
+            testID="catalog-add"
+            primary
+          />
+        </Row>
+        {onBack ? (
+          <Text textStyle={{ color: colors.text, fontSize: 38, fontWeight: '800', lineHeight: 44 }}>
+            {title}
+          </Text>
+        ) : null}
+      </Column>
       {createOpen ? (
         <View
           style={{
