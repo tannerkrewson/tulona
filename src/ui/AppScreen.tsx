@@ -29,14 +29,7 @@ const contentStyle = {
 } as ComponentProps<typeof Column>['style'];
 
 /** The cross-platform screen boundary for feature content. */
-export function AppScreen({
-  onBack,
-  children,
-  title,
-  description,
-  scrollable = true,
-  testID,
-}: AppScreenProps) {
+export function AppScreen({ onBack, children, title, scrollable = true, testID }: AppScreenProps) {
   const { colorScheme, colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const content = (
@@ -48,34 +41,31 @@ export function AppScreen({
         backgroundColor: colors.background,
         paddingLeft: 20 + insets.left,
         paddingRight: 20 + insets.right,
+        paddingBottom: 32,
         paddingTop: 22 + insets.top,
       }}
     >
-      {onBack ? (
-        <AppButton
-          onPress={onBack}
-          style={{ height: 42, paddingHorizontal: 0 }}
-          testID="screen-back"
-          variant="text"
-        >
-          <Row alignment="center" spacing={2}>
-            <AppIcon
-              accessibilityLabel="Back"
-              color={colors.primary}
-              name="chevron-left"
-              size={22}
-            />
-            <Text textStyle={{ color: colors.primary, fontSize: 17 }}>Back</Text>
-          </Row>
-        </AppButton>
-      ) : null}
-      {title ? (
-        <Text textStyle={{ color: colors.text, fontSize: 30, fontWeight: '700' }}>{title}</Text>
-      ) : null}
-      {description ? (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 15, lineHeight: 22 }}>
-          {description}
-        </Text>
+      {onBack || title ? (
+        <Row alignment="center" spacing={8} style={{ height: 42, width: '100%' }}>
+          {onBack ? (
+            <AppButton
+              onPress={onBack}
+              style={{ height: 42, paddingHorizontal: 8, width: 42 }}
+              testID="screen-back"
+              variant="text"
+            >
+              <AppIcon color={colors.primary} name="arrow-left" size={23} strokeWidth={2.5} />
+            </AppButton>
+          ) : null}
+          {title ? (
+            <Text
+              numberOfLines={1}
+              textStyle={{ color: colors.text, fontSize: 30, fontWeight: '700', lineHeight: 36 }}
+            >
+              {title}
+            </Text>
+          ) : null}
+        </Row>
       ) : null}
       {children}
     </Column>

@@ -25,13 +25,13 @@ export default function RootLayout() {
             <Stack.Screen name="folder/[folderId]" />
             <Stack.Screen name="history" />
             <Stack.Screen name="activity/[activityId]" />
+            <Stack.Screen name="activity-session/[transitionId]" />
             <Stack.Screen name="routine/[routineId]" />
             <Stack.Screen name="routine-edit/[routineId]" />
             <Stack.Screen name="routine-chooser" />
             <Stack.Screen name="habit/[habitId]" />
             <Stack.Screen name="folder-edit/[folderId]" />
             <Stack.Screen name="backup" />
-            <Stack.Screen name="onboarding" />
           </Stack>
           <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
             <BootCoordinatorGate />

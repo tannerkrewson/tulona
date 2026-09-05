@@ -1,7 +1,6 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
-import { useColorScheme } from 'react-native';
-
 import { getThemeColors, resolveColorScheme, type ThemeMode } from './colors';
+import { useSystemColorScheme } from './systemColorScheme';
 
 interface ThemePreferenceContextValue {
   appearance: ThemeMode;
@@ -16,7 +15,7 @@ const defaultThemePreference: ThemePreferenceContextValue = {
 const ThemePreferenceContext = createContext<ThemePreferenceContextValue>(defaultThemePreference);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const systemColorScheme = useColorScheme();
+  const systemColorScheme = useSystemColorScheme();
   const [appearance, setAppearance] = useState<ThemeMode>('system');
   const colorScheme = resolveColorScheme(appearance, systemColorScheme);
   const colors = getThemeColors(colorScheme);

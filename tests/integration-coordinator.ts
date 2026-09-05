@@ -121,6 +121,23 @@ async function corruptMetadataRemainsExportable(): Promise<void> {
   );
 }
 
+async function emptyBootStartsTabsWithBlankCatalog(): Promise<void> {
+  const database = new AsyncStorageDatabase(new MemoryStorage());
+  const coordinator = new BootCoordinator(database, new DatasetManager(database), {
+    now: () => nowMs,
+  });
+  const result = await coordinator.hydrate();
+  assert(result.destination.kind === 'tabs', 'a fresh device must open directly to the tabs');
+  assert(result.runtime !== null, 'a fresh device must receive an initialized runtime');
+  assert(
+    result.runtime.catalog.activities.length === 0 &&
+      result.runtime.catalog.folders.length === 0 &&
+      result.runtime.catalog.routines.length === 0,
+    'a fresh device must start with an empty catalog'
+  );
+  assert(result.metadata.activeDatasetId !== null, 'fresh boot must activate the blank dataset');
+}
+
 function bootRoutingPreservesDeepLinks(): void {
   assert(
     destinationAfterBoot({ kind: 'tabs' }, '/history') === null,
@@ -298,6 +315,7 @@ async function activeDatasetHydratesInOrder(): Promise<void> {
 async function run(): Promise<void> {
   bootRoutingPreservesDeepLinks();
   await corruptMetadataRemainsExportable();
+  await emptyBootStartsTabsWithBlankCatalog();
   await activeDatasetHydratesInOrder();
 }
 

@@ -9,6 +9,7 @@ export interface IconMetadata {
 const iconDefinitions = [
   { name: 'activity', label: 'Activity', keywords: ['tracking', 'pulse', 'movement'] },
   { name: 'alarm-clock', label: 'Alarm', keywords: ['reminder', 'notification', 'time'] },
+  { name: 'arrow-left', label: 'Back', keywords: ['previous', 'navigate', 'return'] },
   { name: 'archive', label: 'Archive', keywords: ['stored', 'past', 'hidden'] },
   { name: 'award', label: 'Award', keywords: ['goal', 'achievement', 'success'] },
   { name: 'bar-chart-3', label: 'Insights', keywords: ['report', 'chart', 'analytics'] },

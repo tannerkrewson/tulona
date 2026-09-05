@@ -1,6 +1,7 @@
 import {
   Activity,
   AlarmClock,
+  ArrowLeft,
   Archive,
   Award,
   BarChart3,
@@ -68,6 +69,7 @@ import { getIconMetadata, isEmoji, isIconName, type IconName, type IconValue } f
 export const iconRegistry: Readonly<Record<IconName, LucideIcon>> = {
   activity: Activity,
   'alarm-clock': AlarmClock,
+  'arrow-left': ArrowLeft,
   archive: Archive,
   award: Award,
   'bar-chart-3': BarChart3,
