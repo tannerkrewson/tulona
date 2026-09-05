@@ -29,6 +29,7 @@ export function ColorPickerPlatform({ value, onChange, testID }: ColorPickerPlat
   return (
     <div data-testid={testID} style={{ width: '100%' }}>
       <HexColorPicker
+        aria-label="Choose custom color"
         color={selectedColor}
         onChange={(next) => onChange(next.toUpperCase())}
         style={{ height: 220, width: '100%' }}

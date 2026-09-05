@@ -1,8 +1,10 @@
 import { Column, Picker, Row, Slider, Switch, Text } from '@expo/ui';
 import { useIsFocused, useRouter } from 'expo-router';
+import { Pressable } from 'react-native';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import type { AppSettings } from '@domain';
+import { AppIcon } from '@icons';
 import { useAppTheme, useThemePreference } from '@theme';
 import { AccessiblePicker, AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -15,15 +17,17 @@ function SettingSection({
   title,
   description,
   children,
+  testID,
 }: {
   title: string;
   description: string;
   children: ReactNode;
+  testID?: string;
 }) {
   const { colors } = useAppTheme();
+  const [expanded, setExpanded] = useState(false);
   return (
     <Column
-      spacing={12}
       style={{
         backgroundColor: colors.surface,
         borderColor: colors.border,
@@ -32,14 +36,41 @@ function SettingSection({
         padding: 16,
         width: '100%',
       }}
+      testID={testID}
     >
-      <Column spacing={3}>
-        <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{title}</Text>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-          {description}
-        </Text>
-      </Column>
-      {children}
+      <Pressable
+        accessibilityHint={expanded ? 'Hides these settings' : 'Shows these settings'}
+        accessibilityLabel={title}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        onPress={() => setExpanded((current) => !current)}
+        style={{ minHeight: 48, justifyContent: 'center', width: '100%' }}
+        testID={testID ? `${testID}-toggle` : undefined}
+      >
+        <Row alignment="center" spacing={12} style={{ width: '100%' }}>
+          <Column spacing={3}>
+            <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{title}</Text>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+              {description}
+            </Text>
+          </Column>
+          <AppIcon
+            accessibilityLabel={expanded ? 'Collapse' : 'Expand'}
+            color={colors.textMuted}
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={22}
+          />
+        </Row>
+      </Pressable>
+      {expanded ? (
+        <Column
+          spacing={12}
+          style={{ width: '100%' }}
+          testID={testID ? `${testID}-content` : undefined}
+        >
+          {children}
+        </Column>
+      ) : null}
     </Column>
   );
 }
@@ -166,7 +197,6 @@ export default function SettingsScreen() {
   }, [focused, load]);
 
   if (!store) {
-    const noDataset = loadError?.includes('Create or activate a dataset first') === true;
     return (
       <Screen title="Settings" description="Preferences are stored on this device.">
         <Column spacing={12} style={{ width: '100%' }}>
@@ -186,18 +216,12 @@ export default function SettingsScreen() {
               testID="settings-load-recovery"
             />
           ) : null}
-          {noDataset ? (
-            <AppButton
-              label="Set up this device"
-              onPress={() => router.push('/onboarding')}
-              testID="open-onboarding"
-            />
-          ) : null}
           <SettingSection
             description="Use this prototype reset after intentionally breaking a local data schema."
+            testID="settings-category-prototype-data"
             title="Prototype data"
           >
-            <PrototypeDataReset onCleared={() => router.replace('/onboarding')} />
+            <PrototypeDataReset onCleared={() => router.replace('/(tabs)')} />
           </SettingSection>
         </Column>
       </Screen>
@@ -240,7 +264,11 @@ function SettingsContent({
     >
       <Column spacing={14} style={{ width: '100%' }}>
         <ActionError onBack={() => router.replace('/(tabs)')} store={store} />
-        <SettingSection description="Choose how Tulona looks on this device." title="Appearance">
+        <SettingSection
+          description="Choose how Tulona looks on this device."
+          testID="settings-category-appearance"
+          title="Appearance"
+        >
           <Row alignment="center" spacing={8} style={{ width: '100%' }}>
             {(
               [
@@ -268,6 +296,7 @@ function SettingsContent({
         </SettingSection>
         <SettingSection
           description="A new logical day starts locally at this hour. Midnight is the default."
+          testID="settings-category-time-boundaries"
           title="Time boundaries"
         >
           <Field label="Logical day starts at">
@@ -309,6 +338,7 @@ function SettingsContent({
         </SettingSection>
         <SettingSection
           description="Stops shorter than this are discarded so accidental taps do not become history."
+          testID="settings-category-short-activity-filter"
           title="Short activity filter"
         >
           <Field label="Ignore activities shorter than">
@@ -333,6 +363,7 @@ function SettingsContent({
         </SettingSection>
         <SettingSection
           description="Foreground sound is best-effort and never schedules background notifications."
+          testID="settings-category-routine-alarm"
           title="Routine alarm"
         >
           <Switch
@@ -359,6 +390,7 @@ function SettingsContent({
         </SettingSection>
         <SettingSection
           description="Choose what the routine surface should do with a saved active routine."
+          testID="settings-category-routine-defaults"
           title="Routine defaults"
         >
           <Field label="When reopening a routine">
@@ -381,6 +413,7 @@ function SettingsContent({
         </SettingSection>
         <SettingSection
           description="Archived records are retained for history and can be shown in catalog views."
+          testID="settings-category-catalog-visibility"
           title="Catalog visibility"
         >
           <Switch
@@ -391,18 +424,25 @@ function SettingsContent({
             value={settings.showArchived}
           />
         </SettingSection>
-        <AppButton
-          disabled={saving}
-          label="Backup & restore"
-          onPress={() => router.push('/backup')}
-          style={{ height: 52, width: '100%' }}
-          testID="open-backup"
-        />
+        <SettingSection
+          description="Export a copy of local data or restore a previous backup."
+          testID="settings-category-backup-restore"
+          title="Backup & restore"
+        >
+          <AppButton
+            disabled={saving}
+            label="Backup & restore"
+            onPress={() => router.push('/backup')}
+            style={{ height: 52, width: '100%' }}
+            testID="open-backup"
+          />
+        </SettingSection>
         <SettingSection
           description="Use this prototype reset after intentionally breaking a local data schema."
+          testID="settings-category-prototype-data"
           title="Prototype data"
         >
-          <PrototypeDataReset onCleared={() => router.replace('/onboarding')} />
+          <PrototypeDataReset onCleared={() => router.replace('/(tabs)')} />
         </SettingSection>
       </Column>
     </Screen>
