@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@expo/ui';
 import { usePathname, useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -64,6 +64,10 @@ function ActiveActivityBarContent({
   const { colors } = useAppTheme();
   const router = useRouter();
   const iOSSafari = isIOSSafari();
+  const webSurface =
+    Platform.OS === 'web' ? ('var(--tulona-surface)' as unknown as string) : colors.surface;
+  const webBorder =
+    Platform.OS === 'web' ? ('var(--tulona-border)' as unknown as string) : colors.border;
   const [activeState, setActiveState] = useState<{
     catalog: CatalogCollection | null;
     activeTransition: TimeTransition | null;
@@ -143,11 +147,15 @@ function ActiveActivityBarContent({
         style={[
           styles.bar,
           {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            bottom: pathname === '/' ? 82 : 14,
-            // Safari exposes the home-indicator inset through env(); desktop stays at zero.
-            paddingBottom: iOSSafari ? ('env(safe-area-inset-bottom)' as unknown as number) : 0,
+            backgroundColor: webSurface,
+            borderColor: webBorder,
+            bottom: iOSSafari
+              ? (`calc(${pathname === '/' ? 82 : 14}px + var(--tulona-safe-area-bottom))` as unknown as number)
+              : pathname === '/'
+                ? 82
+                : 14,
+            // Keep the pill above the home indicator without changing desktop spacing.
+            paddingBottom: iOSSafari ? ('var(--tulona-safe-area-bottom)' as unknown as number) : 0,
           },
         ]}
         testID="active-activity-bar"
