@@ -127,7 +127,6 @@ function HabitListContent({ store }: { store: HabitStore }) {
         {activeHabits.length === 0 ? (
           <EmptyState
             actionLabel="Create your first habit"
-            description="Start with something small and repeatable. You can add an automatic trigger later."
             iconName="heart"
             onAction={() => router.push('/habit/new')}
             testID="habits-empty"

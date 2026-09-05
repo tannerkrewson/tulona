@@ -1,16 +1,18 @@
 import { Column, Text } from '@expo/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
+import { View } from 'react-native';
 
 import type { Activity, RoutineDefinition } from '@domain';
 import { useAppTheme } from '@theme';
-import { AppButton, errorText, Screen } from '@ui';
+import { errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import { ActivityRow } from './ActivityRow';
 import { CatalogHeader } from './CatalogHeader';
+import { CatalogIconButton } from './CatalogIconButton';
 
 export interface FolderDetailScreenProps {
   folderId: string;
@@ -192,6 +194,16 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
           }}
           title={folder.name}
         />
+        {editMode ? (
+          <View style={{ alignItems: 'flex-end', width: '100%' }}>
+            <CatalogIconButton
+              icon="pencil"
+              label="Edit folder"
+              onPress={() => router.push(`/folder-edit/${folder.id}`)}
+              testID="folder-edit"
+            />
+          </View>
+        ) : null}
         {visibleError ? (
           <FolderError
             message={visibleError}
@@ -214,15 +226,19 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
                   testID={`folder-child-${item.id}`}
                 />
                 {editMode ? (
-                  <FolderEditActions
-                    disabled={busy || item.archivedAt !== null}
-                    onEdit={() =>
-                      router.push(
-                        `/${item.kind === 'routine' ? 'routine-edit' : 'activity'}/${item.id}`
-                      )
-                    }
-                    testID={`folder-child-actions-${item.id}`}
-                  />
+                  <View style={{ alignItems: 'flex-end', width: '100%' }}>
+                    <CatalogIconButton
+                      disabled={busy || item.archivedAt !== null}
+                      icon="pencil"
+                      label={`Edit ${item.name}`}
+                      onPress={() =>
+                        router.push(
+                          `/${item.kind === 'routine' ? 'routine-edit' : 'activity'}/${item.id}`
+                        )
+                      }
+                      testID={`folder-child-actions-${item.id}`}
+                    />
+                  </View>
                 ) : null}
               </Column>
             );
@@ -236,29 +252,6 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
         <Column style={{ height: activeTransition ? 112 : 20 }} />
       </Column>
     </Screen>
-  );
-}
-
-function FolderEditActions({
-  disabled,
-  onEdit,
-  testID,
-}: {
-  disabled: boolean;
-  onEdit: () => void;
-  testID: string;
-}) {
-  return (
-    <Column style={{ paddingHorizontal: 4, width: '100%' }}>
-      <AppButton
-        disabled={disabled}
-        label="Edit activity"
-        onPress={onEdit}
-        style={{ height: 42, width: '100%' }}
-        testID={testID}
-        variant="outlined"
-      />
-    </Column>
   );
 }
 
