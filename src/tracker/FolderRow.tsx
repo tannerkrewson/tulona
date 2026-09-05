@@ -1,4 +1,4 @@
-import { Column, Row, Spacer, Text } from '@expo/ui';
+import { Row, Spacer, Text } from '@expo/ui';
 import { View } from 'react-native';
 
 import type { Folder } from '@domain';
@@ -52,9 +52,16 @@ export function FolderRow({ folder, disabled = false, onPress, testID }: FolderR
           {folder.name}
         </Text>
         <Spacer flexible />
-        <Column alignment="center" style={{ width: 24 }}>
+        <View
+          style={{
+            alignItems: 'center',
+            alignSelf: 'stretch',
+            justifyContent: 'center',
+            width: 24,
+          }}
+        >
           <AppIcon color={colors.textMuted} name="chevron-right" size={20} strokeWidth={2.5} />
-        </Column>
+        </View>
       </Row>
     </AppButton>
   );

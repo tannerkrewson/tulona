@@ -1,9 +1,8 @@
 import { Column, Row, Spacer, Text } from '@expo/ui';
 import { Pressable, View } from 'react-native';
 
-import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
-import { AppButton } from '@ui';
+import { AppButton, IconButton } from '@ui';
 
 export interface HabitHeaderAction {
   label: string;
@@ -38,18 +37,17 @@ export function HabitHeader({
 
   return (
     <View style={{ position: 'relative', width: '100%', zIndex: 10 }} testID={testID}>
-      <Row alignment="center" style={{ width: '100%' }}>
+      <Row alignment="center" spacing={4} style={{ width: '100%' }}>
         {onBack ? (
-          <Pressable
+          <IconButton
             accessibilityHint="Returns to the habits list"
-            accessibilityLabel="Back to habits"
-            accessibilityRole="button"
+            icon="arrow-left"
+            label="Back to habits"
             onPress={onBack}
-            style={{ alignItems: 'center', height: 46, justifyContent: 'center', width: 46 }}
             testID="habit-detail-back"
-          >
-            <AppIcon color={colors.primary} name="arrow-left" size={24} strokeWidth={2.5} />
-          </Pressable>
+            variant="plain"
+            iconSize={24}
+          />
         ) : null}
         <View style={{ flex: 1 }}>
           <Text
@@ -61,36 +59,25 @@ export function HabitHeader({
         </View>
         <Spacer flexible />
         {onToggleEdit ? (
-          <Pressable
+          <IconButton
             accessibilityHint="Opens habit edit actions"
-            accessibilityLabel="Edit habit"
-            accessibilityRole="button"
-            accessibilityState={{ expanded: editOpen }}
+            expanded={editOpen}
+            icon="pencil"
+            label="Edit habit"
             onPress={onToggleEdit}
-            style={{ alignItems: 'center', height: 46, justifyContent: 'center', width: 46 }}
             testID="edit-habit"
-          >
-            <AppIcon color={colors.primary} name="pencil" size={21} />
-          </Pressable>
+            variant="plain"
+            iconSize={21}
+          />
         ) : onAdd ? (
-          <Pressable
+          <IconButton
             accessibilityHint="Opens a new habit"
-            accessibilityLabel="Add habit"
-            accessibilityRole="button"
+            icon="plus"
+            label="Add habit"
             onPress={onAdd}
-            style={{
-              alignItems: 'center',
-              backgroundColor: colors.primary,
-              borderRadius: 23,
-              height: 46,
-              justifyContent: 'center',
-              paddingHorizontal: 0,
-              width: 46,
-            }}
             testID="new-habit"
-          >
-            <AppIcon color={colors.onPrimary} name="plus" size={23} strokeWidth={2.5} />
-          </Pressable>
+            variant="primary"
+          />
         ) : null}
       </Row>
       {description ? (
