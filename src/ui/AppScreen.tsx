@@ -4,8 +4,7 @@ import { StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@theme';
-import { AppButton } from './AppButton';
-import { AppIcon } from '@icons';
+import { IconButton } from './IconButton';
 
 export interface AppScreenProps {
   onBack?: () => void;
@@ -46,16 +45,17 @@ export function AppScreen({ onBack, children, title, scrollable = true, testID }
       }}
     >
       {onBack || title ? (
-        <Row alignment="center" spacing={8} style={{ height: 42, width: '100%' }}>
+        <Row alignment="center" spacing={4} style={{ height: 42, width: '100%' }}>
           {onBack ? (
-            <AppButton
+            <IconButton
+              accessibilityHint="Returns to the previous screen"
+              icon="arrow-left"
+              label="Back"
               onPress={onBack}
-              style={{ height: 42, paddingHorizontal: 8, width: 42 }}
               testID="screen-back"
-              variant="text"
-            >
-              <AppIcon color={colors.primary} name="arrow-left" size={23} strokeWidth={2.5} />
-            </AppButton>
+              variant="plain"
+              iconSize={23}
+            />
           ) : null}
           {title ? (
             <Text

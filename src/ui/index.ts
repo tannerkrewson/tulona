@@ -12,6 +12,7 @@ export {
 export { DurationText, formatDuration, type DurationTextProps } from './DurationText';
 export { DurationPicker, type DurationPickerProps, type DurationValue } from './DurationPicker';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
+export { IconButton, type IconButtonProps, type IconButtonVariant } from './IconButton';
 export { IconPicker, searchIconCatalog, type IconPickerProps } from './IconPicker';
 export { ReorderControls, type ReorderControlsProps } from './ReorderControls';
 export { Screen, type ScreenProps } from './Screen';

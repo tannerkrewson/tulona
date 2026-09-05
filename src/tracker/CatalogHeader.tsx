@@ -54,7 +54,7 @@ export function CatalogHeader({
         />
       ) : null}
       <Column spacing={12} style={{ width: '100%' }}>
-        <Row alignment="center" style={{ width: '100%' }}>
+        <Row alignment="center" spacing={4} style={{ width: '100%' }}>
           {onBack ? (
             <CatalogIconButton
               icon="arrow-left"

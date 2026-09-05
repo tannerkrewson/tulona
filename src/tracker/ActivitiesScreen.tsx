@@ -131,7 +131,7 @@ export default function ActivitiesScreen() {
 
   if (!runtime) {
     return (
-      <Screen title="tracker">
+      <Screen title="Tracker">
         {error ? (
           <CatalogError
             title="Activities unavailable"
@@ -177,7 +177,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
 
   if (!catalog) {
     return (
-      <Screen title="tracker">
+      <Screen title="Tracker">
         <CatalogError
           title="Activities unavailable"
           message={
@@ -274,7 +274,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
             setEditMode((open) => !open);
             setCreateOpen(false);
           }}
-          title="tracker"
+          title="Tracker"
         />
         {visibleError ? (
           <CatalogError
