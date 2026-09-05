@@ -125,13 +125,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
           <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>{today}</Text>
         </Column>
         {activeHabits.length === 0 ? (
-          <EmptyState
-            actionLabel="Create your first habit"
-            iconName="heart"
-            onAction={() => router.push('/habit/new')}
-            testID="habits-empty"
-            title="No active habits yet"
-          />
+          <EmptyState iconName="heart" testID="habits-empty" title="No active habits yet" />
         ) : (
           <Column spacing={8} style={{ width: '100%' }}>
             {activeHabits.map((habit) => (
