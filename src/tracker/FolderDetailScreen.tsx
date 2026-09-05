@@ -47,7 +47,7 @@ export function FolderDetailScreen({ folderId }: FolderDetailScreenProps) {
 
   if (!runtime) {
     return (
-      <Screen title="Folder">
+      <Screen onBack={() => router.back()} title="Folder">
         {loadError ? (
           <FolderError message={loadError} onBack={() => router.back()} onRetry={load} />
         ) : (
