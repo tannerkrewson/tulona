@@ -52,6 +52,7 @@ const iconDefinitions = [
   { name: 'plane', label: 'Travel', keywords: ['trip', 'flight', 'vacation'] },
   { name: 'pause', label: 'Pause', keywords: ['stop', 'hold'] },
   { name: 'play', label: 'Start', keywords: ['begin', 'run', 'start'] },
+  { name: 'plus', label: 'Add', keywords: ['new', 'create'] },
   { name: 'repeat', label: 'Routine', keywords: ['sequence', 'recurring', 'habit'] },
   { name: 'settings', label: 'Settings', keywords: ['preferences', 'configuration'] },
   { name: 'shopping-bag', label: 'Shopping', keywords: ['errands', 'store', 'supplies'] },

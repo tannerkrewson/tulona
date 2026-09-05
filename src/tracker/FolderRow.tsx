@@ -1,4 +1,5 @@
 import { Column, Row, Spacer, Text } from '@expo/ui';
+import { View } from 'react-native';
 
 import type { Folder } from '@domain';
 import { AppIcon } from '@icons';
@@ -25,19 +26,28 @@ export function FolderRow({ folder, disabled = false, onPress, testID }: FolderR
         borderRadius: 14,
         borderWidth: 0,
         height: 68,
-        paddingHorizontal: 6,
+        paddingHorizontal: 12,
         width: '100%',
       }}
       testID={testID}
       variant="outlined"
     >
-      <Row alignment="center" spacing={14} style={{ width: '100%' }}>
-        <AppIcon
-          accessibilityLabel={`${folder.name} folder`}
-          color={folder.color ?? colors.primary}
-          name={folder.iconName ?? 'folder'}
-          size={29}
-        />
+      <Row alignment="center" spacing={12} style={{ width: '100%' }}>
+        <View
+          style={{
+            alignItems: 'center',
+            height: 40,
+            justifyContent: 'center',
+            width: 40,
+          }}
+        >
+          <AppIcon
+            accessibilityLabel={`${folder.name} folder`}
+            color={folder.color ?? colors.primary}
+            name={folder.iconName ?? 'folder'}
+            size={29}
+          />
+        </View>
         <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 19, fontWeight: '600' }}>
           {folder.name}
         </Text>
