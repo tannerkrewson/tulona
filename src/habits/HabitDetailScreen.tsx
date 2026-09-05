@@ -14,6 +14,7 @@ import { useAppTheme } from '@theme';
 import { AppButton, errorText, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
+import { HabitHeader } from './HabitHeader';
 import { formatHabitSchedule, habitCompletionLabel, habitSignalSummary } from './habit-format';
 import { loadHabitStore } from './habit-runtime';
 import { calculateHabitStreak } from './streak';
@@ -80,23 +81,26 @@ export function HabitDetailScreen({ id }: HabitDetailScreenProps) {
 
   if (!store) {
     return (
-      <Screen title="Habit details">
-        <HabitErrorMessage
-          message={loadError}
-          onBack={() => router.back()}
-          onRetry={() => {
-            setLoadError(null);
-            setVersion((current) => current + 1);
-          }}
-        />
-        <Text
-          textStyle={{
-            color: loadError ? colors.danger.foreground : colors.textMuted,
-            fontSize: 15,
-          }}
-        >
-          {loadError ?? 'Loading habit details...'}
-        </Text>
+      <Screen testID="habit-detail-screen">
+        <Column spacing={16} style={{ width: '100%' }}>
+          <HabitHeader onBack={() => router.back()} title="Habit details" testID="habit-header" />
+          <HabitErrorMessage
+            message={loadError}
+            onBack={() => router.back()}
+            onRetry={() => {
+              setLoadError(null);
+              setVersion((current) => current + 1);
+            }}
+          />
+          <Text
+            textStyle={{
+              color: loadError ? colors.danger.foreground : colors.textMuted,
+              fontSize: 15,
+            }}
+          >
+            {loadError ?? 'Loading habit details...'}
+          </Text>
+        </Column>
       </Screen>
     );
   }
@@ -117,11 +121,15 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
   const persistenceError = store((state) => state.persistenceError);
   const lastAction = useRef<(() => Promise<unknown>) | null>(null);
   const [confirmingArchive, setConfirmingArchive] = useState(false);
+  const [editMenuOpen, setEditMenuOpen] = useState(false);
 
   if (!habit) {
     return (
-      <Screen title="Habit details">
-        <HabitErrorMessage message="Habit not found" onBack={() => router.back()} />
+      <Screen testID="habit-detail-screen">
+        <Column spacing={16} style={{ width: '100%' }}>
+          <HabitHeader onBack={() => router.back()} title="Habit details" testID="habit-header" />
+          <HabitErrorMessage message="Habit not found" onBack={() => router.back()} />
+        </Column>
       </Screen>
     );
   }
@@ -150,8 +158,32 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
   };
 
   return (
-    <Screen title={habit.name} description={formatHabitSchedule(habit.schedule)}>
+    <Screen testID="habit-detail-screen">
       <Column spacing={16} style={{ width: '100%' }}>
+        <HabitHeader
+          description={formatHabitSchedule(habit.schedule)}
+          editActions={[
+            {
+              label: 'Edit habit',
+              onPress: () => router.push(`/habit/${habit.id}?edit=1`),
+              testID: 'edit-habit-menu',
+            },
+            {
+              disabled: busy,
+              label: archived ? 'Restore habit' : 'Archive habit',
+              onPress: () => {
+                if (archived) void changeArchiveState();
+                else setConfirmingArchive(true);
+              },
+              testID: archived ? 'restore-habit' : 'archive-habit',
+            },
+          ]}
+          editOpen={editMenuOpen}
+          onBack={() => router.back()}
+          onToggleEdit={() => setEditMenuOpen((open) => !open)}
+          title={habit.name}
+          testID="habit-header"
+        />
         <HabitErrorMessage
           message={persistenceError ? errorText(persistenceError) : null}
           onBack={() => router.back()}
@@ -160,21 +192,6 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
             void (action ? action() : store.getState().refresh()).catch(() => undefined);
           }}
         />
-        <Column spacing={8} style={{ width: '100%' }}>
-          <AppButton
-            label="Back to habits"
-            onPress={() => router.back()}
-            style={{ height: 48, width: '100%' }}
-            testID="back-to-habits"
-            variant="outlined"
-          />
-          <AppButton
-            label="Edit"
-            onPress={() => router.push(`/habit/${habit.id}?edit=1`)}
-            style={{ height: 50, width: '100%' }}
-            testID="edit-habit"
-          />
-        </Column>
         {archived ? (
           <Column
             spacing={4}
@@ -287,17 +304,6 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
             }}
           />
         ) : null}
-        <AppButton
-          disabled={busy}
-          label={busy ? 'Saving...' : archived ? 'Restore habit' : 'Archive habit'}
-          onPress={() => {
-            if (archived) void changeArchiveState();
-            else setConfirmingArchive(true);
-          }}
-          style={{ height: 48, width: '100%' }}
-          testID={archived ? 'restore-habit' : 'archive-habit'}
-          variant={archived ? 'outlined' : 'text'}
-        />
       </Column>
     </Screen>
   );

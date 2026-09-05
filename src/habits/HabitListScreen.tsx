@@ -1,13 +1,15 @@
-import { Column, Row, Text } from '@expo/ui';
+import { Column, Text } from '@expo/ui';
 import { useIsFocused, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
+import { Pressable, View } from 'react-native';
 
 import type { Habit, HabitDayState } from '@domain';
 import { AppIcon, normalizeIconName } from '@icons';
 import { useAppTheme } from '@theme';
-import { AppButton, EmptyState, errorText, Screen } from '@ui';
+import { EmptyState, errorText, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
+import { HabitHeader } from './HabitHeader';
 import { formatHabitSchedule, habitCompletionLabel, habitSignalSummary } from './habit-format';
 import { loadHabitStore } from './habit-runtime';
 import { calculateHabitStreak } from './streak';
@@ -46,31 +48,38 @@ export default function HabitListScreen() {
 
   if (!store) {
     return (
-      <Screen title="Habits" description="Small actions, kept visible and on your device.">
-        <HabitErrorMessage
-          message={loadError}
-          onRetry={() => {
-            setLoadError(null);
-            void loadHabitStore()
-              .then((nextStore) => setStore(() => nextStore))
-              .catch((error: unknown) => setLoadError(errorText(error)));
-          }}
-          onBack={() => router.replace('/(tabs)')}
-          retryTestID="habits-retry"
-        />
-        <Column
-          style={{
-            backgroundColor: loadError ? 'transparent' : colors.surface,
-            borderColor: loadError ? 'transparent' : colors.border,
-            borderRadius: 16,
-            borderWidth: loadError ? 0 : 1,
-            padding: 18,
-            width: '100%',
-          }}
-        >
-          <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>
-            {loadError ? 'Your habits could not be loaded.' : 'Loading habits...'}
-          </Text>
+      <Screen testID="habits-screen">
+        <Column spacing={20} style={{ width: '100%' }}>
+          <HabitHeader
+            onAdd={() => router.push('/habit/new')}
+            title="Habits"
+            testID="habits-header"
+          />
+          <HabitErrorMessage
+            message={loadError}
+            onRetry={() => {
+              setLoadError(null);
+              void loadHabitStore()
+                .then((nextStore) => setStore(() => nextStore))
+                .catch((error: unknown) => setLoadError(errorText(error)));
+            }}
+            onBack={() => router.replace('/(tabs)')}
+            retryTestID="habits-retry"
+          />
+          <Column
+            style={{
+              backgroundColor: loadError ? 'transparent' : colors.surface,
+              borderColor: loadError ? 'transparent' : colors.border,
+              borderRadius: 16,
+              borderWidth: loadError ? 0 : 1,
+              padding: 18,
+              width: '100%',
+            }}
+          >
+            <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>
+              {loadError ? 'Your habits could not be loaded.' : 'Loading habits...'}
+            </Text>
+          </Column>
         </Column>
       </Screen>
     );
@@ -96,8 +105,13 @@ function HabitListContent({ store }: { store: HabitStore }) {
   const archivedCount = habits.filter((habit) => habit.archivedAt !== null).length;
 
   return (
-    <Screen title="Habits" description="One tap to mark today. Automatic evidence stays separate.">
+    <Screen testID="habits-screen">
       <Column spacing={14} style={{ width: '100%' }}>
+        <HabitHeader
+          onAdd={() => router.push('/habit/new')}
+          title="Habits"
+          testID="habits-header"
+        />
         <HabitErrorMessage
           message={persistenceError ? errorText(persistenceError) : null}
           onBack={() => router.replace('/(tabs)')}
@@ -106,17 +120,9 @@ function HabitListContent({ store }: { store: HabitStore }) {
             void (action ? action() : store.getState().refresh()).catch(() => undefined);
           }}
         />
-        <Column spacing={10} style={{ width: '100%' }}>
-          <Column spacing={3}>
-            <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>Today</Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>{today}</Text>
-          </Column>
-          <AppButton
-            label="New habit"
-            onPress={() => router.push('/habit/new')}
-            style={{ height: 50, width: '100%' }}
-            testID="new-habit"
-          />
+        <Column spacing={3}>
+          <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>Today</Text>
+          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>{today}</Text>
         </Column>
         {activeHabits.length === 0 ? (
           <EmptyState
@@ -128,30 +134,32 @@ function HabitListContent({ store }: { store: HabitStore }) {
             title="No active habits yet"
           />
         ) : (
-          activeHabits.map((habit) => (
-            <HabitListItem
-              habit={habit}
-              key={habit.id}
-              saving={saving}
-              state={states.find(
-                (candidate) => candidate.habitId === habit.id && candidate.logicalDay === today
-              )}
-              states={states.filter((candidate) => candidate.habitId === habit.id)}
-              today={today}
-              logicalDayRolloverHour={logicalDayRolloverHour}
-              weekStartsOn={weekStartsOn}
-              onDetails={() => router.push(`/habit/${habit.id}`)}
-              onToggle={async () => {
-                const action = () => store.getState().toggleManual(habit.id, today);
-                lastAction.current = action;
-                try {
-                  await action();
-                } catch {
-                  // The store retains the persistence error for the visible banner.
-                }
-              }}
-            />
-          ))
+          <Column spacing={8} style={{ width: '100%' }}>
+            {activeHabits.map((habit) => (
+              <HabitListItem
+                habit={habit}
+                key={habit.id}
+                saving={saving}
+                state={states.find(
+                  (candidate) => candidate.habitId === habit.id && candidate.logicalDay === today
+                )}
+                states={states.filter((candidate) => candidate.habitId === habit.id)}
+                today={today}
+                logicalDayRolloverHour={logicalDayRolloverHour}
+                weekStartsOn={weekStartsOn}
+                onDetails={() => router.push(`/habit/${habit.id}`)}
+                onToggle={async () => {
+                  const action = () => store.getState().toggleManual(habit.id, today);
+                  lastAction.current = action;
+                  try {
+                    await action();
+                  } catch {
+                    // The store retains the persistence error for the visible banner.
+                  }
+                }}
+              />
+            ))}
+          </Column>
         )}
         {archivedCount > 0 ? (
           <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
@@ -193,93 +201,73 @@ function HabitListItem({
     weekStartsOn,
   });
   const streakUnit = habit.schedule.kind === 'weekly-count' ? 'week' : 'day';
-  const manualMarked = state?.manual === true;
-  const toggleLabel = manualMarked ? 'Clear manual mark' : 'Mark complete manually';
 
   return (
-    <Column
-      spacing={12}
-      style={{
-        backgroundColor: colors.surface,
-        borderColor: complete ? accent : colors.border,
-        borderRadius: 16,
-        borderWidth: complete ? 2 : 1,
-        padding: 16,
-        width: '100%',
-      }}
+    <View
+      style={{ alignItems: 'center', flexDirection: 'row', gap: 6, width: '100%' }}
       testID={`habit-card-${habit.id}`}
     >
-      <Row alignment="center" spacing={12} style={{ width: '100%' }}>
-        <Column
-          alignment="center"
-          style={{
-            backgroundColor: complete ? colors.success.background : colors.surfaceMuted,
-            borderRadius: 14,
-            height: 48,
-            width: 48,
-          }}
-        >
+      <Pressable
+        accessibilityHint="Toggles today’s manual completion"
+        accessibilityLabel={`${habit.name}. ${habitCompletionLabel(state ?? null)}. ${formatHabitSchedule(habit.schedule)}. ${streak.current} ${streakUnit}${streak.current === 1 ? '' : 's'} current streak. Signals: ${habitSignalSummary(state ?? null)}.`}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: complete, disabled: saving }}
+        disabled={saving}
+        onPress={() => void onToggle()}
+        style={{
+          alignItems: 'center',
+          backgroundColor: complete ? colors.success.background : colors.surface,
+          borderColor: complete ? accent : colors.border,
+          borderRadius: 12,
+          borderWidth: 1,
+          flex: 1,
+          height: 56,
+          justifyContent: 'center',
+          paddingHorizontal: 12,
+        }}
+        testID={`toggle-habit-${habit.id}`}
+      >
+        <View style={{ alignItems: 'center', flexDirection: 'row', gap: 9, width: '100%' }}>
           <AppIcon
+            accessibilityLabel={complete ? 'Completed' : 'Not completed'}
+            color={complete ? colors.success.foreground : colors.textMuted}
+            name={complete ? 'check-circle-2' : 'circle'}
+            size={22}
+          />
+          <AppIcon
+            accessibilityLabel={`${habit.name} icon`}
             color={complete ? colors.success.foreground : accent}
             name={normalizeIconName(habit.iconName, 'heart')}
-            size={24}
+            size={20}
           />
-        </Column>
-        <Column spacing={4}>
-          <Text
-            numberOfLines={2}
-            textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}
-          >
-            {habit.name}
-          </Text>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-            {formatHabitSchedule(habit.schedule)}
-          </Text>
-        </Column>
-      </Row>
-      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-        <AppIcon
-          accessibilityLabel={complete ? 'Completed' : 'Not completed'}
-          color={complete ? colors.success.foreground : colors.textMuted}
-          name={complete ? 'check-circle-2' : 'circle'}
-          size={18}
-        />
-        <Text
-          textStyle={{
-            color: complete ? colors.success.foreground : colors.textMuted,
-            fontSize: 14,
-          }}
-        >
-          {habitCompletionLabel(state ?? null)}
-        </Text>
-      </Row>
-      <Column spacing={6} style={{ width: '100%' }}>
-        <Row alignment="center" spacing={8}>
-          <AppIcon color={colors.primary} name="flame" size={17} />
-          <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
-            {`${streak.current} ${streakUnit}${streak.current === 1 ? '' : 's'} current streak`}
-          </Text>
-        </Row>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-          {`Signals: ${habitSignalSummary(state ?? null)}`}
-        </Text>
-      </Column>
-      <Column spacing={8} style={{ width: '100%' }}>
-        <AppButton
-          disabled={saving}
-          label={saving ? 'Saving...' : toggleLabel}
-          onPress={() => void onToggle()}
-          style={{ height: 48, width: '100%' }}
-          testID={`toggle-habit-${habit.id}`}
-        />
-        <AppButton
-          label="View details"
-          onPress={onDetails}
-          style={{ height: 46, width: '100%' }}
-          testID={`details-habit-${habit.id}`}
-          variant="outlined"
-        />
-      </Column>
-    </Column>
+          <View style={{ flex: 1 }}>
+            <Text
+              numberOfLines={1}
+              textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}
+            >
+              {habit.name}
+            </Text>
+          </View>
+          <View style={{ width: '28%' }}>
+            <Text
+              numberOfLines={1}
+              textStyle={{ color: colors.textMuted, fontSize: 12, textAlign: 'right' }}
+            >
+              {formatHabitSchedule(habit.schedule)}
+            </Text>
+          </View>
+        </View>
+      </Pressable>
+      <Pressable
+        accessibilityHint="Opens habit details"
+        accessibilityLabel={`View details for ${habit.name}`}
+        accessibilityRole="button"
+        onPress={onDetails}
+        style={{ alignItems: 'center', height: 56, justifyContent: 'center', width: 42 }}
+        testID={`details-habit-${habit.id}`}
+      >
+        <AppIcon color={colors.textMuted} name="chevron-right" size={20} />
+      </Pressable>
+    </View>
   );
 }
