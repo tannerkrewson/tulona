@@ -197,16 +197,11 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
 
   return (
     <Screen
+      onBack={() => router.back()}
       title="Backup"
       description="Export a copy or validate a backup before replacing this device's data."
     >
       <Column spacing={14} style={{ width: '100%' }}>
-        <AppButton
-          label="Back to settings"
-          onPress={() => router.back()}
-          style={{ height: 48, width: '100%' }}
-          variant="outlined"
-        />
         <Column
           spacing={10}
           style={{
@@ -385,6 +380,7 @@ export default function BackupScreen() {
   if (!runtime) {
     return (
       <Screen
+        onBack={() => router.back()}
         title="Backup"
         description="Export a copy or validate a backup before replacing this device's data."
       >

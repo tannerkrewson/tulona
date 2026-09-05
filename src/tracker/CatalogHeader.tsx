@@ -53,23 +53,27 @@ export function CatalogHeader({
           testID="catalog-create-backdrop"
         />
       ) : null}
-      <Column spacing={18} style={{ width: '100%' }}>
+      <Column spacing={12} style={{ width: '100%' }}>
         <Row alignment="center" style={{ width: '100%' }}>
           {onBack ? (
             <CatalogIconButton
-              icon="chevron-left"
+              icon="arrow-left"
               label={backLabel}
               onPress={onBack}
               testID="catalog-back"
             />
-          ) : (
-            <Text
-              numberOfLines={1}
-              textStyle={{ color: colors.text, fontSize: 38, fontWeight: '800', lineHeight: 44 }}
-            >
-              {title}
-            </Text>
-          )}
+          ) : null}
+          <Text
+            numberOfLines={1}
+            textStyle={{
+              color: colors.text,
+              fontSize: 30,
+              fontWeight: '700',
+              lineHeight: 36,
+            }}
+          >
+            {title}
+          </Text>
           <Spacer flexible />
           <CatalogIconButton
             icon={editMode ? 'check' : 'pencil'}
@@ -86,11 +90,6 @@ export function CatalogHeader({
             primary
           />
         </Row>
-        {onBack ? (
-          <Text textStyle={{ color: colors.text, fontSize: 38, fontWeight: '800', lineHeight: 44 }}>
-            {title}
-          </Text>
-        ) : null}
       </Column>
       {createOpen ? (
         <View

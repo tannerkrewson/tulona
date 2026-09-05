@@ -146,7 +146,7 @@ export default function HistoryScreen() {
 
   if (!runtime) {
     return (
-      <Screen title="History" description="Derived time for one logical day">
+      <Screen onBack={() => router.back()} title="History">
         {loadError ? (
           <ErrorPanel message={loadError} onBack={() => router.back()} onRetry={load} />
         ) : (
@@ -217,7 +217,7 @@ function HistoryDay({
   if (!catalog) {
     const message = persistenceError ? errorText(persistenceError) : null;
     return (
-      <Screen title="History" description="Derived time for one logical day">
+      <Screen onBack={() => router.back()} title="History">
         {message ? (
           <ErrorPanel
             message={message}
@@ -309,6 +309,7 @@ function HistoryDay({
 
   return (
     <Screen
+      onBack={() => router.back()}
       title="History"
       description="Derived intervals for a logical day; corrections update the journal."
     >

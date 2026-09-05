@@ -48,26 +48,17 @@ export function HabitHeader({
             style={{ alignItems: 'center', height: 46, justifyContent: 'center', width: 46 }}
             testID="habit-detail-back"
           >
-            <AppIcon color={colors.primary} name="chevron-left" size={24} strokeWidth={2.5} />
+            <AppIcon color={colors.primary} name="arrow-left" size={24} strokeWidth={2.5} />
           </Pressable>
         ) : null}
-        {onBack ? (
-          <View style={{ flex: 1 }}>
-            <Text
-              numberOfLines={1}
-              textStyle={{ color: colors.text, fontSize: 30, fontWeight: '700' }}
-            >
-              {title}
-            </Text>
-          </View>
-        ) : (
+        <View style={{ flex: 1 }}>
           <Text
             numberOfLines={1}
-            textStyle={{ color: colors.text, fontSize: 38, fontWeight: '800', lineHeight: 44 }}
+            textStyle={{ color: colors.text, fontSize: 30, fontWeight: '700', lineHeight: 36 }}
           >
             {title}
           </Text>
-        )}
+        </View>
         <Spacer flexible />
         {onToggleEdit ? (
           <Pressable
@@ -98,7 +89,7 @@ export function HabitHeader({
             }}
             testID="new-habit"
           >
-            <Text textStyle={{ color: colors.onPrimary, fontSize: 28, lineHeight: 30 }}>+</Text>
+            <AppIcon color={colors.onPrimary} name="plus" size={23} strokeWidth={2.5} />
           </Pressable>
         ) : null}
       </Row>
