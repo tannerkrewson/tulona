@@ -67,10 +67,18 @@ export function ActivityRow({
         >
           <AppIcon
             accessibilityLabel={
-              editMode ? `Edit ${item.name}` : active ? `${item.name} pause` : `${item.name} play`
+              editMode
+                ? `Edit ${item.name}`
+                : active
+                  ? `${item.name} pause`
+                  : item.kind === 'routine'
+                    ? `${item.name} routine`
+                    : `${item.name} play`
             }
             color={editMode ? onAccent : active ? accent : onAccent}
-            name={editMode ? 'pencil' : active ? 'pause' : 'play'}
+            name={
+              editMode ? 'pencil' : active ? 'pause' : item.kind === 'routine' ? 'repeat' : 'play'
+            }
             size={20}
           />
         </View>
