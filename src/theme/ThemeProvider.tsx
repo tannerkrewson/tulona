@@ -31,9 +31,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--tulona-surface', colors.surface);
     root.style.setProperty('--tulona-border', colors.border);
     root.style.setProperty('--tulona-text', colors.text);
+    root.style.setProperty('--tulona-tab-active', colors.primary);
+    root.style.setProperty('--tulona-tab-inactive', colors.textMuted);
     document.body.style.backgroundColor = colors.background;
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors.background);
-  }, [colorScheme, colors.background, colors.border, colors.surface, colors.text]);
+  }, [
+    colorScheme,
+    colors.background,
+    colors.border,
+    colors.primary,
+    colors.surface,
+    colors.text,
+    colors.textMuted,
+  ]);
 
   return (
     <ThemePreferenceContext.Provider value={{ appearance, setAppearance }}>

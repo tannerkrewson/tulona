@@ -32,12 +32,16 @@ export default function RootHtml({ children }: { children: ReactNode }) {
                       '--tulona-surface': '#0D0D0D',
                       '--tulona-border': '#2A2A2A',
                       '--tulona-text': '#F5F5F5',
+                      '--tulona-tab-active': '#FFFFFF',
+                      '--tulona-tab-inactive': '#A3A3A3',
                     }
                   : {
                       '--tulona-background': '#F5F5F5',
                       '--tulona-surface': '#FFFFFF',
                       '--tulona-border': '#D4D4D4',
                       '--tulona-text': '#171717',
+                      '--tulona-tab-active': '#111111',
+                      '--tulona-tab-inactive': '#666666',
                     };
                 document.documentElement.style.backgroundColor = initialColor;
                 Object.entries(initialTokens).forEach(([property, value]) => {
@@ -85,6 +89,8 @@ export default function RootHtml({ children }: { children: ReactNode }) {
             --tulona-surface: #FFFFFF;
             --tulona-border: #D4D4D4;
             --tulona-text: #171717;
+            --tulona-tab-active: #111111;
+            --tulona-tab-inactive: #666666;
             --tulona-safe-area-bottom: env(safe-area-inset-bottom, 0px);
           }
         `}</style>

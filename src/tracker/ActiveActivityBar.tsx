@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { timestampMs, type CatalogCollection, type TimeTransition } from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { DurationText, errorText, isIOSSafari } from '@ui';
+import { DurationText, errorText } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
@@ -63,11 +63,10 @@ function ActiveActivityBarContent({
 }) {
   const { colors } = useAppTheme();
   const router = useRouter();
-  const iOSSafari = isIOSSafari();
-  const webSurface =
-    Platform.OS === 'web' ? ('var(--tulona-surface)' as unknown as string) : colors.surface;
-  const webBorder =
-    Platform.OS === 'web' ? ('var(--tulona-border)' as unknown as string) : colors.border;
+  const isWeb = Platform.OS === 'web';
+  const webSurface = 'var(--tulona-surface)';
+  const webBorder = 'var(--tulona-border)';
+  const safeAreaBottom = 'var(--tulona-safe-area-bottom)';
   const [activeState, setActiveState] = useState<{
     catalog: CatalogCollection | null;
     activeTransition: TimeTransition | null;
@@ -147,15 +146,15 @@ function ActiveActivityBarContent({
         style={[
           styles.bar,
           {
-            backgroundColor: webSurface,
-            borderColor: webBorder,
-            bottom: iOSSafari
-              ? (`calc(${pathname === '/' ? 82 : 14}px + var(--tulona-safe-area-bottom))` as unknown as number)
+            backgroundColor: isWeb ? webSurface : colors.surface,
+            borderColor: isWeb ? webBorder : colors.border,
+            bottom: (isWeb
+              ? `calc(${pathname === '/' ? 82 : 14}px + ${safeAreaBottom})`
               : pathname === '/'
                 ? 82
-                : 14,
+                : 14) as unknown as number,
             // Keep the pill above the home indicator without changing desktop spacing.
-            paddingBottom: iOSSafari ? ('var(--tulona-safe-area-bottom)' as unknown as number) : 0,
+            paddingBottom: (isWeb ? safeAreaBottom : 0) as unknown as number,
           },
         ]}
         testID="active-activity-bar"
