@@ -1,15 +1,16 @@
-import { Column, Row, Text } from '@expo/ui';
+import { Column, Text } from '@expo/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Activity, CatalogCollection, Folder, RoutineDefinition } from '@domain';
 import { useAppTheme } from '@theme';
-import { AppButton, errorText, Screen } from '@ui';
+import { errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import { ActivityRow } from './ActivityRow';
+import { CatalogEditActions } from './CatalogEditActions';
 import { CatalogHeader } from './CatalogHeader';
 import { FolderRow } from './FolderRow';
 
@@ -56,49 +57,6 @@ function CatalogError({
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
       <RecoveryActions onBack={onBack} onRetry={onRetry} testID="tracker-recovery" />
     </Column>
-  );
-}
-
-function EditActions({
-  onEdit,
-  onUp,
-  onDown,
-  disabled,
-  testID,
-}: {
-  onEdit: () => void;
-  onUp: () => void;
-  onDown: () => void;
-  disabled: boolean;
-  testID: string;
-}) {
-  return (
-    <Row alignment="center" spacing={7} style={{ width: '100%' }}>
-      <AppButton
-        disabled={disabled}
-        label="Edit"
-        onPress={onEdit}
-        style={{ height: 42, width: '32%' }}
-        testID={`${testID}-edit`}
-        variant="outlined"
-      />
-      <AppButton
-        disabled={disabled}
-        label="Up"
-        onPress={onUp}
-        style={{ height: 42, width: '32%' }}
-        testID={`${testID}-up`}
-        variant="outlined"
-      />
-      <AppButton
-        disabled={disabled}
-        label="Down"
-        onPress={onDown}
-        style={{ height: 42, width: '32%' }}
-        testID={`${testID}-down`}
-        variant="outlined"
-      />
-    </Row>
   );
 }
 
@@ -297,7 +255,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
                 testID={`folder-${folder.id}`}
               />
               {editMode ? (
-                <EditActions
+                <CatalogEditActions
                   disabled={busy || folder.archivedAt !== null}
                   onDown={() =>
                     void runAction(
@@ -326,19 +284,19 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
                   active={active}
                   color={resolved?.displayColor}
                   disabled={busy || item.archivedAt !== null}
+                  editMode={editMode}
                   item={item}
-                  onPress={() => activate(item)}
+                  onPress={() => (editMode ? editItem(item) : activate(item))}
                   testID={`catalog-item-${item.id}`}
                 />
                 {editMode ? (
-                  <EditActions
+                  <CatalogEditActions
                     disabled={busy || item.archivedAt !== null}
                     onDown={() =>
                       void runAction(
                         async () => void (await runtime.catalogService.reorderItem(item.id, 'down'))
                       )
                     }
-                    onEdit={() => editItem(item)}
                     onUp={() =>
                       void runAction(
                         async () => void (await runtime.catalogService.reorderItem(item.id, 'up'))
@@ -356,7 +314,6 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
             </Text>
           ) : null}
         </Column>
-        <Column style={{ height: activeTransition ? 176 : 84 }} />
       </Column>
     </Screen>
   );

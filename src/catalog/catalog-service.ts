@@ -51,7 +51,11 @@ export interface UpdateFolderInput {
   iconName?: string | null;
 }
 
-export interface CreateActivityInput extends CatalogStyleInput {
+export interface CreateActivityInput {
+  name: string;
+  color?: string | null;
+  /** Legacy callers may provide this field; new activity records ignore it. */
+  iconName?: string | null;
   id?: UUID;
   folderId?: UUID | null;
 }
@@ -59,7 +63,6 @@ export interface CreateActivityInput extends CatalogStyleInput {
 export interface UpdateActivityInput {
   name?: string;
   color?: string | null;
-  iconName?: string | null;
   folderId?: UUID | null;
 }
 
@@ -240,7 +243,9 @@ function assertCatalogInvariants(catalog: CatalogCollection): void {
   for (const item of [...catalog.activities, ...catalog.routines]) {
     validateName(item.name);
     validateColor(item.color);
-    validateIcon(item.iconName);
+    // Activity iconName is a legacy persisted field. Activity rows no longer
+    // expose custom icons, but old values must remain readable and intact.
+    if (item.kind === 'routine') validateIcon(item.iconName);
     if (ids.has(item.id)) validation(`Duplicate catalog ID "${item.id}"`);
     ids.add(item.id);
     if (item.folderId !== null && !folders.has(item.folderId)) {
@@ -481,7 +486,7 @@ export class CatalogService implements CatalogServiceApi {
       folderId,
       sortOrder: nextSiblingOrder(catalog, folderId),
       color: validateColor(input.color),
-      iconName: validateIcon(input.iconName),
+      iconName: null,
       createdAt: now,
       updatedAt: now,
       archivedAt: null,
@@ -507,7 +512,7 @@ export class CatalogService implements CatalogServiceApi {
       folderId,
       sortOrder: moved ? nextSiblingOrder(catalog, folderId, id) : current.sortOrder,
       color: input.color === undefined ? current.color : validateColor(input.color),
-      iconName: input.iconName === undefined ? current.iconName : validateIcon(input.iconName),
+      iconName: current.iconName,
       updatedAt: this.timestamp(),
     };
     const next = normalizeCatalogOrders({

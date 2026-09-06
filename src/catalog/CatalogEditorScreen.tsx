@@ -278,7 +278,6 @@ function ActivityEditor({
   const { colors } = useAppTheme();
   const [name, setName] = useState(activity?.name ?? '');
   const [color, setColor] = useState(activity?.color ?? '');
-  const [iconName, setIconName] = useState(activity?.iconName ?? '');
   const [folderId, setFolderId] = useState(activity?.folderId ?? initialFolderId ?? ROOT_VALUE);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -311,7 +310,6 @@ function ActivityEditor({
         const nextInput = {
           name,
           color: color.trim() || null,
-          iconName: iconName.trim() || null,
           ...(selectedFolderId !== originalFolderId ? { folderId: selectedFolderId } : {}),
         };
         await service.updateActivity(activity.id, nextInput);
@@ -319,7 +317,6 @@ function ActivityEditor({
         await service.createActivity({
           name,
           color: color.trim() || null,
-          iconName: iconName.trim() || null,
           folderId: selectedFolderId,
         });
       }
@@ -343,7 +340,7 @@ function ActivityEditor({
         }}
       >
         <Row alignment="center" spacing={12}>
-          <AppIcon name={iconName || 'activity'} color={color || colors.primary} size={28} />
+          <AppIcon name="activity" color={color || colors.primary} size={28} />
           <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
             {activity?.name ?? 'New activity'}
           </Text>
@@ -374,9 +371,6 @@ function ActivityEditor({
             testID="activity-color"
             value={color || null}
           />
-        </Field>
-        <Field label="Icon">
-          <IconPicker value={iconName || null} onChange={(next) => setIconName(next ?? '')} />
         </Field>
         <Field label="Placement">
           <FolderPicker

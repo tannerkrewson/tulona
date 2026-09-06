@@ -10,6 +10,7 @@ export interface ActivityRowProps {
   item: TrackableItem;
   color: string | null | undefined;
   active: boolean;
+  editMode?: boolean;
   disabled?: boolean;
   onPress: () => void;
   testID?: string;
@@ -26,6 +27,7 @@ export function ActivityRow({
   item,
   color,
   active,
+  editMode = false,
   disabled = false,
   onPress,
   testID,
@@ -64,9 +66,11 @@ export function ActivityRow({
           }}
         >
           <AppIcon
-            accessibilityLabel={active ? `${item.name} pause` : `${item.name} play`}
-            color={active ? accent : onAccent}
-            name={active ? 'pause' : 'play'}
+            accessibilityLabel={
+              editMode ? `Edit ${item.name}` : active ? `${item.name} pause` : `${item.name} play`
+            }
+            color={editMode ? onAccent : active ? accent : onAccent}
+            name={editMode ? 'pencil' : active ? 'pause' : 'play'}
             size={20}
           />
         </View>

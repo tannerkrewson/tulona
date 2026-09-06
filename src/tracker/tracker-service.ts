@@ -17,6 +17,7 @@ import {
   materializeTransitionIntervals,
   orderTransitions,
   queryTransitions,
+  validTransitions,
   type TrackerQuery,
   type TrackerRange,
   type TransitionInput,
@@ -418,6 +419,10 @@ export class TrackerService implements TrackerServiceApi {
       note: input.note === undefined ? current.note : input.note,
     };
     if (next.activityId !== null) assertUuid(next.activityId, 'Activity ID');
+    if (next.timestamp === current.timestamp && next.activityId !== current.activityId) {
+      const merged = await this.mergeActiveRelabel(transitions, current, next.activityId, now);
+      if (merged) return merged;
+    }
     if (JSON.stringify(current) === JSON.stringify(next)) return current;
     this.assertEditOrder(transitions, current, next, now);
     const result = await this.replaceTransition(current, next, 'tracker-transition-edit');
@@ -464,6 +469,24 @@ export class TrackerService implements TrackerServiceApi {
     const transitions = await this.readHistory(now);
     const target = transitions.find((transition) => transition.id === id);
     if (!target) validation(`Unknown transition "${id}"`);
+    const prior = await this.removeTransitionRecord(transitions, target, id, operationKind);
+    await this.notifyMutation({
+      kind: operationKind.endsWith('merge') ? 'merge' : 'delete',
+      previous: target,
+      current: null,
+      affectedActivityIds: [prior?.activityId, target.activityId].filter(
+        (value): value is UUID => value !== undefined && value !== null
+      ),
+    });
+    return target;
+  }
+
+  private async removeTransitionRecord(
+    transitions: readonly TimeTransition[],
+    target: TimeTransition,
+    id: UUID,
+    operationKind: string
+  ): Promise<TimeTransition | undefined> {
     const prior = orderTransitions(transitions)
       .filter((transition) => transition.status === 'recorded' && transition.id !== target.id)
       .filter((transition) => timestampMs(transition.timestamp) < timestampMs(target.timestamp))
@@ -481,15 +504,31 @@ export class TrackerService implements TrackerServiceApi {
       `tracker-transition-${operationKind.replace('tracker-transition-', '')}-${id}`,
       operationKind
     );
+    return prior;
+  }
+
+  private async mergeActiveRelabel(
+    transitions: readonly TimeTransition[],
+    current: TimeTransition,
+    activityId: UUID | null,
+    now: number
+  ): Promise<TimeTransition | null> {
+    if (activityId === null) return null;
+    const valid = validTransitions(transitions, now);
+    if (valid.at(-1)?.id !== current.id) return null;
+    const previous = valid.at(-2);
+    if (!previous || previous.activityId !== activityId) return null;
+
+    await this.removeTransitionRecord(transitions, current, current.id, 'tracker-transition-merge');
     await this.notifyMutation({
-      kind: operationKind.endsWith('merge') ? 'merge' : 'delete',
-      previous: target,
-      current: null,
-      affectedActivityIds: [prior?.activityId, target.activityId].filter(
+      kind: 'merge',
+      previous: current,
+      current: previous,
+      affectedActivityIds: [current.activityId, previous.activityId].filter(
         (value): value is UUID => value !== undefined && value !== null
       ),
     });
-    return target;
+    return previous;
   }
 
   async mergeTransition(
