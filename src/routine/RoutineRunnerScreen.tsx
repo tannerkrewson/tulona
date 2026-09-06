@@ -5,7 +5,12 @@ import { Circle, Svg } from 'react-native-svg';
 import { Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { formatCountdownMs, type ActiveRoutine, type RoutineStepStatus } from '@domain';
+import {
+  formatCountdownMs,
+  timestampMs,
+  type ActiveRoutine,
+  type RoutineStepStatus,
+} from '@domain';
 import { AppIcon } from '@icons';
 import { errorText, IconButton, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -45,6 +50,14 @@ function stepStatusLabel(status: RoutineStepStatus): string {
   if (status === 'skipped') return 'Skipped';
   if (status === 'active') return 'Current';
   return 'Not started';
+}
+
+function compactDuration(durationMs: number): string {
+  const totalSeconds = Math.floor(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes > 0) return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
 }
 
 function orderedSteps(active: ActiveRoutine) {
@@ -270,6 +283,9 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const totalCurrentMs = currentStep.durationMs + (currentSession?.addedTimeMs ?? 0);
   const progress =
     timing.remainingMs === null ? 0 : Math.min(1, Math.max(0, timing.remainingMs / totalCurrentMs));
+  const isPaused = active.status === 'paused';
+  const pausedElapsedMs =
+    isPaused && active.pausedAt ? Math.max(0, nowMs - timestampMs(active.pausedAt)) : 0;
 
   return (
     <Screen backgroundColor={RUNNER.background} scrollable testID="routine-runner">
@@ -325,37 +341,77 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           <View
             style={[
               styles.timerCircle,
+              isPaused && styles.timerCirclePaused,
               { height: circleSize, width: circleSize, borderRadius: circleSize / 2 },
             ]}
             testID="current-routine-step"
           >
-            <Pressable
-              accessibilityLabel={`Open routine steps, step ${active.currentStepIndex + 1} of ${steps.length}`}
-              accessibilityRole="button"
-              onPress={() => setRoutineMenuOpen(true)}
-              style={({ pressed }) => [styles.stepToggle, { opacity: pressed ? 0.7 : 1 }]}
-              testID="open-routine-steps"
-            >
-              <AppIcon name="list-checks" color={RUNNER.accent} size={17} />
-              <Text textStyle={{ color: RUNNER.muted, fontSize: 12, fontWeight: '700' }}>
-                {`Step ${active.currentStepIndex + 1} of ${steps.length}`}
-              </Text>
-              <AppIcon name="chevron-down" color={RUNNER.muted} size={16} />
-            </Pressable>
-            <AppIcon name={currentStep.iconName || 'timer'} color={RUNNER.accent} size={70} />
-            <Text
-              textStyle={{
-                color: timing.isOvertime ? RUNNER.danger : RUNNER.text,
-                fontSize: Math.min(60, Math.max(46, circleSize / 6)),
-                fontWeight: '800',
-                letterSpacing: -1,
-                textAlign: 'center',
-              }}
-              testID="routine-countdown"
-            >
-              {displayCountdown}
-            </Text>
+            {!isPaused ? (
+              <>
+                <Pressable
+                  accessibilityLabel={`Open routine steps, step ${active.currentStepIndex + 1} of ${steps.length}`}
+                  accessibilityRole="button"
+                  onPress={() => setRoutineMenuOpen(true)}
+                  style={({ pressed }) => [styles.stepToggle, { opacity: pressed ? 0.7 : 1 }]}
+                  testID="open-routine-steps"
+                >
+                  <AppIcon name="list-checks" color={RUNNER.accent} size={17} />
+                  <Text textStyle={{ color: RUNNER.muted, fontSize: 12, fontWeight: '700' }}>
+                    {`Step ${active.currentStepIndex + 1} of ${steps.length}`}
+                  </Text>
+                  <AppIcon name="chevron-down" color={RUNNER.muted} size={16} />
+                </Pressable>
+                <AppIcon name={currentStep.iconName || 'timer'} color={RUNNER.accent} size={70} />
+                <Text
+                  textStyle={{
+                    color: timing.isOvertime ? RUNNER.danger : RUNNER.text,
+                    fontSize: Math.min(60, Math.max(46, circleSize / 6)),
+                    fontWeight: '800',
+                    letterSpacing: -1,
+                    textAlign: 'center',
+                  }}
+                  testID="routine-countdown"
+                >
+                  {displayCountdown}
+                </Text>
+              </>
+            ) : null}
           </View>
+          {isPaused ? (
+            <View style={styles.pausedOverlay} testID="routine-paused-state">
+              <Text textStyle={{ color: RUNNER.muted, fontSize: 14, fontWeight: '700' }}>
+                Paused
+              </Text>
+              <Text
+                textStyle={{
+                  color: RUNNER.text,
+                  fontSize: Math.min(56, Math.max(44, circleSize / 6.5)),
+                  fontWeight: '800',
+                  letterSpacing: -1,
+                }}
+                testID="routine-paused-elapsed"
+              >
+                {formatCountdownMs(pausedElapsedMs)}
+              </Text>
+              <Pressable
+                accessibilityLabel="Resume routine"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: busy }}
+                disabled={busy}
+                onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.resume())}
+                style={({ pressed }) => [
+                  styles.resumeButton,
+                  { opacity: busy ? 0.4 : pressed ? 0.75 : 1 },
+                ]}
+                testID="routine-resume"
+              >
+                <AppIcon color={RUNNER.accentText} name="play" size={18} strokeWidth={2.8} />
+                <Text textStyle={{ color: RUNNER.accentText, fontSize: 15, fontWeight: '800' }}>
+                  Resume
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
           <ProgressRing progress={progress} size={circleSize} />
         </View>
 
@@ -365,55 +421,43 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           </RunnerError>
         ) : null}
 
-        <Row alignment="center" style={styles.controlRow}>
-          <RoundControl
-            disabled={busy}
-            icon="clock"
-            label="Add time"
-            onPress={() => setAddTimeOpen(true)}
-            size={52}
-            testID="open-add-time"
-          />
-          <RoundControl
-            disabled={busy}
-            icon={active.status === 'paused' ? 'play' : 'pause'}
-            label={active.status === 'paused' ? 'Resume routine' : 'Pause routine'}
-            onPress={() =>
-              void runAction((nextRuntime) =>
-                active.status === 'paused'
-                  ? nextRuntime.routineService.resume()
-                  : nextRuntime.routineService.pause()
-              )
-            }
-            size={58}
-            testID={active.status === 'paused' ? 'routine-resume' : 'routine-pause'}
-          />
-          <RoundControl
-            disabled={busy || active.status === 'paused'}
-            emphasis
-            icon="check"
-            label="Complete current step"
-            onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.done())}
-            size={78}
-            testID="routine-done"
-          />
-          <RoundControl
-            disabled={busy || active.status === 'paused'}
-            icon="skip-forward"
-            label="Skip or move current step"
-            onPress={() => setSkipOpen(true)}
-            size={58}
-            testID="routine-skip"
-          />
-          <RoundControl
-            disabled={busy}
-            icon="list-checks"
-            label="Rearrange routine steps"
-            onPress={() => setRoutineMenuOpen(true)}
-            size={52}
-            testID="open-routine-rearrange"
-          />
-        </Row>
+        {!isPaused ? (
+          <Row alignment="center" style={styles.controlRow}>
+            <RoundControl
+              disabled={busy}
+              icon="clock"
+              label="Add time"
+              onPress={() => setAddTimeOpen(true)}
+              size={52}
+              testID="open-add-time"
+            />
+            <RoundControl
+              disabled={busy}
+              icon="pause"
+              label="Pause routine"
+              onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.pause())}
+              size={58}
+              testID="routine-pause"
+            />
+            <RoundControl
+              disabled={busy}
+              emphasis
+              icon="check"
+              label="Complete current step"
+              onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.done())}
+              size={78}
+              testID="routine-done"
+            />
+            <RoundControl
+              disabled={busy}
+              icon="skip-forward"
+              label="Skip or move current step"
+              onPress={() => setSkipOpen(true)}
+              size={58}
+              testID="routine-skip"
+            />
+          </Row>
+        ) : null}
 
         {nextStep ? (
           <Row alignment="center" spacing={10} style={styles.nextRow}>
@@ -442,6 +486,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
         visible={routineMenuOpen}
       />
       <AddTimeModal
+        addedTimeMs={currentSession?.addedTimeMs ?? 0}
         busy={busy}
         onAdd={(addedTimeMs) =>
           void runAction(
@@ -450,6 +495,13 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           )
         }
         onClose={() => setAddTimeOpen(false)}
+        onReset={() =>
+          void runAction(
+            (nextRuntime) => nextRuntime.routineService.resetTime(),
+            () => setAddTimeOpen(false)
+          )
+        }
+        originalDurationMs={currentStep.durationMs}
         visible={addTimeOpen}
       />
       <SkipModal
@@ -631,45 +683,72 @@ function ModalAction({
 }
 
 function AddTimeModal({
+  addedTimeMs,
   busy,
   onAdd,
   onClose,
+  onReset,
+  originalDurationMs,
   visible,
 }: {
+  addedTimeMs: number;
   busy: boolean;
   onAdd: (addedTimeMs: number) => void;
   onClose: () => void;
+  onReset: () => void;
+  originalDurationMs: number;
   visible: boolean;
 }) {
   const options = [
-    { label: '+1 minute', value: 60_000 },
-    { label: '+3 minutes', value: 180_000 },
-    { label: '+5 minutes', value: 300_000 },
-    { label: '+10 minutes', value: 600_000 },
-    { label: '+30 minutes', value: 1_800_000 },
+    { label: '-1m', value: -60_000, disabled: addedTimeMs < 60_000 },
+    { label: '+1m', value: 60_000, disabled: false },
+    { label: '+5m', value: 300_000, disabled: false },
+    { label: '+10m', value: 600_000, disabled: false },
   ];
   return (
     <RunnerModal onClose={onClose} title="Add time" visible={visible}>
-      <View style={styles.modalOptions}>
+      <View style={styles.compactOptions}>
         {options.map((option) => (
           <Pressable
             key={option.value}
-            accessibilityLabel={option.label}
+            accessibilityLabel={
+              option.value < 0 ? 'Remove 1 minute' : `Add ${option.label.slice(1)}`
+            }
             accessibilityRole="button"
-            disabled={busy}
+            accessibilityState={{ disabled: busy || option.disabled }}
+            disabled={busy || option.disabled}
             onPress={() => onAdd(option.value)}
             style={({ pressed }) => [
-              styles.presetButton,
-              { opacity: busy ? 0.4 : pressed ? 0.7 : 1 },
+              styles.compactPresetButton,
+              { opacity: busy || option.disabled ? 0.35 : pressed ? 0.7 : 1 },
             ]}
             testID={`add-time-${option.value}`}
           >
-            <Text textStyle={{ color: RUNNER.text, fontSize: 16, fontWeight: '700' }}>
+            <Text textStyle={{ color: RUNNER.text, fontSize: 15, fontWeight: '800' }}>
               {option.label}
             </Text>
           </Pressable>
         ))}
       </View>
+      <Pressable
+        accessibilityLabel={`Reset to original duration, ${compactDuration(originalDurationMs)}`}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: busy }}
+        disabled={busy}
+        onPress={onReset}
+        style={({ pressed }) => [styles.resetButton, { opacity: busy ? 0.4 : pressed ? 0.7 : 1 }]}
+        testID="reset-time-original"
+      >
+        <AppIcon color={RUNNER.accent} name="clock" size={20} />
+        <View style={styles.resetText}>
+          <Text textStyle={{ color: RUNNER.text, fontSize: 16, fontWeight: '700' }}>
+            Reset to original
+          </Text>
+          <Text textStyle={{ color: RUNNER.muted, fontSize: 13 }}>
+            {`Original ${compactDuration(originalDurationMs)}`}
+          </Text>
+        </View>
+      </Pressable>
     </RunnerModal>
   );
 }
@@ -724,7 +803,7 @@ function RoutineStepsModal({
 }) {
   const steps = orderedSteps(active);
   return (
-    <RunnerModal onClose={onClose} title="Routine steps" visible={visible}>
+    <RunnerModal onClose={onClose} title="Steps" visible={visible}>
       <Column spacing={10} style={{ width: '100%' }}>
         {steps.map((step, index) => {
           const session = active.stepSessions.find((candidate) => candidate.stepId === step.id);
@@ -754,7 +833,9 @@ function RoutineStepsModal({
                       {`${index + 1}. ${step.name || 'Untitled step'}`}
                     </Text>
                     <Text textStyle={{ color: RUNNER.muted, fontSize: 13 }}>
-                      {stepStatusLabel(status)}
+                      {`${stepStatusLabel(status)} · ${compactDuration(
+                        step.durationMs + (session?.addedTimeMs ?? 0)
+                      )}`}
                     </Text>
                   </Column>
                 </View>
@@ -861,9 +942,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     width: '100%',
   },
-  modalOptions: {
-    gap: 10,
-    marginTop: 4,
+  compactOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     width: '100%',
   },
   modalRoot: {
@@ -893,15 +975,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
   },
-  presetButton: {
+  compactPresetButton: {
     alignItems: 'center',
     backgroundColor: RUNNER.surface,
     borderColor: RUNNER.border,
     borderRadius: 14,
     borderWidth: 1,
+    flexBasis: '20%',
+    flexGrow: 1,
     minHeight: 50,
+    minWidth: 58,
     justifyContent: 'center',
-    width: '100%',
   },
   rearrangeRow: {
     alignItems: 'center',
@@ -946,6 +1030,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 7,
   },
+  resetButton: {
+    alignItems: 'center',
+    backgroundColor: RUNNER.surface,
+    borderColor: RUNNER.border,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    minHeight: 54,
+    paddingHorizontal: 16,
+    width: '100%',
+  },
+  resetText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  pausedOverlay: {
+    alignItems: 'center',
+    bottom: 0,
+    gap: 10,
+    justifyContent: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  resumeButton: {
+    alignItems: 'center',
+    backgroundColor: RUNNER.accent,
+    borderRadius: 14,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: 18,
+  },
   stopButton: {
     alignItems: 'center',
     backgroundColor: RUNNER.surface,
@@ -966,6 +1086,9 @@ const styles = StyleSheet.create({
     gap: 13,
     justifyContent: 'center',
     padding: 22,
+  },
+  timerCirclePaused: {
+    opacity: 0.45,
   },
   timerWrap: {
     alignSelf: 'center',

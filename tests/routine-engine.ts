@@ -8,6 +8,7 @@ import {
   moveCurrentRoutineStepToEnd,
   pauseRoutine,
   reorderActiveRoutineStep,
+  resetRoutineTime,
   resumeRoutine,
   routineTiming,
   skipRoutineStep,
@@ -70,6 +71,13 @@ async function run(): Promise<void> {
   assert(routineTiming(paused, at(5_000)).remainingMs === 500, 'pause freezes countdown');
   const extendedPaused = addRoutineTime(paused, 2_000, at(5_000));
   assert(extendedPaused.remainingMsWhenPaused === 2_500, 'add-time extends paused remaining time');
+  const reduced = addRoutineTime(extendedPaused, -1_000, at(5_000));
+  assert(reduced.stepSessions[0]?.addedTimeMs === 1_000, 'negative add-time removes an extension');
+  const resetPaused = resetRoutineTime(reduced, at(5_000));
+  assert(
+    resetPaused.stepSessions[0]?.addedTimeMs === 0 && resetPaused.remainingMsWhenPaused === 500,
+    'reset-time restores the original paused duration'
+  );
   const resumed = resumeRoutine(extendedPaused, at(10_000));
   assert(
     routineTiming(resumed, at(10_000)).remainingMs === 2_500,
