@@ -5,6 +5,7 @@ import {
   evaluateHabitTrigger,
   evaluateHabitSchedule,
   calculateHabitStreak,
+  habitDaySwipeTarget,
   habitWeekDays,
   habitWeekSwipeTarget,
   shiftHabitDay,
@@ -203,6 +204,13 @@ async function run(): Promise<void> {
     shiftHabitDay('2026-08-26', -1) === '2026-08-25' &&
       shiftHabitDay('1900-01-03', -1) === '1900-01-02',
     'habit day navigation supports one-day historical swipes'
+  );
+  assert(
+    habitDaySwipeTarget('2026-08-26', 1, '2026-08-26') === null &&
+      habitDaySwipeTarget('2026-08-26', -1, '2026-08-26') === '2026-08-25' &&
+      habitDaySwipeTarget('2026-08-25', 1, '2026-08-26') === '2026-08-26' &&
+      habitDaySwipeTarget('2026-08-26', -1, '2026-08-26', 5) === '2026-08-25',
+    'habit day swipes move one day and reject future pages'
   );
 
   const dailyStates = ['2026-08-28', '2026-08-29'].map((logicalDay) => ({
