@@ -3,7 +3,12 @@ import { Text } from '@expo/ui';
 import { usePathname, useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 
-import { timestampMs, type CatalogCollection, type TimeTransition } from '@domain';
+import {
+  timestampMs,
+  type ActiveRoutine,
+  type CatalogCollection,
+  type TimeTransition,
+} from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 import { DurationText, errorText } from '@ui';
@@ -21,6 +26,13 @@ function activeItem(
 ): ReturnType<typeof resolveCatalogItem> {
   if (!catalog || !transition?.activityId) return null;
   return resolveCatalogItem(catalog, transition.activityId);
+}
+
+function routineOwnsActivity(routine: ActiveRoutine, activityId: string): boolean {
+  if (routine.routineSnapshot.trackingMode === 'overall') {
+    return routine.routineId === activityId;
+  }
+  return routine.routineSnapshot.steps.some((step) => step.activityId === activityId);
 }
 
 /** Loads once at the shell boundary so the player survives catalog navigation. */
@@ -107,8 +119,9 @@ function ActiveActivityBarContent({
   if (!activeTransition || activeTransition.activityId === null) return null;
 
   const resolved = activeItem(catalog, activeTransition);
+  const activeActivityId = activeTransition.activityId;
   const name = resolved?.item.name ?? 'Current activity';
-  const context = resolved?.folder?.name ?? 'Activities';
+  const context = resolved?.folder?.name ?? null;
   const elapsedMs = Math.max(0, nowMs - timestampMs(activeTransition.timestamp));
   const configuredColor = resolved?.item.color ?? resolved?.displayColor;
   const accent =
@@ -116,6 +129,20 @@ function ActiveActivityBarContent({
       ? configuredColor.trim()
       : colors.primary;
   const onAccent = getAccessibleTextColor(accent);
+
+  const openDetails = async () => {
+    let activeRoutine: ActiveRoutine | null = null;
+    try {
+      activeRoutine = await runtime.routineService.getActive();
+    } catch {
+      // Fall back to the session view if routine state is temporarily unavailable.
+    }
+    const destination =
+      activeRoutine && routineOwnsActivity(activeRoutine, activeActivityId)
+        ? `/routine/${activeRoutine.routineId}`
+        : `/activity-session/${activeTransition.id}`;
+    router.push(destination as Href);
+  };
 
   const pause = async () => {
     if (busy) return;
@@ -153,8 +180,6 @@ function ActiveActivityBarContent({
               : pathname === '/'
                 ? 82
                 : 14) as unknown as number,
-            // Keep the pill above the home indicator without changing desktop spacing.
-            paddingBottom: (isWeb ? safeAreaBottom : 0) as unknown as number,
           },
         ]}
         testID="active-activity-bar"
@@ -177,18 +202,20 @@ function ActiveActivityBarContent({
         <Pressable
           accessibilityLabel={`Open ${name} session details`}
           accessibilityRole="button"
-          onPress={() => router.push(`/activity-session/${activeTransition.id}` as Href)}
+          onPress={() => void openDetails()}
           style={styles.info}
           testID="active-activity-details"
         >
           <View style={styles.infoRow}>
             <View style={styles.infoText}>
-              <Text
-                numberOfLines={1}
-                textStyle={{ color: colors.textMuted, fontSize: 11, fontWeight: '800' }}
-              >
-                {context.toUpperCase()}
-              </Text>
+              {context ? (
+                <Text
+                  numberOfLines={1}
+                  textStyle={{ color: colors.textMuted, fontSize: 11, fontWeight: '800' }}
+                >
+                  {context}
+                </Text>
+              ) : null}
               <Text
                 numberOfLines={1}
                 textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}

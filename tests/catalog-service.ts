@@ -119,16 +119,10 @@ async function run(): Promise<void> {
     () => service.createActivity({ name: 'Invalid color', color: 'blue' }),
     'invalid colors must be rejected'
   );
-  await rejects(
-    () => service.createActivity({ name: 'Invalid icon', iconName: 'rocket' }),
-    'uncurated icons must be rejected'
-  );
-
   const rootActivity = await service.createActivity({
     id: ids.rootActivity,
     name: 'Root activity',
     color: '#445566',
-    iconName: 'activity',
   });
   await service.createActivity({ id: ids.secondRootActivity, name: 'Second root' });
   const childActivity = await service.createActivity({
@@ -222,11 +216,21 @@ async function run(): Promise<void> {
     reorderedSteps[0]?.id === ids.secondStep && reorderedSteps[0].sortOrder === 0,
     'routine steps must support integer Move Down ordering'
   );
-  const emojiActivity = await service.createActivity({
-    name: 'Emoji activity',
-    iconName: '😀',
-  });
-  assert(emojiActivity.iconName === '😀', 'catalog records must persist system emoji values');
+  repository.catalog = {
+    ...repository.catalog,
+    activities: repository.catalog.activities.map((item) =>
+      item.id === ids.rootActivity ? { ...item, iconName: 'legacy-custom-icon' } : item
+    ),
+  };
+  assert(
+    (await service.getActivity(ids.rootActivity)).iconName === 'legacy-custom-icon',
+    'legacy activity icons must remain readable'
+  );
+  await service.updateActivity(ids.rootActivity, { name: 'Root activity renamed' });
+  assert(
+    (await service.getActivity(ids.rootActivity)).iconName === 'legacy-custom-icon',
+    'editing an activity must preserve legacy icon data'
+  );
   repository.catalog = {
     ...repository.catalog,
     folders: repository.catalog.folders.map((item, index) => ({

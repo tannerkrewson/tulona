@@ -222,6 +222,53 @@ async function run(): Promise<void> {
   const recordedStop = await longService.switchActivity(null);
   assert(recordedStop.activityId === null, 'long activities must persist a stopped state');
 
+  const relabelRepository = new MemoryTrackerRepository();
+  const precedingActivity = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const activeActivity = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const precedingSession = transition(ids.july, '2026-08-03T10:00:00.000Z', precedingActivity);
+  const activeSession = transition(ids.august, '2026-08-03T11:00:00.000Z', activeActivity);
+  await relabelRepository.upsertTransitions([precedingSession, activeSession]);
+  const relabelMutations: string[] = [];
+  const relabelService = createTrackerService(relabelRepository, {
+    now: () => now,
+    onMutation: async (mutation) => {
+      relabelMutations.push(`${mutation.kind}:${mutation.previous?.id}->${mutation.current?.id}`);
+    },
+  });
+  const mergedSession = await relabelService.reassignTransition(
+    activeSession.id,
+    precedingActivity
+  );
+  assert(
+    mergedSession.id === precedingSession.id,
+    'relabeling must return the surviving preceding session'
+  );
+  const relabeledHistory = (await relabelRepository.readMonth('2026-08')).transitions;
+  assert(
+    relabeledHistory.length === 1 && relabeledHistory[0]?.id === precedingSession.id,
+    'relabeling an active session to the preceding activity must remove the duplicate boundary'
+  );
+  assert(
+    (await relabelService.getActiveTransition())?.id === precedingSession.id,
+    'the preceding session must remain the active merged session'
+  );
+  const relabeledQuery = await relabelService.query(
+    range(Date.parse('2026-08-03T09:00:00.000Z'), Date.parse(now)),
+    Date.parse(now)
+  );
+  assert(
+    relabeledQuery.intervals.length === 1 &&
+      relabeledQuery.intervals[0]?.activityId === precedingActivity &&
+      relabeledQuery.intervals[0]?.startMs === Date.parse(precedingSession.timestamp) &&
+      relabeledQuery.intervals[0]?.endMs === Date.parse(now),
+    'relabeling must materialize one combined interval through the current time'
+  );
+  assert(
+    relabelRepository.operationKinds.at(-1) === 'tracker-transition-merge' &&
+      relabelMutations.at(-1) === `merge:${activeSession.id}->${precedingSession.id}`,
+    'relabeling must use the merge write and mutation path'
+  );
+
   const correctionRepository = new MemoryTrackerRepository();
   await correctionRepository.upsertTransitions([
     transition(ids.july, '2026-07-20T10:00:00.000Z', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),

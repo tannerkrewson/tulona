@@ -11,6 +11,7 @@ import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import { ActivityRow } from './ActivityRow';
+import { CatalogEditActions } from './CatalogEditActions';
 import { CatalogHeader } from './CatalogHeader';
 import { CatalogIconButton } from './CatalogIconButton';
 
@@ -123,6 +124,9 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
     .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name));
   const visibleError = actionError ?? (persistenceError ? errorText(persistenceError) : null);
 
+  const editItem = (item: Activity | RoutineDefinition) =>
+    router.push(`/${item.kind === 'routine' ? 'routine-edit' : 'activity'}/${item.id}`);
+
   const runAction = async (action: () => Promise<void>) => {
     setBusy(true);
     setActionError(null);
@@ -221,24 +225,26 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
                   active={active}
                   color={resolved?.displayColor}
                   disabled={busy || item.archivedAt !== null}
+                  editMode={editMode}
                   item={item}
-                  onPress={() => activate(item)}
+                  onPress={() => (editMode ? editItem(item) : activate(item))}
                   testID={`folder-child-${item.id}`}
                 />
                 {editMode ? (
-                  <View style={{ alignItems: 'flex-end', width: '100%' }}>
-                    <CatalogIconButton
-                      disabled={busy || item.archivedAt !== null}
-                      icon="pencil"
-                      label={`Edit ${item.name}`}
-                      onPress={() =>
-                        router.push(
-                          `/${item.kind === 'routine' ? 'routine-edit' : 'activity'}/${item.id}`
-                        )
-                      }
-                      testID={`folder-child-actions-${item.id}`}
-                    />
-                  </View>
+                  <CatalogEditActions
+                    disabled={busy || item.archivedAt !== null}
+                    onDown={() =>
+                      void runAction(
+                        async () => void (await runtime.catalogService.reorderItem(item.id, 'down'))
+                      )
+                    }
+                    onUp={() =>
+                      void runAction(
+                        async () => void (await runtime.catalogService.reorderItem(item.id, 'up'))
+                      )
+                    }
+                    testID={`folder-child-actions-${item.id}`}
+                  />
                 ) : null}
               </Column>
             );
@@ -249,7 +255,6 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
             </Text>
           ) : null}
         </Column>
-        <Column style={{ height: activeTransition ? 112 : 20 }} />
       </Column>
     </Screen>
   );
