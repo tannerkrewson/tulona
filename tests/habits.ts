@@ -187,6 +187,11 @@ async function run(): Promise<void> {
     shiftHabitWeek('1900-01-03', -1) === '1899-12-27',
     'habit day navigation supports arbitrary past dates'
   );
+  assert(
+    shiftHabitWeek('2026-08-26', 1) === '2026-09-02' &&
+      shiftHabitWeek('2026-08-26', -1) === '2026-08-19',
+    'habit week swipes preserve the selected weekday across Sunday-first weeks'
+  );
 
   const dailyStates = ['2026-08-28', '2026-08-29'].map((logicalDay) => ({
     habitId: ids.habit,
