@@ -78,7 +78,6 @@ function ActiveActivityBarContent({
   const isWeb = Platform.OS === 'web';
   const webSurface = 'var(--tulona-surface)';
   const webBorder = 'var(--tulona-border)';
-  const safeAreaBottom = 'var(--tulona-safe-area-bottom)';
   const [activeState, setActiveState] = useState<{
     catalog: CatalogCollection | null;
     activeTransition: TimeTransition | null;
@@ -175,11 +174,9 @@ function ActiveActivityBarContent({
           {
             backgroundColor: isWeb ? webSurface : colors.surface,
             borderColor: isWeb ? webBorder : colors.border,
-            bottom: (isWeb
-              ? `calc(${pathname === '/' ? 82 : 14}px + ${safeAreaBottom})`
-              : pathname === '/'
-                ? 82
-                : 14) as unknown as number,
+            // The tab bar owns the iOS home-indicator inset. Keep this pill's
+            // position fixed so it does not create an extra gap above the bar.
+            bottom: pathname === '/' ? 82 : 14,
           },
         ]}
         testID="active-activity-bar"
