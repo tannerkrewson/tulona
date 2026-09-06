@@ -307,6 +307,7 @@ export const habitDayStateSchema = z
     logicalDay,
     manual: z.boolean().nullable(),
     automatic: z.boolean().nullable(),
+    outcome: z.enum(['done', 'failed', 'skipped']).nullable().optional(),
     updatedAt: isoTimestamp,
   })
   .passthrough();

@@ -22,6 +22,7 @@ export type RoutineTrackingMode = 'overall' | 'steps';
 export type RoutineStepEndBehavior = 'overtime' | 'auto-advance' | 'autoAdvance';
 export type RoutineStepCompletionOutcome = 'done' | 'skipped' | 'autoAdvanced';
 export type HabitSignalSource = 'manual' | 'automatic';
+export type HabitDayOutcome = 'done' | 'failed' | 'skipped';
 
 export interface Timestamps {
   createdAt: IsoTimestamp;
@@ -209,6 +210,8 @@ export interface HabitDayState {
   logicalDay: LogicalDayKey;
   manual: boolean | null;
   automatic: boolean | null;
+  /** An explicit user outcome. Older records may not contain this field. */
+  outcome?: HabitDayOutcome | null;
   updatedAt: IsoTimestamp;
 }
 

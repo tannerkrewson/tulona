@@ -1,18 +1,19 @@
-import { Column, Text } from '@expo/ui';
+import { Column, Row, ScrollView, Text } from '@expo/ui';
 import { useIsFocused, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { PanResponder, Pressable, View } from 'react-native';
 
-import type { Habit, HabitDayState } from '@domain';
+import type { Habit, HabitDayOutcome, HabitDayState, LogicalDayKey } from '@domain';
 import { AppIcon, normalizeIconName } from '@icons';
 import { useAppTheme } from '@theme';
 import { EmptyState, errorText, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
-import { formatHabitSchedule, habitCompletionLabel, habitSignalSummary } from './habit-format';
+import { formatHabitDay, habitWeekDays, sundayFirstWeekdayLabels } from './date-navigation';
+import { habitCompletionLabel, habitOutcomeLabel, habitSignalSummary } from './habit-format';
 import { loadHabitStore } from './habit-runtime';
-import { calculateHabitStreak } from './streak';
+import { calculateHabitStreak, habitCompleted } from './streak';
 import type { HabitStore } from './habit-store';
 
 export default function HabitListScreen() {
@@ -94,8 +95,8 @@ function HabitListContent({ store }: { store: HabitStore }) {
   const habits = store((state) => state.habits);
   const states = store((state) => state.states);
   const today = store((state) => state.today);
+  const selectedDay = store((state) => state.selectedDay);
   const logicalDayRolloverHour = store((state) => state.logicalDayRolloverHour);
-  const weekStartsOn = store((state) => state.weekStartsOn);
   const saving = store((state) => state.saving);
   const persistenceError = store((state) => state.persistenceError);
   const lastAction = useRef<(() => Promise<unknown>) | null>(null);
@@ -104,8 +105,13 @@ function HabitListContent({ store }: { store: HabitStore }) {
     .sort((left, right) => left.sortOrder - right.sortOrder);
   const archivedCount = habits.filter((habit) => habit.archivedAt !== null).length;
 
+  const runAction = (action: () => Promise<unknown>) => {
+    lastAction.current = action;
+    void action().catch(() => undefined);
+  };
+
   return (
-    <Screen testID="habits-screen">
+    <Screen scrollable={false} testID="habits-screen">
       <Column spacing={14} style={{ width: '100%' }}>
         <HabitHeader
           onAdd={() => router.push('/habit/new')}
@@ -117,50 +123,151 @@ function HabitListContent({ store }: { store: HabitStore }) {
           onBack={() => router.replace('/(tabs)')}
           onRetry={() => {
             const action = lastAction.current;
-            void (action ? action() : store.getState().refresh()).catch(() => undefined);
+            runAction(action ?? (() => store.getState().refresh()));
           }}
         />
-        <Column spacing={3}>
-          <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>Today</Text>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>{today}</Text>
-        </Column>
-        {activeHabits.length === 0 ? (
-          <EmptyState iconName="heart" testID="habits-empty" title="No active habits yet" />
-        ) : (
-          <Column spacing={8} style={{ width: '100%' }}>
-            {activeHabits.map((habit) => (
-              <HabitListItem
-                habit={habit}
-                key={habit.id}
-                saving={saving}
-                state={states.find(
-                  (candidate) => candidate.habitId === habit.id && candidate.logicalDay === today
-                )}
-                states={states.filter((candidate) => candidate.habitId === habit.id)}
-                today={today}
-                logicalDayRolloverHour={logicalDayRolloverHour}
-                weekStartsOn={weekStartsOn}
-                onDetails={() => router.push(`/habit/${habit.id}`)}
-                onToggle={async () => {
-                  const action = () => store.getState().toggleManual(habit.id, today);
-                  lastAction.current = action;
-                  try {
-                    await action();
-                  } catch {
-                    // The store retains the persistence error for the visible banner.
-                  }
-                }}
-              />
-            ))}
+        <DateStrip
+          selectedDay={selectedDay}
+          today={today}
+          rolloverHour={logicalDayRolloverHour}
+          onSelectDay={(day) => runAction(() => store.getState().selectDay(day))}
+          onSwipe={(amount) => runAction(() => store.getState().shiftSelectedDay(amount))}
+        />
+        <ScrollView style={{ height: '100%', width: '100%' }}>
+          <Column spacing={12} style={{ paddingBottom: 20, width: '100%' }}>
+            <Column spacing={2}>
+              <Text textStyle={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>
+                {selectedDay === today ? 'Today' : 'Selected day'}
+              </Text>
+              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+                {formatHabitDay(selectedDay)}
+              </Text>
+            </Column>
+            {activeHabits.length === 0 ? (
+              <EmptyState iconName="heart" testID="habits-empty" title="No active habits yet" />
+            ) : (
+              <Column spacing={2} style={{ width: '100%' }}>
+                {activeHabits.map((habit) => (
+                  <HabitListItem
+                    habit={habit}
+                    key={habit.id}
+                    saving={saving}
+                    state={states.find(
+                      (candidate) =>
+                        candidate.habitId === habit.id && candidate.logicalDay === selectedDay
+                    )}
+                    states={states.filter((candidate) => candidate.habitId === habit.id)}
+                    selectedDay={selectedDay}
+                    logicalDayRolloverHour={logicalDayRolloverHour}
+                    onDetails={() => router.push(`/habit/${habit.id}`)}
+                    onToggle={async () => {
+                      await store.getState().toggleManual(habit.id, selectedDay);
+                    }}
+                    onOutcome={async (outcome) => {
+                      await store.getState().setOutcome(habit.id, selectedDay, outcome);
+                    }}
+                  />
+                ))}
+              </Column>
+            )}
+            {archivedCount > 0 ? (
+              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+                {`${archivedCount} archived ${archivedCount === 1 ? 'habit' : 'habits'} remain available from their detail screen.`}
+              </Text>
+            ) : null}
           </Column>
-        )}
-        {archivedCount > 0 ? (
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-            {`${archivedCount} archived ${archivedCount === 1 ? 'habit' : 'habits'} remain available from their detail screen.`}
-          </Text>
-        ) : null}
+        </ScrollView>
       </Column>
     </Screen>
+  );
+}
+
+function DateStrip({
+  selectedDay,
+  today,
+  rolloverHour,
+  onSelectDay,
+  onSwipe,
+}: {
+  selectedDay: LogicalDayKey;
+  today: LogicalDayKey;
+  rolloverHour: number;
+  onSelectDay: (day: LogicalDayKey) => void;
+  onSwipe: (amount: -1 | 1) => void;
+}) {
+  const { colors } = useAppTheme();
+  const days = habitWeekDays(selectedDay, rolloverHour);
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          Math.abs(gesture.dx) > 16 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+        onPanResponderRelease: (_, gesture) => {
+          if (Math.abs(gesture.dx) >= 45) onSwipe(gesture.dx < 0 ? 1 : -1);
+        },
+      }),
+    [onSwipe]
+  );
+
+  return (
+    <View
+      {...panResponder.panHandlers}
+      style={{
+        backgroundColor: colors.surface,
+        borderBottomColor: colors.border,
+        borderBottomWidth: 1,
+        paddingBottom: 10,
+        paddingTop: 2,
+        width: '100%',
+      }}
+      testID="habit-week-strip"
+    >
+      <Row alignment="center" spacing={2} style={{ width: '100%' }}>
+        {days.map((day, index) => {
+          const selected = day === selectedDay;
+          const future = day > today;
+          return (
+            <Pressable
+              accessibilityLabel={`${sundayFirstWeekdayLabels[index]} ${day.slice(8)}${selected ? ', selected' : ''}`}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: future, selected }}
+              disabled={future}
+              key={day}
+              onPress={() => onSelectDay(day)}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                backgroundColor: selected ? colors.primary : 'transparent',
+                borderRadius: 10,
+                flex: 1,
+                height: 54,
+                justifyContent: 'center',
+                opacity: future ? 0.35 : pressed ? 0.65 : 1,
+              })}
+              testID={`habit-day-${day}`}
+            >
+              <Text
+                textStyle={{
+                  color: selected ? colors.onPrimary : colors.textMuted,
+                  fontSize: 11,
+                  fontWeight: '600',
+                }}
+              >
+                {sundayFirstWeekdayLabels[index]}
+              </Text>
+              <Text
+                textStyle={{
+                  color: selected ? colors.onPrimary : colors.text,
+                  fontSize: 18,
+                  fontWeight: selected ? '700' : '600',
+                }}
+              >
+                {day.slice(8)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </Row>
+    </View>
   );
 }
 
@@ -168,99 +275,205 @@ function HabitListItem({
   habit,
   state,
   states,
-  today,
+  selectedDay,
   saving,
   logicalDayRolloverHour,
-  weekStartsOn,
   onToggle,
   onDetails,
+  onOutcome,
 }: {
   habit: Habit;
   state: HabitDayState | undefined;
   states: HabitDayState[];
-  today: HabitDayState['logicalDay'];
+  selectedDay: HabitDayState['logicalDay'];
   saving: boolean;
   logicalDayRolloverHour: number;
-  weekStartsOn: number;
   onToggle: () => Promise<void>;
   onDetails: () => void;
+  onOutcome: (outcome: HabitDayOutcome | null) => Promise<void>;
 }) {
   const { colors } = useAppTheme();
-  const complete = state?.manual === true || state?.automatic === true;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const longPressed = useRef(false);
+  const complete = habitCompleted(state ?? null);
+  const outcome = state?.outcome ?? null;
   const accent = habit.color ?? colors.primary;
   const streak = calculateHabitStreak(habit, states, {
-    now: today,
+    now: selectedDay,
     rolloverHour: logicalDayRolloverHour,
-    weekStartsOn,
+    weekStartsOn: 0,
   });
-  const streakUnit = habit.schedule.kind === 'weekly-count' ? 'week' : 'day';
+  const statusIcon =
+    outcome === 'failed'
+      ? 'x'
+      : outcome === 'skipped'
+        ? 'skip-forward'
+        : complete
+          ? 'check-circle-2'
+          : 'circle';
+  const statusColor =
+    outcome === 'failed'
+      ? colors.danger.foreground
+      : outcome === 'skipped'
+        ? colors.textMuted
+        : complete
+          ? colors.success.foreground
+          : colors.textMuted;
+  const statusLabel = habitOutcomeLabel(outcome) ?? habitCompletionLabel(state ?? null);
 
   return (
     <View
-      style={{ alignItems: 'center', flexDirection: 'row', gap: 6, width: '100%' }}
+      style={{ position: 'relative', width: '100%', zIndex: menuOpen ? 2 : 1 }}
       testID={`habit-card-${habit.id}`}
     >
       <Pressable
-        accessibilityHint="Toggles today’s manual completion"
-        accessibilityLabel={`${habit.name}. ${habitCompletionLabel(state ?? null)}. ${formatHabitSchedule(habit.schedule)}. ${streak.current} ${streakUnit}${streak.current === 1 ? '' : 's'} current streak. Signals: ${habitSignalSummary(state ?? null)}.`}
+        accessibilityHint="Toggles this habit for the selected day. Long press for more actions."
+        accessibilityLabel={`${habit.name}. ${statusLabel}. ${streak.current} current streak. Signals: ${habitSignalSummary(state ?? null)}.`}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: complete, disabled: saving }}
+        delayLongPress={500}
         disabled={saving}
-        onPress={() => void onToggle()}
-        style={{
-          alignItems: 'center',
-          backgroundColor: complete ? colors.success.background : colors.surface,
-          borderColor: complete ? accent : colors.border,
-          borderRadius: 12,
-          borderWidth: 1,
-          flex: 1,
-          height: 56,
-          justifyContent: 'center',
-          paddingHorizontal: 12,
+        onLongPress={() => {
+          longPressed.current = true;
+          setMenuOpen(true);
         }}
+        onPress={() => {
+          if (longPressed.current) {
+            longPressed.current = false;
+            return;
+          }
+          void onToggle();
+        }}
+        style={({ pressed }) => ({
+          alignItems: 'center',
+          backgroundColor:
+            outcome === 'skipped'
+              ? colors.surfaceMuted
+              : complete
+                ? colors.success.background
+                : colors.surface,
+          borderBottomColor: colors.border,
+          borderBottomWidth: 1,
+          flexDirection: 'row',
+          minHeight: 60,
+          opacity: saving ? 0.55 : pressed ? 0.72 : 1,
+          paddingHorizontal: 4,
+          width: '100%',
+        })}
         testID={`toggle-habit-${habit.id}`}
       >
-        <View style={{ alignItems: 'center', flexDirection: 'row', gap: 9, width: '100%' }}>
-          <AppIcon
-            accessibilityLabel={complete ? 'Completed' : 'Not completed'}
-            color={complete ? colors.success.foreground : colors.textMuted}
-            name={complete ? 'check-circle-2' : 'circle'}
-            size={22}
-          />
-          <AppIcon
-            accessibilityLabel={`${habit.name} icon`}
-            color={complete ? colors.success.foreground : accent}
-            name={normalizeIconName(habit.iconName, 'heart')}
-            size={20}
-          />
-          <View style={{ flex: 1 }}>
-            <Text
-              numberOfLines={1}
-              textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}
-            >
-              {habit.name}
-            </Text>
-          </View>
-          <View style={{ width: '28%' }}>
-            <Text
-              numberOfLines={1}
-              textStyle={{ color: colors.textMuted, fontSize: 12, textAlign: 'right' }}
-            >
-              {formatHabitSchedule(habit.schedule)}
-            </Text>
-          </View>
+        <AppIcon accessibilityLabel={statusLabel} color={statusColor} name={statusIcon} size={22} />
+        <AppIcon
+          accessibilityLabel={`${habit.name} icon`}
+          color={complete ? colors.success.foreground : accent}
+          name={normalizeIconName(habit.iconName, 'heart')}
+          size={20}
+        />
+        <View style={{ flex: 1, paddingHorizontal: 10 }}>
+          <Text
+            numberOfLines={1}
+            textStyle={{
+              color: colors.text,
+              fontSize: 16,
+              fontWeight: '600',
+            }}
+          >
+            {habit.name}
+          </Text>
+          {outcome ? (
+            <Text textStyle={{ color: colors.textMuted, fontSize: 12 }}>{statusLabel}</Text>
+          ) : null}
         </View>
+        <Column alignment="end" spacing={0} style={{ width: 88 }}>
+          <Text textStyle={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>
+            {String(streak.current)}
+          </Text>
+          <Text textStyle={{ color: colors.textMuted, fontSize: 11 }}>Current Streak</Text>
+        </Column>
       </Pressable>
-      <Pressable
-        accessibilityHint="Opens habit details"
-        accessibilityLabel={`View details for ${habit.name}`}
-        accessibilityRole="button"
-        onPress={onDetails}
-        style={{ alignItems: 'center', height: 56, justifyContent: 'center', width: 42 }}
-        testID={`details-habit-${habit.id}`}
-      >
-        <AppIcon color={colors.textMuted} name="chevron-right" size={20} />
-      </Pressable>
+      {menuOpen ? (
+        <View
+          style={{
+            position: 'absolute',
+            right: 4,
+            top: 58,
+            width: 220,
+            zIndex: 10,
+          }}
+        >
+          <Column
+            spacing={2}
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderRadius: 12,
+              borderWidth: 1,
+              padding: 5,
+              width: '100%',
+            }}
+            testID={`habit-actions-${habit.id}`}
+          >
+            <HabitAction
+              label={outcome === 'done' ? 'Clear done' : 'Mark done'}
+              onPress={() => {
+                setMenuOpen(false);
+                void onOutcome(outcome === 'done' ? null : 'done');
+              }}
+              testID={`habit-action-done-${habit.id}`}
+            />
+            <HabitAction
+              label={outcome === 'failed' ? 'Clear failed' : 'Mark failed (X)'}
+              onPress={() => {
+                setMenuOpen(false);
+                void onOutcome(outcome === 'failed' ? null : 'failed');
+              }}
+              testID={`habit-action-failed-${habit.id}`}
+            />
+            <HabitAction
+              label={outcome === 'skipped' ? 'Clear skipped' : 'Skip day'}
+              onPress={() => {
+                setMenuOpen(false);
+                void onOutcome(outcome === 'skipped' ? null : 'skipped');
+              }}
+              testID={`habit-action-skipped-${habit.id}`}
+            />
+            <HabitAction
+              label="View details"
+              onPress={onDetails}
+              testID={`habit-action-details-${habit.id}`}
+            />
+          </Column>
+        </View>
+      ) : null}
     </View>
+  );
+}
+
+function HabitAction({
+  label,
+  onPress,
+  testID,
+}: {
+  label: string;
+  onPress: () => void;
+  testID: string;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => ({
+        backgroundColor: pressed ? colors.surfaceMuted : 'transparent',
+        borderRadius: 8,
+        minHeight: 42,
+        justifyContent: 'center',
+        paddingHorizontal: 10,
+      })}
+      testID={testID}
+    >
+      <Text textStyle={{ color: colors.text, fontSize: 14 }}>{label}</Text>
+    </Pressable>
   );
 }
