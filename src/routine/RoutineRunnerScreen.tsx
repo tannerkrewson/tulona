@@ -512,14 +512,13 @@ function ProgressRing({ progress, size }: { progress: number; size: number }) {
         cx={size / 2}
         cy={size / 2}
         fill="none"
-        origin={`${size / 2}, ${size / 2}`}
         r={radius}
-        rotation="-90"
         stroke={RUNNER.accent}
         strokeDasharray={`${circumference} ${circumference}`}
         strokeDashoffset={circumference * (1 - progress)}
         strokeLinecap="round"
         strokeWidth={strokeWidth}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
       />
     </Svg>
   );
