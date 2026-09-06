@@ -17,7 +17,7 @@ import {
 import type { Habit, HabitDayOutcome, HabitDayState, LogicalDayKey } from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { EmptyState, errorText, Screen } from '@ui';
+import { EmptyState, errorText, getRowSurfaceStyle, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
@@ -449,15 +449,15 @@ function HabitListItem({
         }}
         style={({ pressed }) => ({
           alignItems: 'center',
-          backgroundColor:
-            outcome === 'skipped'
-              ? colors.surfaceMuted
-              : complete
-                ? colors.success.background
-                : colors.surface,
-          borderColor: complete ? colors.success.foreground : colors.border,
-          borderRadius: 14,
-          borderWidth: 1,
+          ...getRowSurfaceStyle({
+            backgroundColor:
+              outcome === 'skipped'
+                ? colors.surfaceMuted
+                : complete
+                  ? colors.success.background
+                  : colors.surface,
+            borderColor: complete ? colors.success.foreground : colors.border,
+          }),
           flexDirection: 'row',
           minHeight: 72,
           opacity: saving ? 0.55 : pressed ? 0.72 : 1,

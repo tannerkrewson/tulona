@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import type { TrackableItem } from '@domain';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { AppButton } from '@ui';
+import { AppButton, getRowSurfaceStyle } from '@ui';
 import { AppIcon } from '@icons';
 
 export interface ActivityRowProps {
@@ -42,10 +42,10 @@ export function ActivityRow({
       disabled={disabled}
       onPress={onPress}
       style={{
-        backgroundColor: active ? accent : colors.surface,
-        borderColor: active ? accent : colors.border,
-        borderRadius: 14,
-        borderWidth: 1,
+        ...getRowSurfaceStyle({
+          backgroundColor: active ? accent : colors.surface,
+          borderColor: active ? accent : colors.border,
+        }),
         height: 64,
         paddingHorizontal: 12,
         width: '100%',

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
-import { errorText, Screen } from '@ui';
+import { errorText, getRowSurfaceStyle, ROW_SURFACE_BORDER_WIDTH, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { settingsCategories } from './settings-categories';
@@ -32,7 +32,7 @@ function SettingsCategoryRow({
       style={({ pressed }) => ({
         backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
         borderBottomColor: colors.border,
-        borderBottomWidth: isLast ? 0 : 1,
+        borderBottomWidth: isLast ? 0 : ROW_SURFACE_BORDER_WIDTH,
         minHeight: 66,
         opacity: pressed ? 0.78 : 1,
         paddingHorizontal: 16,
@@ -53,10 +53,24 @@ function SettingsCategoryRow({
         >
           <AppIcon color={colors.text} name={category.icon} size={19} strokeWidth={2.2} />
         </View>
-        <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600' }}>
-          {category.title}
-        </Text>
-        <AppIcon color={colors.textMuted} name="chevron-right" size={20} strokeWidth={2.4} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            numberOfLines={1}
+            textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600' }}
+          >
+            {category.title}
+          </Text>
+        </View>
+        <View
+          style={{
+            alignItems: 'center',
+            alignSelf: 'stretch',
+            justifyContent: 'center',
+            width: 24,
+          }}
+        >
+          <AppIcon color={colors.textMuted} name="chevron-right" size={20} strokeWidth={2.4} />
+        </View>
       </Row>
     </Pressable>
   );
@@ -65,24 +79,25 @@ function SettingsCategoryRow({
 function SettingsCategoryList({ router }: { router: ReturnType<typeof useRouter> }) {
   const { colors } = useAppTheme();
   return (
-    <Column
+    <View
       style={{
-        borderColor: colors.border,
-        borderRadius: 14,
-        borderWidth: 1,
+        ...getRowSurfaceStyle({ backgroundColor: colors.surface, borderColor: colors.border }),
+        overflow: 'hidden',
         width: '100%',
       }}
       testID="settings-category-list"
     >
-      {settingsCategories.map((category, index) => (
-        <SettingsCategoryRow
-          category={category}
-          isLast={index === settingsCategories.length - 1}
-          key={category.id}
-          onPress={() => router.push(category.path as Href)}
-        />
-      ))}
-    </Column>
+      <Column style={{ width: '100%' }}>
+        {settingsCategories.map((category, index) => (
+          <SettingsCategoryRow
+            category={category}
+            isLast={index === settingsCategories.length - 1}
+            key={category.id}
+            onPress={() => router.push(category.path as Href)}
+          />
+        ))}
+      </Column>
+    </View>
   );
 }
 
