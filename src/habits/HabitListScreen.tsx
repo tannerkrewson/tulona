@@ -1,16 +1,27 @@
 import { Column, Row, ScrollView, Text } from '@expo/ui';
 import { useIsFocused, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { PanResponder, Pressable, View } from 'react-native';
+import type { ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  Modal,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text as NativeText,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
 import type { Habit, HabitDayOutcome, HabitDayState, LogicalDayKey } from '@domain';
-import { AppIcon, normalizeIconName } from '@icons';
+import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 import { EmptyState, errorText, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
-import { habitWeekDays, shiftHabitWeek, sundayFirstWeekdayLabels } from './date-navigation';
+import { habitWeekDays, shiftHabitDay, sundayFirstWeekdayLabels } from './date-navigation';
 import { habitCompletionLabel, habitOutcomeLabel, habitSignalSummary } from './habit-format';
 import { loadHabitStore } from './habit-runtime';
 import { calculateHabitStreak, habitCompleted } from './streak';
@@ -126,56 +137,165 @@ function HabitListContent({ store }: { store: HabitStore }) {
             runAction(action ?? (() => store.getState().refresh()));
           }}
         />
-        <DateStrip
+        <HabitDayNavigation
           selectedDay={selectedDay}
           today={today}
           rolloverHour={logicalDayRolloverHour}
           onSelectDay={(day) => runAction(() => store.getState().selectDay(day))}
-          onSwipe={(amount) => {
-            const nextDay = shiftHabitWeek(selectedDay, amount, logicalDayRolloverHour);
-            if (nextDay <= today) {
-              runAction(() => store.getState().selectDay(nextDay));
-            }
-          }}
-        />
-        <ScrollView style={{ height: '100%', width: '100%' }}>
-          <Column spacing={12} style={{ paddingBottom: 20, width: '100%' }}>
-            {activeHabits.length === 0 ? (
-              <EmptyState iconName="heart" testID="habits-empty" title="No active habits yet" />
-            ) : (
-              <Column spacing={8} style={{ width: '100%' }}>
-                {activeHabits.map((habit) => (
-                  <HabitListItem
-                    habit={habit}
-                    key={habit.id}
-                    saving={saving}
-                    state={states.find(
-                      (candidate) =>
-                        candidate.habitId === habit.id && candidate.logicalDay === selectedDay
-                    )}
-                    states={states.filter((candidate) => candidate.habitId === habit.id)}
-                    selectedDay={selectedDay}
-                    logicalDayRolloverHour={logicalDayRolloverHour}
-                    onDetails={() => router.push(`/habit/${habit.id}`)}
-                    onToggle={async () => {
-                      await store.getState().toggleManual(habit.id, selectedDay);
-                    }}
-                    onOutcome={async (outcome) => {
-                      await store.getState().setOutcome(habit.id, selectedDay, outcome);
-                    }}
-                  />
-                ))}
-              </Column>
-            )}
-            {archivedCount > 0 ? (
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                {`${archivedCount} archived ${archivedCount === 1 ? 'habit' : 'habits'} remain available from their detail screen.`}
-              </Text>
-            ) : null}
-          </Column>
-        </ScrollView>
+          weekStrip={
+            <DateStrip
+              selectedDay={selectedDay}
+              today={today}
+              rolloverHour={logicalDayRolloverHour}
+              onSelectDay={(day) => runAction(() => store.getState().selectDay(day))}
+            />
+          }
+        >
+          <ScrollView style={{ height: '100%', width: '100%' }}>
+            <Column spacing={12} style={{ paddingBottom: 20, width: '100%' }}>
+              {activeHabits.length === 0 ? (
+                <EmptyState iconName="heart" testID="habits-empty" title="No active habits yet" />
+              ) : (
+                <Column spacing={8} style={{ width: '100%' }}>
+                  {activeHabits.map((habit) => (
+                    <HabitListItem
+                      habit={habit}
+                      key={habit.id}
+                      saving={saving}
+                      state={states.find(
+                        (candidate) =>
+                          candidate.habitId === habit.id && candidate.logicalDay === selectedDay
+                      )}
+                      states={states.filter((candidate) => candidate.habitId === habit.id)}
+                      selectedDay={selectedDay}
+                      logicalDayRolloverHour={logicalDayRolloverHour}
+                      onDetails={() => router.push(`/habit/${habit.id}`)}
+                      onToggle={async () => {
+                        await store.getState().toggleManual(habit.id, selectedDay);
+                      }}
+                      onOutcome={async (outcome) => {
+                        await store.getState().setOutcome(habit.id, selectedDay, outcome);
+                      }}
+                    />
+                  ))}
+                </Column>
+              )}
+              {archivedCount > 0 ? (
+                <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+                  {`${archivedCount} archived ${archivedCount === 1 ? 'habit' : 'habits'} remain available from their detail screen.`}
+                </Text>
+              ) : null}
+            </Column>
+          </ScrollView>
+        </HabitDayNavigation>
       </Column>
     </Screen>
+  );
+}
+
+const DAY_SWIPE_THRESHOLD = 45;
+const DAY_SWIPE_SETTLE_DURATION = 180;
+const HABIT_MENU_WIDTH = 220;
+const HABIT_MENU_HEIGHT = 190;
+
+interface HabitMenuAnchor {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function HabitDayNavigation({
+  selectedDay,
+  today,
+  rolloverHour,
+  onSelectDay,
+  weekStrip,
+  children,
+}: {
+  selectedDay: LogicalDayKey;
+  today: LogicalDayKey;
+  rolloverHour: number;
+  onSelectDay: (day: LogicalDayKey) => void;
+  weekStrip: ReactNode;
+  children: ReactNode;
+}) {
+  const { colors } = useAppTheme();
+  const { width: viewportWidth } = useWindowDimensions();
+  const [stripWidth, setStripWidth] = useState(0);
+  const [dragX] = useState(() => new Animated.Value(0));
+  const useNativeDriver = Platform.OS !== 'web';
+
+  const settle = useCallback(
+    (target: number, nextDay?: LogicalDayKey) => {
+      dragX.stopAnimation();
+      Animated.timing(dragX, {
+        duration: DAY_SWIPE_SETTLE_DURATION,
+        toValue: target,
+        useNativeDriver,
+      }).start(({ finished }) => {
+        dragX.setValue(0);
+        if (finished && nextDay) onSelectDay(nextDay);
+      });
+    },
+    [dragX, onSelectDay, useNativeDriver]
+  );
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          Math.abs(gesture.dx) > 16 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+        onMoveShouldSetPanResponderCapture: (_, gesture) =>
+          Math.abs(gesture.dx) > 16 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+        onPanResponderGrant: () => {
+          dragX.stopAnimation();
+          dragX.setValue(0);
+        },
+        onPanResponderMove: (_, gesture) => {
+          dragX.setValue(gesture.dx);
+        },
+        onPanResponderRelease: (_, gesture) => {
+          if (Math.abs(gesture.dx) < DAY_SWIPE_THRESHOLD) {
+            settle(0);
+            return;
+          }
+
+          const amount = gesture.dx < 0 ? 1 : -1;
+          const nextDay = shiftHabitDay(selectedDay, amount, rolloverHour);
+          if (nextDay > today) {
+            settle(0);
+            return;
+          }
+
+          const distance = Math.max(stripWidth, viewportWidth - 40, 320);
+          settle(gesture.dx < 0 ? -distance : distance, nextDay);
+        },
+        onPanResponderTerminate: () => settle(0),
+        onPanResponderTerminationRequest: () => false,
+      }),
+    [dragX, rolloverHour, selectedDay, settle, stripWidth, today, viewportWidth]
+  );
+
+  return (
+    <View
+      {...panResponder.panHandlers}
+      style={{ flex: 1, minHeight: 0, width: '100%' }}
+      testID="habit-day-navigation"
+    >
+      <View
+        onLayout={(event) => setStripWidth(event.nativeEvent.layout.width)}
+        style={{ backgroundColor: colors.surface, overflow: 'hidden', width: '100%' }}
+      >
+        <Animated.View
+          style={{ transform: [{ translateX: dragX }], width: '100%' }}
+          testID="habit-week-strip"
+        >
+          {weekStrip}
+        </Animated.View>
+      </View>
+      {children}
+    </View>
   );
 }
 
@@ -184,31 +304,17 @@ function DateStrip({
   today,
   rolloverHour,
   onSelectDay,
-  onSwipe,
 }: {
   selectedDay: LogicalDayKey;
   today: LogicalDayKey;
   rolloverHour: number;
   onSelectDay: (day: LogicalDayKey) => void;
-  onSwipe: (amount: -1 | 1) => void;
 }) {
   const { colors } = useAppTheme();
   const days = habitWeekDays(selectedDay, rolloverHour);
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gesture) =>
-          Math.abs(gesture.dx) > 16 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
-        onPanResponderRelease: (_, gesture) => {
-          if (Math.abs(gesture.dx) >= 45) onSwipe(gesture.dx < 0 ? 1 : -1);
-        },
-      }),
-    [onSwipe]
-  );
 
   return (
     <View
-      {...panResponder.panHandlers}
       style={{
         backgroundColor: colors.surface,
         borderBottomColor: colors.border,
@@ -217,7 +323,6 @@ function DateStrip({
         paddingTop: 2,
         width: '100%',
       }}
-      testID="habit-week-strip"
     >
       <Row alignment="center" spacing={2} style={{ width: '100%' }}>
         {days.map((day, index) => {
@@ -290,12 +395,12 @@ function HabitListItem({
   onOutcome: (outcome: HabitDayOutcome | null) => Promise<void>;
 }) {
   const { colors } = useAppTheme();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<HabitMenuAnchor | null>(null);
   const longPressed = useRef(false);
+  const rowRef = useRef<View>(null);
   const complete = habitCompleted(state ?? null);
   const outcome = state?.outcome ?? null;
   const accent = habit.color ?? colors.primary;
-  const accentForeground = getAccessibleTextColor(accent);
   const streak = calculateHabitStreak(habit, states, {
     now: selectedDay,
     rolloverHour: logicalDayRolloverHour,
@@ -303,18 +408,22 @@ function HabitListItem({
   });
   const statusIcon =
     outcome === 'failed' ? 'x' : outcome === 'skipped' ? 'skip-forward' : complete ? 'check' : null;
-  const statusColor =
+  const statusBackground =
     outcome === 'failed'
-      ? colors.danger.foreground
+      ? colors.danger.background
       : outcome === 'skipped'
-        ? colors.textMuted
+        ? colors.warning.background
         : complete
-          ? colors.success.foreground
-          : colors.textMuted;
+          ? colors.success.background
+          : accent;
+  const statusColor = getAccessibleTextColor(statusBackground);
   const statusLabel = habitOutcomeLabel(outcome) ?? habitCompletionLabel(state ?? null);
+  const menuOpen = menuAnchor !== null;
 
   return (
     <View
+      collapsable={false}
+      ref={rowRef}
       style={{ position: 'relative', width: '100%', zIndex: menuOpen ? 2 : 1 }}
       testID={`habit-card-${habit.id}`}
     >
@@ -327,7 +436,9 @@ function HabitListItem({
         disabled={saving}
         onLongPress={() => {
           longPressed.current = true;
-          setMenuOpen(true);
+          rowRef.current?.measureInWindow((x, y, width, height) => {
+            setMenuAnchor({ height, width, x, y });
+          });
         }}
         onPress={() => {
           if (longPressed.current) {
@@ -357,17 +468,28 @@ function HabitListItem({
         testID={`toggle-habit-${habit.id}`}
       >
         <Row alignment="center" spacing={12} style={{ width: '100%' }}>
-          <View
-            style={{
+          <Pressable
+            accessibilityHint="Toggles this habit for the selected day"
+            accessibilityLabel={`${habit.name}, ${statusLabel}`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: saving }}
+            disabled={saving}
+            onPress={(event) => {
+              event.stopPropagation();
+              void onToggle();
+            }}
+            style={({ pressed }) => ({
               alignItems: 'center',
-              backgroundColor: complete ? colors.success.background : 'transparent',
-              borderColor: statusColor,
+              backgroundColor: statusBackground,
+              borderColor: statusBackground,
               borderRadius: 8,
-              borderWidth: 2,
+              borderWidth: 1,
               height: 40,
               justifyContent: 'center',
+              opacity: saving ? 0.55 : pressed ? 0.72 : 1,
               width: 40,
-            }}
+            })}
+            testID={`status-habit-${habit.id}`}
           >
             {statusIcon ? (
               <AppIcon
@@ -378,24 +500,7 @@ function HabitListItem({
                 strokeWidth={2.5}
               />
             ) : null}
-          </View>
-          <View
-            style={{
-              alignItems: 'center',
-              backgroundColor: accent,
-              borderRadius: 10,
-              height: 40,
-              justifyContent: 'center',
-              width: 40,
-            }}
-          >
-            <AppIcon
-              accessibilityLabel={`${habit.name} icon`}
-              color={accentForeground}
-              name={normalizeIconName(habit.iconName, 'heart')}
-              size={20}
-            />
-          </View>
+          </Pressable>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text
               numberOfLines={1}
@@ -419,59 +524,45 @@ function HabitListItem({
           </Column>
         </Row>
       </Pressable>
-      {menuOpen ? (
-        <View
-          style={{
-            position: 'absolute',
-            right: 0,
-            top: 76,
-            width: 220,
-            zIndex: 10,
-          }}
+      {menuAnchor ? (
+        <HabitActionMenu
+          anchor={menuAnchor}
+          onClose={() => setMenuAnchor(null)}
+          testID={`habit-actions-${habit.id}`}
         >
-          <Column
-            spacing={2}
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 12,
-              borderWidth: 1,
-              padding: 5,
-              width: '100%',
+          <HabitAction
+            label={outcome === 'done' ? 'Clear done' : 'Mark done'}
+            onPress={() => {
+              setMenuAnchor(null);
+              void onOutcome(outcome === 'done' ? null : 'done');
             }}
-            testID={`habit-actions-${habit.id}`}
-          >
-            <HabitAction
-              label={outcome === 'done' ? 'Clear done' : 'Mark done'}
-              onPress={() => {
-                setMenuOpen(false);
-                void onOutcome(outcome === 'done' ? null : 'done');
-              }}
-              testID={`habit-action-done-${habit.id}`}
-            />
-            <HabitAction
-              label={outcome === 'failed' ? 'Clear failed' : 'Mark failed (X)'}
-              onPress={() => {
-                setMenuOpen(false);
-                void onOutcome(outcome === 'failed' ? null : 'failed');
-              }}
-              testID={`habit-action-failed-${habit.id}`}
-            />
-            <HabitAction
-              label={outcome === 'skipped' ? 'Clear skipped' : 'Skip day'}
-              onPress={() => {
-                setMenuOpen(false);
-                void onOutcome(outcome === 'skipped' ? null : 'skipped');
-              }}
-              testID={`habit-action-skipped-${habit.id}`}
-            />
-            <HabitAction
-              label="View details"
-              onPress={onDetails}
-              testID={`habit-action-details-${habit.id}`}
-            />
-          </Column>
-        </View>
+            testID={`habit-action-done-${habit.id}`}
+          />
+          <HabitAction
+            label={outcome === 'failed' ? 'Clear failed' : 'Mark failed (X)'}
+            onPress={() => {
+              setMenuAnchor(null);
+              void onOutcome(outcome === 'failed' ? null : 'failed');
+            }}
+            testID={`habit-action-failed-${habit.id}`}
+          />
+          <HabitAction
+            label={outcome === 'skipped' ? 'Clear skipped' : 'Skip day'}
+            onPress={() => {
+              setMenuAnchor(null);
+              void onOutcome(outcome === 'skipped' ? null : 'skipped');
+            }}
+            testID={`habit-action-skipped-${habit.id}`}
+          />
+          <HabitAction
+            label="View details"
+            onPress={() => {
+              setMenuAnchor(null);
+              onDetails();
+            }}
+            testID={`habit-action-details-${habit.id}`}
+          />
+        </HabitActionMenu>
       ) : null}
     </View>
   );
@@ -501,7 +592,62 @@ function HabitAction({
       })}
       testID={testID}
     >
-      <Text textStyle={{ color: colors.text, fontSize: 14 }}>{label}</Text>
+      <NativeText selectable={false} style={{ color: colors.text, fontSize: 14 }}>
+        {label}
+      </NativeText>
     </Pressable>
+  );
+}
+
+function HabitActionMenu({
+  anchor,
+  children,
+  onClose,
+  testID,
+}: {
+  anchor: HabitMenuAnchor;
+  children: ReactNode;
+  onClose: () => void;
+  testID: string;
+}) {
+  const { colors } = useAppTheme();
+  const { width: viewportWidth } = useWindowDimensions();
+  const maxLeft = Math.max(8, viewportWidth - HABIT_MENU_WIDTH - 8);
+  const left = Math.min(Math.max(anchor.x + anchor.width - HABIT_MENU_WIDTH, 8), maxLeft);
+  const top = Math.max(8, anchor.y - HABIT_MENU_HEIGHT - 8);
+
+  return (
+    <Modal animationType="fade" transparent visible onRequestClose={onClose}>
+      <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+        <Pressable
+          accessibilityLabel="Close habit actions"
+          accessibilityRole="button"
+          onPress={onClose}
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          style={{
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderRadius: 12,
+            borderWidth: 1,
+            elevation: 12,
+            left,
+            padding: 5,
+            position: 'absolute',
+            shadowColor: '#000000',
+            shadowOffset: { height: 4, width: 0 },
+            shadowOpacity: 0.18,
+            shadowRadius: 10,
+            top,
+            width: HABIT_MENU_WIDTH,
+            zIndex: 10,
+          }}
+          testID={testID}
+        >
+          {children}
+        </View>
+      </View>
+    </Modal>
   );
 }

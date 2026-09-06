@@ -9,7 +9,7 @@ import {
   type HabitDayState,
   type LogicalDayKey,
 } from '@domain';
-import { AppIcon, normalizeIconName } from '@icons';
+import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
 import { AppButton, errorText, Screen } from '@ui';
 
@@ -223,34 +223,17 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
             width: '100%',
           }}
         >
-          <Row alignment="center" spacing={12}>
-            <Column
-              alignment="center"
-              style={{
-                backgroundColor: colors.surfaceMuted,
-                borderRadius: 16,
-                height: 56,
-                width: 56,
-              }}
+          <Column spacing={4}>
+            <Text
+              numberOfLines={2}
+              textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}
             >
-              <AppIcon
-                color={habit.color ?? colors.primary}
-                name={normalizeIconName(habit.iconName, 'heart')}
-                size={28}
-              />
-            </Column>
-            <Column spacing={4}>
-              <Text
-                numberOfLines={2}
-                textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}
-              >
-                {habit.name}
-              </Text>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                {habit.description ?? 'No description added.'}
-              </Text>
-            </Column>
-          </Row>
+              {habit.name}
+            </Text>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+              {habit.description ?? 'No description added.'}
+            </Text>
+          </Column>
           <Row alignment="center" spacing={8} style={{ width: '100%' }}>
             <AppIcon
               color={

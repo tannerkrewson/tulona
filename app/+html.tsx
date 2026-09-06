@@ -111,6 +111,13 @@ export default function RootHtml({ children }: { children: ReactNode }) {
           :root[data-tulona-safe-area="ios"] {
             --tulona-safe-area-bottom: env(safe-area-inset-bottom, 0px);
           }
+          /* Keep browser history edge-swipes from popping the root tabs. The
+             habit navigator owns its inner horizontal day gesture. */
+          html,
+          body,
+          #root {
+            overscroll-behavior-x: none;
+          }
         `}</style>
         <ScrollViewStyleReset />
       </head>

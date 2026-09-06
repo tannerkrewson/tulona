@@ -19,6 +19,14 @@ export function shiftHabitWeek(
   return shiftLogicalDay(selectedDay, amount * 7, { rolloverHour });
 }
 
+export function shiftHabitDay(
+  selectedDay: LogicalDayKey,
+  amount: -1 | 1,
+  rolloverHour = 0
+): LogicalDayKey {
+  return shiftLogicalDay(selectedDay, amount, { rolloverHour });
+}
+
 export function formatHabitDay(value: LogicalDayKey): string {
   const date = new Date(`${value}T12:00:00`);
   if (!Number.isFinite(date.getTime())) return value;

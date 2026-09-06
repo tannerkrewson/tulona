@@ -6,6 +6,7 @@ import {
   evaluateHabitSchedule,
   calculateHabitStreak,
   habitWeekDays,
+  shiftHabitDay,
   shiftHabitWeek,
   isHabitScheduledDay,
 } from '../src/habits';
@@ -191,6 +192,11 @@ async function run(): Promise<void> {
     shiftHabitWeek('2026-08-26', 1) === '2026-09-02' &&
       shiftHabitWeek('2026-08-26', -1) === '2026-08-19',
     'habit week swipes preserve the selected weekday across Sunday-first weeks'
+  );
+  assert(
+    shiftHabitDay('2026-08-26', -1) === '2026-08-25' &&
+      shiftHabitDay('1900-01-03', -1) === '1900-01-02',
+    'habit day navigation supports one-day historical swipes'
   );
 
   const dailyStates = ['2026-08-28', '2026-08-29'].map((logicalDay) => ({
