@@ -253,6 +253,7 @@ const styles = StyleSheet.create({
   },
   info: {
     flex: 1,
+    justifyContent: 'center',
     minWidth: 0,
     paddingHorizontal: 15,
     paddingVertical: 10,

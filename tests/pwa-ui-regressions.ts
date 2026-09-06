@@ -14,6 +14,10 @@ const read = (relativePath: string) => fs.readFileSync(path.join(root, relativeP
 const html = read('app/+html.tsx');
 const tabs = read('app/(tabs)/_layout.tsx');
 const activeBar = read('src/tracker/ActiveActivityBar.tsx');
+const activities = read('src/tracker/ActivitiesScreen.tsx');
+const activityRow = read('src/tracker/ActivityRow.tsx');
+const catalogEditActions = read('src/tracker/CatalogEditActions.tsx');
+const folderDetail = read('src/tracker/FolderDetailScreen.tsx');
 const systemColorScheme = read('src/theme/systemColorScheme.ts');
 const rootLayout = read('app/_layout.tsx');
 const folderRoute = 'app/(tabs)/folder/[folderId].tsx';
@@ -111,6 +115,10 @@ assert(
   'top-level tab changes must not create browser back-swipe history'
 );
 assert(
+  rootLayout.includes('gestureEnabled: false'),
+  'the root tab destination must not be dismissed by an edge-back gesture'
+);
+assert(
   tabs.includes('focused ? webTabActive : webTabInactive'),
   'web tab icons must use live active/inactive theme variables'
 );
@@ -120,6 +128,31 @@ assert(
     activeBar.includes('height: ACTIVE_BAR_HEIGHT') &&
     !activeBar.includes("pathname === '/' ? 82 : 14"),
   'the floating activity bar must use one fixed height and stay above the tab bar'
+);
+assert(
+  activeBar.includes("justifyContent: 'center'") &&
+    activeBar.includes('infoRow') &&
+    activeBar.includes('<DurationText'),
+  'top-level active activity text and timer must share the centered bar layout'
+);
+assert(
+  activities.includes(
+    'router.push(editMode ? `/folder-edit/${folder.id}` : `/folder/${folder.id}`)'
+  ) && !activities.includes('onEdit={() => router.push(`/folder-edit/${folder.id}`)}'),
+  'edit-mode folder rows must open folder edit without a separate folder pencil action'
+);
+assert(
+  activityRow.includes('<CatalogEditActions') &&
+    activityRow.includes('inline') &&
+    catalogEditActions.includes('inline ? { flexShrink: 0 }') &&
+    activities.includes('await store.getState().hydrate()'),
+  'tracker edit-mode activity arrows must be inline and refresh the visible catalog after reorder'
+);
+assert(
+  folderDetail.includes("const goBackToTracker = () => router.replace('/(tabs)')") &&
+    folderDetail.includes('onBack={goBackToTracker}') &&
+    folderDetail.includes('await store.getState().hydrate()'),
+  'folder back must return to the tracker context and child reorders must refresh the catalog'
 );
 assert(
   tabs.includes('name="folder/[folderId]"') &&
