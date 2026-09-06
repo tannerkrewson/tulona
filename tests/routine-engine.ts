@@ -4,7 +4,9 @@ import {
   catchUpRoutine,
   completeRoutineStep,
   markRoutineAlarmFired,
+  moveCurrentRoutineStepToEnd,
   pauseRoutine,
+  reorderActiveRoutineStep,
   resumeRoutine,
   routineTiming,
   skipRoutineStep,
@@ -125,6 +127,27 @@ async function run(): Promise<void> {
   assert(skipped.stepSessions[0]?.outcome === 'skipped', 'skip records its outcome');
   const cancelled = cancelRoutine(skipped, at(200));
   assert(cancelled.status === 'cancelled', 'cancel produces an explicit cancelled state');
+
+  const movedToEnd = moveCurrentRoutineStepToEnd(
+    startRoutine(snapshot(['overtime', 'overtime', 'overtime']), start),
+    at(100)
+  );
+  assert(
+    movedToEnd.routineSnapshot.steps[0]?.id === ids.second &&
+      movedToEnd.routineSnapshot.steps[2]?.id === ids.first,
+    'moving the current step to the end preserves the remaining step order'
+  );
+  assert(movedToEnd.currentStepIndex === 0, 'moving a step starts the next pending step');
+  assert(
+    movedToEnd.stepSessions.find((session) => session.stepId === ids.first)?.status === 'pending',
+    'the moved step becomes pending instead of creating duplicate completion history'
+  );
+  const reordered = reorderActiveRoutineStep(movedToEnd, ids.first, 'up');
+  assert(
+    reordered.routineSnapshot.steps[1]?.id === ids.first,
+    'active routine reordering persists normalized sort order'
+  );
+  assert(reordered.currentStepIndex === 0, 'active routine reordering keeps current step active');
 
   const alarmGuarded = markRoutineAlarmFired(initial, ids.first);
   assert(alarmGuarded.alarmFiredStepIds?.length === 1, 'alarm firing is persisted per step');

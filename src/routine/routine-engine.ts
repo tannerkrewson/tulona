@@ -13,6 +13,7 @@ import {
 
 export type RoutineTimestampInput = Date | number | string;
 export type RoutineStepAction = 'done' | 'skipped';
+export type RoutineStepMoveDirection = 'up' | 'down';
 
 export interface RoutineTiming {
   status: ActiveRoutine['status'];
@@ -79,6 +80,10 @@ function cloneRoutine(activeRoutine: ActiveRoutine): ActiveRoutine {
 
 function orderedSteps(snapshot: RoutineSnapshot) {
   return [...snapshot.steps].sort((left, right) => left.sortOrder - right.sortOrder);
+}
+
+function normalizeStepOrder(steps: RoutineSnapshot['steps']): RoutineSnapshot['steps'] {
+  return steps.map((step, sortOrder) => ({ ...step, sortOrder }));
 }
 
 function currentStep(activeRoutine: ActiveRoutine) {
@@ -371,6 +376,67 @@ export function advanceRoutine(
   return action === 'skipped'
     ? skipRoutineStep(activeRoutine, at)
     : completeRoutineStep(activeRoutine, at);
+}
+
+/** Reorders a persisted active routine while keeping the current step active. */
+export function reorderActiveRoutineStep(
+  activeRoutine: ActiveRoutine,
+  stepId: UUID,
+  direction: RoutineStepMoveDirection
+): ActiveRoutine {
+  if (activeRoutine.status !== 'running' && activeRoutine.status !== 'paused') {
+    throw new Error(`Routine steps cannot be reordered while ${activeRoutine.status}`);
+  }
+  const next = cloneRoutine(activeRoutine);
+  const steps = orderedSteps(next.routineSnapshot);
+  const from = steps.findIndex((step) => step.id === stepId);
+  if (from < 0) throw new Error(`Unknown routine step "${stepId}"`);
+  const to = direction === 'up' ? from - 1 : from + 1;
+  if (to < 0 || to >= steps.length) return next;
+  const [moved] = steps.splice(from, 1);
+  if (!moved) return next;
+  steps.splice(to, 0, moved);
+  next.routineSnapshot.steps = normalizeStepOrder(steps);
+  const currentId = orderedSteps(activeRoutine.routineSnapshot)[activeRoutine.currentStepIndex]?.id;
+  const currentIndex = currentId
+    ? steps.findIndex((step) => step.id === currentId)
+    : activeRoutine.currentStepIndex;
+  next.currentStepIndex = currentIndex < 0 ? activeRoutine.currentStepIndex : currentIndex;
+  return next;
+}
+
+/** Moves the current step to the end and starts the next pending step immediately. */
+export function moveCurrentRoutineStepToEnd(
+  activeRoutine: ActiveRoutine,
+  at: RoutineTimestampInput = Date.now()
+): ActiveRoutine {
+  if (activeRoutine.status !== 'running') {
+    throw new Error('A running routine is required to move a step to the end');
+  }
+  const next = cloneRoutine(activeRoutine);
+  const steps = orderedSteps(next.routineSnapshot);
+  const current = steps[next.currentStepIndex];
+  const session = current
+    ? next.stepSessions.find((candidate) => candidate.stepId === current.id)
+    : null;
+  if (!current || !session || session.status !== 'active') {
+    throw new Error('Routine must have exactly one active step');
+  }
+  if (steps.length < 2 || next.currentStepIndex === steps.length - 1) return next;
+  session.status = 'pending';
+  session.startedAt = null;
+  session.completedAt = null;
+  session.outcome = undefined;
+  session.addedTimeMs = 0;
+  steps.splice(next.currentStepIndex, 1);
+  steps.push(current);
+  next.routineSnapshot.steps = normalizeStepOrder(steps);
+  const nextIndex = next.routineSnapshot.steps.findIndex((step) => {
+    const candidate = next.stepSessions.find((stepSession) => stepSession.stepId === step.id);
+    return candidate?.status === 'pending';
+  });
+  if (nextIndex < 0) throw new Error('Routine has no pending step after moving the current step');
+  return initializeNextStep(next, nextIndex, atMs(at));
 }
 
 /** Catches up every elapsed auto-advance step and stops at overtime/future work. */
