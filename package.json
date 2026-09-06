@@ -15,6 +15,7 @@
     "test:habits": "tsx tests/habits.ts",
     "test:theme": "tsx tests/theme-colors.ts",
     "test:pwa-ui": "tsx tests/pwa-ui-regressions.ts",
+    "test:settings-ui": "tsx tests/settings-ui-regressions.ts",
     "test:persistence": "tsx tests/persistence-checks.ts",
     "test:tracker": "tsx tests/tracker-engine.ts",
     "test:routine": "tsx tests/routine-service.ts",

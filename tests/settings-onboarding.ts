@@ -11,6 +11,7 @@ import { createHabitService } from '../src/habits/habit-service';
 import { createOnboardingService } from '../src/onboarding/onboarding-service';
 import { createSettingsService, DEFAULT_SETTINGS } from '../src/settings/settings-service';
 import { createSettingsStore } from '../src/settings/settings-store';
+import { getSettingsCategory, settingsCategories } from '../src/settings/settings-categories';
 import type { AsyncStorageLike } from '../src/data';
 
 class MemoryStorage implements AsyncStorageLike {
@@ -59,6 +60,24 @@ async function createServices(
 }
 
 async function run(): Promise<void> {
+  assert(
+    settingsCategories.every(
+      (category) => !('subtitle' in category) && !('description' in category)
+    ),
+    'main settings categories must remain simple rows without subtitles'
+  );
+  for (const category of settingsCategories) {
+    const routeId = category.path.slice(category.path.lastIndexOf('/') + 1);
+    assert(
+      getSettingsCategory(routeId)?.id === category.id,
+      `settings category ${category.id} must preserve its navigation route`
+    );
+  }
+  assert(
+    getSettingsCategory('time-boundaries')?.id === 'time-and-activity',
+    'legacy settings routes must continue resolving to their canonical category'
+  );
+
   const database = new AsyncStorageDatabase(new MemoryStorage());
   const manager = createDatasetManager(database);
   const services = await createServices(database, manager);
