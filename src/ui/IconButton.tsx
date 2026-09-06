@@ -14,6 +14,7 @@ export interface IconButtonProps {
   variant?: IconButtonVariant;
   iconSize?: number;
   accessibilityHint?: string;
+  color?: string;
 }
 
 /** Shared icon-only control with a consistent touch target and horizontal spacing. */
@@ -27,6 +28,7 @@ export function IconButton({
   variant = 'muted',
   iconSize,
   accessibilityHint,
+  color,
 }: IconButtonProps) {
   const { colors } = useAppTheme();
   const primary = variant === 'primary';
@@ -57,7 +59,7 @@ export function IconButton({
     >
       <AppIcon
         accessibilityLabel={label}
-        color={primary ? colors.onPrimary : plain ? colors.primary : colors.text}
+        color={color ?? (primary ? colors.onPrimary : plain ? colors.primary : colors.text)}
         name={icon}
         size={iconSize ?? (primary ? 23 : 20)}
         strokeWidth={2.5}

@@ -13,6 +13,7 @@ export interface AppScreenProps {
   description?: string;
   scrollable?: boolean;
   testID?: string;
+  backgroundColor?: string;
 }
 
 const hostStyles = StyleSheet.create({
@@ -35,16 +36,18 @@ export function AppScreen({
   description,
   scrollable = true,
   testID,
+  backgroundColor,
 }: AppScreenProps) {
   const { colorScheme, colors } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const screenBackground = backgroundColor ?? colors.background;
   const content = (
     <Column
       alignment="start"
       spacing={16}
       style={{
         ...contentStyle,
-        backgroundColor: colors.background,
+        backgroundColor: screenBackground,
         paddingLeft: 20 + insets.left,
         paddingRight: 20 + insets.right,
         paddingBottom: 32,
@@ -87,7 +90,7 @@ export function AppScreen({
       // The tab navigator owns the bottom safe area; retain only screen-edge insets here.
       ignoreSafeArea="all"
       seedColor={colors.primary}
-      style={[hostStyles.host, { backgroundColor: colors.background }]}
+      style={[hostStyles.host, { backgroundColor: screenBackground }]}
       testID={testID}
       useViewportSizeMeasurement
     >
