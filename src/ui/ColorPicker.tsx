@@ -67,6 +67,10 @@ export function ColorPicker({
     !availableOptions.some((option) => option.value.toLowerCase() === selectedValue);
   const rootTestID = testID ?? 'color-picker';
   const [customPickerOpen, setCustomPickerOpen] = useState(false);
+  const selectColor = (nextValue: string | null) => {
+    setCustomPickerOpen(false);
+    onChange(nextValue);
+  };
 
   return (
     <Column spacing={10} style={{ width: '100%' }} testID={testID}>
@@ -75,7 +79,7 @@ export function ColorPicker({
           <AppButton
             disabled={value == null}
             label="Default"
-            onPress={() => onChange(null)}
+            onPress={() => selectColor(null)}
             style={{ height: 44, paddingHorizontal: 14 }}
             testID={testID ? `${testID}-clear` : undefined}
             variant={value == null ? 'filled' : 'outlined'}
@@ -100,7 +104,9 @@ export function ColorPicker({
           }}
           testID={`${rootTestID}-custom-toggle`}
         >
-          <Text textStyle={{ fontSize: 24, lineHeight: 28 }}>🌈</Text>
+          <View style={{ alignItems: 'center', height: 28, justifyContent: 'center', width: 28 }}>
+            <Text textStyle={{ fontSize: 24, lineHeight: 24 }}>🌈</Text>
+          </View>
         </Pressable>
         {availableOptions.map((option) => {
           const selected = selectedValue === option.value.toLowerCase();
@@ -110,7 +116,7 @@ export function ColorPicker({
               accessibilityLabel={`${option.label}${selected ? ', selected' : ''}`}
               accessibilityRole="radio"
               accessibilityState={{ selected }}
-              onPress={() => onChange(option.value)}
+              onPress={() => selectColor(option.value)}
               style={{
                 alignItems: 'center',
                 borderColor: selected ? colors.focus : 'transparent',
@@ -122,12 +128,13 @@ export function ColorPicker({
               }}
               testID={`${rootTestID}-${option.value}`}
             >
-              <Column
-                alignment="center"
+              <View
                 style={{
+                  alignItems: 'center',
                   backgroundColor: option.value,
                   borderRadius: 18,
                   height: 36,
+                  justifyContent: 'center',
                   width: 36,
                 }}
               >
@@ -137,9 +144,10 @@ export function ColorPicker({
                     color={getAccessibleTextColor(option.value)}
                     name="check"
                     size={18}
+                    strokeWidth={2.8}
                   />
                 ) : null}
-              </Column>
+              </View>
             </Pressable>
           );
         })}

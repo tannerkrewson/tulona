@@ -3,46 +3,28 @@ import type { IconName } from '@icons/icon-names';
 export const settingsCategories = [
   { id: 'appearance', title: 'Appearance', icon: 'palette', path: '/settings/appearance' },
   {
-    id: 'time-boundaries',
-    title: 'Time boundaries',
+    id: 'time-and-activity',
+    title: 'Time & activity',
     icon: 'clock',
-    path: '/settings/time-boundaries',
+    path: '/settings/time-and-activity',
   },
   {
-    id: 'short-activity-filter',
-    title: 'Short activity filter',
-    icon: 'timer',
-    path: '/settings/short-activity-filter',
-  },
-  {
-    id: 'routine-alarm',
-    title: 'Routine alarm',
-    icon: 'alarm-clock',
-    path: '/settings/routine-alarm',
-  },
-  {
-    id: 'routine-defaults',
-    title: 'Routine defaults',
+    id: 'routines',
+    title: 'Routines',
     icon: 'repeat',
-    path: '/settings/routine-defaults',
+    path: '/settings/routines',
   },
   {
-    id: 'catalog-visibility',
-    title: 'Catalog visibility',
+    id: 'catalog',
+    title: 'Catalog',
     icon: 'archive',
-    path: '/settings/catalog-visibility',
+    path: '/settings/catalog',
   },
   {
-    id: 'backup-restore',
-    title: 'Backup & restore',
+    id: 'data',
+    title: 'Data',
     icon: 'upload',
-    path: '/settings/backup-restore',
-  },
-  {
-    id: 'prototype-data',
-    title: 'Prototype data',
-    icon: 'trash-2',
-    path: '/settings/prototype-data',
+    path: '/settings/data',
   },
 ] as const satisfies readonly {
   id: string;
@@ -54,7 +36,18 @@ export const settingsCategories = [
 export type SettingsCategory = (typeof settingsCategories)[number];
 export type SettingsCategoryId = SettingsCategory['id'];
 
+const legacyCategoryIds: Readonly<Record<string, SettingsCategoryId>> = {
+  'time-boundaries': 'time-and-activity',
+  'short-activity-filter': 'time-and-activity',
+  'routine-alarm': 'routines',
+  'routine-defaults': 'routines',
+  'catalog-visibility': 'catalog',
+  'backup-restore': 'data',
+  'prototype-data': 'data',
+};
+
 export function getSettingsCategory(value: string | string[] | undefined): SettingsCategory | null {
   const id = Array.isArray(value) ? value[0] : value;
-  return settingsCategories.find((category) => category.id === id) ?? null;
+  const canonicalId = legacyCategoryIds[id ?? ''] ?? id;
+  return settingsCategories.find((category) => category.id === canonicalId) ?? null;
 }
