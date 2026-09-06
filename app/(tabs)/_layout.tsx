@@ -19,6 +19,10 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      // Switching top-level tabs should replace the current destination rather
+      // than create browser history that iOS Safari can reveal with an edge
+      // swipe. Nested screens keep their normal back-stack behavior.
+      backBehavior="none"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: isWeb ? webTabActive : colors.primary,

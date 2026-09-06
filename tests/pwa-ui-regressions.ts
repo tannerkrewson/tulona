@@ -107,6 +107,10 @@ assert(
   'tab tints must use live theme variables on web'
 );
 assert(
+  tabs.includes('backBehavior="none"'),
+  'top-level tab changes must not create browser back-swipe history'
+);
+assert(
   tabs.includes('focused ? webTabActive : webTabInactive'),
   'web tab icons must use live active/inactive theme variables'
 );

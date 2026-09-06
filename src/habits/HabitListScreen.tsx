@@ -463,6 +463,7 @@ function HabitListItem({
           opacity: saving ? 0.55 : pressed ? 0.72 : 1,
           paddingHorizontal: 12,
           paddingVertical: 10,
+          userSelect: 'none',
           width: '100%',
         })}
         testID={`toggle-habit-${habit.id}`}
