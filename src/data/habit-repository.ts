@@ -1,5 +1,11 @@
 import { habitCollectionSchema, habitDayStateSchema, habitMonthCollectionSchema } from '@domain';
-import type { Habit, HabitDayState, HabitMonthCollection, MonthKey } from '@domain';
+import type {
+  Habit,
+  HabitDayOutcome,
+  HabitDayState,
+  HabitMonthCollection,
+  MonthKey,
+} from '@domain';
 
 import type { KeyValueDatabase } from './database';
 import { DatasetStore } from './dataset-store';
@@ -16,6 +22,12 @@ export interface HabitRepositoryApi {
     habitId: string,
     logicalDay: string,
     signals: Partial<Pick<HabitDayState, 'manual' | 'automatic'>>,
+    updatedAt: string
+  ): Promise<HabitDayState>;
+  updateOutcome(
+    habitId: string,
+    logicalDay: string,
+    outcome: HabitDayOutcome | null,
     updatedAt: string
   ): Promise<HabitDayState>;
 }
@@ -113,6 +125,30 @@ export class HabitRepository implements HabitRepositoryApi {
       automatic: Object.prototype.hasOwnProperty.call(signals, 'automatic')
         ? (signals.automatic ?? null)
         : (existing?.automatic ?? null),
+      outcome: existing?.outcome ?? null,
+      updatedAt,
+    };
+    await this.upsertDayState(next);
+    return next;
+  }
+
+  async updateOutcome(
+    habitId: string,
+    logicalDay: string,
+    outcome: HabitDayOutcome | null,
+    updatedAt: string
+  ): Promise<HabitDayState> {
+    const month = logicalDay.slice(0, 7) as MonthKey;
+    const collection = await this.readMonth(month);
+    const existing = collection.states.find(
+      (state) => state.habitId === habitId && state.logicalDay === logicalDay
+    );
+    const next: HabitDayState = {
+      habitId,
+      logicalDay: logicalDay as HabitDayState['logicalDay'],
+      manual: existing?.manual ?? null,
+      automatic: existing?.automatic ?? null,
+      outcome,
       updatedAt,
     };
     await this.upsertDayState(next);

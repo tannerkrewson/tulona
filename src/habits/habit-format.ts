@@ -1,4 +1,4 @@
-import type { HabitDayState, HabitSchedule } from '@domain';
+import type { HabitDayOutcome, HabitDayState, HabitSchedule } from '@domain';
 
 export const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
@@ -21,7 +21,12 @@ export function formatHabitSchedule(schedule: HabitSchedule): string {
   }
 }
 
-export function habitCompletionLabel(state: Pick<HabitDayState, 'manual' | 'automatic'> | null) {
+export function habitCompletionLabel(
+  state: Pick<HabitDayState, 'manual' | 'automatic' | 'outcome'> | null
+) {
+  if (state?.outcome === 'failed') return 'Failed';
+  if (state?.outcome === 'skipped') return 'Skipped';
+  if (state?.outcome === 'done') return 'Done';
   if (state?.manual === true && state.automatic === true)
     return 'Completed manually + automatically';
   if (state?.manual === true) return 'Completed manually';
@@ -34,4 +39,17 @@ export function habitSignalSummary(state: Pick<HabitDayState, 'manual' | 'automa
   if (state?.manual === true) signals.push('manual');
   if (state?.automatic === true) signals.push('automatic');
   return signals.length > 0 ? signals.join(' + ') : 'none';
+}
+
+export function habitOutcomeLabel(outcome: HabitDayOutcome | null | undefined): string | null {
+  switch (outcome) {
+    case 'done':
+      return 'Done';
+    case 'failed':
+      return 'Failed';
+    case 'skipped':
+      return 'Skipped';
+    default:
+      return null;
+  }
 }

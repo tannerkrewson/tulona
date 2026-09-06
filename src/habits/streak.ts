@@ -36,24 +36,30 @@ function completedByDay(
   const result = new Map<string, boolean>();
   for (const state of states) {
     if (state.logicalDay > currentDay) continue;
-    result.set(
-      state.logicalDay,
-      (result.get(state.logicalDay) ?? false) || state.manual === true || state.automatic === true
-    );
+    result.set(state.logicalDay, (result.get(state.logicalDay) ?? false) || habitCompleted(state));
   }
   return result;
 }
 
 function periodCompleted(
   period: ReturnType<typeof evaluateHabitSchedule>[number],
-  completed: ReadonlyMap<string, boolean>
-): boolean {
-  if (period.kind === 'day') return completed.get(period.start) === true;
+  completed: ReadonlyMap<string, boolean>,
+  skipped: ReadonlySet<string>,
+  failed: ReadonlySet<string>
+): 'complete' | 'incomplete' | 'skipped' | 'failed' {
+  if (period.kind === 'day') {
+    if (failed.has(period.start)) return 'failed';
+    if (skipped.has(period.start)) return 'skipped';
+    return completed.get(period.start) === true ? 'complete' : 'incomplete';
+  }
+  if ([...failed].some((day) => day >= period.start && day <= period.end)) {
+    return 'failed';
+  }
   let count = 0;
   for (const [day, isComplete] of completed) {
     if (isComplete && day >= period.start && day <= period.end) count += 1;
   }
-  return count >= period.requiredCount;
+  return count >= period.requiredCount ? 'complete' : 'incomplete';
 }
 
 function runLength(values: readonly boolean[]): number {
@@ -100,23 +106,40 @@ export function calculateHabitStreak(
   }
 
   const completed = completedByDay(states, currentDay);
+  const skipped = new Set(
+    states
+      .filter((state) => state.logicalDay <= currentDay && state.outcome === 'skipped')
+      .map((state) => state.logicalDay)
+  );
+  const failed = new Set(
+    states
+      .filter((state) => state.logicalDay <= currentDay && state.outcome === 'failed')
+      .map((state) => state.logicalDay)
+  );
   const periods = evaluateHabitSchedule(
     habit.schedule,
     { start: firstDay, end: currentDay },
     options
   );
-  const values = periods.map((period) => periodCompleted(period, completed));
-  const lastPeriod = periods.at(-1);
-  const lastValue = values.at(-1);
+  const statuses = periods.map((period) => periodCompleted(period, completed, skipped, failed));
+  const values = statuses
+    .filter((status) => status !== 'skipped')
+    .map((status) => status === 'complete');
+  const lastMeaningfulIndex = statuses.findLastIndex((status) => status !== 'skipped');
+  const lastPeriod = lastMeaningfulIndex < 0 ? undefined : periods[lastMeaningfulIndex];
+  const lastStatus = lastMeaningfulIndex < 0 ? undefined : statuses[lastMeaningfulIndex];
   const currentPeriodIncomplete =
-    lastPeriod !== undefined && lastPeriod.end >= currentDay && lastValue === false;
+    lastPeriod !== undefined && lastPeriod.end >= currentDay && lastStatus === 'incomplete';
   const longest = runLength(values);
   const current = currentRun(values, currentPeriodIncomplete);
   return { current, longest, currentStreak: current, longestStreak: longest };
 }
 
-export function habitCompleted(state: Pick<HabitDayState, 'manual' | 'automatic'> | null): boolean {
-  return state?.manual === true || state?.automatic === true;
+export function habitCompleted(
+  state: Pick<HabitDayState, 'manual' | 'automatic' | 'outcome'> | null
+): boolean {
+  if (state?.outcome === 'failed' || state?.outcome === 'skipped') return false;
+  return state?.outcome === 'done' || state?.manual === true || state?.automatic === true;
 }
 
 export const getHabitStreak = calculateHabitStreak;

@@ -7,6 +7,7 @@ import {
   sortByOrder,
   toTimestamp,
   type Habit,
+  type HabitDayOutcome,
   type HabitDayState,
   type HabitSchedule,
   type HabitTrigger,
@@ -86,6 +87,11 @@ export interface HabitServiceApi {
     habitId: UUID,
     logicalDay: LogicalDayKey,
     completed: boolean | null
+  ): Promise<HabitDayState>;
+  setOutcome(
+    habitId: UUID,
+    logicalDay: LogicalDayKey,
+    outcome: HabitDayOutcome | null
   ): Promise<HabitDayState>;
 }
 
@@ -351,7 +357,14 @@ export class HabitService implements HabitServiceApi {
     logicalDay: LogicalDayKey,
     completed: boolean | null
   ): Promise<HabitDayState> {
-    return this.updateSignals(habitId, logicalDay, { manual: completed });
+    const next = await this.updateSignals(habitId, logicalDay, { manual: completed });
+    if (completed === true && next.outcome !== 'done') {
+      return this.setOutcome(habitId, logicalDay, 'done');
+    }
+    if (completed === null && next.outcome === 'done') {
+      return this.setOutcome(habitId, logicalDay, null);
+    }
+    return next;
   }
 
   async setAutomaticCompletion(
@@ -360,6 +373,19 @@ export class HabitService implements HabitServiceApi {
     completed: boolean | null
   ): Promise<HabitDayState> {
     return this.updateSignals(habitId, logicalDay, { automatic: completed });
+  }
+
+  async setOutcome(
+    habitId: UUID,
+    logicalDay: LogicalDayKey,
+    outcome: HabitDayOutcome | null
+  ): Promise<HabitDayState> {
+    await this.get(habitId);
+    assertLogicalDay(logicalDay);
+    if (outcome !== null && !['done', 'failed', 'skipped'].includes(outcome)) {
+      validation(`Invalid habit outcome "${outcome}"`);
+    }
+    return this.repository.updateOutcome(habitId, logicalDay, outcome, this.timestamp());
   }
 
   private async setArchiveState(id: UUID, archived: boolean): Promise<Habit> {

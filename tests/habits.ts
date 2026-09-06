@@ -5,6 +5,8 @@ import {
   evaluateHabitTrigger,
   evaluateHabitSchedule,
   calculateHabitStreak,
+  habitWeekDays,
+  shiftHabitWeek,
   isHabitScheduledDay,
 } from '../src/habits';
 import type {
@@ -103,6 +105,27 @@ class MemoryHabitRepository implements HabitRepositoryApi {
       logicalDay: logicalDay as HabitDayState['logicalDay'],
       manual: signals.manual ?? current?.manual ?? null,
       automatic: signals.automatic ?? current?.automatic ?? null,
+      outcome: current?.outcome ?? null,
+      updatedAt,
+    };
+    this.states.set(key, next);
+    return next;
+  }
+
+  async updateOutcome(
+    habitId: string,
+    logicalDay: string,
+    outcome: HabitDayState['outcome'],
+    updatedAt: string
+  ): Promise<HabitDayState> {
+    const key = `${habitId}:${logicalDay}`;
+    const current = this.states.get(key);
+    const next = {
+      habitId,
+      logicalDay: logicalDay as HabitDayState['logicalDay'],
+      manual: current?.manual ?? null,
+      automatic: current?.automatic ?? null,
+      outcome,
       updatedAt,
     };
     this.states.set(key, next);
@@ -155,6 +178,15 @@ async function run(): Promise<void> {
     ).length === 2,
     'weekly-count evaluation returns calendar-week periods'
   );
+  assert(
+    habitWeekDays('2026-08-26').join(',') ===
+      '2026-08-23,2026-08-24,2026-08-25,2026-08-26,2026-08-27,2026-08-28,2026-08-29',
+    'habit day strip is Sunday-first'
+  );
+  assert(
+    shiftHabitWeek('1900-01-03', -1) === '1899-12-27',
+    'habit day navigation supports arbitrary past dates'
+  );
 
   const dailyStates = ['2026-08-28', '2026-08-29'].map((logicalDay) => ({
     habitId: ids.habit,
@@ -168,6 +200,42 @@ async function run(): Promise<void> {
     dailyStreak.current === 2 && dailyStreak.longest === 2,
     'an incomplete current daily period does not break the current streak'
   );
+  const skippedStreak = calculateHabitStreak(
+    habit(ids.habit),
+    ['2026-08-27', '2026-08-28', '2026-08-29'].map((logicalDay, index) => ({
+      habitId: ids.habit,
+      logicalDay,
+      manual: index !== 1,
+      automatic: null,
+      outcome: index === 1 ? 'skipped' : null,
+      updatedAt: createdAt,
+    })),
+    { now: '2026-08-29' }
+  );
+  assert(skippedStreak.current === 2, 'skipped days preserve the current streak');
+  const failedStreak = calculateHabitStreak(
+    habit(ids.habit),
+    [
+      {
+        habitId: ids.habit,
+        logicalDay: '2026-08-28',
+        manual: true,
+        automatic: null,
+        outcome: null,
+        updatedAt: createdAt,
+      },
+      {
+        habitId: ids.habit,
+        logicalDay: '2026-08-29',
+        manual: null,
+        automatic: null,
+        outcome: 'failed',
+        updatedAt: createdAt,
+      },
+    ],
+    { now: '2026-08-29' }
+  );
+  assert(failedStreak.current === 0, 'failed outcomes break the current streak');
   const weekdayStreak = calculateHabitStreak(
     { schedule: { kind: 'weekly', daysOfWeek: [1, 2, 3, 4, 5] } },
     [27, 28].map((day) => ({
@@ -264,6 +332,12 @@ async function run(): Promise<void> {
     storedState?.manual === true && storedState.automatic === true,
     'signals are independently writable'
   );
+  await habitService.setOutcome(ids.habit, '2026-08-30', 'skipped');
+  assert(
+    repository.states.get(`${ids.habit}:2026-08-30`)?.outcome === 'skipped',
+    'explicit skipped outcomes persist alongside reconciliation signals'
+  );
+  await habitService.setOutcome(ids.habit, '2026-08-30', null);
   await habitService.archive(ids.habit);
   assert(
     (await habitService.get(ids.habit)).archivedAt !== null,

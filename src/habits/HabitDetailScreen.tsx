@@ -17,7 +17,7 @@ import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
 import { formatHabitSchedule, habitCompletionLabel, habitSignalSummary } from './habit-format';
 import { loadHabitStore } from './habit-runtime';
-import { calculateHabitStreak } from './streak';
+import { calculateHabitStreak, habitCompleted } from './streak';
 import type { HabitStore } from './habit-store';
 import { isHabitScheduledDay } from './schedule';
 
@@ -420,7 +420,9 @@ function HistoryGrid({
         <Row alignment="center" key={`history-week-${week}`} spacing={5} style={{ width: '100%' }}>
           {days.slice(week * 7, week * 7 + 7).map((day) => {
             const state = stateForDay(day);
-            const complete = state?.manual === true || state?.automatic === true;
+            const complete = habitCompleted(state);
+            const failed = state?.outcome === 'failed';
+            const skipped = state?.outcome === 'skipped';
             const scheduled = isHabitScheduledDay(habit.schedule, day, {
               rolloverHour: logicalDayRolloverHour,
             });
@@ -438,14 +440,20 @@ function HistoryGrid({
                   style={{
                     backgroundColor: complete
                       ? colors.success.background
-                      : !scheduled
-                        ? colors.surfaceMuted
-                        : colors.inactive.background,
+                      : failed
+                        ? colors.danger.background
+                        : skipped
+                          ? colors.surfaceMuted
+                          : !scheduled
+                            ? colors.surfaceMuted
+                            : colors.inactive.background,
                     borderColor: complete
                       ? colors.success.foreground
-                      : !scheduled
-                        ? colors.border
-                        : colors.border,
+                      : failed
+                        ? colors.danger.foreground
+                        : !scheduled
+                          ? colors.border
+                          : colors.border,
                     borderRadius: 9,
                     borderWidth: 1,
                     height: 30,
@@ -453,9 +461,15 @@ function HistoryGrid({
                   }}
                 >
                   <AppIcon
-                    accessibilityLabel={`${day}: ${complete ? 'Completed' : scheduled ? 'Not completed' : 'Not scheduled'}`}
-                    color={complete ? colors.success.foreground : colors.textMuted}
-                    name={complete ? 'check' : 'circle'}
+                    accessibilityLabel={`${day}: ${complete ? 'Completed' : failed ? 'Failed' : skipped ? 'Skipped' : scheduled ? 'Not completed' : 'Not scheduled'}`}
+                    color={
+                      complete
+                        ? colors.success.foreground
+                        : failed
+                          ? colors.danger.foreground
+                          : colors.textMuted
+                    }
+                    name={complete ? 'check' : failed ? 'x' : skipped ? 'skip-forward' : 'circle'}
                     size={14}
                   />
                 </Column>

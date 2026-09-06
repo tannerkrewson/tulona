@@ -67,6 +67,7 @@ const iconDefinitions = [
   { name: 'upload', label: 'Backup', keywords: ['export', 'restore'] },
   { name: 'wallet', label: 'Finance', keywords: ['money', 'budget', 'errands'] },
   { name: 'watch', label: 'Timepiece', keywords: ['time', 'wearable', 'duration'] },
+  { name: 'x', label: 'Failed', keywords: ['close', 'cancel', 'failed'] },
   { name: 'zap', label: 'Energy', keywords: ['quick', 'power', 'focus'] },
 ] as const;
 

@@ -59,6 +59,7 @@ import {
   Upload,
   Wallet,
   Watch,
+  X,
   Zap,
   type LucideIcon,
   type LucideProps,
@@ -128,6 +129,7 @@ export const iconRegistry: Readonly<Record<IconName, LucideIcon>> = {
   upload: Upload,
   wallet: Wallet,
   watch: Watch,
+  x: X,
   zap: Zap,
 };
 
