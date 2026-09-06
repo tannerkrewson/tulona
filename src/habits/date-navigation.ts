@@ -29,6 +29,17 @@ export function habitWeekSwipeTarget(
   return nextDay <= today ? nextDay : null;
 }
 
+/** One-day pager target for the habit list. Swipe right goes to yesterday. */
+export function habitDaySwipeTarget(
+  selectedDay: LogicalDayKey,
+  amount: -1 | 1,
+  today: LogicalDayKey,
+  rolloverHour = 0
+): LogicalDayKey | null {
+  const nextDay = shiftHabitDay(selectedDay, amount, rolloverHour);
+  return nextDay <= today ? nextDay : null;
+}
+
 export function shiftHabitDay(
   selectedDay: LogicalDayKey,
   amount: -1 | 1,

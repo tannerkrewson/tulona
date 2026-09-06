@@ -12,6 +12,7 @@ import {
   type RoutineStepStatus,
 } from '@domain';
 import { AppIcon } from '@icons';
+import { useAppTheme } from '@theme';
 import { errorText, IconButton, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
@@ -22,7 +23,22 @@ export interface RoutineRunnerScreenProps {
   routineId: string;
 }
 
-const RUNNER = {
+interface RunnerPalette {
+  background: string;
+  circle: string;
+  surface: string;
+  border: string;
+  text: string;
+  muted: string;
+  accent: string;
+  accentText: string;
+  danger: string;
+  errorCard: string;
+  modalSheet: string;
+  stepToggle: string;
+}
+
+const RUNNER_DARK: RunnerPalette = {
   background: '#070707',
   circle: '#111111',
   surface: '#171717',
@@ -32,17 +48,39 @@ const RUNNER = {
   accent: '#B7F36B',
   accentText: '#101400',
   danger: '#FF9898',
+  errorCard: '#271616',
+  modalSheet: '#0D0D0D',
+  stepToggle: '#202020',
 };
+
+const RUNNER_LIGHT: RunnerPalette = {
+  background: '#F5F5F5',
+  circle: '#FFFFFF',
+  surface: '#FFFFFF',
+  border: '#D4D4D4',
+  text: '#171717',
+  muted: '#666666',
+  accent: '#2F7A1F',
+  accentText: '#FFFFFF',
+  danger: '#B3261E',
+  errorCard: '#F7E4E4',
+  modalSheet: '#FFFFFF',
+  stepToggle: '#EEEEEE',
+};
+
+function runnerPalette(colorScheme: 'light' | 'dark'): RunnerPalette {
+  return colorScheme === 'dark' ? RUNNER_DARK : RUNNER_LIGHT;
+}
 
 function absoluteTime(timestamp: string | null): string {
   if (!timestamp) return '—';
   return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function statusColor(status: RoutineStepStatus): string {
-  if (status === 'completed' || status === 'active') return RUNNER.accent;
-  if (status === 'skipped') return RUNNER.muted;
-  return RUNNER.border;
+function statusColor(status: RoutineStepStatus, palette: RunnerPalette): string {
+  if (status === 'completed' || status === 'active') return palette.accent;
+  if (status === 'skipped') return palette.muted;
+  return palette.border;
 }
 
 function stepStatusLabel(status: RoutineStepStatus): string {
@@ -66,18 +104,25 @@ function orderedSteps(active: ActiveRoutine) {
 
 function RunnerError({
   message,
+  palette,
   title = 'Routine unavailable',
   children,
 }: {
   message: string | null;
+  palette: RunnerPalette;
   title?: string;
   children?: ReactNode;
 }) {
   if (!message) return null;
   return (
-    <View style={styles.errorCard}>
-      <Text textStyle={{ color: RUNNER.danger, fontSize: 16, fontWeight: '700' }}>{title}</Text>
-      <Text textStyle={{ color: RUNNER.danger, fontSize: 14 }}>{message}</Text>
+    <View
+      style={[
+        styles.errorCard,
+        { backgroundColor: palette.errorCard, borderColor: palette.border },
+      ]}
+    >
+      <Text textStyle={{ color: palette.danger, fontSize: 16, fontWeight: '700' }}>{title}</Text>
+      <Text textStyle={{ color: palette.danger, fontSize: 14 }}>{message}</Text>
       {children}
     </View>
   );
@@ -85,6 +130,8 @@ function RunnerError({
 
 export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const router = useRouter();
+  const { colorScheme } = useAppTheme();
+  const RUNNER = runnerPalette(colorScheme);
   const { width } = useWindowDimensions();
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [active, setActive] = useState<ActiveRoutine | null>(null);
@@ -246,7 +293,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           <Text textStyle={{ color: RUNNER.text, fontSize: 24, fontWeight: '700' }}>
             Routine runner
           </Text>
-          <RunnerError message={loadError ?? 'Restoring the persisted routine...'}>
+          <RunnerError message={loadError ?? 'Restoring the persisted routine...'} palette={RUNNER}>
             <RecoveryActions onBack={goBack} onRetry={restore} testID="routine-recovery" />
           </RunnerError>
         </Column>
@@ -265,7 +312,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
         scrollable={false}
         title="Routine"
       >
-        <RunnerError message="The active routine has no current step.">
+        <RunnerError message="The active routine has no current step." palette={RUNNER}>
           <RecoveryActions onBack={goBack} testID="routine-step-recovery" />
         </RunnerError>
       </Screen>
@@ -320,7 +367,14 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             accessibilityRole="button"
             disabled={busy}
             onPress={() => setStopOpen(true)}
-            style={({ pressed }) => [styles.stopButton, { opacity: pressed || busy ? 0.65 : 1 }]}
+            style={({ pressed }) => [
+              styles.stopButton,
+              {
+                backgroundColor: RUNNER.surface,
+                borderColor: RUNNER.border,
+                opacity: pressed || busy ? 0.65 : 1,
+              },
+            ]}
             testID="stop-routine"
           >
             <Text textStyle={{ color: RUNNER.muted, fontSize: 14, fontWeight: '700' }}>Stop</Text>
@@ -342,7 +396,13 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             style={[
               styles.timerCircle,
               isPaused && styles.timerCirclePaused,
-              { height: circleSize, width: circleSize, borderRadius: circleSize / 2 },
+              {
+                backgroundColor: RUNNER.circle,
+                borderColor: RUNNER.border,
+                height: circleSize,
+                width: circleSize,
+                borderRadius: circleSize / 2,
+              },
             ]}
             testID="current-routine-step"
           >
@@ -352,7 +412,14 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
                   accessibilityLabel={`Open routine steps, step ${active.currentStepIndex + 1} of ${steps.length}`}
                   accessibilityRole="button"
                   onPress={() => setRoutineMenuOpen(true)}
-                  style={({ pressed }) => [styles.stepToggle, { opacity: pressed ? 0.7 : 1 }]}
+                  style={({ pressed }) => [
+                    styles.stepToggle,
+                    {
+                      backgroundColor: RUNNER.stepToggle,
+                      borderColor: RUNNER.border,
+                      opacity: pressed ? 0.7 : 1,
+                    },
+                  ]}
                   testID="open-routine-steps"
                 >
                   <AppIcon name="list-checks" color={RUNNER.accent} size={17} />
@@ -401,7 +468,10 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
                 onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.resume())}
                 style={({ pressed }) => [
                   styles.resumeButton,
-                  { opacity: busy ? 0.4 : pressed ? 0.75 : 1 },
+                  {
+                    backgroundColor: RUNNER.accent,
+                    opacity: busy ? 0.4 : pressed ? 0.75 : 1,
+                  },
                 ]}
                 testID="routine-resume"
               >
@@ -412,11 +482,11 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
               </Pressable>
             </View>
           ) : null}
-          <ProgressRing progress={progress} size={circleSize} />
+          <ProgressRing palette={RUNNER} progress={progress} size={circleSize} />
         </View>
 
         {actionError ? (
-          <RunnerError message={actionError} title="Routine action failed">
+          <RunnerError message={actionError} palette={RUNNER} title="Routine action failed">
             <RecoveryActions onBack={goBack} onRetry={retry} testID="routine-action-recovery" />
           </RunnerError>
         ) : null}
@@ -428,6 +498,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
               icon="clock"
               label="Add time"
               onPress={() => setAddTimeOpen(true)}
+              palette={RUNNER}
               size={52}
               testID="open-add-time"
             />
@@ -436,6 +507,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
               icon="pause"
               label="Pause routine"
               onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.pause())}
+              palette={RUNNER}
               size={58}
               testID="routine-pause"
             />
@@ -445,6 +517,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
               icon="check"
               label="Complete current step"
               onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.done())}
+              palette={RUNNER}
               size={78}
               testID="routine-done"
             />
@@ -453,6 +526,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
               icon="skip-forward"
               label="Skip or move current step"
               onPress={() => setSkipOpen(true)}
+              palette={RUNNER}
               size={58}
               testID="routine-skip"
             />
@@ -474,6 +548,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
         active={active}
         busy={busy}
         onClose={() => setRoutineMenuOpen(false)}
+        palette={RUNNER}
         onJump={(stepId) =>
           void runAction(
             (nextRuntime) => nextRuntime.routineService.jumpToStep(stepId),
@@ -488,6 +563,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
       <AddTimeModal
         addedTimeMs={currentSession?.addedTimeMs ?? 0}
         busy={busy}
+        palette={RUNNER}
         onAdd={(addedTimeMs) =>
           void runAction(
             (nextRuntime) => nextRuntime.routineService.addTime(addedTimeMs),
@@ -507,6 +583,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
       <SkipModal
         busy={busy}
         onClose={() => setSkipOpen(false)}
+        palette={RUNNER}
         onMoveToEnd={() =>
           void runAction(
             (nextRuntime) => nextRuntime.routineService.moveCurrentStepToEnd(),
@@ -524,6 +601,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
       <StopModal
         busy={busy}
         onClose={() => setStopOpen(false)}
+        palette={RUNNER}
         onStop={() =>
           void runAction(
             async (nextRuntime) => {
@@ -539,7 +617,15 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   );
 }
 
-function ProgressRing({ progress, size }: { progress: number; size: number }) {
+function ProgressRing({
+  progress,
+  size,
+  palette,
+}: {
+  progress: number;
+  size: number;
+  palette: RunnerPalette;
+}) {
   const strokeWidth = 6;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -557,7 +643,7 @@ function ProgressRing({ progress, size }: { progress: number; size: number }) {
         fill="none"
         opacity={0.22}
         r={radius}
-        stroke={RUNNER.border}
+        stroke={palette.border}
         strokeWidth={strokeWidth}
       />
       <Circle
@@ -565,7 +651,7 @@ function ProgressRing({ progress, size }: { progress: number; size: number }) {
         cy={size / 2}
         fill="none"
         r={radius}
-        stroke={RUNNER.accent}
+        stroke={palette.accent}
         strokeDasharray={`${circumference} ${circumference}`}
         strokeDashoffset={circumference * (1 - progress)}
         strokeLinecap="round"
@@ -582,6 +668,7 @@ function RoundControl({
   icon,
   label,
   onPress,
+  palette,
   size,
   testID,
 }: {
@@ -590,6 +677,7 @@ function RoundControl({
   icon: 'check' | 'clock' | 'list-checks' | 'pause' | 'play' | 'skip-forward';
   label: string;
   onPress: () => void;
+  palette: RunnerPalette;
   size: number;
   testID: string;
 }) {
@@ -602,8 +690,8 @@ function RoundControl({
       onPress={onPress}
       style={({ pressed }) => ({
         alignItems: 'center',
-        backgroundColor: emphasis ? RUNNER.accent : RUNNER.surface,
-        borderColor: emphasis ? RUNNER.accent : RUNNER.border,
+        backgroundColor: emphasis ? palette.accent : palette.surface,
+        borderColor: emphasis ? palette.accent : palette.border,
         borderRadius: size / 2,
         borderWidth: 1,
         height: size,
@@ -614,7 +702,7 @@ function RoundControl({
       testID={testID}
     >
       <AppIcon
-        color={emphasis ? RUNNER.accentText : RUNNER.text}
+        color={emphasis ? palette.accentText : palette.text}
         name={icon}
         size={emphasis ? 30 : 22}
         strokeWidth={2.6}
@@ -626,11 +714,13 @@ function RoundControl({
 function RunnerModal({
   children,
   onClose,
+  palette,
   visible,
   title,
 }: {
   children: ReactNode;
   onClose: () => void;
+  palette: RunnerPalette;
   visible: boolean;
   title: string;
 }) {
@@ -639,11 +729,22 @@ function RunnerModal({
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
       <View style={styles.modalRoot}>
         <Pressable accessibilityLabel="Close modal" onPress={onClose} style={styles.modalScrim} />
-        <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 18) }]}>
+        <View
+          style={[
+            styles.modalSheet,
+            {
+              backgroundColor: palette.modalSheet,
+              borderColor: palette.border,
+              paddingBottom: Math.max(insets.bottom, 18),
+            },
+          ]}
+        >
           <Row alignment="center" style={styles.modalHeader}>
-            <Text textStyle={{ color: RUNNER.text, fontSize: 20, fontWeight: '800' }}>{title}</Text>
+            <Text textStyle={{ color: palette.text, fontSize: 20, fontWeight: '800' }}>
+              {title}
+            </Text>
             <Pressable accessibilityLabel="Close modal" onPress={onClose} style={styles.modalClose}>
-              <Text textStyle={{ color: RUNNER.muted, fontSize: 24 }}>×</Text>
+              <Text textStyle={{ color: palette.muted, fontSize: 24 }}>×</Text>
             </Pressable>
           </Row>
           {children}
@@ -658,12 +759,14 @@ function ModalAction({
   icon,
   label,
   onPress,
+  palette,
   testID,
 }: {
   disabled?: boolean;
   icon: 'arrow-left' | 'check' | 'chevron-down' | 'skip-forward';
   label: string;
   onPress: () => void;
+  palette: RunnerPalette;
   testID?: string;
 }) {
   return (
@@ -673,11 +776,18 @@ function ModalAction({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.modalAction, { opacity: disabled ? 0.4 : pressed ? 0.7 : 1 }]}
+      style={({ pressed }) => [
+        styles.modalAction,
+        {
+          backgroundColor: palette.surface,
+          borderColor: palette.border,
+          opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
+        },
+      ]}
       testID={testID}
     >
-      <AppIcon color={RUNNER.accent} name={icon} size={20} />
-      <Text textStyle={{ color: RUNNER.text, fontSize: 16, fontWeight: '700' }}>{label}</Text>
+      <AppIcon color={palette.accent} name={icon} size={20} />
+      <Text textStyle={{ color: palette.text, fontSize: 16, fontWeight: '700' }}>{label}</Text>
     </Pressable>
   );
 }
@@ -689,6 +799,7 @@ function AddTimeModal({
   onClose,
   onReset,
   originalDurationMs,
+  palette,
   visible,
 }: {
   addedTimeMs: number;
@@ -697,6 +808,7 @@ function AddTimeModal({
   onClose: () => void;
   onReset: () => void;
   originalDurationMs: number;
+  palette: RunnerPalette;
   visible: boolean;
 }) {
   const options = [
@@ -706,7 +818,7 @@ function AddTimeModal({
     { label: '+10m', value: 600_000, disabled: false },
   ];
   return (
-    <RunnerModal onClose={onClose} title="Add time" visible={visible}>
+    <RunnerModal onClose={onClose} palette={palette} title="Add time" visible={visible}>
       <View style={styles.compactOptions}>
         {options.map((option) => (
           <Pressable
@@ -720,11 +832,15 @@ function AddTimeModal({
             onPress={() => onAdd(option.value)}
             style={({ pressed }) => [
               styles.compactPresetButton,
-              { opacity: busy || option.disabled ? 0.35 : pressed ? 0.7 : 1 },
+              {
+                backgroundColor: palette.surface,
+                borderColor: palette.border,
+                opacity: busy || option.disabled ? 0.35 : pressed ? 0.7 : 1,
+              },
             ]}
             testID={`add-time-${option.value}`}
           >
-            <Text textStyle={{ color: RUNNER.text, fontSize: 15, fontWeight: '800' }}>
+            <Text textStyle={{ color: palette.text, fontSize: 15, fontWeight: '800' }}>
               {option.label}
             </Text>
           </Pressable>
@@ -736,15 +852,22 @@ function AddTimeModal({
         accessibilityState={{ disabled: busy }}
         disabled={busy}
         onPress={onReset}
-        style={({ pressed }) => [styles.resetButton, { opacity: busy ? 0.4 : pressed ? 0.7 : 1 }]}
+        style={({ pressed }) => [
+          styles.resetButton,
+          {
+            backgroundColor: palette.surface,
+            borderColor: palette.border,
+            opacity: busy ? 0.4 : pressed ? 0.7 : 1,
+          },
+        ]}
         testID="reset-time-original"
       >
-        <AppIcon color={RUNNER.accent} name="clock" size={20} />
+        <AppIcon color={palette.accent} name="clock" size={20} />
         <View style={styles.resetText}>
-          <Text textStyle={{ color: RUNNER.text, fontSize: 16, fontWeight: '700' }}>
+          <Text textStyle={{ color: palette.text, fontSize: 16, fontWeight: '700' }}>
             Reset to original
           </Text>
-          <Text textStyle={{ color: RUNNER.muted, fontSize: 13 }}>
+          <Text textStyle={{ color: palette.muted, fontSize: 13 }}>
             {`Original ${compactDuration(originalDurationMs)}`}
           </Text>
         </View>
@@ -758,21 +881,24 @@ function SkipModal({
   onClose,
   onMoveToEnd,
   onSkip,
+  palette,
   visible,
 }: {
   busy: boolean;
   onClose: () => void;
   onMoveToEnd: () => void;
   onSkip: () => void;
+  palette: RunnerPalette;
   visible: boolean;
 }) {
   return (
-    <RunnerModal onClose={onClose} title="Next step" visible={visible}>
+    <RunnerModal onClose={onClose} palette={palette} title="Next step" visible={visible}>
       <ModalAction
         disabled={busy}
         icon="chevron-down"
         label="Move step to end"
         onPress={onMoveToEnd}
+        palette={palette}
         testID="routine-move-step-to-end"
       />
       <ModalAction
@@ -780,6 +906,7 @@ function SkipModal({
         icon="skip-forward"
         label="Skip step"
         onPress={onSkip}
+        palette={palette}
         testID="routine-skip-step"
       />
     </RunnerModal>
@@ -792,6 +919,7 @@ function RoutineStepsModal({
   onClose,
   onJump,
   onMove,
+  palette,
   visible,
 }: {
   active: ActiveRoutine;
@@ -799,11 +927,12 @@ function RoutineStepsModal({
   onClose: () => void;
   onJump: (stepId: string) => void;
   onMove: (stepId: string, direction: 'up' | 'down') => void;
+  palette: RunnerPalette;
   visible: boolean;
 }) {
   const steps = orderedSteps(active);
   return (
-    <RunnerModal onClose={onClose} title="Steps" visible={visible}>
+    <RunnerModal onClose={onClose} palette={palette} title="Steps" visible={visible}>
       <Column spacing={10} style={{ width: '100%' }}>
         {steps.map((step, index) => {
           const session = active.stepSessions.find((candidate) => candidate.stepId === step.id);
@@ -817,7 +946,19 @@ function RoutineStepsModal({
                   ? 'circle-dot'
                   : 'circle';
           return (
-            <Row key={step.id} alignment="center" spacing={8} style={styles.rearrangeRow}>
+            <Row
+              key={step.id}
+              alignment="center"
+              spacing={8}
+              style={{
+                backgroundColor: palette.surface,
+                borderColor: palette.border,
+                borderRadius: 13,
+                borderWidth: 1,
+                paddingHorizontal: 10,
+                width: '100%',
+              }}
+            >
               <Pressable
                 accessibilityLabel={`Open ${step.name || 'step'}`}
                 accessibilityRole="button"
@@ -826,13 +967,13 @@ function RoutineStepsModal({
                 style={({ pressed }) => [styles.stepTouchable, { opacity: pressed ? 0.7 : 1 }]}
                 testID={`routine-jump-step-${step.id}`}
               >
-                <AppIcon color={statusColor(status)} name={icon} size={21} />
+                <AppIcon color={statusColor(status, palette)} name={icon} size={21} />
                 <View style={styles.stepText}>
                   <Column spacing={2}>
-                    <Text textStyle={{ color: RUNNER.text, fontSize: 15, fontWeight: '700' }}>
+                    <Text textStyle={{ color: palette.text, fontSize: 15, fontWeight: '700' }}>
                       {`${index + 1}. ${step.name || 'Untitled step'}`}
                     </Text>
-                    <Text textStyle={{ color: RUNNER.muted, fontSize: 13 }}>
+                    <Text textStyle={{ color: palette.muted, fontSize: 13 }}>
                       {`${stepStatusLabel(status)} · ${compactDuration(
                         step.durationMs + (session?.addedTimeMs ?? 0)
                       )}`}
@@ -851,7 +992,7 @@ function RoutineStepsModal({
                 ]}
                 testID={`routine-reorder-up-${step.id}`}
               >
-                <AppIcon color={RUNNER.text} name="chevron-up" size={18} />
+                <AppIcon color={palette.text} name="chevron-up" size={18} />
               </Pressable>
               <Pressable
                 accessibilityLabel={`Move ${step.name || 'step'} down`}
@@ -864,7 +1005,7 @@ function RoutineStepsModal({
                 ]}
                 testID={`routine-reorder-down-${step.id}`}
               >
-                <AppIcon color={RUNNER.text} name="chevron-down" size={18} />
+                <AppIcon color={palette.text} name="chevron-down" size={18} />
               </Pressable>
             </Row>
           );
@@ -878,23 +1019,32 @@ function StopModal({
   busy,
   onClose,
   onStop,
+  palette,
   visible,
 }: {
   busy: boolean;
   onClose: () => void;
   onStop: () => void;
+  palette: RunnerPalette;
   visible: boolean;
 }) {
   return (
-    <RunnerModal onClose={onClose} title="Stop routine" visible={visible}>
+    <RunnerModal onClose={onClose} palette={palette} title="Stop routine" visible={visible}>
       <ModalAction
         disabled={busy}
         icon="check"
         label="Stop and save"
         onPress={onStop}
+        palette={palette}
         testID="confirm-stop-routine"
       />
-      <ModalAction disabled={busy} icon="arrow-left" label="Keep running" onPress={onClose} />
+      <ModalAction
+        disabled={busy}
+        icon="arrow-left"
+        label="Keep running"
+        onPress={onClose}
+        palette={palette}
+      />
     </RunnerModal>
   );
 }
@@ -922,8 +1072,8 @@ const styles = StyleSheet.create({
   },
   modalAction: {
     alignItems: 'center',
-    backgroundColor: RUNNER.surface,
-    borderColor: RUNNER.border,
+    backgroundColor: RUNNER_DARK.surface,
+    borderColor: RUNNER_DARK.border,
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: 'row',
@@ -962,7 +1112,7 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     backgroundColor: '#0D0D0D',
-    borderColor: RUNNER.border,
+    borderColor: RUNNER_DARK.border,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 1,
@@ -977,8 +1127,8 @@ const styles = StyleSheet.create({
   },
   compactPresetButton: {
     alignItems: 'center',
-    backgroundColor: RUNNER.surface,
-    borderColor: RUNNER.border,
+    backgroundColor: RUNNER_DARK.surface,
+    borderColor: RUNNER_DARK.border,
     borderRadius: 14,
     borderWidth: 1,
     flexBasis: '20%',
@@ -989,8 +1139,8 @@ const styles = StyleSheet.create({
   },
   rearrangeRow: {
     alignItems: 'center',
-    backgroundColor: RUNNER.surface,
-    borderColor: RUNNER.border,
+    backgroundColor: RUNNER_DARK.surface,
+    borderColor: RUNNER_DARK.border,
     borderRadius: 13,
     borderWidth: 1,
     flexDirection: 'row',
@@ -1022,7 +1172,7 @@ const styles = StyleSheet.create({
   stepToggle: {
     alignItems: 'center',
     backgroundColor: '#202020',
-    borderColor: RUNNER.border,
+    borderColor: RUNNER_DARK.border,
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: 'row',
@@ -1032,8 +1182,8 @@ const styles = StyleSheet.create({
   },
   resetButton: {
     alignItems: 'center',
-    backgroundColor: RUNNER.surface,
-    borderColor: RUNNER.border,
+    backgroundColor: RUNNER_DARK.surface,
+    borderColor: RUNNER_DARK.border,
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: 'row',
@@ -1058,7 +1208,7 @@ const styles = StyleSheet.create({
   },
   resumeButton: {
     alignItems: 'center',
-    backgroundColor: RUNNER.accent,
+    backgroundColor: RUNNER_DARK.accent,
     borderRadius: 14,
     flexDirection: 'row',
     gap: 8,
@@ -1068,8 +1218,8 @@ const styles = StyleSheet.create({
   },
   stopButton: {
     alignItems: 'center',
-    backgroundColor: RUNNER.surface,
-    borderColor: RUNNER.border,
+    backgroundColor: RUNNER_DARK.surface,
+    borderColor: RUNNER_DARK.border,
     borderRadius: 15,
     borderWidth: 1,
     justifyContent: 'center',
@@ -1080,8 +1230,8 @@ const styles = StyleSheet.create({
   timerCircle: {
     alignItems: 'center',
     alignSelf: 'center',
-    backgroundColor: RUNNER.circle,
-    borderColor: RUNNER.border,
+    backgroundColor: RUNNER_DARK.circle,
+    borderColor: RUNNER_DARK.border,
     borderWidth: 1,
     gap: 13,
     justifyContent: 'center',
