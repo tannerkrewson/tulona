@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import type { ViewStyle } from 'react-native';
 
 import type { Habit, HabitDayOutcome, HabitDayState, LogicalDayKey } from '@domain';
 import { AppIcon } from '@icons';
@@ -21,7 +22,7 @@ import { EmptyState, errorText, getRowSurfaceStyle, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
-import { habitWeekDays, shiftHabitDay, sundayFirstWeekdayLabels } from './date-navigation';
+import { habitWeekDays, habitWeekSwipeTarget, sundayFirstWeekdayLabels } from './date-navigation';
 import { habitCompletionLabel, habitOutcomeLabel, habitSignalSummary } from './habit-format';
 import { loadHabitStore } from './habit-runtime';
 import { calculateHabitStreak, habitCompleted } from './streak';
@@ -152,7 +153,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
           }
         >
           <ScrollView style={{ height: '100%', width: '100%' }}>
-            <Column spacing={12} style={{ paddingBottom: 20, width: '100%' }}>
+            <Column spacing={12} style={{ paddingBottom: 20, paddingTop: 12, width: '100%' }}>
               {activeHabits.length === 0 ? (
                 <EmptyState iconName="heart" testID="habits-empty" title="No active habits yet" />
               ) : (
@@ -193,8 +194,8 @@ function HabitListContent({ store }: { store: HabitStore }) {
   );
 }
 
-const DAY_SWIPE_THRESHOLD = 45;
-const DAY_SWIPE_SETTLE_DURATION = 180;
+const WEEK_PAGE_SWIPE_THRESHOLD = 45;
+const WEEK_PAGE_SETTLE_DURATION = 180;
 const HABIT_MENU_WIDTH = 220;
 const HABIT_MENU_HEIGHT = 190;
 
@@ -220,17 +221,20 @@ function HabitDayNavigation({
   weekStrip: ReactNode;
   children: ReactNode;
 }) {
-  const { colors } = useAppTheme();
   const { width: viewportWidth } = useWindowDimensions();
-  const [stripWidth, setStripWidth] = useState(0);
+  const [pageWidth, setPageWidth] = useState(0);
   const [dragX] = useState(() => new Animated.Value(0));
   const useNativeDriver = Platform.OS !== 'web';
+  const gestureSurfaceStyle =
+    Platform.OS === 'web'
+      ? ({ touchAction: 'pan-y', userSelect: 'none' } as unknown as ViewStyle)
+      : undefined;
 
   const settle = useCallback(
     (target: number, nextDay?: LogicalDayKey) => {
       dragX.stopAnimation();
       Animated.timing(dragX, {
-        duration: DAY_SWIPE_SETTLE_DURATION,
+        duration: WEEK_PAGE_SETTLE_DURATION,
         toValue: target,
         useNativeDriver,
       }).start(({ finished }) => {
@@ -256,45 +260,45 @@ function HabitDayNavigation({
           dragX.setValue(gesture.dx);
         },
         onPanResponderRelease: (_, gesture) => {
-          if (Math.abs(gesture.dx) < DAY_SWIPE_THRESHOLD) {
+          if (Math.abs(gesture.dx) < WEEK_PAGE_SWIPE_THRESHOLD) {
             settle(0);
             return;
           }
 
           const amount = gesture.dx < 0 ? 1 : -1;
-          const nextDay = shiftHabitDay(selectedDay, amount, rolloverHour);
-          if (nextDay > today) {
+          const nextDay = habitWeekSwipeTarget(selectedDay, amount, today, rolloverHour);
+          if (!nextDay) {
             settle(0);
             return;
           }
 
-          const distance = Math.max(stripWidth, viewportWidth - 40, 320);
+          const distance = Math.max(pageWidth, viewportWidth - 40, 320);
           settle(gesture.dx < 0 ? -distance : distance, nextDay);
         },
         onPanResponderTerminate: () => settle(0),
         onPanResponderTerminationRequest: () => false,
       }),
-    [dragX, rolloverHour, selectedDay, settle, stripWidth, today, viewportWidth]
+    [dragX, pageWidth, rolloverHour, selectedDay, settle, today, viewportWidth]
   );
 
   return (
     <View
       {...panResponder.panHandlers}
-      style={{ flex: 1, minHeight: 0, width: '100%' }}
+      onLayout={(event) => setPageWidth(event.nativeEvent.layout.width)}
+      style={[{ flex: 1, minHeight: 0, overflow: 'hidden', width: '100%' }, gestureSurfaceStyle]}
       testID="habit-day-navigation"
     >
-      <View
-        onLayout={(event) => setStripWidth(event.nativeEvent.layout.width)}
-        style={{ backgroundColor: colors.surface, overflow: 'hidden', width: '100%' }}
-      >
-        <Animated.View
-          style={{ transform: [{ translateX: dragX }], width: '100%' }}
-          testID="habit-week-strip"
-        >
+      <Animated.View style={{ flex: 1, minHeight: 0, transform: [{ translateX: dragX }] }}>
+        <View {...panResponder.panHandlers} style={gestureSurfaceStyle} testID="habit-week-strip">
           {weekStrip}
-        </Animated.View>
-      </View>
-      {children}
+        </View>
+        <View
+          {...panResponder.panHandlers}
+          style={[{ flex: 1, minHeight: 0, width: '100%' }, gestureSurfaceStyle]}
+        >
+          {children}
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -317,14 +321,15 @@ function DateStrip({
     <View
       style={{
         backgroundColor: colors.surface,
-        borderBottomColor: colors.border,
-        borderBottomWidth: 1,
-        paddingBottom: 10,
-        paddingTop: 2,
+        borderColor: colors.border,
+        borderRadius: 12,
+        borderWidth: 1,
+        paddingHorizontal: 4,
+        paddingVertical: 8,
         width: '100%',
       }}
     >
-      <Row alignment="center" spacing={2} style={{ width: '100%' }}>
+      <Row alignment="center" spacing={4} style={{ width: '100%' }}>
         {days.map((day, index) => {
           const selected = day === selectedDay;
           const future = day > today;
