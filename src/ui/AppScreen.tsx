@@ -28,7 +28,14 @@ const contentStyle = {
 } as ComponentProps<typeof Column>['style'];
 
 /** The cross-platform screen boundary for feature content. */
-export function AppScreen({ onBack, children, title, scrollable = true, testID }: AppScreenProps) {
+export function AppScreen({
+  onBack,
+  children,
+  title,
+  description,
+  scrollable = true,
+  testID,
+}: AppScreenProps) {
   const { colorScheme, colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const content = (
@@ -66,6 +73,9 @@ export function AppScreen({ onBack, children, title, scrollable = true, testID }
             </Text>
           ) : null}
         </Row>
+      ) : null}
+      {description ? (
+        <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>{description}</Text>
       ) : null}
       {children}
     </Column>

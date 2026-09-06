@@ -28,6 +28,14 @@ function readableDay(day: LogicalDayKey): string {
   });
 }
 
+function shortDay(day: LogicalDayKey): string {
+  return dateForLogicalDay(day).toLocaleDateString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 function readableTime(value: number): string {
   return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
@@ -50,10 +58,19 @@ function BreakdownCard({
 }) {
   const [tab, setTab] = useState<'items' | 'folders'>('items');
   const [filter, setFilter] = useState<ItemFilter>('all');
+  const [expanded, setExpanded] = useState(false);
   const visible = useMemo(
     () => (tab === 'items' ? filteredItems({ items }, filter) : []),
     [filter, items, tab]
   );
+  const changeTab = (next: 'items' | 'folders') => {
+    setTab(next);
+    setExpanded(false);
+  };
+  const changeFilter = (next: ItemFilter) => {
+    setFilter(next);
+    setExpanded(false);
+  };
 
   return (
     <SectionCard
@@ -62,7 +79,7 @@ function BreakdownCard({
       title="Where time went"
     >
       <SegmentedOptions
-        onChange={setTab}
+        onChange={changeTab}
         options={[
           { label: 'Items', value: 'items' },
           { label: 'Folders', value: 'folders' },
@@ -72,7 +89,7 @@ function BreakdownCard({
       />
       {tab === 'items' ? (
         <SegmentedOptions
-          onChange={setFilter}
+          onChange={changeFilter}
           options={[
             { label: 'All', value: 'all' },
             { label: 'Activities', value: 'activity' },
@@ -86,9 +103,8 @@ function BreakdownCard({
         visible.length === 0 ? (
           <EmptyNote message="No tracked items in this range." />
         ) : (
-          visible
-            .slice(0, 12)
-            .map((item) => (
+          <Column spacing={12} style={{ width: '100%' }}>
+            {(expanded ? visible : visible.slice(0, 8)).map((item) => (
               <ShareBar
                 color={item.displayColor}
                 durationMs={item.durationMs}
@@ -97,7 +113,17 @@ function BreakdownCard({
                 name={item.name}
                 totalMs={totalMs}
               />
-            ))
+            ))}
+            {visible.length > 8 ? (
+              <AppButton
+                label={expanded ? 'Show less' : `Show all ${visible.length}`}
+                onPress={() => setExpanded((value) => !value)}
+                style={{ height: 44, width: '100%' }}
+                testID={`${testID}-toggle`}
+                variant="outlined"
+              />
+            ) : null}
+          </Column>
         )
       ) : folders.length === 0 ? (
         <EmptyNote message="No tracked folders in this range." />
@@ -192,7 +218,7 @@ function WeekView({ report }: { report: WeeklyReport }) {
             color={colors.primary}
             durationMs={day.totalMs}
             key={day.logicalDay}
-            name={readableDay(day.logicalDay)}
+            name={shortDay(day.logicalDay)}
             totalMs={report.totalMs}
           />
         ))}
