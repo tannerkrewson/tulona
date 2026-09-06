@@ -26,6 +26,13 @@ export default function RootHtml({ children }: { children: ReactNode }) {
                 const themeColor = document.querySelector('meta[name="theme-color"]');
                 const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
                 const initialColor = prefersDark ? '#000000' : '#F5F5F5';
+                const userAgent = navigator.userAgent;
+                const isIOS =
+                  /iPad|iPhone|iPod/i.test(userAgent) ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                const isOtherIOSBrowser = /CriOS|FxiOS|EdgiOS|OPiOS|GSA|DuckDuckGo/i.test(userAgent);
+                const isSafari = /Safari\\//i.test(userAgent) && !isOtherIOSBrowser;
+                const isStandalonePWA = navigator.standalone === true;
                 const initialTokens = prefersDark
                   ? {
                       '--tulona-background': '#000000',
@@ -44,6 +51,12 @@ export default function RootHtml({ children }: { children: ReactNode }) {
                       '--tulona-tab-inactive': '#666666',
                     };
                 document.documentElement.style.backgroundColor = initialColor;
+                if (isIOS && (isSafari || isStandalonePWA)) {
+                  document.documentElement.style.setProperty(
+                    '--tulona-safe-area-bottom',
+                    'env(safe-area-inset-bottom, 0px)'
+                  );
+                }
                 Object.entries(initialTokens).forEach(([property, value]) => {
                   document.documentElement.style.setProperty(property, value);
                 });
@@ -91,7 +104,7 @@ export default function RootHtml({ children }: { children: ReactNode }) {
             --tulona-text: #171717;
             --tulona-tab-active: #111111;
             --tulona-tab-inactive: #666666;
-            --tulona-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+            --tulona-safe-area-bottom: 0px;
           }
         `}</style>
         <ScrollViewStyleReset />

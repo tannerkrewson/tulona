@@ -16,4 +16,5 @@ export { IconButton, type IconButtonProps, type IconButtonVariant } from './Icon
 export { IconPicker, searchIconCatalog, type IconPickerProps } from './IconPicker';
 export { ReorderControls, type ReorderControlsProps } from './ReorderControls';
 export { Screen, type ScreenProps } from './Screen';
+export { isIOSSafari, isIOSSafariEnvironment, type IOSWebEnvironment } from './platform';
 export { errorText } from './error-text';
