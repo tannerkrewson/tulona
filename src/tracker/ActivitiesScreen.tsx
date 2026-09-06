@@ -169,6 +169,18 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
     }
   };
 
+  const reorderFolder = (folderId: string, direction: 'up' | 'down') =>
+    void runAction(async () => {
+      await runtime.catalogService.reorderFolders(folderId, direction);
+      await store.getState().hydrate();
+    });
+
+  const reorderItem = (itemId: string, direction: 'up' | 'down') =>
+    void runAction(async () => {
+      await runtime.catalogService.reorderItem(itemId, direction);
+      await store.getState().hydrate();
+    });
+
   const activate = (item: Activity | RoutineDefinition) => {
     void runAction(async () => {
       if (activeTransition?.activityId === item.id) {
@@ -251,25 +263,16 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
               <FolderRow
                 disabled={busy || folder.archivedAt !== null}
                 folder={folder}
-                onPress={() => router.push(`/folder/${folder.id}`)}
+                onPress={() =>
+                  router.push(editMode ? `/folder-edit/${folder.id}` : `/folder/${folder.id}`)
+                }
                 testID={`folder-${folder.id}`}
               />
               {editMode ? (
                 <CatalogEditActions
                   disabled={busy || folder.archivedAt !== null}
-                  onDown={() =>
-                    void runAction(
-                      async () =>
-                        void (await runtime.catalogService.reorderFolders(folder.id, 'down'))
-                    )
-                  }
-                  onEdit={() => router.push(`/folder-edit/${folder.id}`)}
-                  onUp={() =>
-                    void runAction(
-                      async () =>
-                        void (await runtime.catalogService.reorderFolders(folder.id, 'up'))
-                    )
-                  }
+                  onDown={() => reorderFolder(folder.id, 'down')}
+                  onUp={() => reorderFolder(folder.id, 'up')}
                   testID={`folder-actions-${folder.id}`}
                 />
               ) : null}
@@ -279,33 +282,19 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
             const resolved = resolveCatalogItem(catalog, item.id);
             const active = activeTransition?.activityId === item.id;
             return (
-              <Column key={item.id} spacing={6} style={{ width: '100%' }}>
-                <ActivityRow
-                  active={active}
-                  color={resolved?.displayColor}
-                  disabled={busy || item.archivedAt !== null}
-                  editMode={editMode}
-                  item={item}
-                  onPress={() => (editMode ? editItem(item) : activate(item))}
-                  testID={`catalog-item-${item.id}`}
-                />
-                {editMode ? (
-                  <CatalogEditActions
-                    disabled={busy || item.archivedAt !== null}
-                    onDown={() =>
-                      void runAction(
-                        async () => void (await runtime.catalogService.reorderItem(item.id, 'down'))
-                      )
-                    }
-                    onUp={() =>
-                      void runAction(
-                        async () => void (await runtime.catalogService.reorderItem(item.id, 'up'))
-                      )
-                    }
-                    testID={`catalog-actions-${item.id}`}
-                  />
-                ) : null}
-              </Column>
+              <ActivityRow
+                key={item.id}
+                active={active}
+                actionsTestID={`catalog-actions-${item.id}`}
+                color={resolved?.displayColor}
+                disabled={busy || item.archivedAt !== null}
+                editMode={editMode}
+                item={item}
+                onMoveDown={() => reorderItem(item.id, 'down')}
+                onMoveUp={() => reorderItem(item.id, 'up')}
+                onPress={() => (editMode ? editItem(item) : activate(item))}
+                testID={`catalog-item-${item.id}`}
+              />
             );
           })}
           {folders.length === 0 && rootItems.length === 0 ? (

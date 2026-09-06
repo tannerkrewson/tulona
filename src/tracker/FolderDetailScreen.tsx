@@ -11,7 +11,6 @@ import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import { ActivityRow } from './ActivityRow';
-import { CatalogEditActions } from './CatalogEditActions';
 import { CatalogHeader } from './CatalogHeader';
 import { CatalogIconButton } from './CatalogIconButton';
 
@@ -22,6 +21,7 @@ export interface FolderDetailScreenProps {
 export function FolderDetailScreen({ folderId }: FolderDetailScreenProps) {
   const { colors } = useAppTheme();
   const router = useRouter();
+  const goBackToTracker = () => router.replace('/(tabs)');
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -48,9 +48,9 @@ export function FolderDetailScreen({ folderId }: FolderDetailScreenProps) {
 
   if (!runtime) {
     return (
-      <Screen onBack={() => router.back()} title="Folder">
+      <Screen onBack={goBackToTracker} title="Folder">
         {loadError ? (
-          <FolderError message={loadError} onBack={() => router.back()} onRetry={load} />
+          <FolderError message={loadError} onBack={goBackToTracker} onRetry={load} />
         ) : (
           <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>Loading folder...</Text>
         )}
@@ -64,6 +64,7 @@ export function FolderDetailScreen({ folderId }: FolderDetailScreenProps) {
 function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderId: string }) {
   const { colors } = useAppTheme();
   const router = useRouter();
+  const goBackToTracker = () => router.replace('/(tabs)');
   const store = runtime.trackerStore;
   const catalog = store((state) => state.catalog);
   const activeTransition = store((state) => state.activeTransition);
@@ -96,7 +97,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
                 ? 'Loading folder...'
                 : 'No catalog loaded yet.'
           }
-          onBack={() => router.back()}
+          onBack={goBackToTracker}
           onRetry={() => void store.getState().hydrate()}
         />
       </Screen>
@@ -109,8 +110,8 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
       <Screen title="Folder">
         <FolderError
           message="This folder no longer exists."
-          onBack={() => router.back()}
-          onRetry={() => router.back()}
+          onBack={goBackToTracker}
+          onRetry={goBackToTracker}
         />
       </Screen>
     );
@@ -138,6 +139,12 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
       setBusy(false);
     }
   };
+
+  const reorderItem = (itemId: string, direction: 'up' | 'down') =>
+    void runAction(async () => {
+      await runtime.catalogService.reorderItem(itemId, direction);
+      await store.getState().hydrate();
+    });
 
   const activate = (item: Activity | RoutineDefinition) => {
     void runAction(async () => {
@@ -190,7 +197,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
           ]}
           createOpen={createOpen}
           editMode={editMode}
-          onBack={() => router.back()}
+          onBack={goBackToTracker}
           onToggleCreate={() => setCreateOpen((open) => !open)}
           onToggleEdit={() => {
             setEditMode((open) => !open);
@@ -211,7 +218,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
         {visibleError ? (
           <FolderError
             message={visibleError}
-            onBack={() => router.back()}
+            onBack={goBackToTracker}
             onRetry={() => void store.getState().hydrate()}
           />
         ) : null}
@@ -220,33 +227,19 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
             const resolved = resolveCatalogItem(catalog, item.id);
             const active = activeTransition?.activityId === item.id;
             return (
-              <Column key={item.id} spacing={6} style={{ width: '100%' }}>
-                <ActivityRow
-                  active={active}
-                  color={resolved?.displayColor}
-                  disabled={busy || item.archivedAt !== null}
-                  editMode={editMode}
-                  item={item}
-                  onPress={() => (editMode ? editItem(item) : activate(item))}
-                  testID={`folder-child-${item.id}`}
-                />
-                {editMode ? (
-                  <CatalogEditActions
-                    disabled={busy || item.archivedAt !== null}
-                    onDown={() =>
-                      void runAction(
-                        async () => void (await runtime.catalogService.reorderItem(item.id, 'down'))
-                      )
-                    }
-                    onUp={() =>
-                      void runAction(
-                        async () => void (await runtime.catalogService.reorderItem(item.id, 'up'))
-                      )
-                    }
-                    testID={`folder-child-actions-${item.id}`}
-                  />
-                ) : null}
-              </Column>
+              <ActivityRow
+                key={item.id}
+                active={active}
+                actionsTestID={`folder-child-actions-${item.id}`}
+                color={resolved?.displayColor}
+                disabled={busy || item.archivedAt !== null}
+                editMode={editMode}
+                item={item}
+                onMoveDown={() => reorderItem(item.id, 'down')}
+                onMoveUp={() => reorderItem(item.id, 'up')}
+                onPress={() => (editMode ? editItem(item) : activate(item))}
+                testID={`folder-child-${item.id}`}
+              />
             );
           })}
           {children.length === 0 ? (

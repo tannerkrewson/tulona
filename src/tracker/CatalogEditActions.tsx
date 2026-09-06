@@ -7,6 +7,7 @@ export interface CatalogEditActionsProps {
   onDown: () => void;
   onEdit?: () => void;
   disabled: boolean;
+  inline?: boolean;
   testID: string;
 }
 
@@ -16,6 +17,7 @@ export function CatalogEditActions({
   onDown,
   onEdit,
   disabled,
+  inline = false,
   testID,
 }: CatalogEditActionsProps) {
   return (
@@ -23,8 +25,7 @@ export function CatalogEditActions({
       style={{
         alignItems: 'center',
         flexDirection: 'row',
-        justifyContent: 'flex-end',
-        width: '100%',
+        ...(inline ? { flexShrink: 0 } : { justifyContent: 'flex-end', width: '100%' }),
       }}
     >
       {onEdit ? (
