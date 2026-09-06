@@ -19,6 +19,16 @@ export function shiftHabitWeek(
   return shiftLogicalDay(selectedDay, amount * 7, { rolloverHour });
 }
 
+export function habitWeekSwipeTarget(
+  selectedDay: LogicalDayKey,
+  amount: -1 | 1,
+  today: LogicalDayKey,
+  rolloverHour = 0
+): LogicalDayKey | null {
+  const nextDay = shiftHabitWeek(selectedDay, amount, rolloverHour);
+  return nextDay <= today ? nextDay : null;
+}
+
 export function shiftHabitDay(
   selectedDay: LogicalDayKey,
   amount: -1 | 1,

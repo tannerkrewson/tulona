@@ -6,6 +6,7 @@ import {
   evaluateHabitSchedule,
   calculateHabitStreak,
   habitWeekDays,
+  habitWeekSwipeTarget,
   shiftHabitDay,
   shiftHabitWeek,
   isHabitScheduledDay,
@@ -191,7 +192,12 @@ async function run(): Promise<void> {
   assert(
     shiftHabitWeek('2026-08-26', 1) === '2026-09-02' &&
       shiftHabitWeek('2026-08-26', -1) === '2026-08-19',
-    'habit week swipes preserve the selected weekday across Sunday-first weeks'
+    'habit page swipes preserve the selected weekday across full Sunday-first weeks'
+  );
+  assert(
+    habitWeekSwipeTarget('2026-08-26', 1, '2026-09-03') === '2026-09-02' &&
+      habitWeekSwipeTarget('2026-08-26', 1, '2026-09-01') === null,
+    'habit page swipes advance exactly one week and reject future pages'
   );
   assert(
     shiftHabitDay('2026-08-26', -1) === '2026-08-25' &&
