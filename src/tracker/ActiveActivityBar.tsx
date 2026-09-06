@@ -20,6 +20,11 @@ function isCatalogPath(pathname: string): boolean {
   return pathname === '/' || /^\/folder\/[^/]+$/.test(pathname);
 }
 
+const TAB_BAR_HEIGHT = 64;
+const ACTIVE_BAR_GAP = 18;
+const ACTIVE_BAR_BOTTOM = TAB_BAR_HEIGHT + ACTIVE_BAR_GAP;
+const ACTIVE_BAR_HEIGHT = 64;
+
 function activeItem(
   catalog: CatalogCollection | null,
   transition: TimeTransition | null
@@ -63,16 +68,10 @@ export function ActiveActivityBar() {
   }, [catalogVisible]);
 
   if (!catalogVisible || !runtime || error) return null;
-  return <ActiveActivityBarContent pathname={pathname} runtime={runtime} />;
+  return <ActiveActivityBarContent runtime={runtime} />;
 }
 
-function ActiveActivityBarContent({
-  pathname,
-  runtime,
-}: {
-  pathname: string;
-  runtime: RoutineRuntime;
-}) {
+function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
   const { colors } = useAppTheme();
   const router = useRouter();
   const isWeb = Platform.OS === 'web';
@@ -174,9 +173,12 @@ function ActiveActivityBarContent({
           {
             backgroundColor: isWeb ? webSurface : colors.surface,
             borderColor: isWeb ? webBorder : colors.border,
-            // The tab bar owns the iOS home-indicator inset. Keep this pill's
-            // position fixed so it does not create an extra gap above the bar.
-            bottom: pathname === '/' ? 82 : 14,
+            // Keep the pill a fixed gap above the tab bar. The web tab bar's
+            // CSS height includes the cold-start-safe home-indicator inset.
+            bottom: (isWeb
+              ? `calc(${ACTIVE_BAR_BOTTOM}px + var(--tulona-safe-area-bottom))`
+              : ACTIVE_BAR_BOTTOM) as unknown as number,
+            height: ACTIVE_BAR_HEIGHT,
           },
         ]}
         testID="active-activity-bar"

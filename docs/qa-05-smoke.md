@@ -74,3 +74,4 @@ Evidence root: `/tmp/opencode/tulona-qa-05`
 ## Discovered Follow-Up
 
 - Beads bug `tulona-dos` was created before any follow-up edit: catalog editor inputs could display a stale value after a successful save while the heading showed the new value. It was reproduced at `/tulona/folder-edit/edafd763-5166-4705-8bf8-d01d67f3eed1`; evidence: `screenshots/catalog-folder-edited-confirmed.png` and `screenshots/catalog-folder-edit-persisted.png`. The editor refresh fix was then validated in fresh session `qa05-fixverify3`; evidence: `screenshots/catalog-editor-controlled-fix.png`.
+- iOS safe-area validation limitation: automated regression coverage verifies the cold-start bootstrap, iOS-only gating, tab padding, folder tab-bar presence, and active-bar geometry. The actual `env(safe-area-inset-bottom)` value and curved home-indicator clearance still require a physical iPhone Safari/standalone-PWA run; no physical-device validation was available for this smoke pass.

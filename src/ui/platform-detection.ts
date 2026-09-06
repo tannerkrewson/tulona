@@ -3,6 +3,7 @@ export interface IOSWebEnvironment {
   readonly platform: string;
   readonly maxTouchPoints: number;
   readonly standalone: boolean;
+  readonly displayModeStandalone?: boolean;
 }
 
 /** Identifies iOS Safari and an installed iOS PWA, but not other web targets. */
@@ -11,6 +12,7 @@ export function isIOSSafariEnvironment({
   platform,
   maxTouchPoints,
   standalone,
+  displayModeStandalone = false,
 }: IOSWebEnvironment): boolean {
   const isIOS =
     /iPad|iPhone|iPod/i.test(userAgent) || (platform === 'MacIntel' && maxTouchPoints > 1);
@@ -21,5 +23,5 @@ export function isIOSSafariEnvironment({
 
   // navigator.standalone is present for an iOS home-screen PWA, whose UA does
   // not contain Safari. It is intentionally checked only after the iOS test.
-  return isSafari || standalone;
+  return isSafari || standalone || displayModeStandalone;
 }
