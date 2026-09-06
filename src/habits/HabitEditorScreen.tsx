@@ -1,11 +1,10 @@
-import { Column, Picker, Row, Text } from '@expo/ui';
+import { Column, Picker, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import type { CatalogCollection, Habit, HabitSchedule, HabitTrigger, UUID } from '@domain';
-import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
 import {
   AccessiblePicker,
@@ -13,7 +12,6 @@ import {
   AppButton,
   ColorPicker,
   errorText,
-  IconPicker,
   Screen,
 } from '@ui';
 
@@ -31,7 +29,6 @@ interface HabitDraft {
   name: string;
   description: string;
   color: string | null;
-  iconName: string | null;
   scheduleKind: ScheduleKind;
   daysOfWeek: number[];
   timesPerWeek: string;
@@ -59,7 +56,6 @@ function draftFromHabit(habit: Habit | null): HabitDraft {
     name: habit?.name ?? '',
     description: habit?.description ?? '',
     color: habit?.color ?? null,
-    iconName: habit?.iconName ?? null,
     scheduleKind: habit?.schedule.kind ?? 'daily',
     daysOfWeek: habit?.schedule.kind === 'weekly' ? habit.schedule.daysOfWeek : [1, 2, 3, 4, 5],
     timesPerWeek:
@@ -140,7 +136,6 @@ function inputFromDraft(draft: HabitDraft) {
     name: draft.name,
     description: draft.description.trim() || null,
     color: draft.color,
-    iconName: draft.iconName,
     schedule: scheduleFromDraft(draft),
     trigger: triggerFromDraft(draft),
   };
@@ -399,21 +394,14 @@ function HabitEditorForm({
             width: '100%',
           }}
         >
-          <Row alignment="center" spacing={12}>
-            <AppIcon
-              color={draft.color ?? colors.primary}
-              name={draft.iconName ?? 'heart'}
-              size={30}
-            />
-            <Column spacing={3} style={{ width: '75%' }}>
-              <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
-                {draft.name || 'Untitled habit'}
-              </Text>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                {habit ? 'Changes are saved on this device.' : 'Daily is the default schedule.'}
-              </Text>
-            </Column>
-          </Row>
+          <Column spacing={3} style={{ width: '100%' }}>
+            <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
+              {draft.name || 'Untitled habit'}
+            </Text>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+              {habit ? 'Changes are saved on this device.' : 'Daily is the default schedule.'}
+            </Text>
+          </Column>
           <Field label="Name">
             <Input
               label="Habit name"
@@ -431,13 +419,6 @@ function HabitEditorForm({
               placeholder="What makes this habit useful?"
               testID="habit-description"
               value={draft.description}
-            />
-          </Field>
-          <Field label="Icon">
-            <IconPicker
-              onChange={(iconName) => update({ iconName })}
-              testID="habit-icon-picker"
-              value={draft.iconName}
             />
           </Field>
           <Field label="Color">
