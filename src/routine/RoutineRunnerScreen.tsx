@@ -1,6 +1,7 @@
 import { Column, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Circle, Svg } from 'react-native-svg';
 import { Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -50,18 +51,6 @@ function orderedSteps(active: ActiveRoutine) {
   return [...active.routineSnapshot.steps].sort((left, right) => left.sortOrder - right.sortOrder);
 }
 
-function estimatedEndTime(
-  active: ActiveRoutine,
-  remainingMs: number | null,
-  nowMs: number
-): string {
-  const currentDeadline = remainingMs === null ? nowMs : nowMs + Math.max(0, remainingMs);
-  const pendingDuration = orderedSteps(active)
-    .slice(active.currentStepIndex + 1)
-    .reduce((total, step) => total + step.durationMs, 0);
-  return absoluteTime(new Date(currentDeadline + pendingDuration).toISOString());
-}
-
 function RunnerError({
   message,
   title = 'Routine unavailable',
@@ -83,7 +72,6 @@ function RunnerError({
 
 export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [active, setActive] = useState<ActiveRoutine | null>(null);
@@ -91,10 +79,9 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [stepsOpen, setStepsOpen] = useState(false);
+  const [routineMenuOpen, setRoutineMenuOpen] = useState(false);
   const [addTimeOpen, setAddTimeOpen] = useState(false);
   const [skipOpen, setSkipOpen] = useState(false);
-  const [rearrangeOpen, setRearrangeOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
   const recovering = useRef(false);
   const lastAction = useRef<
@@ -235,16 +222,13 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
 
   if (!active || !runtime) {
     return (
-      <Screen backgroundColor={RUNNER.background} scrollable={false}>
+      <Screen
+        backgroundColor={RUNNER.background}
+        onBack={goBack}
+        scrollable={false}
+        title="Routine"
+      >
         <Column alignment="center" spacing={16} style={{ width: '100%' }}>
-          <IconButton
-            accessibilityHint="Returns to the previous screen"
-            color={RUNNER.text}
-            icon="arrow-left"
-            label="Back"
-            onPress={goBack}
-            variant="plain"
-          />
           <AppIcon name="timer" color={RUNNER.accent} size={40} />
           <Text textStyle={{ color: RUNNER.text, fontSize: 24, fontWeight: '700' }}>
             Routine runner
@@ -262,7 +246,12 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const currentStep = steps[active.currentStepIndex];
   if (!currentStep) {
     return (
-      <Screen backgroundColor={RUNNER.background} scrollable={false}>
+      <Screen
+        backgroundColor={RUNNER.background}
+        onBack={goBack}
+        scrollable={false}
+        title="Routine"
+      >
         <RunnerError message="The active routine has no current step.">
           <RecoveryActions onBack={goBack} testID="routine-step-recovery" />
         </RunnerError>
@@ -277,13 +266,15 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
       ? '—'
       : formatCountdownMs(timing.remainingMs);
   const nextStep = steps[active.currentStepIndex + 1];
-  const circleSize = Math.min(Math.max(width - 56, 270), 352);
-  const endTime = estimatedEndTime(active, timing.remainingMs, nowMs);
+  const circleSize = Math.min(Math.max(width - 56, 268), 352);
+  const totalCurrentMs = currentStep.durationMs + (currentSession?.addedTimeMs ?? 0);
+  const progress =
+    timing.remainingMs === null ? 0 : Math.min(1, Math.max(0, timing.remainingMs / totalCurrentMs));
 
   return (
     <Screen backgroundColor={RUNNER.background} scrollable testID="routine-runner">
-      <Column spacing={18} style={{ width: '100%' }}>
-        <Row alignment="center" spacing={4} style={{ width: '100%' }}>
+      <Column spacing={18} style={styles.runnerContent}>
+        <Row alignment="center" spacing={10} style={styles.headerRow}>
           <IconButton
             accessibilityHint="Returns to the previous screen"
             color={RUNNER.text}
@@ -296,9 +287,9 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             <Column spacing={2}>
               <Text
                 numberOfLines={1}
-                textStyle={{ color: RUNNER.muted, fontSize: 12, fontWeight: '700' }}
+                textStyle={{ color: RUNNER.muted, fontSize: 13, fontWeight: '600' }}
               >
-                {active.routineSnapshot.name.toUpperCase()}
+                {active.routineSnapshot.name}
               </Text>
               <Text
                 numberOfLines={2}
@@ -330,51 +321,42 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           </Text>
         </Row>
 
-        <View
-          style={[
-            styles.timerCircle,
-            { height: circleSize, width: circleSize, borderRadius: circleSize / 2 },
-          ]}
-          testID="current-routine-step"
-        >
-          <Pressable
-            accessibilityLabel={`Open routine steps, step ${active.currentStepIndex + 1} of ${steps.length}`}
-            accessibilityRole="button"
-            onPress={() => setStepsOpen(true)}
-            style={({ pressed }) => [styles.stepToggle, { opacity: pressed ? 0.7 : 1 }]}
-            testID="open-routine-steps"
+        <View style={[styles.timerWrap, { height: circleSize, width: circleSize }]}>
+          <View
+            style={[
+              styles.timerCircle,
+              { height: circleSize, width: circleSize, borderRadius: circleSize / 2 },
+            ]}
+            testID="current-routine-step"
           >
-            <AppIcon name="list-checks" color={RUNNER.accent} size={17} />
-            <Text textStyle={{ color: RUNNER.muted, fontSize: 12, fontWeight: '800' }}>
-              {`STEP ${active.currentStepIndex + 1} OF ${steps.length}`}
+            <Pressable
+              accessibilityLabel={`Open routine steps, step ${active.currentStepIndex + 1} of ${steps.length}`}
+              accessibilityRole="button"
+              onPress={() => setRoutineMenuOpen(true)}
+              style={({ pressed }) => [styles.stepToggle, { opacity: pressed ? 0.7 : 1 }]}
+              testID="open-routine-steps"
+            >
+              <AppIcon name="list-checks" color={RUNNER.accent} size={17} />
+              <Text textStyle={{ color: RUNNER.muted, fontSize: 12, fontWeight: '700' }}>
+                {`Step ${active.currentStepIndex + 1} of ${steps.length}`}
+              </Text>
+              <AppIcon name="chevron-down" color={RUNNER.muted} size={16} />
+            </Pressable>
+            <AppIcon name={currentStep.iconName || 'timer'} color={RUNNER.accent} size={70} />
+            <Text
+              textStyle={{
+                color: timing.isOvertime ? RUNNER.danger : RUNNER.text,
+                fontSize: Math.min(60, Math.max(46, circleSize / 6)),
+                fontWeight: '800',
+                letterSpacing: -1,
+                textAlign: 'center',
+              }}
+              testID="routine-countdown"
+            >
+              {displayCountdown}
             </Text>
-            <AppIcon name="chevron-down" color={RUNNER.muted} size={16} />
-          </Pressable>
-          <AppIcon name={currentStep.iconName || 'timer'} color={RUNNER.accent} size={70} />
-          <Text
-            textStyle={{
-              color: timing.isOvertime ? RUNNER.danger : RUNNER.text,
-              fontSize: Math.min(60, Math.max(46, circleSize / 6)),
-              fontWeight: '800',
-              letterSpacing: -1,
-              textAlign: 'center',
-            }}
-            testID="routine-countdown"
-          >
-            {displayCountdown}
-          </Text>
-          <Pressable
-            accessibilityLabel="Open duration presets"
-            accessibilityRole="button"
-            disabled={busy}
-            onPress={() => setAddTimeOpen(true)}
-            style={({ pressed }) => [styles.durationPill, { opacity: pressed || busy ? 0.65 : 1 }]}
-            testID="open-add-time"
-          >
-            <Text textStyle={{ color: RUNNER.muted, fontSize: 17, fontWeight: '700' }}>−</Text>
-            <Text textStyle={{ color: RUNNER.text, fontSize: 14, fontWeight: '700' }}>3m</Text>
-            <Text textStyle={{ color: RUNNER.accent, fontSize: 17, fontWeight: '700' }}>+</Text>
-          </Pressable>
+          </View>
+          <ProgressRing progress={progress} size={circleSize} />
         </View>
 
         {actionError ? (
@@ -383,7 +365,15 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           </RunnerError>
         ) : null}
 
-        <Row alignment="center" spacing={18} style={styles.controlRow}>
+        <Row alignment="center" style={styles.controlRow}>
+          <RoundControl
+            disabled={busy}
+            icon="clock"
+            label="Add time"
+            onPress={() => setAddTimeOpen(true)}
+            size={52}
+            testID="open-add-time"
+          />
           <RoundControl
             disabled={busy}
             icon={active.status === 'paused' ? 'play' : 'pause'}
@@ -395,6 +385,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
                   : nextRuntime.routineService.pause()
               )
             }
+            size={58}
             testID={active.status === 'paused' ? 'routine-resume' : 'routine-pause'}
           />
           <RoundControl
@@ -403,6 +394,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             icon="check"
             label="Complete current step"
             onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.done())}
+            size={78}
             testID="routine-done"
           />
           <RoundControl
@@ -410,51 +402,45 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             icon="skip-forward"
             label="Skip or move current step"
             onPress={() => setSkipOpen(true)}
+            size={58}
             testID="routine-skip"
+          />
+          <RoundControl
+            disabled={busy}
+            icon="list-checks"
+            label="Rearrange routine steps"
+            onPress={() => setRoutineMenuOpen(true)}
+            size={52}
+            testID="open-routine-rearrange"
           />
         </Row>
 
         {nextStep ? (
           <Row alignment="center" spacing={10} style={styles.nextRow}>
-            <Text textStyle={{ color: RUNNER.muted, fontSize: 11, fontWeight: '800' }}>NEXT</Text>
+            <Text textStyle={{ color: RUNNER.muted, fontSize: 11, fontWeight: '700' }}>Next</Text>
             <AppIcon name={nextStep.iconName || 'timer'} color={RUNNER.muted} size={17} />
             <Text numberOfLines={1} textStyle={{ color: RUNNER.muted, fontSize: 15 }}>
               {nextStep.name || 'Untitled step'}
             </Text>
           </Row>
         ) : null}
-
-        <View style={[styles.endsCard, { marginBottom: Math.max(insets.bottom, 8) }]}>
-          <View style={styles.endsText}>
-            <Column spacing={2}>
-              <Text textStyle={{ color: RUNNER.muted, fontSize: 12, fontWeight: '700' }}>
-                ALL ENDS
-              </Text>
-              <Text textStyle={{ color: RUNNER.text, fontSize: 18, fontWeight: '800' }}>
-                {endTime}
-              </Text>
-            </Column>
-          </View>
-          <Pressable
-            accessibilityLabel="Rearrange routine steps"
-            accessibilityRole="button"
-            disabled={busy}
-            onPress={() => setRearrangeOpen(true)}
-            style={({ pressed }) => [
-              styles.rearrangeButton,
-              { opacity: pressed || busy ? 0.65 : 1 },
-            ]}
-            testID="open-routine-rearrange"
-          >
-            <AppIcon name="list-checks" color={RUNNER.text} size={17} />
-            <Text textStyle={{ color: RUNNER.text, fontSize: 14, fontWeight: '700' }}>
-              Rearrange
-            </Text>
-          </Pressable>
-        </View>
       </Column>
 
-      <StepsModal active={active} onClose={() => setStepsOpen(false)} visible={stepsOpen} />
+      <RoutineStepsModal
+        active={active}
+        busy={busy}
+        onClose={() => setRoutineMenuOpen(false)}
+        onJump={(stepId) =>
+          void runAction(
+            (nextRuntime) => nextRuntime.routineService.jumpToStep(stepId),
+            () => setRoutineMenuOpen(false)
+          )
+        }
+        onMove={(stepId, direction) =>
+          void runAction((nextRuntime) => nextRuntime.routineService.reorderStep(stepId, direction))
+        }
+        visible={routineMenuOpen}
+      />
       <AddTimeModal
         busy={busy}
         onAdd={(addedTimeMs) =>
@@ -483,15 +469,6 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
         }
         visible={skipOpen}
       />
-      <RearrangeModal
-        active={active}
-        busy={busy}
-        onClose={() => setRearrangeOpen(false)}
-        onMove={(stepId, direction) =>
-          void runAction((nextRuntime) => nextRuntime.routineService.reorderStep(stepId, direction))
-        }
-        visible={rearrangeOpen}
-      />
       <StopModal
         busy={busy}
         onClose={() => setStopOpen(false)}
@@ -510,22 +487,61 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   );
 }
 
+function ProgressRing({ progress, size }: { progress: number; size: number }) {
+  const strokeWidth = 6;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <Svg
+      height={size}
+      pointerEvents="none"
+      style={StyleSheet.absoluteFill}
+      viewBox={`0 0 ${size} ${size}`}
+      width={size}
+    >
+      <Circle
+        cx={size / 2}
+        cy={size / 2}
+        fill="none"
+        opacity={0.22}
+        r={radius}
+        stroke={RUNNER.border}
+        strokeWidth={strokeWidth}
+      />
+      <Circle
+        cx={size / 2}
+        cy={size / 2}
+        fill="none"
+        origin={`${size / 2}, ${size / 2}`}
+        r={radius}
+        rotation="-90"
+        stroke={RUNNER.accent}
+        strokeDasharray={`${circumference} ${circumference}`}
+        strokeDashoffset={circumference * (1 - progress)}
+        strokeLinecap="round"
+        strokeWidth={strokeWidth}
+      />
+    </Svg>
+  );
+}
+
 function RoundControl({
   disabled,
   emphasis = false,
   icon,
   label,
   onPress,
+  size,
   testID,
 }: {
   disabled: boolean;
   emphasis?: boolean;
-  icon: 'check' | 'pause' | 'play' | 'skip-forward';
+  icon: 'check' | 'clock' | 'list-checks' | 'pause' | 'play' | 'skip-forward';
   label: string;
   onPress: () => void;
+  size: number;
   testID: string;
 }) {
-  const size = emphasis ? 78 : 58;
   return (
     <Pressable
       accessibilityLabel={label}
@@ -549,7 +565,7 @@ function RoundControl({
       <AppIcon
         color={emphasis ? RUNNER.accentText : RUNNER.text}
         name={icon}
-        size={emphasis ? 30 : 23}
+        size={emphasis ? 30 : 22}
         strokeWidth={2.6}
       />
     </Pressable>
@@ -627,17 +643,14 @@ function AddTimeModal({
   visible: boolean;
 }) {
   const options = [
-    { label: '+1 min', value: 60_000 },
-    { label: '+3 min', value: 180_000 },
-    { label: '+5 min', value: 300_000 },
-    { label: '+10 min', value: 600_000 },
-    { label: '+30 min', value: 1_800_000 },
+    { label: '+1 minute', value: 60_000 },
+    { label: '+3 minutes', value: 180_000 },
+    { label: '+5 minutes', value: 300_000 },
+    { label: '+10 minutes', value: 600_000 },
+    { label: '+30 minutes', value: 1_800_000 },
   ];
   return (
     <RunnerModal onClose={onClose} title="Add time" visible={visible}>
-      <Text textStyle={{ color: RUNNER.muted, fontSize: 14, lineHeight: 20 }}>
-        Extend the current step without resetting its timer.
-      </Text>
       <View style={styles.modalOptions}>
         {options.map((option) => (
           <Pressable
@@ -695,19 +708,26 @@ function SkipModal({
   );
 }
 
-function StepsModal({
+function RoutineStepsModal({
   active,
+  busy,
   onClose,
+  onJump,
+  onMove,
   visible,
 }: {
   active: ActiveRoutine;
+  busy: boolean;
   onClose: () => void;
+  onJump: (stepId: string) => void;
+  onMove: (stepId: string, direction: 'up' | 'down') => void;
   visible: boolean;
 }) {
+  const steps = orderedSteps(active);
   return (
     <RunnerModal onClose={onClose} title="Routine steps" visible={visible}>
-      <Column spacing={14} style={{ width: '100%' }}>
-        {orderedSteps(active).map((step, index) => {
+      <Column spacing={10} style={{ width: '100%' }}>
+        {steps.map((step, index) => {
           const session = active.stepSessions.find((candidate) => candidate.stepId === step.id);
           const status = session?.status ?? 'pending';
           const icon =
@@ -719,86 +739,56 @@ function StepsModal({
                   ? 'circle-dot'
                   : 'circle';
           return (
-            <Row key={step.id} alignment="center" spacing={11} style={{ width: '100%' }}>
-              <AppIcon color={statusColor(status)} name={icon} size={21} />
-              <View style={styles.stepText}>
-                <Column spacing={2}>
-                  <Text textStyle={{ color: RUNNER.text, fontSize: 15, fontWeight: '700' }}>
-                    {`${index + 1}. ${step.name || 'Untitled step'}`}
-                  </Text>
-                  <Text textStyle={{ color: RUNNER.muted, fontSize: 13 }}>
-                    {stepStatusLabel(status)}
-                  </Text>
-                </Column>
-              </View>
+            <Row key={step.id} alignment="center" spacing={8} style={styles.rearrangeRow}>
+              <Pressable
+                accessibilityLabel={`Open ${step.name || 'step'}`}
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => onJump(step.id)}
+                style={({ pressed }) => [styles.stepTouchable, { opacity: pressed ? 0.7 : 1 }]}
+                testID={`routine-jump-step-${step.id}`}
+              >
+                <AppIcon color={statusColor(status)} name={icon} size={21} />
+                <View style={styles.stepText}>
+                  <Column spacing={2}>
+                    <Text textStyle={{ color: RUNNER.text, fontSize: 15, fontWeight: '700' }}>
+                      {`${index + 1}. ${step.name || 'Untitled step'}`}
+                    </Text>
+                    <Text textStyle={{ color: RUNNER.muted, fontSize: 13 }}>
+                      {stepStatusLabel(status)}
+                    </Text>
+                  </Column>
+                </View>
+              </Pressable>
+              <Pressable
+                accessibilityLabel={`Move ${step.name || 'step'} up`}
+                accessibilityRole="button"
+                disabled={busy || index === 0}
+                onPress={() => onMove(step.id, 'up')}
+                style={({ pressed }) => [
+                  styles.reorderIcon,
+                  { opacity: busy || index === 0 ? 0.25 : pressed ? 0.7 : 1 },
+                ]}
+                testID={`routine-reorder-up-${step.id}`}
+              >
+                <AppIcon color={RUNNER.text} name="chevron-up" size={18} />
+              </Pressable>
+              <Pressable
+                accessibilityLabel={`Move ${step.name || 'step'} down`}
+                accessibilityRole="button"
+                disabled={busy || index === steps.length - 1}
+                onPress={() => onMove(step.id, 'down')}
+                style={({ pressed }) => [
+                  styles.reorderIcon,
+                  { opacity: busy || index === steps.length - 1 ? 0.25 : pressed ? 0.7 : 1 },
+                ]}
+                testID={`routine-reorder-down-${step.id}`}
+              >
+                <AppIcon color={RUNNER.text} name="chevron-down" size={18} />
+              </Pressable>
             </Row>
           );
         })}
-      </Column>
-    </RunnerModal>
-  );
-}
-
-function RearrangeModal({
-  active,
-  busy,
-  onClose,
-  onMove,
-  visible,
-}: {
-  active: ActiveRoutine;
-  busy: boolean;
-  onClose: () => void;
-  onMove: (stepId: string, direction: 'up' | 'down') => void;
-  visible: boolean;
-}) {
-  const steps = orderedSteps(active);
-  return (
-    <RunnerModal onClose={onClose} title="Rearrange" visible={visible}>
-      <Column spacing={10} style={{ width: '100%' }}>
-        {steps.map((step, index) => (
-          <Row key={step.id} alignment="center" spacing={8} style={styles.rearrangeRow}>
-            <View style={styles.rearrangeIndex}>
-              <Text textStyle={{ color: RUNNER.muted, fontSize: 14, fontWeight: '700' }}>
-                {String(index + 1)}
-              </Text>
-            </View>
-            <View style={styles.rearrangeText}>
-              <Text
-                numberOfLines={1}
-                textStyle={{ color: RUNNER.text, fontSize: 15, fontWeight: '700' }}
-              >
-                {step.name || 'Untitled step'}
-              </Text>
-            </View>
-            <Pressable
-              accessibilityLabel={`Move ${step.name || 'step'} up`}
-              accessibilityRole="button"
-              disabled={busy || index === 0}
-              onPress={() => onMove(step.id, 'up')}
-              style={({ pressed }) => [
-                styles.reorderIcon,
-                { opacity: busy || index === 0 ? 0.25 : pressed ? 0.7 : 1 },
-              ]}
-              testID={`routine-reorder-up-${step.id}`}
-            >
-              <AppIcon color={RUNNER.text} name="chevron-up" size={18} />
-            </Pressable>
-            <Pressable
-              accessibilityLabel={`Move ${step.name || 'step'} down`}
-              accessibilityRole="button"
-              disabled={busy || index === steps.length - 1}
-              onPress={() => onMove(step.id, 'down')}
-              style={({ pressed }) => [
-                styles.reorderIcon,
-                { opacity: busy || index === steps.length - 1 ? 0.25 : pressed ? 0.7 : 1 },
-              ]}
-              testID={`routine-reorder-down-${step.id}`}
-            >
-              <AppIcon color={RUNNER.text} name="chevron-down" size={18} />
-            </Pressable>
-          </Row>
-        ))}
       </Column>
     </RunnerModal>
   );
@@ -817,53 +807,21 @@ function StopModal({
 }) {
   return (
     <RunnerModal onClose={onClose} title="Stop routine" visible={visible}>
-      <Text textStyle={{ color: RUNNER.muted, fontSize: 14, lineHeight: 20 }}>
-        End this routine and save its progress to history?
-      </Text>
-      <View style={styles.modalOptions}>
-        <ModalAction
-          disabled={busy}
-          icon="check"
-          label="Stop and save"
-          onPress={onStop}
-          testID="confirm-stop-routine"
-        />
-        <ModalAction disabled={busy} icon="arrow-left" label="Keep running" onPress={onClose} />
-      </View>
+      <ModalAction
+        disabled={busy}
+        icon="check"
+        label="Stop and save"
+        onPress={onStop}
+        testID="confirm-stop-routine"
+      />
+      <ModalAction disabled={busy} icon="arrow-left" label="Keep running" onPress={onClose} />
     </RunnerModal>
   );
 }
 
 const styles = StyleSheet.create({
   controlRow: {
-    justifyContent: 'center',
-    width: '100%',
-  },
-  endsText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  durationPill: {
-    alignItems: 'center',
-    backgroundColor: RUNNER.surface,
-    borderColor: RUNNER.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 9,
-    paddingHorizontal: 15,
-    paddingVertical: 7,
-  },
-  endsCard: {
-    alignItems: 'center',
-    backgroundColor: RUNNER.surface,
-    borderColor: RUNNER.border,
-    borderRadius: 20,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    justifyContent: 'space-between',
     width: '100%',
   },
   errorCard: {
@@ -874,6 +832,13 @@ const styles = StyleSheet.create({
     gap: 7,
     padding: 14,
     width: '100%',
+  },
+  headerRow: {
+    width: '100%',
+  },
+  headerText: {
+    flex: 1,
+    minWidth: 0,
   },
   modalAction: {
     alignItems: 'center',
@@ -899,7 +864,7 @@ const styles = StyleSheet.create({
   },
   modalOptions: {
     gap: 10,
-    marginTop: 14,
+    marginTop: 4,
     width: '100%',
   },
   modalRoot: {
@@ -939,17 +904,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
   },
-  rearrangeButton: {
-    alignItems: 'center',
-    backgroundColor: '#242424',
-    borderColor: RUNNER.border,
-    borderRadius: 15,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 7,
-    paddingHorizontal: 13,
-    paddingVertical: 10,
-  },
   rearrangeRow: {
     alignItems: 'center',
     backgroundColor: RUNNER.surface,
@@ -958,23 +912,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     gap: 8,
-    minHeight: 54,
+    minHeight: 62,
     paddingHorizontal: 10,
     width: '100%',
-  },
-  rearrangeIndex: {
-    alignItems: 'center',
-    width: 22,
-  },
-  rearrangeText: {
-    flex: 1,
-    minWidth: 0,
   },
   reorderIcon: {
     alignItems: 'center',
     height: 38,
     justifyContent: 'center',
     width: 38,
+  },
+  runnerContent: {
+    width: '100%',
+  },
+  stepText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  stepTouchable: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flex: 1,
+    gap: 11,
+    minWidth: 0,
   },
   stepToggle: {
     alignItems: 'center',
@@ -987,10 +947,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 7,
   },
-  stepText: {
-    flex: 1,
-    minWidth: 0,
-  },
   stopButton: {
     alignItems: 'center',
     backgroundColor: RUNNER.surface,
@@ -1002,14 +958,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 9,
   },
-  timeRange: {
-    justifyContent: 'center',
-    width: '100%',
-  },
-  headerText: {
-    flex: 1,
-    minWidth: 0,
-  },
   timerCircle: {
     alignItems: 'center',
     alignSelf: 'center',
@@ -1019,5 +967,13 @@ const styles = StyleSheet.create({
     gap: 13,
     justifyContent: 'center',
     padding: 22,
+  },
+  timerWrap: {
+    alignSelf: 'center',
+    position: 'relative',
+  },
+  timeRange: {
+    justifyContent: 'center',
+    width: '100%',
   },
 });

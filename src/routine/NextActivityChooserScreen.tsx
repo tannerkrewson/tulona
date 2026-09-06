@@ -1,12 +1,14 @@
-import { Column, Row, Text } from '@expo/ui';
+import { Column, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import type { ActiveRoutine, CatalogCollection, UUID } from '@domain';
-import { AppIcon, type IconValue } from '@icons';
 import { useAppTheme } from '@theme';
-import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { AppButton, errorText, Screen } from '@ui';
+import { RecoveryActions } from '../orchestration/RecoveryActions';
+import { resolveCatalogItem } from '../catalog/catalog-service';
+import { ActivityRow } from '../tracker/ActivityRow';
+import { FolderRow } from '../tracker/FolderRow';
 
 import { loadRoutineRuntime, type RoutineRuntime } from './routine-runtime';
 
@@ -109,12 +111,8 @@ export function NextActivityChooserScreen() {
 
   if (!active || !catalog) {
     return (
-      <Screen scrollable={false}>
+      <Screen onBack={() => router.replace('/(tabs)')} title="Choose activity" scrollable={false}>
         <Column alignment="center" spacing={16} style={{ width: '100%' }}>
-          <AppIcon name="repeat" color={colors.primary} size={40} />
-          <Text textStyle={{ color: colors.text, fontSize: 25, fontWeight: '700' }}>
-            What are you doing now?
-          </Text>
           <ChooserError message={error ?? 'Restoring the next-activity chooser...'}>
             <RecoveryActions
               onBack={() => router.replace('/(tabs)')}
@@ -129,71 +127,39 @@ export function NextActivityChooserScreen() {
 
   const folders = [...catalog.folders]
     .filter((folder) => folder.archivedAt === null)
-    .sort((left, right) => left.sortOrder - right.sortOrder);
+    .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name));
   const items = [...catalog.activities, ...catalog.routines]
     .filter((item) => item.archivedAt === null && item.folderId === folderId)
-    .sort((left, right) => left.sortOrder - right.sortOrder);
+    .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name));
   const visibleFolders = folderId === null ? folders : [];
-  const title = folderId === null ? 'Choose your next activity' : 'Choose from this folder';
+  const currentFolder = folderId ? folders.find((folder) => folder.id === folderId) : null;
+  const title = currentFolder?.name ?? 'Choose activity';
 
   return (
-    <Screen>
+    <Screen
+      onBack={() => (folderId === null ? router.replace('/(tabs)') : setFolderId(null))}
+      title={title}
+    >
       <Column spacing={18} style={{ width: '100%' }}>
-        <Row alignment="center" spacing={12}>
-          <Column
-            style={{
-              backgroundColor: colors.active.background,
-              borderRadius: 12,
-              padding: 10,
-            }}
-          >
-            <AppIcon name="repeat" color={colors.active.foreground} size={23} />
-          </Column>
-          <Column spacing={3}>
-            <Text
-              numberOfLines={2}
-              textStyle={{ color: colors.text, fontSize: 25, fontWeight: '700' }}
-            >
-              What are you doing now?
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              {`${active.routineSnapshot.name} completed at ${shortTime(active.completedAt)}`}
-            </Text>
-          </Column>
-        </Row>
         <Text textStyle={{ color: colors.textMuted, fontSize: 16, lineHeight: 22 }}>
-          Choose the next tracked item. This choice is recorded at the routine completion time, not
-          now.
+          {`${active.routineSnapshot.name} completed at ${shortTime(active.completedAt)}. Choose the next tracked item.`}
         </Text>
-        {folderId !== null ? (
-          <AppButton
-            disabled={busy}
-            label="Back to root"
-            onPress={() => setFolderId(null)}
-            style={{ height: 48, width: '100%' }}
-            variant="outlined"
-            testID="chooser-back"
-          />
-        ) : null}
-        <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>{title}</Text>
         {visibleFolders.map((folder) => (
-          <ChooserItem
+          <FolderRow
             key={folder.id}
-            iconName={folder.iconName || 'folder'}
-            label={folder.name}
-            actionLabel="Open folder"
             disabled={busy}
+            folder={folder}
             onPress={() => setFolderId(folder.id)}
             testID={`chooser-folder-${folder.id}`}
           />
         ))}
         {items.map((item) => (
-          <ChooserItem
+          <ActivityRow
             key={item.id}
-            iconName={item.iconName || (item.kind === 'routine' ? 'repeat' : 'activity')}
-            label={item.name}
-            actionLabel="Choose"
+            active={false}
+            color={resolveCatalogItem(catalog, item.id)?.displayColor}
             disabled={busy}
+            item={item}
             onPress={() => void choose(item.id)}
             testID={`chooser-item-${item.id}`}
           />
@@ -238,49 +204,5 @@ export function NextActivityChooserScreen() {
         />
       </Column>
     </Screen>
-  );
-}
-
-function ChooserItem({
-  iconName,
-  label,
-  actionLabel,
-  disabled,
-  onPress,
-  testID,
-}: {
-  iconName: IconValue;
-  label: string;
-  actionLabel: string;
-  disabled: boolean;
-  onPress: () => void;
-  testID: string;
-}) {
-  const { colors } = useAppTheme();
-  return (
-    <Column
-      spacing={8}
-      style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 14,
-        borderWidth: 1,
-        padding: 14,
-        width: '100%',
-      }}
-    >
-      <Row alignment="center" spacing={10}>
-        <AppIcon name={iconName} color={colors.primary} size={24} />
-        <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>{label}</Text>
-      </Row>
-      <AppButton
-        disabled={disabled}
-        label={actionLabel}
-        onPress={onPress}
-        style={{ height: 50, width: '100%' }}
-        variant="outlined"
-        testID={testID}
-      />
-    </Column>
   );
 }
