@@ -1,6 +1,6 @@
 import { Column, Row, Text } from '@expo/ui';
 import { useIsFocused, useRouter, type Href } from 'expo-router';
-import { Pressable } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useCallback, useEffect, useState } from 'react';
 
 import { AppIcon } from '@icons';
@@ -41,17 +41,18 @@ function SettingsCategoryRow({
       testID={`settings-category-${category.id}`}
     >
       <Row alignment="center" spacing={12} style={{ height: 66, width: '100%' }}>
-        <Column
-          alignment="center"
+        <View
           style={{
+            alignItems: 'center',
             backgroundColor: colors.surfaceMuted,
             borderRadius: 9,
             height: 34,
+            justifyContent: 'center',
             width: 34,
           }}
         >
           <AppIcon color={colors.text} name={category.icon} size={19} strokeWidth={2.2} />
-        </Column>
+        </View>
         <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600' }}>
           {category.title}
         </Text>
