@@ -26,6 +26,7 @@ import {
   jumpToRoutineStep,
   pauseRoutine as pauseRoutineState,
   reorderActiveRoutineStep,
+  resetRoutineTime as resetRoutineTimeState,
   resumeRoutine as resumeRoutineState,
   routineRunHistory,
   routineTiming,
@@ -77,6 +78,8 @@ export interface RoutineServiceApi {
   resume(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   addTime(addedTimeMs: number, at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   addRoutineTime(addedTimeMs: number, at?: RoutineTimestampInput): Promise<ActiveRoutine>;
+  resetTime(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
+  resetRoutineTime(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   moveCurrentStepToEnd(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   reorderStep(stepId: UUID, direction: 'up' | 'down'): Promise<ActiveRoutine>;
   jumpToStep(stepId: UUID, at?: RoutineTimestampInput): Promise<ActiveRoutine>;
@@ -196,6 +199,14 @@ export class RoutineService implements RoutineServiceApi {
     at: RoutineTimestampInput = this.now()
   ): Promise<ActiveRoutine> {
     return this.addTime(addedTimeMs, at);
+  }
+
+  async resetTime(at: RoutineTimestampInput = this.now()): Promise<ActiveRoutine> {
+    return this.mutate((active) => resetRoutineTimeState(active, at));
+  }
+
+  async resetRoutineTime(at: RoutineTimestampInput = this.now()): Promise<ActiveRoutine> {
+    return this.resetTime(at);
   }
 
   async moveCurrentStepToEnd(at: RoutineTimestampInput = this.now()): Promise<ActiveRoutine> {

@@ -323,18 +323,21 @@ export function resumeRoutine(
   return next;
 }
 
-/** Adds duration to the current deadline or to paused remaining time. */
+/** Adds or removes duration from the current deadline or paused remaining time. */
 export function addRoutineTime(
   activeRoutine: ActiveRoutine,
   addedTimeMs: number,
   at: RoutineTimestampInput = Date.now()
 ): ActiveRoutine {
   atMs(at);
-  if (!Number.isInteger(addedTimeMs) || addedTimeMs <= 0) {
-    throw new RangeError('Added routine time must be a positive integer in milliseconds');
+  if (!Number.isInteger(addedTimeMs) || addedTimeMs === 0) {
+    throw new RangeError('Routine time adjustment must be a non-zero integer in milliseconds');
   }
   const next = cloneRoutine(activeRoutine);
   const session = assertActiveStep(next);
+  if (session.addedTimeMs + addedTimeMs < 0) {
+    throw new RangeError('Routine time cannot be reduced below the original duration');
+  }
   session.addedTimeMs += addedTimeMs;
   if (next.status === 'paused') {
     const remainingMs = pausedRemainingMs(next);
@@ -345,6 +348,30 @@ export function addRoutineTime(
     if (deadlineMs === null) throw new Error('Cannot add time without a current deadline');
     setCurrentDeadline(next, deadlineMs + addedTimeMs);
   }
+  return next;
+}
+
+/** Restores the current step to its original allocated duration. */
+export function resetRoutineTime(
+  activeRoutine: ActiveRoutine,
+  at: RoutineTimestampInput = Date.now()
+): ActiveRoutine {
+  atMs(at);
+  const next = cloneRoutine(activeRoutine);
+  const session = assertActiveStep(next);
+  const addedTimeMs = session.addedTimeMs;
+  if (addedTimeMs === 0) return next;
+
+  if (next.status === 'paused') {
+    const remainingMs = pausedRemainingMs(next);
+    if (remainingMs === null) throw new Error('Paused routine has no remaining time');
+    next.remainingMsWhenPaused = remainingMs - addedTimeMs;
+  } else {
+    const deadlineMs = runningDeadlineMs(next);
+    if (deadlineMs === null) throw new Error('Cannot reset time without a current deadline');
+    setCurrentDeadline(next, deadlineMs - addedTimeMs);
+  }
+  session.addedTimeMs = 0;
   return next;
 }
 
