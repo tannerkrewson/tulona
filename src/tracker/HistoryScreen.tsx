@@ -9,7 +9,7 @@ import {
   logicalDayKey,
   shiftLogicalDay,
   toTimestamp,
-  type CatalogCollection,
+  type LogicalDayKey,
   type TimeInterval,
   type TimeTransition,
   type TrackableItem,
@@ -22,26 +22,13 @@ import { AccessiblePicker, AccessibleTextInput, AppButton, errorText, Screen } f
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import { orderTransitions } from './tracker-engine';
+import { SectionCard } from '../reporting/insights-shared';
 
 const NONE = '__none__';
 
-function dayDate(day: string, rolloverHour: number): Date {
-  return dateForLogicalDay(day as import('@domain').LogicalDayKey, rolloverHour);
-}
-
-function validDay(value: string | string[] | undefined): import('@domain').LogicalDayKey | null {
+function validDay(value: string | string[] | undefined): LogicalDayKey | null {
   const candidate = Array.isArray(value) ? value[0] : value;
-  return candidate && /^\d{4}-\d{2}-\d{2}$/.test(candidate)
-    ? (candidate as import('@domain').LogicalDayKey)
-    : null;
-}
-
-function shiftDay(
-  day: import('@domain').LogicalDayKey,
-  amount: number,
-  rolloverHour: number
-): import('@domain').LogicalDayKey {
-  return shiftLogicalDay(day, amount, { rolloverHour });
+  return candidate && /^\d{4}-\d{2}-\d{2}$/.test(candidate) ? (candidate as LogicalDayKey) : null;
 }
 
 function localInputValue(timestamp: string): string {
@@ -59,22 +46,12 @@ function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function formatDate(day: string, rolloverHour: number): string {
-  return dayDate(day, rolloverHour).toLocaleDateString([], {
+function readableDay(day: LogicalDayKey, rolloverHour: number): string {
+  return dateForLogicalDay(day, rolloverHour).toLocaleDateString([], {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
   });
-}
-
-function catalogName(catalog: CatalogCollection, transition: TimeTransition | null): string {
-  if (!transition || transition.activityId === null) return 'No activity';
-  return resolveCatalogItem(catalog, transition.activityId)?.item.name ?? 'Unavailable activity';
-}
-
-function colorForTransition(catalog: CatalogCollection, transition: TimeTransition | null): string {
-  if (!transition || transition.activityId === null) return '#64748B';
-  return resolveCatalogItem(catalog, transition.activityId)?.displayColor ?? '#176B87';
 }
 
 function ErrorPanel({
@@ -120,13 +97,16 @@ export default function HistoryScreen() {
   const params = useLocalSearchParams<{ day?: string }>();
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [selectedDay, setSelectedDay] = useState(() => validDay(params.day));
+  const [manualDay, setManualDay] = useState<LogicalDayKey | null>(null);
   const [fallbackTimestamp] = useState(() => Date.now());
+  const paramDay = validDay(params.day);
 
   const load = useCallback(() => {
-    setLoadError(null);
     void loadRoutineRuntime()
-      .then(setRuntime)
+      .then((nextRuntime) => {
+        setRuntime(nextRuntime);
+        setLoadError(null);
+      })
       .catch((error: unknown) => setLoadError(errorText(error)));
   }, []);
 
@@ -144,6 +124,14 @@ export default function HistoryScreen() {
     };
   }, []);
 
+  const changeDay = useCallback(
+    (next: LogicalDayKey) => {
+      setManualDay(next);
+      router.setParams({ day: next });
+    },
+    [router]
+  );
+
   if (!runtime) {
     return (
       <Screen onBack={() => router.back()} title="History">
@@ -157,13 +145,14 @@ export default function HistoryScreen() {
   }
 
   const day =
-    selectedDay ??
+    paramDay ??
+    manualDay ??
     logicalDayKey(fallbackTimestamp, { rolloverHour: runtime.settings.logicalDayRolloverHour });
   return (
     <HistoryDay
       key={day}
       day={day}
-      onChangeDay={setSelectedDay}
+      onChangeDay={changeDay}
       rolloverHour={runtime.settings.logicalDayRolloverHour}
       runtime={runtime}
     />
@@ -177,8 +166,8 @@ function HistoryDay({
   rolloverHour,
 }: {
   runtime: RoutineRuntime;
-  day: string;
-  onChangeDay: (day: import('@domain').LogicalDayKey) => void;
+  day: LogicalDayKey;
+  onChangeDay: (day: LogicalDayKey) => void;
   rolloverHour: number;
 }) {
   const { colors } = useAppTheme();
@@ -194,6 +183,7 @@ function HistoryDay({
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [pending, setPending] = useState<{ kind: 'delete' | 'merge'; id: string } | null>(null);
   const [insertOpen, setInsertOpen] = useState(false);
   const [insertValue, setInsertValue] = useState(() =>
@@ -259,6 +249,7 @@ function HistoryDay({
 
   const beginEdit = (transition: TimeTransition) => {
     setEditingId(transition.id);
+    setExpandedId(transition.id);
     setBoundaryValue(localInputValue(transition.timestamp));
     setActionError(null);
   };
@@ -307,66 +298,50 @@ function HistoryDay({
     });
   };
 
+  const activities = [...catalog.activities, ...catalog.routines];
+
   return (
     <Screen
       onBack={() => router.back()}
       title="History"
-      description="Derived intervals for a logical day; corrections update the journal."
+      description="Review the day timeline and correct mistakes."
     >
-      <Column spacing={16} style={{ width: '100%' }}>
-        <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-          <AppButton
-            disabled={busy}
-            label="Previous day"
-            onPress={() => onChangeDay(shiftDay(day, -1, rolloverHour))}
-            style={{ height: 48, width: '48%' }}
-            testID="history-previous-day"
-            variant="outlined"
-          />
-          <AppButton
-            disabled={busy || futureDay}
-            label="Next day"
-            onPress={() => onChangeDay(shiftDay(day, 1, rolloverHour))}
-            style={{ height: 48, width: '48%' }}
-            testID="history-next-day"
-            variant="outlined"
-          />
-        </Row>
-        <Column alignment="center" spacing={2} style={{ width: '100%' }}>
-          <Text textStyle={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>
-            {formatDate(day, rolloverHour)}
+      <Column spacing={14} style={{ width: '100%' }}>
+        <SectionCard testID="history-range" title={readableDay(day, rolloverHour)} subtitle={day}>
+          <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+            <AppButton
+              disabled={busy}
+              label="‹ Prev"
+              onPress={() => onChangeDay(shiftLogicalDay(day, -1, { rolloverHour }))}
+              style={{ height: 48, width: '48%' }}
+              testID="history-previous-day"
+              variant="outlined"
+            />
+            <AppButton
+              disabled={busy || futureDay}
+              label="Next ›"
+              onPress={() => onChangeDay(shiftLogicalDay(day, 1, { rolloverHour }))}
+              style={{ height: 48, width: '48%' }}
+              testID="history-next-day"
+              variant="outlined"
+            />
+          </Row>
+          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+            {`${formatDuration(totalMs)} tracked · ${intervals.length} interval${intervals.length === 1 ? '' : 's'}`}
           </Text>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>{day}</Text>
-        </Column>
-        <Column spacing={10} style={{ width: '100%' }}>
-          <Column
-            spacing={2}
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 14,
-              borderWidth: 1,
-              padding: 14,
-              width: '100%',
-            }}
-          >
-            <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>Tracked total</Text>
-            <Text textStyle={{ color: colors.text, fontSize: 23, fontWeight: '800' }}>
-              {formatDuration(totalMs)}
-            </Text>
-          </Column>
-          <AppButton
-            disabled={busy || futureDay}
-            label={insertOpen ? 'Close missed switch' : 'Insert missed switch'}
-            onPress={() => setInsertOpen((open) => !open)}
-            style={{ height: 48, width: '100%' }}
-            testID="toggle-missed-switch"
-            variant="outlined"
-          />
-        </Column>
+        </SectionCard>
+
+        <AppButton
+          disabled={busy || futureDay}
+          label={insertOpen ? 'Close missed switch' : 'Add a missed switch'}
+          onPress={() => setInsertOpen((open) => !open)}
+          style={{ height: 48, width: '100%' }}
+          testID="toggle-missed-switch"
+          variant="outlined"
+        />
         {insertOpen ? (
           <InsertSwitchPanel
-            activities={[...catalog.activities, ...catalog.routines]}
+            activities={activities}
             activityId={insertActivityId}
             busy={busy}
             onActivityChange={setInsertActivityId}
@@ -384,7 +359,8 @@ function HistoryDay({
             }
           />
         ) : null}
-        <Column spacing={12} style={{ width: '100%' }} testID="history-timeline">
+
+        <Column spacing={10} style={{ width: '100%' }} testID="history-timeline">
           {intervals.map((interval) => {
             const transition = transitions.find(
               (candidate: TimeTransition) => candidate.id === interval.transitionId
@@ -393,17 +369,24 @@ function HistoryDay({
             const index = orderedTransitions.findIndex(
               (candidate: TimeTransition) => candidate.id === transition.id
             );
-            const canMerge = index > 0;
-            const color = colorForTransition(catalog, transition);
-            const name = catalogName(catalog, transition);
+            const resolved = transition.activityId
+              ? resolveCatalogItem(catalog, transition.activityId)
+              : null;
+            const color = resolved?.displayColor ?? '#64748B';
+            const name =
+              transition.activityId === null
+                ? 'No activity'
+                : (resolved?.item.name ?? 'Unavailable activity');
             return (
               <HistoryInterval
                 key={`${interval.transitionId}-${interval.startMs}`}
-                activities={[...catalog.activities, ...catalog.routines]}
+                activities={activities}
                 boundaryValue={boundaryValue}
                 busy={busy}
-                canMerge={canMerge}
+                canMerge={index > 0}
+                color={color}
                 editing={editingId === transition.id}
+                expanded={expandedId === transition.id}
                 interval={interval}
                 name={name}
                 onBeginEdit={() => beginEdit(transition)}
@@ -413,8 +396,10 @@ function HistoryDay({
                 onMerge={() => setPending({ kind: 'merge', id: transition.id })}
                 onReassign={(value) => reassign(transition, value)}
                 onSave={() => saveBoundary(transition)}
+                onToggle={() =>
+                  setExpandedId((current) => (current === transition.id ? null : transition.id))
+                }
                 transition={transition}
-                color={color}
               />
             );
           })}
@@ -438,6 +423,7 @@ function HistoryDay({
             </Column>
           ) : null}
         </Column>
+
         {pending ? (
           <Column
             spacing={8}
@@ -578,6 +564,7 @@ function HistoryInterval({
   canMerge,
   color,
   editing,
+  expanded,
   interval,
   name,
   onBeginEdit,
@@ -587,6 +574,7 @@ function HistoryInterval({
   onMerge,
   onReassign,
   onSave,
+  onToggle,
   transition,
 }: {
   activities: TrackableItem[];
@@ -595,6 +583,7 @@ function HistoryInterval({
   canMerge: boolean;
   color: string;
   editing: boolean;
+  expanded: boolean;
   interval: TimeInterval;
   name: string;
   onBeginEdit: () => void;
@@ -604,6 +593,7 @@ function HistoryInterval({
   onMerge: () => void;
   onReassign: (value: string) => Promise<boolean>;
   onSave: () => void;
+  onToggle: () => void;
   transition: TimeTransition;
 }) {
   const { colors } = useAppTheme();
@@ -624,120 +614,118 @@ function HistoryInterval({
     >
       <Row alignment="center" spacing={10}>
         <Column style={{ backgroundColor: color, borderRadius: 6, height: 38, width: 12 }} />
-        <Column spacing={3}>
+        <Column spacing={3} style={{ width: '62%' }}>
           <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '800' }}>{name}</Text>
           <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-            {`${formatTime(interval.startMs)} - ${formatTime(interval.endMs)} | ${formatDuration(duration)} | ${transition.activityId === null ? 'Stopped' : 'Recorded'}`}
+            {`${formatTime(interval.startMs)} – ${formatTime(interval.endMs)} · ${formatDuration(duration)}`}
           </Text>
         </Column>
-        <AppIcon
-          accessibilityLabel={
-            transition.activityId === null ? 'Stopped interval' : 'Recorded interval'
-          }
-          color={transition.activityId === null ? colors.textMuted : color}
-          name={transition.activityId === null ? 'pause' : 'check-circle-2'}
-          size={20}
+        <AppButton
+          label={expanded ? 'Hide' : 'Correct'}
+          onPress={onToggle}
+          style={{ height: 40 }}
+          testID={`toggle-corrections-${transition.id}`}
+          variant="outlined"
         />
       </Row>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-        {`Boundary recorded at ${new Date(transition.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`}
-      </Text>
-      {editing ? (
-        <Column spacing={8} style={{ width: '100%' }} testID={`edit-boundary-${transition.id}`}>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>
-            Edit one boundary
-          </Text>
+      {expanded || editing ? (
+        <Column spacing={10} style={{ width: '100%' }}>
           <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-            The preceding interval ends at this same time; the selected interval starts here.
+            {`Boundary recorded at ${new Date(transition.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`}
           </Text>
-          <AccessibleTextInput
-            enterKeyHint="done"
-            label="Boundary date and time"
-            onChangeText={onBoundaryChange}
-            testID={`boundary-time-${transition.id}`}
-            defaultValue={boundaryValue}
-            style={{
-              borderColor: colors.border,
-              borderRadius: 10,
-              borderWidth: 1,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              width: '100%',
-            }}
-            textStyle={{ color: colors.text, fontSize: 16 }}
-          />
-          <Column spacing={8} style={{ width: '100%' }}>
-            <AppButton
-              disabled={busy}
-              label="Save boundary"
-              onPress={onSave}
-              style={{ height: 48, width: '100%' }}
-              testID={`save-boundary-${transition.id}`}
-            />
-            <AppButton
-              disabled={busy}
-              label="Cancel"
-              onPress={onCancelEdit}
-              style={{ height: 48, width: '100%' }}
-              variant="outlined"
-            />
-          </Column>
+          {editing ? (
+            <Column spacing={8} style={{ width: '100%' }} testID={`edit-boundary-${transition.id}`}>
+              <AccessibleTextInput
+                enterKeyHint="done"
+                label="Boundary date and time"
+                onChangeText={onBoundaryChange}
+                testID={`boundary-time-${transition.id}`}
+                defaultValue={boundaryValue}
+                style={{
+                  borderColor: colors.border,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  width: '100%',
+                }}
+                textStyle={{ color: colors.text, fontSize: 16 }}
+              />
+              <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+                <AppButton
+                  disabled={busy}
+                  label="Save"
+                  onPress={onSave}
+                  style={{ height: 48, width: '48%' }}
+                  testID={`save-boundary-${transition.id}`}
+                />
+                <AppButton
+                  disabled={busy}
+                  label="Cancel"
+                  onPress={onCancelEdit}
+                  style={{ height: 48, width: '48%' }}
+                  variant="outlined"
+                />
+              </Row>
+            </Column>
+          ) : (
+            <Column spacing={6} style={{ width: '100%' }}>
+              <Text textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>
+                Reassign this interval
+              </Text>
+              <AccessiblePicker
+                label="Reassign transition activity"
+                onValueChange={(next) => {
+                  const value = String(next);
+                  if (value !== (transition.activityId ?? NONE)) {
+                    const previous = reassignValue;
+                    void onReassign(value).then((persisted) => {
+                      setReassignValue(persisted ? value : previous);
+                    });
+                  }
+                }}
+                selectedValue={reassignValue}
+                testID={`reassign-${transition.id}`}
+              >
+                <Picker.Item label="No activity (stop)" value={NONE} />
+                {activities.map((item) => (
+                  <Picker.Item
+                    key={item.id}
+                    label={`${item.name}${item.kind === 'routine' ? ' (routine)' : ''}${item.archivedAt ? ' (archived)' : ''}`}
+                    value={item.id}
+                  />
+                ))}
+              </AccessiblePicker>
+              <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+                <AppButton
+                  disabled={busy}
+                  label="Move time"
+                  onPress={onBeginEdit}
+                  style={{ height: 44, width: '31%' }}
+                  testID={`open-boundary-${transition.id}`}
+                  variant="outlined"
+                />
+                <AppButton
+                  disabled={busy}
+                  label="Delete"
+                  onPress={onDelete}
+                  style={{ height: 44, width: '31%' }}
+                  testID={`delete-boundary-${transition.id}`}
+                  variant="outlined"
+                />
+                <AppButton
+                  disabled={busy || !canMerge}
+                  label="Merge"
+                  onPress={onMerge}
+                  style={{ height: 44, width: '31%' }}
+                  testID={`merge-boundary-${transition.id}`}
+                  variant="outlined"
+                />
+              </Row>
+            </Column>
+          )}
         </Column>
       ) : null}
-      <Column spacing={6} style={{ width: '100%' }}>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>
-          Reassign this transition
-        </Text>
-        <AccessiblePicker
-          label="Reassign transition activity"
-          onValueChange={(next) => {
-            const value = String(next);
-            if (value !== (transition.activityId ?? NONE)) {
-              const previous = reassignValue;
-              void onReassign(value).then((persisted) => {
-                setReassignValue(persisted ? value : previous);
-              });
-            }
-          }}
-          selectedValue={reassignValue}
-          testID={`reassign-${transition.id}`}
-        >
-          <Picker.Item label="No activity (stop)" value={NONE} />
-          {activities.map((item) => (
-            <Picker.Item
-              key={item.id}
-              label={`${item.name}${item.kind === 'routine' ? ' (routine)' : ''}${item.archivedAt ? ' (archived)' : ''}`}
-              value={item.id}
-            />
-          ))}
-        </AccessiblePicker>
-      </Column>
-      <Column spacing={8} style={{ width: '100%' }}>
-        <AppButton
-          disabled={busy || editing}
-          label="Edit boundary"
-          onPress={onBeginEdit}
-          style={{ height: 48, width: '100%' }}
-          testID={`open-boundary-${transition.id}`}
-          variant="outlined"
-        />
-        <AppButton
-          disabled={busy || editing}
-          label="Delete boundary"
-          onPress={onDelete}
-          style={{ height: 48, width: '100%' }}
-          testID={`delete-boundary-${transition.id}`}
-          variant="outlined"
-        />
-        <AppButton
-          disabled={busy || editing || !canMerge}
-          label="Merge with previous"
-          onPress={onMerge}
-          style={{ height: 48, width: '100%' }}
-          testID={`merge-boundary-${transition.id}`}
-          variant="outlined"
-        />
-      </Column>
     </Column>
   );
 }

@@ -1,6 +1,6 @@
 import { Column, Row, Text } from '@expo/ui';
 import { useIsFocused, useRouter } from 'expo-router';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
   dateForLogicalDay,
@@ -15,189 +15,194 @@ import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import type { DailyReport, ReportFolder, ReportItem, WeeklyReport } from './reporting-service';
 import { loadReportingRuntime, type ReportingRuntime } from './reporting-runtime';
+import { EmptyNote, SectionCard, SegmentedOptions, ShareBar, SummaryHero } from './insights-shared';
 
-type ReportView = 'day' | 'week';
-
-function dayDate(day: LogicalDayKey): Date {
-  return dateForLogicalDay(day);
-}
-
-function shiftDay(day: LogicalDayKey, amount: number, rolloverHour: number): LogicalDayKey {
-  return shiftLogicalDay(day, amount, { rolloverHour });
-}
+type RangeView = 'day' | 'week';
+type ItemFilter = 'all' | 'activity' | 'routine';
 
 function readableDay(day: LogicalDayKey): string {
-  return dayDate(day).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  return dateForLogicalDay(day).toLocaleDateString([], {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
 }
 
 function readableTime(value: number): string {
   return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function ReportCard({ children, testID }: { children: ReactNode; testID?: string }) {
-  const { colors } = useAppTheme();
-  return (
-    <Column
-      spacing={12}
-      style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 16,
-        borderWidth: 1,
-        padding: 16,
-        width: '100%',
-      }}
-      testID={testID}
-    >
-      {children}
-    </Column>
-  );
+function filteredItems(report: { items: ReportItem[] }, filter: ItemFilter): ReportItem[] {
+  if (filter === 'all') return report.items.filter((item) => item.kind !== 'untracked');
+  return report.items.filter((item) => item.kind === filter);
 }
 
-function ProportionalRow({ item, maxMs }: { item: ReportItem | ReportFolder; maxMs: number }) {
-  const { colors } = useAppTheme();
-  const percentage = maxMs > 0 ? Math.max(5, (item.durationMs / maxMs) * 100) : 0;
-  return (
-    <Column spacing={6} style={{ width: '100%' }} testID={`proportional-${item.id ?? 'unfiled'}`}>
-      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-        <Column style={{ width: '72%' }}>
-          <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
-            {item.name}
-          </Text>
-        </Column>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-          {`${formatDuration(item.durationMs)} · ${Math.round(percentage)}% of the largest item`}
-        </Text>
-      </Row>
-      <Column
-        style={{
-          backgroundColor: colors.surfaceMuted,
-          borderRadius: 99,
-          height: 12,
-          width: '100%',
-        }}
-        testID={`${item.id ?? 'unfiled'}-proportional-bar`}
-      >
-        <Column
-          style={{
-            backgroundColor: item.displayColor,
-            borderRadius: 99,
-            height: 12,
-            width: `${percentage}%`,
-          }}
-        />
-      </Column>
-    </Column>
-  );
-}
-
-function Breakdown({
-  title,
+function BreakdownCard({
   items,
+  folders,
+  totalMs,
   testID,
 }: {
-  title: string;
-  items: ReportItem[] | ReportFolder[];
+  items: ReportItem[];
+  folders: ReportFolder[];
+  totalMs: number;
   testID: string;
 }) {
-  const { colors } = useAppTheme();
-  const maxMs = Math.max(...items.map((item) => item.durationMs), 0);
+  const [tab, setTab] = useState<'items' | 'folders'>('items');
+  const [filter, setFilter] = useState<ItemFilter>('all');
+  const visible = useMemo(
+    () => (tab === 'items' ? filteredItems({ items }, filter) : []),
+    [filter, items, tab]
+  );
+
   return (
-    <ReportCard testID={testID}>
-      <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{title}</Text>
-      {items.length === 0 ? (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-          No tracked time in this range.
-        </Text>
+    <SectionCard
+      subtitle="Each bar is a share of the period total."
+      testID={testID}
+      title="Where time went"
+    >
+      <SegmentedOptions
+        onChange={setTab}
+        options={[
+          { label: 'Items', value: 'items' },
+          { label: 'Folders', value: 'folders' },
+        ]}
+        testIDPrefix={`${testID}-tab`}
+        value={tab}
+      />
+      {tab === 'items' ? (
+        <SegmentedOptions
+          onChange={setFilter}
+          options={[
+            { label: 'All', value: 'all' },
+            { label: 'Activities', value: 'activity' },
+            { label: 'Routines', value: 'routine' },
+          ]}
+          testIDPrefix={`${testID}-filter`}
+          value={filter}
+        />
+      ) : null}
+      {tab === 'items' ? (
+        visible.length === 0 ? (
+          <EmptyNote message="No tracked items in this range." />
+        ) : (
+          visible
+            .slice(0, 12)
+            .map((item) => (
+              <ShareBar
+                color={item.displayColor}
+                durationMs={item.durationMs}
+                key={item.id ?? item.name}
+                meta={item.folderName ?? (item.isArchived ? 'Archived' : undefined)}
+                name={item.name}
+                totalMs={totalMs}
+              />
+            ))
+        )
+      ) : folders.length === 0 ? (
+        <EmptyNote message="No tracked folders in this range." />
       ) : (
-        items.map((item) => (
-          <ProportionalRow item={item} key={item.id ?? 'unfiled'} maxMs={maxMs} />
+        folders.map((folder) => (
+          <ShareBar
+            color={folder.displayColor}
+            durationMs={folder.durationMs}
+            key={folder.id ?? folder.name}
+            name={folder.name}
+            totalMs={totalMs}
+          />
         ))
       )}
-    </ReportCard>
+    </SectionCard>
   );
 }
 
-function DayReport({ report }: { report: DailyReport }) {
-  const { colors } = useAppTheme();
+function DayView({ report, day }: { report: DailyReport; day: LogicalDayKey }) {
+  const router = useRouter();
+  const preview = report.timeline.slice(0, 8);
   return (
     <Column spacing={14} style={{ width: '100%' }}>
-      <ReportCard testID="daily-total">
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>Total tracked time</Text>
-        <Text textStyle={{ color: colors.text, fontSize: 36, fontWeight: '700' }}>
-          {report.totalFormatted}
-        </Text>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>{report.logicalDay}</Text>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-          {report.currentActiveItem
-            ? `Current item: ${report.currentActiveItem.name}`
-            : 'Nothing is currently active'}
-        </Text>
-      </ReportCard>
-      <Breakdown items={report.activities} testID="activity-breakdown" title="Activities" />
-      <Breakdown items={report.routines} testID="routine-breakdown" title="Routines" />
-      <Breakdown items={report.folders} testID="folder-breakdown" title="Folders" />
-      <ReportCard testID="timeline">
-        <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>Timeline</Text>
+      <SummaryHero
+        detail={readableDay(day)}
+        eyebrow="Total tracked"
+        footnote={
+          report.currentActiveItem
+            ? `Active now: ${report.currentActiveItem.name}`
+            : 'Nothing is currently active'
+        }
+        testID="daily-total"
+        total={report.totalFormatted}
+      />
+      <BreakdownCard
+        folders={report.folders}
+        items={report.items}
+        testID="insights-breakdown"
+        totalMs={report.totalMs}
+      />
+      <SectionCard
+        subtitle="Chronological order. Corrections live in History."
+        testID="timeline"
+        title="Timeline"
+      >
         {report.timeline.length === 0 ? (
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>No intervals recorded.</Text>
+          <EmptyNote message="No intervals recorded." />
         ) : (
-          report.timeline.map((entry) => (
-            <Column key={`${entry.transitionId}-${entry.startMs}`} spacing={4}>
-              <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
-                {entry.name}
+          preview.map((entry) => (
+            <Column key={`${entry.transitionId}-${entry.startMs}`} spacing={2}>
+              <Text textStyle={{ fontSize: 15, fontWeight: '600' }}>{entry.name}</Text>
+              <Text textStyle={{ fontSize: 13 }}>
+                {`${readableTime(entry.startMs)} – ${readableTime(entry.endMs)} · ${formatDuration(entry.durationMs)}`}
               </Text>
-              <Row alignment="center" spacing={8}>
-                <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-                  {`${readableTime(entry.startMs)} to ${readableTime(entry.endMs)}`}
-                </Text>
-                <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-                  {formatDuration(entry.durationMs)}
-                </Text>
-              </Row>
             </Column>
           ))
         )}
-      </ReportCard>
+        {report.timeline.length > preview.length ? (
+          <EmptyNote
+            message={`Showing ${preview.length} of ${report.timeline.length} intervals.`}
+          />
+        ) : null}
+        <AppButton
+          label="Open history to review or correct"
+          onPress={() => router.push(`/history?day=${day}`)}
+          style={{ height: 48 }}
+          testID="insights-history"
+          variant="outlined"
+        />
+      </SectionCard>
     </Column>
   );
 }
 
-function WeekReport({ report }: { report: WeeklyReport }) {
+function WeekView({ report }: { report: WeeklyReport }) {
   const { colors } = useAppTheme();
-  const maxMs = Math.max(...report.daily.map((day) => day.totalMs), 0);
   return (
     <Column spacing={14} style={{ width: '100%' }}>
-      <ReportCard testID="weekly-total">
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>Week total</Text>
-        <Text textStyle={{ color: colors.text, fontSize: 36, fontWeight: '700' }}>
-          {report.totalFormatted}
-        </Text>
-        <Text
-          textStyle={{ color: colors.textMuted, fontSize: 14 }}
-        >{`${report.start} to ${report.end}`}</Text>
-      </ReportCard>
-      <ReportCard testID="daily-totals">
-        <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-          Daily totals
-        </Text>
+      <SummaryHero
+        detail={`${report.start} to ${report.end}`}
+        eyebrow="Week total"
+        testID="weekly-total"
+        total={report.totalFormatted}
+      />
+      <SectionCard
+        subtitle="Each bar is a share of the week total."
+        testID="daily-totals"
+        title="Daily totals"
+      >
         {report.daily.map((day) => (
-          <ProportionalRow
-            item={{
-              id: day.logicalDay,
-              name: day.logicalDay,
-              durationMs: day.totalMs,
-              displayColor: colors.primary,
-              isArchived: false,
-            }}
+          <ShareBar
+            color={colors.primary}
+            durationMs={day.totalMs}
             key={day.logicalDay}
-            maxMs={maxMs}
+            name={readableDay(day.logicalDay)}
+            totalMs={report.totalMs}
           />
         ))}
-      </ReportCard>
-      <Breakdown items={report.activities} testID="weekly-activity-breakdown" title="Activities" />
-      <Breakdown items={report.routines} testID="weekly-routine-breakdown" title="Routines" />
-      <Breakdown items={report.folders} testID="weekly-folder-breakdown" title="Folders" />
+      </SectionCard>
+      <BreakdownCard
+        folders={report.folders}
+        items={report.items}
+        testID="insights-breakdown"
+        totalMs={report.totalMs}
+      />
     </Column>
   );
 }
@@ -213,7 +218,7 @@ function InsightsContent({
   const router = useRouter();
   const rolloverHour = runtime.settings.logicalDayRolloverHour;
   const [day, setDay] = useState(initialDay);
-  const [view, setView] = useState<ReportView>('day');
+  const [view, setView] = useState<RangeView>('day');
   const [report, setReport] = useState<DailyReport | null>(null);
   const [week, setWeek] = useState<WeeklyReport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -238,66 +243,58 @@ function InsightsContent({
     };
   }, [day, reloadToken, runtime, view]);
 
+  const shift = (amount: number) => setDay(shiftLogicalDay(day, amount, { rolloverHour }));
+  const rangeLabel =
+    view === 'day' ? readableDay(day) : week ? `${week.start} to ${week.end}` : readableDay(day);
+
   return (
-    <Screen title="Insights" description="See where your time went, by logical day or week.">
+    <Screen title="Insights" description="Totals, breakdowns, and timeline.">
       <Column spacing={14} style={{ width: '100%' }}>
-        <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-          <AppButton
-            label="Previous"
-            onPress={() => setDay(shiftDay(day, view === 'day' ? -1 : -7, rolloverHour))}
-            style={{ height: 48 }}
-            testID="insights-previous"
+        <SectionCard testID="insights-range" title="Range">
+          <SegmentedOptions
+            onChange={setView}
+            options={[
+              { label: 'Day', testID: 'insights-day-view', value: 'day' },
+              { label: 'Week', testID: 'insights-week-view', value: 'week' },
+            ]}
+            testIDPrefix="insights-view"
+            value={view}
           />
-          <AppButton
-            label="Today"
-            onPress={() =>
-              void runtime.reportingService
-                .today()
-                .then((today) => setDay(today.logicalDay))
-                .catch((todayError: unknown) => setError(errorText(todayError)))
-            }
-            style={{ height: 48 }}
-            testID="insights-today"
-          />
-          <AppButton
-            label="Next"
-            onPress={() => setDay(shiftDay(day, view === 'day' ? 1 : 7, rolloverHour))}
-            style={{ height: 48 }}
-            testID="insights-next"
-          />
-        </Row>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>{readableDay(day)}</Text>
-        <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-          <AppButton
-            label="Day view"
-            onPress={() => setView('day')}
-            style={{ height: 48 }}
-            testID="insights-day-view"
-            variant={view === 'day' ? 'filled' : 'outlined'}
-          />
-          <AppButton
-            label="Week view"
-            onPress={() => setView('week')}
-            style={{ height: 48 }}
-            testID="insights-week-view"
-            variant={view === 'week' ? 'filled' : 'outlined'}
-          />
-        </Row>
-        <AppButton
-          label="History"
-          onPress={() => router.push('/history')}
-          style={{ height: 44 }}
-          testID="insights-history"
-          variant="outlined"
-        />
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-          {`Showing ${view === 'day' ? 'day' : 'week'} view`}
-        </Text>
+          <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+            <AppButton
+              label="‹ Prev"
+              onPress={() => shift(view === 'day' ? -1 : -7)}
+              style={{ height: 48, width: '31%' }}
+              testID="insights-previous"
+              variant="outlined"
+            />
+            <AppButton
+              label="Today"
+              onPress={() =>
+                void runtime.reportingService
+                  .today()
+                  .then((today) => {
+                    setDay(today.logicalDay);
+                    setView('day');
+                  })
+                  .catch((todayError: unknown) => setError(errorText(todayError)))
+              }
+              style={{ height: 48, width: '31%' }}
+              testID="insights-today"
+              variant="outlined"
+            />
+            <AppButton
+              label="Next ›"
+              onPress={() => shift(view === 'day' ? 1 : 7)}
+              style={{ height: 48, width: '31%' }}
+              testID="insights-next"
+              variant="outlined"
+            />
+          </Row>
+          <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>{rangeLabel}</Text>
+        </SectionCard>
         {error ? (
-          <ReportCard testID="insights-error">
-            <Text textStyle={{ color: colors.danger.foreground, fontSize: 15, fontWeight: '700' }}>
-              Insights unavailable
-            </Text>
+          <SectionCard testID="insights-error" title="Insights unavailable">
             <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{error}</Text>
             <RecoveryActions
               onBack={() => router.replace('/(tabs)')}
@@ -305,15 +302,15 @@ function InsightsContent({
               retryTestID="insights-retry"
               testID="insights-recovery"
             />
-          </ReportCard>
+          </SectionCard>
         ) : view === 'day' ? (
           report ? (
-            <DayReport report={report} />
+            <DayView day={day} report={report} />
           ) : (
             <Text textStyle={{ color: colors.textMuted }}>Loading insights...</Text>
           )
         ) : week ? (
-          <WeekReport report={week} />
+          <WeekView report={week} />
         ) : (
           <Text textStyle={{ color: colors.textMuted }}>Loading insights...</Text>
         )}
@@ -351,7 +348,7 @@ export default function InsightsScreen() {
 
   if (!runtime) {
     return (
-      <Screen title="Insights" description="See where your time went, by logical day or week.">
+      <Screen title="Insights" description="Totals, breakdowns, and timeline.">
         <Text
           textStyle={{
             color: loadError ? colors.danger.foreground : colors.textMuted,
