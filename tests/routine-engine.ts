@@ -3,6 +3,7 @@ import {
   cancelRoutine,
   catchUpRoutine,
   completeRoutineStep,
+  jumpToRoutineStep,
   markRoutineAlarmFired,
   moveCurrentRoutineStepToEnd,
   pauseRoutine,
@@ -148,6 +149,18 @@ async function run(): Promise<void> {
     'active routine reordering persists normalized sort order'
   );
   assert(reordered.currentStepIndex === 0, 'active routine reordering keeps current step active');
+
+  const progressed = completeRoutineStep(
+    startRoutine(snapshot(['overtime', 'overtime', 'overtime']), start),
+    at(100)
+  );
+  const jumped = jumpToRoutineStep(progressed, ids.first, at(200));
+  assert(jumped.currentStepIndex === 0, 'selecting a routine step moves the active cursor');
+  assert(
+    jumped.stepSessions.find((session) => session.stepId === ids.first)?.status === 'active' &&
+      jumped.stepSessions.find((session) => session.stepId === ids.second)?.status === 'pending',
+    'jumping back resets the selected step and future work'
+  );
 
   const alarmGuarded = markRoutineAlarmFired(initial, ids.first);
   assert(alarmGuarded.alarmFiredStepIds?.length === 1, 'alarm firing is persisted per step');

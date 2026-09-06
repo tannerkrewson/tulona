@@ -405,6 +405,63 @@ export function reorderActiveRoutineStep(
   return next;
 }
 
+/** Moves the active cursor to a selected step and resets that step's future work. */
+export function jumpToRoutineStep(
+  activeRoutine: ActiveRoutine,
+  stepId: UUID,
+  at: RoutineTimestampInput = Date.now()
+): ActiveRoutine {
+  if (activeRoutine.status !== 'running' && activeRoutine.status !== 'paused') {
+    throw new Error(`Routine steps cannot be selected while ${activeRoutine.status}`);
+  }
+  const atTimestamp = timestamp(at);
+  const next = cloneRoutine(activeRoutine);
+  const steps = orderedSteps(next.routineSnapshot);
+  const targetIndex = steps.findIndex((step) => step.id === stepId);
+  if (targetIndex < 0) throw new Error(`Unknown routine step "${stepId}"`);
+  if (targetIndex === next.currentStepIndex) return next;
+
+  for (const [index, step] of steps.entries()) {
+    const session = next.stepSessions.find((candidate) => candidate.stepId === step.id);
+    if (!session) throw new Error('Routine step history is not contiguous');
+    if (index < targetIndex) {
+      if (session.status === 'active' || session.status === 'pending') {
+        session.status = 'completed';
+        session.startedAt ??= atTimestamp;
+        session.completedAt = atTimestamp;
+        session.outcome = 'done';
+      }
+      continue;
+    }
+    if (index === targetIndex) {
+      session.status = 'active';
+      session.startedAt = atTimestamp;
+      session.completedAt = null;
+      session.outcome = undefined;
+      session.addedTimeMs = 0;
+      session.plannedDurationMs = step.durationMs;
+      continue;
+    }
+    session.status = 'pending';
+    session.startedAt = null;
+    session.completedAt = null;
+    session.outcome = undefined;
+    session.addedTimeMs = 0;
+    session.plannedDurationMs = step.durationMs;
+  }
+
+  next.currentStepIndex = targetIndex;
+  next.currentStepStartedAt = atTimestamp;
+  next.currentStepDeadlineAt = toTimestamp(atMs(at) + steps[targetIndex]!.durationMs);
+  next.completedAt = null;
+  next.pausedAt = activeRoutine.status === 'paused' ? atTimestamp : null;
+  next.remainingMsWhenPaused =
+    activeRoutine.status === 'paused' ? steps[targetIndex]!.durationMs : null;
+  next.pausedDurationMs = 0;
+  next.status = activeRoutine.status;
+  return next;
+}
+
 /** Moves the current step to the end and starts the next pending step immediately. */
 export function moveCurrentRoutineStepToEnd(
   activeRoutine: ActiveRoutine,

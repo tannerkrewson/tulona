@@ -23,6 +23,7 @@ import {
   catchUpRoutine,
   completeRoutineStep,
   moveCurrentRoutineStepToEnd,
+  jumpToRoutineStep,
   pauseRoutine as pauseRoutineState,
   reorderActiveRoutineStep,
   resumeRoutine as resumeRoutineState,
@@ -78,6 +79,7 @@ export interface RoutineServiceApi {
   addRoutineTime(addedTimeMs: number, at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   moveCurrentStepToEnd(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   reorderStep(stepId: UUID, direction: 'up' | 'down'): Promise<ActiveRoutine>;
+  jumpToStep(stepId: UUID, at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   done(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   completeStep(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   skip(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
@@ -202,6 +204,10 @@ export class RoutineService implements RoutineServiceApi {
 
   async reorderStep(stepId: UUID, direction: 'up' | 'down'): Promise<ActiveRoutine> {
     return this.mutate((active) => reorderActiveRoutineStep(active, stepId, direction));
+  }
+
+  async jumpToStep(stepId: UUID, at: RoutineTimestampInput = this.now()): Promise<ActiveRoutine> {
+    return this.mutate((active) => jumpToRoutineStep(active, stepId, at));
   }
 
   async done(at: RoutineTimestampInput = this.now()): Promise<ActiveRoutine> {
