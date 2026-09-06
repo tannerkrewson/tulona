@@ -16,8 +16,14 @@ export function useSystemColorScheme(): ColorSchemeName {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const sync = () => setWebColorScheme(media.matches ? 'dark' : 'light');
     sync();
-    media.addEventListener?.('change', sync);
-    return () => media.removeEventListener?.('change', sync);
+    if (media.addEventListener) media.addEventListener('change', sync);
+    else media.addListener?.(sync);
+    window.addEventListener('pageshow', sync);
+    return () => {
+      if (media.removeEventListener) media.removeEventListener('change', sync);
+      else media.removeListener?.(sync);
+      window.removeEventListener('pageshow', sync);
+    };
   }, []);
 
   return Platform.OS === 'web' ? webColorScheme : nativeColorScheme;

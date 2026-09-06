@@ -3,15 +3,15 @@ import { Platform, View } from 'react-native';
 
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
+import { isIOSSafari } from '@ui';
 
 export default function TabLayout() {
   const { colors } = useAppTheme();
   const isWeb = Platform.OS === 'web';
+  const iOSSafari = isIOSSafari();
   // Live CSS variables keep the natively-rendered tab bar in sync with the
   // theme even when React Navigation serves cached route options. The
-  // safe-area inset is applied on all web targets: iOS Safari, the installed
-  // iOS PWA (whose user agent omits the Safari token), and Android. Targets
-  // without an inset resolve the var to 0px, so desktop spacing is unchanged.
+  // safe-area inset is only enabled for iOS Safari and installed iOS PWAs.
   const webSurface = 'var(--tulona-surface)';
   const webBorder = 'var(--tulona-border)';
   const webTabActive = 'var(--tulona-tab-active)';
@@ -29,8 +29,8 @@ export default function TabLayout() {
           borderTopColor: isWeb ? webBorder : colors.border,
           borderTopWidth: 1,
           elevation: 0,
-          height: (isWeb ? `calc(64px + ${safeAreaBottom})` : 64) as unknown as number,
-          paddingBottom: (isWeb ? `calc(6px + ${safeAreaBottom})` : 6) as unknown as number,
+          height: iOSSafari ? (`calc(64px + ${safeAreaBottom})` as unknown as number) : 64,
+          paddingBottom: iOSSafari ? (`calc(6px + ${safeAreaBottom})` as unknown as number) : 6,
           paddingTop: 6,
           shadowOpacity: 0,
         },
@@ -50,7 +50,13 @@ export default function TabLayout() {
         options={{
           title: 'Tracker',
           tabBarAccessibilityLabel: 'Tracker tab',
-          tabBarIcon: ({ color, size }) => <AppIcon name="activity" color={color} size={size} />,
+          tabBarIcon: ({ color, focused, size }) => (
+            <AppIcon
+              name="activity"
+              color={isWeb ? (focused ? webTabActive : webTabInactive) : color}
+              size={size}
+            />
+          ),
         }}
       />
       <Tabs.Screen
@@ -58,7 +64,13 @@ export default function TabLayout() {
         options={{
           title: 'Habits',
           tabBarAccessibilityLabel: 'Habits tab',
-          tabBarIcon: ({ color, size }) => <AppIcon name="heart" color={color} size={size} />,
+          tabBarIcon: ({ color, focused, size }) => (
+            <AppIcon
+              name="heart"
+              color={isWeb ? (focused ? webTabActive : webTabInactive) : color}
+              size={size}
+            />
+          ),
         }}
       />
       <Tabs.Screen
@@ -66,7 +78,13 @@ export default function TabLayout() {
         options={{
           title: 'Insights',
           tabBarAccessibilityLabel: 'Insights tab',
-          tabBarIcon: ({ color, size }) => <AppIcon name="bar-chart-3" color={color} size={size} />,
+          tabBarIcon: ({ color, focused, size }) => (
+            <AppIcon
+              name="bar-chart-3"
+              color={isWeb ? (focused ? webTabActive : webTabInactive) : color}
+              size={size}
+            />
+          ),
         }}
       />
       <Tabs.Screen
@@ -74,7 +92,13 @@ export default function TabLayout() {
         options={{
           title: 'Settings',
           tabBarAccessibilityLabel: 'Settings tab',
-          tabBarIcon: ({ color, size }) => <AppIcon name="settings" color={color} size={size} />,
+          tabBarIcon: ({ color, focused, size }) => (
+            <AppIcon
+              name="settings"
+              color={isWeb ? (focused ? webTabActive : webTabInactive) : color}
+              size={size}
+            />
+          ),
         }}
       />
     </Tabs>
