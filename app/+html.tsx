@@ -32,7 +32,9 @@ export default function RootHtml({ children }: { children: ReactNode }) {
                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
                 const isOtherIOSBrowser = /CriOS|FxiOS|EdgiOS|OPiOS|GSA|DuckDuckGo/i.test(userAgent);
                 const isSafari = /Safari\\//i.test(userAgent) && !isOtherIOSBrowser;
-                const isStandalonePWA = navigator.standalone === true;
+                const isStandalonePWA =
+                  navigator.standalone === true ||
+                  window.matchMedia?.('(display-mode: standalone)')?.matches === true;
                 const initialTokens = prefersDark
                   ? {
                       '--tulona-background': '#000000',
@@ -52,10 +54,10 @@ export default function RootHtml({ children }: { children: ReactNode }) {
                     };
                 document.documentElement.style.backgroundColor = initialColor;
                 if (isIOS && (isSafari || isStandalonePWA)) {
-                  document.documentElement.style.setProperty(
-                    '--tulona-safe-area-bottom',
-                    'env(safe-area-inset-bottom, 0px)'
-                  );
+                  // Mark the root before the app mounts. The stylesheet below
+                  // then resolves the inset during the first layout, including
+                  // a cold standalone-PWA launch.
+                  document.documentElement.dataset.tulonaSafeArea = 'ios';
                 }
                 Object.entries(initialTokens).forEach(([property, value]) => {
                   document.documentElement.style.setProperty(property, value);
@@ -105,6 +107,9 @@ export default function RootHtml({ children }: { children: ReactNode }) {
             --tulona-tab-active: #111111;
             --tulona-tab-inactive: #666666;
             --tulona-safe-area-bottom: 0px;
+          }
+          :root[data-tulona-safe-area="ios"] {
+            --tulona-safe-area-bottom: env(safe-area-inset-bottom, 0px);
           }
         `}</style>
         <ScrollViewStyleReset />

@@ -22,7 +22,6 @@ export default function RootLayout() {
         <View role="main" style={{ flex: 1 }}>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="folder/[folderId]" />
             <Stack.Screen name="history" />
             <Stack.Screen name="activity/[activityId]" />
             <Stack.Screen name="activity-session/[transitionId]" />

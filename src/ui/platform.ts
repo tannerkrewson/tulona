@@ -14,5 +14,8 @@ export function isIOSSafari(): boolean {
     platform: navigator.platform,
     maxTouchPoints: navigator.maxTouchPoints,
     standalone: browserNavigator.standalone === true,
+    displayModeStandalone:
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(display-mode: standalone)').matches,
   });
 }

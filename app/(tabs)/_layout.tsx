@@ -3,15 +3,14 @@ import { Platform, View } from 'react-native';
 
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
-import { isIOSSafari } from '@ui';
 
 export default function TabLayout() {
   const { colors } = useAppTheme();
   const isWeb = Platform.OS === 'web';
-  const iOSSafari = isIOSSafari();
   // Live CSS variables keep the natively-rendered tab bar in sync with the
   // theme even when React Navigation serves cached route options. The
-  // safe-area inset is only enabled for iOS Safari and installed iOS PWAs.
+  // root stylesheet gates the safe-area token to iOS Safari and standalone
+  // iOS PWAs before this navigator mounts.
   const webSurface = 'var(--tulona-surface)';
   const webBorder = 'var(--tulona-border)';
   const webTabActive = 'var(--tulona-tab-active)';
@@ -29,8 +28,8 @@ export default function TabLayout() {
           borderTopColor: isWeb ? webBorder : colors.border,
           borderTopWidth: 1,
           elevation: 0,
-          height: iOSSafari ? (`calc(64px + ${safeAreaBottom})` as unknown as number) : 64,
-          paddingBottom: iOSSafari ? (`calc(6px + ${safeAreaBottom})` as unknown as number) : 6,
+          height: (isWeb ? `calc(64px + ${safeAreaBottom})` : 64) as unknown as number,
+          paddingBottom: (isWeb ? `calc(6px + ${safeAreaBottom})` : 6) as unknown as number,
           paddingTop: 6,
           shadowOpacity: 0,
         },
@@ -99,6 +98,14 @@ export default function TabLayout() {
               size={size}
             />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="folder/[folderId]"
+        options={{
+          // Folders are tracker subroutes, not a fifth tab. Keeping the route
+          // in this navigator preserves the four-tab bar while a folder is open.
+          href: null,
         }}
       />
     </Tabs>
