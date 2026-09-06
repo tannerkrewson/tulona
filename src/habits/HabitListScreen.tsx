@@ -10,11 +10,7 @@ import { EmptyState, errorText, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
-import {
-  habitWeekDays,
-  shiftHabitWeek,
-  sundayFirstWeekdayLabels,
-} from './date-navigation';
+import { habitWeekDays, shiftHabitWeek, sundayFirstWeekdayLabels } from './date-navigation';
 import { habitCompletionLabel, habitOutcomeLabel, habitSignalSummary } from './habit-format';
 import { loadHabitStore } from './habit-runtime';
 import { calculateHabitStreak, habitCompleted } from './streak';
@@ -306,13 +302,7 @@ function HabitListItem({
     weekStartsOn: 0,
   });
   const statusIcon =
-    outcome === 'failed'
-      ? 'x'
-      : outcome === 'skipped'
-        ? 'skip-forward'
-        : complete
-          ? 'check'
-          : null;
+    outcome === 'failed' ? 'x' : outcome === 'skipped' ? 'skip-forward' : complete ? 'check' : null;
   const statusColor =
     outcome === 'failed'
       ? colors.danger.foreground
