@@ -21,7 +21,7 @@ export default function RootLayout() {
         </Head>
         <View role="main" style={{ flex: 1 }}>
           <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
             <Stack.Screen name="history" />
             <Stack.Screen name="activity/[activityId]" />
             <Stack.Screen name="activity-session/[transitionId]" />

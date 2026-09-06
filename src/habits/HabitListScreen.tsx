@@ -5,12 +5,16 @@ import { PanResponder, Pressable, View } from 'react-native';
 
 import type { Habit, HabitDayOutcome, HabitDayState, LogicalDayKey } from '@domain';
 import { AppIcon, normalizeIconName } from '@icons';
-import { useAppTheme } from '@theme';
+import { getAccessibleTextColor, useAppTheme } from '@theme';
 import { EmptyState, errorText, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
-import { formatHabitDay, habitWeekDays, sundayFirstWeekdayLabels } from './date-navigation';
+import {
+  habitWeekDays,
+  shiftHabitWeek,
+  sundayFirstWeekdayLabels,
+} from './date-navigation';
 import { habitCompletionLabel, habitOutcomeLabel, habitSignalSummary } from './habit-format';
 import { loadHabitStore } from './habit-runtime';
 import { calculateHabitStreak, habitCompleted } from './streak';
@@ -131,22 +135,19 @@ function HabitListContent({ store }: { store: HabitStore }) {
           today={today}
           rolloverHour={logicalDayRolloverHour}
           onSelectDay={(day) => runAction(() => store.getState().selectDay(day))}
-          onSwipe={(amount) => runAction(() => store.getState().shiftSelectedDay(amount))}
+          onSwipe={(amount) => {
+            const nextDay = shiftHabitWeek(selectedDay, amount, logicalDayRolloverHour);
+            if (nextDay <= today) {
+              runAction(() => store.getState().selectDay(nextDay));
+            }
+          }}
         />
         <ScrollView style={{ height: '100%', width: '100%' }}>
           <Column spacing={12} style={{ paddingBottom: 20, width: '100%' }}>
-            <Column spacing={2}>
-              <Text textStyle={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>
-                {selectedDay === today ? 'Today' : 'Selected day'}
-              </Text>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                {formatHabitDay(selectedDay)}
-              </Text>
-            </Column>
             {activeHabits.length === 0 ? (
               <EmptyState iconName="heart" testID="habits-empty" title="No active habits yet" />
             ) : (
-              <Column spacing={2} style={{ width: '100%' }}>
+              <Column spacing={8} style={{ width: '100%' }}>
                 {activeHabits.map((habit) => (
                   <HabitListItem
                     habit={habit}
@@ -298,6 +299,7 @@ function HabitListItem({
   const complete = habitCompleted(state ?? null);
   const outcome = state?.outcome ?? null;
   const accent = habit.color ?? colors.primary;
+  const accentForeground = getAccessibleTextColor(accent);
   const streak = calculateHabitStreak(habit, states, {
     now: selectedDay,
     rolloverHour: logicalDayRolloverHour,
@@ -309,8 +311,8 @@ function HabitListItem({
       : outcome === 'skipped'
         ? 'skip-forward'
         : complete
-          ? 'check-circle-2'
-          : 'circle';
+          ? 'check'
+          : null;
   const statusColor =
     outcome === 'failed'
       ? colors.danger.foreground
@@ -352,51 +354,87 @@ function HabitListItem({
               : complete
                 ? colors.success.background
                 : colors.surface,
-          borderBottomColor: colors.border,
-          borderBottomWidth: 1,
+          borderColor: complete ? colors.success.foreground : colors.border,
+          borderRadius: 14,
+          borderWidth: 1,
           flexDirection: 'row',
-          minHeight: 60,
+          minHeight: 72,
           opacity: saving ? 0.55 : pressed ? 0.72 : 1,
-          paddingHorizontal: 4,
+          paddingHorizontal: 12,
+          paddingVertical: 10,
           width: '100%',
         })}
         testID={`toggle-habit-${habit.id}`}
       >
-        <AppIcon accessibilityLabel={statusLabel} color={statusColor} name={statusIcon} size={22} />
-        <AppIcon
-          accessibilityLabel={`${habit.name} icon`}
-          color={complete ? colors.success.foreground : accent}
-          name={normalizeIconName(habit.iconName, 'heart')}
-          size={20}
-        />
-        <View style={{ flex: 1, paddingHorizontal: 10 }}>
-          <Text
-            numberOfLines={1}
-            textStyle={{
-              color: colors.text,
-              fontSize: 16,
-              fontWeight: '600',
+        <Row alignment="center" spacing={12} style={{ width: '100%' }}>
+          <View
+            style={{
+              alignItems: 'center',
+              backgroundColor: complete ? colors.success.background : 'transparent',
+              borderColor: statusColor,
+              borderRadius: 8,
+              borderWidth: 2,
+              height: 40,
+              justifyContent: 'center',
+              width: 40,
             }}
           >
-            {habit.name}
-          </Text>
-          {outcome ? (
-            <Text textStyle={{ color: colors.textMuted, fontSize: 12 }}>{statusLabel}</Text>
-          ) : null}
-        </View>
-        <Column alignment="end" spacing={0} style={{ width: 88 }}>
-          <Text textStyle={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>
-            {String(streak.current)}
-          </Text>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 11 }}>Current Streak</Text>
-        </Column>
+            {statusIcon ? (
+              <AppIcon
+                accessibilityLabel={statusLabel}
+                color={statusColor}
+                name={statusIcon}
+                size={20}
+                strokeWidth={2.5}
+              />
+            ) : null}
+          </View>
+          <View
+            style={{
+              alignItems: 'center',
+              backgroundColor: accent,
+              borderRadius: 10,
+              height: 40,
+              justifyContent: 'center',
+              width: 40,
+            }}
+          >
+            <AppIcon
+              accessibilityLabel={`${habit.name} icon`}
+              color={accentForeground}
+              name={normalizeIconName(habit.iconName, 'heart')}
+              size={20}
+            />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              numberOfLines={1}
+              textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600' }}
+            >
+              {habit.name}
+            </Text>
+            {outcome ? (
+              <View style={{ marginTop: 2 }}>
+                <Text numberOfLines={1} textStyle={{ color: colors.textMuted, fontSize: 12 }}>
+                  {statusLabel}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <Column alignment="end" spacing={0} style={{ width: 82 }}>
+            <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
+              {String(streak.current)}
+            </Text>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 11 }}>Current Streak</Text>
+          </Column>
+        </Row>
       </Pressable>
       {menuOpen ? (
         <View
           style={{
             position: 'absolute',
-            right: 4,
-            top: 58,
+            right: 0,
+            top: 76,
             width: 220,
             zIndex: 10,
           }}

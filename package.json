@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "format": "prettier --check .",
     "test:domain": "tsx tests/domain-calculations.ts",
+    "test:habits": "tsx tests/habits.ts",
     "test:theme": "tsx tests/theme-colors.ts",
     "test:pwa-ui": "tsx tests/pwa-ui-regressions.ts",
     "test:persistence": "tsx tests/persistence-checks.ts",
