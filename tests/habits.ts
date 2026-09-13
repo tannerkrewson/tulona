@@ -230,6 +230,7 @@ async function run(): Promise<void> {
     !isPastMidnightHabitDay('2026-08-29', new Date(2026, 7, 31, 1, 30), 3) &&
       !isPastMidnightHabitDay('2026-08-31', new Date(2026, 7, 31, 3, 0), 3) &&
       isPastMidnightHabitDay('2026-08-30', new Date(2026, 7, 31, 1, 30), 0) &&
+      isPastMidnightHabitDay('2026-08-31', new Date(2026, 7, 31, 1, 30), 0) &&
       !isPastMidnightHabitDay('2026-08-30', new Date(2026, 7, 31, 8, 0), 0) &&
       isPastMidnightHabitDay('2026-08-30', new Date(2026, 7, 31, 7, 0), 9) &&
       !isPastMidnightHabitDay('2026-08-30', new Date(2026, 7, 31, 9, 0), 9),
