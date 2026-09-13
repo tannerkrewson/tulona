@@ -385,6 +385,36 @@ async function run(): Promise<void> {
     stepRun.id === 'ffffffff-ffff-4fff-8fff-ffffffffffff',
     'step run persists its supplied ID'
   );
+
+  const pausedRoutine = await createServices(new MemoryStorage());
+  const pausedRun = await pausedRoutine.routineService.startRoutine(routineId, {
+    id: '12121212-1212-4121-8121-121212121212',
+    startedAt,
+  });
+  pausedRoutine.setNow(at(5_000));
+  const paused = await pausedRoutine.routineService.pause();
+  assert(
+    pausedRun.id === '12121212-1212-4121-8121-121212121212' &&
+      paused.status === 'paused' &&
+      (await pausedRoutine.trackerService.getActiveTransition())?.activityId === routineId,
+    'pausing a routine preserves its state and tracker attribution until the bar stops it'
+  );
+  await pausedRoutine.trackerService.switchActivity(null);
+  assert(
+    (await pausedRoutine.trackerService.getActiveTransition())?.activityId === null,
+    'the tracker can enter idle while the routine remains paused'
+  );
+  pausedRoutine.setNow(at(10_000));
+  const resumed = await pausedRoutine.routineService.resume();
+  const resumedTransition = await pausedRoutine.trackerService.switchActivity(routineId, {
+    source: 'routine',
+  });
+  assert(
+    resumed.status === 'running' &&
+      resumedTransition.activityId === routineId &&
+      resumedTransition.timestamp === at(10_000),
+    'resuming a paused routine reopens a new session for the same activity'
+  );
 }
 
 run().catch((error: unknown) => {

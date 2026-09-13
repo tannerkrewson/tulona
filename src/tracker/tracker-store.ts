@@ -27,6 +27,7 @@ export interface TrackerStoreState {
   transitions: TimeTransition[];
   intervals: TimeInterval[];
   activeTransition: TimeTransition | null;
+  lastActivityTransition: TimeTransition | null;
   nowMs: number;
   loading: boolean;
   persistenceError: PersistenceError | null;
@@ -105,6 +106,7 @@ export function createTrackerStore(service: TrackerServiceApi, options: TrackerS
       transitions: [],
       intervals: [],
       activeTransition: null,
+      lastActivityTransition: null,
       nowMs: now(),
       loading: false,
       persistenceError: null,
@@ -116,9 +118,19 @@ export function createTrackerStore(service: TrackerServiceApi, options: TrackerS
             : options.catalogRepository
               ? await options.catalogRepository.read()
               : get().catalog;
-          const query = await service.query(get().selectedRange, now());
-          const activeTransition = await service.getActiveTransition(now());
-          set({ catalog, loading: false, ...applyQuery(query), activeTransition });
+          const currentNowMs = now();
+          const [query, activeTransition, lastActivityTransition] = await Promise.all([
+            service.query(get().selectedRange, currentNowMs),
+            service.getActiveTransition(currentNowMs),
+            service.getLatestActivityTransition(currentNowMs),
+          ]);
+          set({
+            catalog,
+            loading: false,
+            ...applyQuery(query),
+            activeTransition,
+            lastActivityTransition,
+          });
         } catch (error) {
           set({ loading: false, persistenceError: errorFrom(error) });
           throw error;
@@ -127,9 +139,12 @@ export function createTrackerStore(service: TrackerServiceApi, options: TrackerS
       refresh: async (currentNowMs = now()) => {
         set({ loading: true, persistenceError: null });
         try {
-          const query = await service.query(get().selectedRange, currentNowMs);
-          const activeTransition = await service.getActiveTransition(currentNowMs);
-          set({ loading: false, ...applyQuery(query), activeTransition });
+          const [query, activeTransition, lastActivityTransition] = await Promise.all([
+            service.query(get().selectedRange, currentNowMs),
+            service.getActiveTransition(currentNowMs),
+            service.getLatestActivityTransition(currentNowMs),
+          ]);
+          set({ loading: false, ...applyQuery(query), activeTransition, lastActivityTransition });
         } catch (error) {
           set({ loading: false, persistenceError: errorFrom(error) });
           throw error;
