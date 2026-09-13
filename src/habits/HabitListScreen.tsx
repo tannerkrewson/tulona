@@ -457,11 +457,6 @@ function HabitWeekStrip({
   const currentDays = habitWeekDays(selectedDay, rolloverHour);
   const nextDays = habitWeekDays(nextAnchor, rolloverHour);
   const nextWeekTarget = habitWeekSwipeTarget(selectedDay, 1, today, rolloverHour);
-  const translateX = dragX.interpolate({
-    extrapolate: 'clamp',
-    inputRange: [-effectiveWidth, 0, effectiveWidth],
-    outputRange: [nextWeekTarget ? -effectiveWidth : -effectiveWidth / 3, 0, effectiveWidth],
-  });
 
   useEffect(() => {
     dragX.setValue(0);
@@ -474,7 +469,6 @@ function HabitWeekStrip({
       dragX.stopAnimation();
       Animated.timing(dragX, {
         duration: WEEK_SETTLE_DURATION,
-        isInteraction: false,
         toValue: target,
         useNativeDriver,
       }).start(({ finished }) => {
@@ -508,9 +502,15 @@ function HabitWeekStrip({
           if (gestureLock.current.locked) return;
           dragX.stopAnimation();
         },
-        // Keep the week-strip transform on the direct Animated event path;
-        // resistance is applied by the native-capable interpolation below.
-        onPanResponderMove: Animated.event([null, { dx: dragX }], { useNativeDriver }),
+        // Keep the known pre-optimization gesture path until the week-strip
+        // jank has been profiled on the target devices.
+        onPanResponderMove: (_, gesture) => {
+          if (gestureLock.current.locked) return;
+          let dx = gesture.dx;
+          if (dx < 0 && !nextWeekTarget) dx /= 3;
+          dx = Math.max(-effectiveWidth, Math.min(effectiveWidth, dx));
+          dragX.setValue(dx);
+        },
         onPanResponderRelease: (_, gesture) => {
           if (gestureLock.current.locked) return;
           if (Math.abs(gesture.dx) < WEEK_SWIPE_THRESHOLD) {
@@ -533,7 +533,7 @@ function HabitWeekStrip({
         },
         onPanResponderTerminationRequest: () => false,
       }),
-    [dragX, effectiveWidth, gestureLock, nextWeekTarget, prevAnchor, settleTo, useNativeDriver]
+    [dragX, effectiveWidth, gestureLock, nextWeekTarget, prevAnchor, settleTo]
   );
 
   return (
@@ -551,7 +551,7 @@ function HabitWeekStrip({
           style={{
             flexDirection: 'row',
             marginLeft: -effectiveWidth,
-            transform: [{ translateX }],
+            transform: [{ translateX: dragX }],
             width: effectiveWidth * 3,
           }}
         >

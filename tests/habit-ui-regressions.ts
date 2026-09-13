@@ -11,6 +11,9 @@ const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const habitList = read('src/habits/HabitListScreen.tsx');
 const habitStore = read('src/habits/habit-store.ts');
+const weekPagerStart = habitList.indexOf('function HabitWeekStrip(');
+const weekDaysStart = habitList.indexOf('function WeekDaysRow(');
+const weekPager = habitList.slice(weekPagerStart, weekDaysStart);
 
 assert(
   habitStore.includes('cycleOutcome') && habitStore.includes('nextHabitOutcome(existing?.outcome)'),
@@ -41,9 +44,9 @@ assert(
   'past-midnight warning must explain the configured rollover and provide a safe dismissal'
 );
 assert(
-  habitList.includes('Animated.event([null, { dx: dragX }], { useNativeDriver })') &&
-    habitList.includes('per-frame JS work'),
-  'week swipes must keep the transform update on the native animation path'
+  weekPager.includes('onPanResponderMove: (_, gesture) =>') &&
+    !weekPager.includes('Animated.event([null, { dx: dragX }], { useNativeDriver })'),
+  'week-strip optimization is reverted pending device-level profiling'
 );
 assert(
   habitList.includes('const pageGap = 12') &&
