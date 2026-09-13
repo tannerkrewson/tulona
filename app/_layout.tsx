@@ -32,6 +32,7 @@ export default function RootLayout() {
             <Stack.Screen name="history" />
             <Stack.Screen name="activity/[activityId]" />
             <Stack.Screen name="activity-session/[transitionId]" />
+            <Stack.Screen name="activity-session/activity-chooser" />
             <Stack.Screen name="routine/[routineId]" />
             <Stack.Screen name="routine-edit/[routineId]" />
             <Stack.Screen name="routine-chooser" />

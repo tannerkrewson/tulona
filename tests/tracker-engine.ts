@@ -3,6 +3,7 @@ import { createTrackerService, type TrackerServiceApi } from '../src/tracker/tra
 import {
   latestValidTransition,
   materializeTransitionIntervals,
+  orderTransitions,
   queryTransitions,
 } from '../src/tracker/tracker-engine';
 import { PersistenceError } from '../src/data/errors';
@@ -291,6 +292,86 @@ async function run(): Promise<void> {
   await rejects(
     () => correctionService.adjustLatestStart('2026-07-19T00:00:00.000Z'),
     'adjust latest must not cross the preceding transition'
+  );
+
+  const snapRepository = new MemoryTrackerRepository();
+  const snapPrevious = transition(
+    ids.july,
+    '2026-08-03T10:00:00.000Z',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  );
+  const snapTarget = transition(
+    ids.august,
+    '2026-08-03T11:00:00.000Z',
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  );
+  const snapFollowing = transition(
+    ids.switched,
+    '2026-08-03T11:30:00.000Z',
+    'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  );
+  await snapRepository.upsertTransitions([snapPrevious, snapTarget, snapFollowing]);
+  const snapService = createTrackerService(snapRepository, { now: () => now });
+  const snapped = await snapService.snapTransitionStartToPrevious(snapTarget.id);
+  assert(
+    snapped.timestamp === snapPrevious.timestamp,
+    'snap must move the target start to the preceding transition boundary'
+  );
+  const snappedHistory = orderTransitions((await snapRepository.readMonth('2026-08')).transitions);
+  assert(
+    snappedHistory[0]?.id === snapPrevious.id &&
+      snappedHistory[1]?.id === snapTarget.id &&
+      snappedHistory[2]?.id === snapFollowing.id,
+    'snapping must preserve chronological transition ordering when two boundaries meet'
+  );
+  assert(
+    snapRepository.operationKinds.at(-1) === 'tracker-transition-snap-previous',
+    'snapping must be persisted as a dedicated tracker correction'
+  );
+  const snapQuery = await snapService.query(
+    range(Date.parse('2026-08-03T09:00:00.000Z'), Date.parse('2026-08-03T12:00:00.000Z')),
+    Date.parse(now)
+  );
+  assert(
+    snapQuery.intervals.every(
+      (interval, index) => index === 0 || snapQuery.intervals[index - 1].endMs <= interval.startMs
+    ),
+    'snapping must not create overlapping materialized intervals'
+  );
+
+  const noPreviousRepository = new MemoryTrackerRepository();
+  await noPreviousRepository.upsertTransitions([snapPrevious]);
+  const noPreviousService = createTrackerService(noPreviousRepository, { now: () => now });
+  await rejects(
+    () => noPreviousService.snapTransitionStartToPrevious(snapPrevious.id),
+    'snapping the first transition must be safely unavailable'
+  );
+
+  const resetRepository = new MemoryTrackerRepository();
+  const resetPrevious = transition(
+    ids.july,
+    '2026-08-04T10:00:00.000Z',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  );
+  const resetTarget = transition(
+    ids.august,
+    '2026-08-04T11:00:00.000Z',
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  );
+  await resetRepository.upsertTransitions([resetPrevious, resetTarget]);
+  const resetService = createTrackerService(resetRepository, { now: () => now });
+  const reset = await resetService.resetActiveStartToNow(resetTarget.id);
+  assert(
+    reset.timestamp === now && (await resetService.getActiveTransition())?.timestamp === now,
+    'reset-to-now must persist and publish the active transition timestamp'
+  );
+  assert(
+    resetRepository.operationKinds.at(-1) === 'tracker-transition-reset-now',
+    'reset-to-now must be journaled as a tracker correction'
+  );
+  await rejects(
+    () => resetService.resetActiveStartToNow(resetPrevious.id),
+    'reset-to-now must be unavailable for historical transitions'
   );
 
   const historyRepository = new MemoryTrackerRepository();
