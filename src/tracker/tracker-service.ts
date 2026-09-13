@@ -14,6 +14,7 @@ import { PersistenceError } from '@data/errors';
 
 import {
   latestValidTransition,
+  latestValidActivityTransition,
   materializeTransitionIntervals,
   orderTransitions,
   queryTransitions,
@@ -73,6 +74,7 @@ export interface TrackerServiceOptions {
 export interface TrackerServiceApi {
   getActiveTransition(at?: TimestampInput): Promise<TimeTransition | null>;
   activeTransition(at?: TimestampInput): Promise<TimeTransition | null>;
+  getLatestActivityTransition(at?: TimestampInput): Promise<TimeTransition | null>;
   switchActivity(
     activityId: UUID | null,
     timestampOrOptions?: TimestampInput | SwitchActivityOptions
@@ -214,6 +216,13 @@ export class TrackerService implements TrackerServiceApi {
 
   async activeTransition(at?: TimestampInput): Promise<TimeTransition | null> {
     return this.getActiveTransition(at ?? this.now());
+  }
+
+  async getLatestActivityTransition(
+    at: TimestampInput = this.now()
+  ): Promise<TimeTransition | null> {
+    const atMs = normalizeNow(at);
+    return latestValidActivityTransition(await this.readHistory(atMs), atMs);
   }
 
   async switchActivity(

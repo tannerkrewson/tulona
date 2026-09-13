@@ -19,6 +19,7 @@
     "test:settings-ui": "tsx tests/settings-ui-regressions.ts",
     "test:persistence": "tsx tests/persistence-checks.ts",
     "test:tracker": "tsx tests/tracker-engine.ts",
+    "test:tracker-ui": "tsx tests/tracker-ui-regressions.ts",
     "test:routine": "tsx tests/routine-service.ts",
     "test:integration": "tsx tests/integration-coordinator.ts",
     "test:icons": "tsx tests/icon-values.ts",
