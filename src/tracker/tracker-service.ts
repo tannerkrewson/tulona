@@ -46,6 +46,17 @@ export interface TransitionEditInput {
   note?: string | null;
 }
 
+export interface TransitionContext {
+  transition: TimeTransition | null;
+  previous: TimeTransition | null;
+  following: TimeTransition | null;
+}
+
+interface TransitionEditOptions {
+  allowPrecedingEqual?: boolean;
+  operationKind?: string;
+}
+
 export interface HistoricalConfirmation {
   confirm?: boolean;
 }
@@ -53,7 +64,7 @@ export interface HistoricalConfirmation {
 export type HistoricalConfirmationInput = HistoricalConfirmation | boolean;
 
 export type TrackerMutationKind =
-  'insert' | 'edit' | 'reassign' | 'adjust-latest' | 'delete' | 'merge';
+  'insert' | 'edit' | 'reassign' | 'adjust-latest' | 'adjust-transition' | 'delete' | 'merge';
 
 export interface TrackerMutation {
   kind: TrackerMutationKind;
@@ -75,6 +86,7 @@ export interface TrackerServiceApi {
   getActiveTransition(at?: TimestampInput): Promise<TimeTransition | null>;
   activeTransition(at?: TimestampInput): Promise<TimeTransition | null>;
   getLatestActivityTransition(at?: TimestampInput): Promise<TimeTransition | null>;
+  getTransitionContext(id: UUID, at?: TimestampInput): Promise<TransitionContext>;
   switchActivity(
     activityId: UUID | null,
     timestampOrOptions?: TimestampInput | SwitchActivityOptions
@@ -97,6 +109,8 @@ export interface TrackerServiceApi {
   insertMissedSwitch(input: TransitionInput): Promise<TimeTransition>;
   editTransition(id: UUID, input: TransitionEditInput): Promise<TimeTransition>;
   reassignTransition(id: UUID, activityId: UUID | null): Promise<TimeTransition>;
+  snapTransitionStartToPrevious(id: UUID): Promise<TimeTransition>;
+  resetActiveStartToNow(id: UUID): Promise<TimeTransition>;
   deleteTransition(id: UUID, confirmation?: HistoricalConfirmationInput): Promise<TimeTransition>;
   mergeTransition(id: UUID, confirmation?: HistoricalConfirmationInput): Promise<TimeTransition>;
   mergeTransitions(id: UUID, confirmation?: HistoricalConfirmationInput): Promise<TimeTransition>;
@@ -223,6 +237,22 @@ export class TrackerService implements TrackerServiceApi {
   ): Promise<TimeTransition | null> {
     const atMs = normalizeNow(at);
     return latestValidActivityTransition(await this.readHistory(atMs), atMs);
+  }
+
+  async getTransitionContext(
+    id: UUID,
+    at: TimestampInput = this.now()
+  ): Promise<TransitionContext> {
+    assertUuid(id, 'Transition ID');
+    const atMs = normalizeNow(at);
+    const transitions = validTransitions(await this.readHistory(atMs), atMs);
+    const index = transitions.findIndex((transition) => transition.id === id);
+    if (index < 0) return { transition: null, previous: null, following: null };
+    return {
+      transition: transitions[index],
+      previous: transitions[index - 1] ?? null,
+      following: transitions[index + 1] ?? null,
+    };
   }
 
   async switchActivity(
@@ -404,10 +434,46 @@ export class TrackerService implements TrackerServiceApi {
     return this.editTransitionWithKind(id, input, 'edit');
   }
 
+  async snapTransitionStartToPrevious(id: UUID): Promise<TimeTransition> {
+    const context = await this.getTransitionContext(id);
+    if (!context.transition) validation(`Unknown transition "${id}"`);
+    if (!context.previous) {
+      validation('Cannot snap this start because no preceding transition is available');
+    }
+    if (timestampMs(context.transition.timestamp) === timestampMs(context.previous.timestamp)) {
+      return context.transition;
+    }
+    return this.editTransitionWithKind(
+      id,
+      { timestamp: context.previous.timestamp },
+      'adjust-transition',
+      {
+        allowPrecedingEqual: true,
+        operationKind: 'tracker-transition-snap-previous',
+      }
+    );
+  }
+
+  async resetActiveStartToNow(id: UUID): Promise<TimeTransition> {
+    assertUuid(id, 'Transition ID');
+    const now = normalizeNow(this.now());
+    const active = latestValidTransition(await this.readHistory(now), now);
+    if (!active || active.id !== id || active.activityId === null) {
+      validation('Only the active activity session can be reset to now');
+    }
+    return this.editTransitionWithKind(
+      id,
+      { timestamp: normalizeTimestamp(now, 'Current time') },
+      'adjust-transition',
+      { operationKind: 'tracker-transition-reset-now' }
+    );
+  }
+
   private async editTransitionWithKind(
     id: UUID,
     input: TransitionEditInput,
-    mutationKind: Extract<TrackerMutationKind, 'edit' | 'reassign'>
+    mutationKind: Extract<TrackerMutationKind, 'edit' | 'reassign' | 'adjust-transition'>,
+    options: TransitionEditOptions = {}
   ): Promise<TimeTransition> {
     assertUuid(id, 'Transition ID');
     const now = normalizeNow(this.now());
@@ -433,8 +499,12 @@ export class TrackerService implements TrackerServiceApi {
       if (merged) return merged;
     }
     if (JSON.stringify(current) === JSON.stringify(next)) return current;
-    this.assertEditOrder(transitions, current, next, now);
-    const result = await this.replaceTransition(current, next, 'tracker-transition-edit');
+    this.assertEditOrder(transitions, current, next, now, options.allowPrecedingEqual ?? false);
+    const result = await this.replaceTransition(
+      current,
+      next,
+      options.operationKind ?? 'tracker-transition-edit'
+    );
     const prior = orderTransitions(transitions)
       .filter(
         (transition) =>
@@ -586,7 +656,8 @@ export class TrackerService implements TrackerServiceApi {
     transitions: readonly TimeTransition[],
     current: TimeTransition,
     candidate: TimeTransition,
-    now: number
+    now: number,
+    allowPrecedingEqual = false
   ): void {
     if (candidate.timestamp === current.timestamp) return;
     const valid = orderTransitions(transitions).filter(
@@ -600,7 +671,11 @@ export class TrackerService implements TrackerServiceApi {
       .filter((transition) => timestampMs(transition.timestamp) < candidateMs)
       .at(-1);
     const next = valid.find((transition) => timestampMs(transition.timestamp) > candidateMs);
-    if (previous && candidateMs <= timestampMs(previous.timestamp)) {
+    if (
+      previous &&
+      (candidateMs < timestampMs(previous.timestamp) ||
+        (!allowPrecedingEqual && candidateMs === timestampMs(previous.timestamp)))
+    ) {
       validation('Edited transition must remain after the preceding transition');
     }
     if (next && candidateMs >= timestampMs(next.timestamp)) {
