@@ -1,13 +1,20 @@
 import { createTrackerStore } from '../src/tracker/tracker-store';
 import { createTrackerService, type TrackerServiceApi } from '../src/tracker/tracker-service';
 import {
+  latestValidActivityTransition,
   latestValidTransition,
   materializeTransitionIntervals,
   queryTransitions,
 } from '../src/tracker/tracker-engine';
 import { PersistenceError } from '../src/data/errors';
 import type { TrackerRepositoryApi } from '../src/data/tracker-repository';
-import type { MonthKey, TimeTransition, TrackerMonthCollection, Transition } from '../src/domain';
+import type {
+  CatalogCollection,
+  MonthKey,
+  TimeTransition,
+  TrackerMonthCollection,
+  Transition,
+} from '../src/domain';
 
 const ids = {
   july: '11111111-1111-4111-8111-111111111111',
@@ -146,6 +153,16 @@ async function run(): Promise<void> {
     latestValidTransition(raw, nowMs)?.id === ids.switched,
     'latest active state must ignore future and superseded records'
   );
+  assert(
+    latestValidActivityTransition(
+      [
+        ...raw,
+        transition('77777777-7777-4777-8777-777777777777', '2026-08-04T11:00:00.000Z', null),
+      ],
+      nowMs
+    )?.id === ids.switched,
+    'latest activity state must ignore the idle stop marker'
+  );
   const intervals = materializeTransitionIntervals(raw, { startMs, endMs, nowMs });
   assert(intervals.length === 2, 'range materialization must carry prior state and stop at now');
   assert(intervals[0]?.startMs === startMs, 'first interval must be clipped to range start');
@@ -179,6 +196,10 @@ async function run(): Promise<void> {
   assert(
     (await service.getActiveTransition())?.id === switched.id,
     'switch success must be read back from durable state'
+  );
+  assert(
+    (await service.getLatestActivityTransition())?.id === ids.switched,
+    'latest activity state must survive an idle stop transition'
   );
 
   repository.failWrites = true;
@@ -342,18 +363,46 @@ async function run(): Promise<void> {
     'historical edit, delete, and merge must use repository writes'
   );
 
+  let storeNowMs = nowMs;
   const storeService: TrackerServiceApi = createTrackerService(historyRepository, {
-    now: () => now,
+    now: () => storeNowMs,
   });
   const store = createTrackerStore(storeService, {
     initialRange: range(startMs, nowMs),
-    now: () => nowMs,
+    now: () => storeNowMs,
   });
   await store.getState().hydrate();
   const storeSwitch = await store.getState().switchActivity('ffffffff-ffff-4fff-8fff-ffffffffffff');
   assert(
     store.getState().activeTransition?.id === storeSwitch.id,
     'store must publish state after a durable successful mutation'
+  );
+  assert(
+    store.getState().lastActivityTransition?.id === storeSwitch.id,
+    'store must publish the latest activity separately from the active state'
+  );
+  storeNowMs += 1_000;
+  await store.getState().switchActivity(null);
+  assert(
+    store.getState().activeTransition?.activityId === null &&
+      store.getState().lastActivityTransition?.id === storeSwitch.id,
+    'store must retain the last activity after pausing into the idle state'
+  );
+  const hydratedCatalog: CatalogCollection = { folders: [], activities: [], routines: [] };
+  const refreshedStore = createTrackerStore(
+    createTrackerService(historyRepository, { now: () => storeNowMs }),
+    {
+      catalogService: { read: async () => hydratedCatalog },
+      initialRange: range(startMs, nowMs),
+      now: () => storeNowMs,
+    }
+  );
+  await refreshedStore.getState().hydrate();
+  assert(
+    refreshedStore.getState().catalog === hydratedCatalog &&
+      refreshedStore.getState().activeTransition?.activityId === null &&
+      refreshedStore.getState().lastActivityTransition?.id === storeSwitch.id,
+    'hydration must recover the idle bar activity and catalog after refresh'
   );
   const beforeFailure = store.getState().activeTransition?.id;
   historyRepository.failWrites = true;
@@ -368,6 +417,12 @@ async function run(): Promise<void> {
   assert(
     store.getState().persistenceError !== null,
     'store must retain persistence errors for UI recovery'
+  );
+
+  const emptyService = createTrackerService(new MemoryTrackerRepository(), { now: () => now });
+  assert(
+    (await emptyService.getLatestActivityTransition()) === null,
+    'a never-started tracker must not invent a resumable activity'
   );
 }
 

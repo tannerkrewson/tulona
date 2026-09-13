@@ -82,6 +82,18 @@ export function latestValidTransition(
   return validTransitions(transitions, nowMs).at(-1) ?? null;
 }
 
+/** Returns the most recent recorded activity transition, ignoring stop markers. */
+export function latestValidActivityTransition(
+  transitions: readonly TimeTransition[],
+  nowMs = Date.now()
+): TimeTransition | null {
+  return (
+    validTransitions(transitions, nowMs)
+      .filter((transition) => transition.activityId !== null)
+      .at(-1) ?? null
+  );
+}
+
 export const getActiveTransition = latestValidTransition;
 export const deriveActiveTransition = latestValidTransition;
 
