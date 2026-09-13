@@ -1,4 +1,4 @@
-import { shiftLogicalDay, type LogicalDayKey } from '@domain';
+import { logicalDayKey, shiftLogicalDay, type LogicalDayKey } from '@domain';
 
 import { habitWeekStart } from './schedule';
 
@@ -52,4 +52,39 @@ export function formatHabitDay(value: LogicalDayKey): string {
   const date = new Date(`${value}T12:00:00`);
   if (!Number.isFinite(date.getTime())) return value;
   return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+/**
+ * Returns true when a fresh calendar rollover can make the selected logical
+ * day surprising. Historical selections never trigger this reminder.
+ */
+export function isPastMidnightHabitDay(
+  selectedDay: LogicalDayKey,
+  now: Date | number | string,
+  rolloverHour = 0
+): boolean {
+  const localNow = new Date(now);
+  if (!Number.isFinite(localNow.getTime())) throw new RangeError('Invalid current time');
+  const calendarDay = logicalDayKey(now, { rolloverHour: 0 });
+  const logicalDay = logicalDayKey(now, { rolloverHour });
+  const localHour = localNow.getHours();
+
+  if (calendarDay !== logicalDay) {
+    // For a delayed rollover, the current logical day still belongs to the
+    // previous calendar date until the configured hour arrives.
+    return selectedDay === logicalDay && localHour < rolloverHour;
+  }
+
+  // Midnight rollover has no pre-rollover period. Keep its prior-day reminder
+  // useful through the early morning, while treating later history as intent.
+  return localHour < 6 && selectedDay === shiftLogicalDay(logicalDay, -1, { rolloverHour });
+}
+
+export function formatHabitRolloverHour(rolloverHour: number): string {
+  if (!Number.isInteger(rolloverHour) || rolloverHour < 0 || rolloverHour > 23) {
+    throw new RangeError('Logical-day rollover hour must be an integer from 0 through 23');
+  }
+  if (rolloverHour === 0) return 'midnight';
+  const hour = rolloverHour % 12 || 12;
+  return `${hour}:00 ${rolloverHour < 12 ? 'AM' : 'PM'}`;
 }

@@ -23,9 +23,12 @@ import { EmptyState, errorText, getRowSurfaceStyle, Screen } from '@ui';
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
 import {
+  formatHabitDay,
+  formatHabitRolloverHour,
   habitDaySwipeTarget,
   habitWeekDays,
   habitWeekSwipeTarget,
+  isPastMidnightHabitDay,
   shiftHabitWeek,
   sundayFirstWeekdayLabels,
 } from './date-navigation';
@@ -108,6 +111,7 @@ export default function HabitListScreen() {
 }
 
 function HabitListContent({ store }: { store: HabitStore }) {
+  const { colors } = useAppTheme();
   const router = useRouter();
   const habits = store((state) => state.habits);
   const states = store((state) => state.states);
@@ -116,11 +120,23 @@ function HabitListContent({ store }: { store: HabitStore }) {
   const logicalDayRolloverHour = store((state) => state.logicalDayRolloverHour);
   const saving = store((state) => state.saving);
   const persistenceError = store((state) => state.persistenceError);
+  const [clockMs, setClockMs] = useState(() => Date.now());
+  const [dismissedPastMidnightDay, setDismissedPastMidnightDay] = useState<LogicalDayKey | null>(
+    null
+  );
   const lastAction = useRef<(() => Promise<unknown>) | null>(null);
   const activeHabits = habits
     .filter((habit) => habit.archivedAt === null)
     .sort((left, right) => left.sortOrder - right.sortOrder);
   const archivedCount = habits.filter((habit) => habit.archivedAt !== null).length;
+  const pastMidnightWarningVisible =
+    isPastMidnightHabitDay(selectedDay, clockMs, logicalDayRolloverHour) &&
+    dismissedPastMidnightDay !== selectedDay;
+
+  useEffect(() => {
+    const timer = setInterval(() => setClockMs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const runAction = useCallback((action: () => Promise<unknown>) => {
     lastAction.current = action;
@@ -142,7 +158,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
       onOutcome={(habitId, outcome) =>
         runAction(() => store.getState().setOutcome(habitId, day, outcome))
       }
-      onToggle={(habitId) => runAction(() => store.getState().toggleManual(habitId, day))}
+      onCycle={(habitId) => runAction(() => store.getState().cycleOutcome(habitId, day))}
       saving={saving}
       states={states}
     />
@@ -170,6 +186,56 @@ function HabitListContent({ store }: { store: HabitStore }) {
           selectedDay={selectedDay}
           today={today}
         />
+        {pastMidnightWarningVisible ? (
+          <View
+            accessibilityLiveRegion="polite"
+            accessibilityRole="alert"
+            style={{ width: '100%' }}
+            testID="habit-past-midnight-warning"
+          >
+            <Column
+              spacing={6}
+              style={{
+                backgroundColor: colors.warning.background,
+                borderColor: colors.warning.foreground,
+                borderRadius: 12,
+                borderWidth: 1,
+                padding: 14,
+                width: '100%',
+              }}
+            >
+              <Text
+                textStyle={{ color: colors.warning.foreground, fontSize: 14, fontWeight: '700' }}
+              >
+                Past midnight reminder
+              </Text>
+              <Text textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}>
+                {`The calendar day has changed, but your logical day rolls over at ${formatHabitRolloverHour(logicalDayRolloverHour)}. You are viewing ${formatHabitDay(selectedDay)}; entries saved now stay on that logical day.`}
+              </Text>
+              <Pressable
+                accessibilityHint="Dismisses this reminder without changing habit data"
+                accessibilityLabel="Keep logging on this logical day"
+                accessibilityRole="button"
+                onPress={() => setDismissedPastMidnightDay(selectedDay)}
+                style={({ pressed }) => ({
+                  alignSelf: 'flex-start',
+                  borderRadius: 8,
+                  opacity: pressed ? 0.65 : 1,
+                  paddingHorizontal: 2,
+                  paddingVertical: 4,
+                })}
+                testID="habit-past-midnight-keep"
+              >
+                <NativeText
+                  selectable={false}
+                  style={{ color: colors.warning.foreground, fontSize: 14, fontWeight: '700' }}
+                >
+                  Keep logging here
+                </NativeText>
+              </Pressable>
+            </Column>
+          </View>
+        ) : null}
         <HabitDayPager
           onSelectDay={selectDay}
           renderDay={renderDay}
@@ -219,10 +285,17 @@ function HabitDayPager({
   const useNativeDriver = Platform.OS !== 'web';
   const gestureStyle = webGestureStyle('pan-y');
   const effectiveWidth = pageWidth > 0 ? pageWidth : Math.max(viewportWidth - 40, 280);
+  const pageGap = 12;
+  const pageStride = effectiveWidth + pageGap;
 
   const prevDay = habitDaySwipeTarget(selectedDay, -1, today, rolloverHour) ?? selectedDay;
   const nextTarget = habitDaySwipeTarget(selectedDay, 1, today, rolloverHour);
   const nextDay = nextTarget ?? selectedDay;
+  const translateX = dragX.interpolate({
+    extrapolate: 'clamp',
+    inputRange: [-pageStride, 0, pageStride],
+    outputRange: [nextTarget ? -pageStride : -pageStride / 3, 0, pageStride],
+  });
 
   useEffect(() => {
     dragX.setValue(0);
@@ -235,6 +308,7 @@ function HabitDayPager({
       dragX.stopAnimation();
       Animated.timing(dragX, {
         duration: DAY_SETTLE_DURATION,
+        isInteraction: false,
         toValue: target,
         useNativeDriver,
       }).start(({ finished }) => {
@@ -271,14 +345,10 @@ function HabitDayPager({
           if (gestureLock.current.locked) return;
           dragX.stopAnimation();
         },
-        onPanResponderMove: (_, gesture) => {
-          if (gestureLock.current.locked) return;
-          let dx = gesture.dx;
-          // Resistance when swiping into a blocked future day.
-          if (dx < 0 && !nextTarget) dx /= 3;
-          dx = Math.max(-effectiveWidth, Math.min(effectiveWidth, dx));
-          dragX.setValue(dx);
-        },
+        // Map the gesture directly to the animated value. The interpolated
+        // transform below retains future-day resistance without extra
+        // per-frame JS work on platforms that support the native driver.
+        onPanResponderMove: Animated.event([null, { dx: dragX }], { useNativeDriver }),
         onPanResponderRelease: (_, gesture) => {
           if (gestureLock.current.locked) return;
           if (Math.abs(gesture.dx) < DAY_SWIPE_THRESHOLD) {
@@ -286,14 +356,14 @@ function HabitDayPager({
             return;
           }
           if (gesture.dx > 0) {
-            settleTo(effectiveWidth, prevDay);
+            settleTo(pageStride, prevDay);
             return;
           }
           if (!nextTarget) {
             settleTo(0);
             return;
           }
-          settleTo(-effectiveWidth, nextTarget);
+          settleTo(-pageStride, nextTarget);
         },
         onPanResponderTerminate: () => {
           gestureLock.current.locked = false;
@@ -301,7 +371,7 @@ function HabitDayPager({
         },
         onPanResponderTerminationRequest: () => false,
       }),
-    [dragX, effectiveWidth, gestureLock, nextTarget, prevDay, settleTo]
+    [dragX, gestureLock, nextTarget, pageStride, prevDay, settleTo, useNativeDriver]
   );
 
   return (
@@ -315,10 +385,15 @@ function HabitDayPager({
         style={{
           flex: 1,
           flexDirection: 'row',
-          marginLeft: -effectiveWidth,
+          flexShrink: 0,
+          marginLeft: -pageStride,
           minHeight: 0,
-          transform: [{ translateX: dragX }],
-          width: effectiveWidth * 3,
+          transform: [
+            {
+              translateX,
+            },
+          ],
+          width: pageStride * 3,
         }}
       >
         {[
@@ -326,7 +401,17 @@ function HabitDayPager({
           { day: selectedDay, key: `current-${selectedDay}` },
           { day: nextDay, key: `next-${nextDay}` },
         ].map(({ day, key }) => (
-          <View key={key} style={{ flex: 1, minHeight: 0, width: effectiveWidth }}>
+          <View
+            key={key}
+            style={{
+              flexBasis: effectiveWidth,
+              flexGrow: 0,
+              flexShrink: 0,
+              marginRight: pageGap,
+              minHeight: 0,
+              width: effectiveWidth,
+            }}
+          >
             {renderDay(day)}
           </View>
         ))}
@@ -361,6 +446,11 @@ function HabitWeekStrip({
   const currentDays = habitWeekDays(selectedDay, rolloverHour);
   const nextDays = habitWeekDays(nextAnchor, rolloverHour);
   const nextWeekTarget = habitWeekSwipeTarget(selectedDay, 1, today, rolloverHour);
+  const translateX = dragX.interpolate({
+    extrapolate: 'clamp',
+    inputRange: [-effectiveWidth, 0, effectiveWidth],
+    outputRange: [nextWeekTarget ? -effectiveWidth : -effectiveWidth / 3, 0, effectiveWidth],
+  });
 
   useEffect(() => {
     dragX.setValue(0);
@@ -373,6 +463,7 @@ function HabitWeekStrip({
       dragX.stopAnimation();
       Animated.timing(dragX, {
         duration: WEEK_SETTLE_DURATION,
+        isInteraction: false,
         toValue: target,
         useNativeDriver,
       }).start(({ finished }) => {
@@ -406,13 +497,9 @@ function HabitWeekStrip({
           if (gestureLock.current.locked) return;
           dragX.stopAnimation();
         },
-        onPanResponderMove: (_, gesture) => {
-          if (gestureLock.current.locked) return;
-          let dx = gesture.dx;
-          if (dx < 0 && !nextWeekTarget) dx /= 3;
-          dx = Math.max(-effectiveWidth, Math.min(effectiveWidth, dx));
-          dragX.setValue(dx);
-        },
+        // Keep the week-strip transform on the direct Animated event path;
+        // resistance is applied by the native-capable interpolation below.
+        onPanResponderMove: Animated.event([null, { dx: dragX }], { useNativeDriver }),
         onPanResponderRelease: (_, gesture) => {
           if (gestureLock.current.locked) return;
           if (Math.abs(gesture.dx) < WEEK_SWIPE_THRESHOLD) {
@@ -435,7 +522,7 @@ function HabitWeekStrip({
         },
         onPanResponderTerminationRequest: () => false,
       }),
-    [dragX, effectiveWidth, gestureLock, nextWeekTarget, prevAnchor, settleTo]
+    [dragX, effectiveWidth, gestureLock, nextWeekTarget, prevAnchor, settleTo, useNativeDriver]
   );
 
   return (
@@ -443,9 +530,6 @@ function HabitWeekStrip({
       onLayout={(event) => setPageWidth(event.nativeEvent.layout.width)}
       style={{
         backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 12,
-        borderWidth: 1,
         overflow: 'hidden',
         width: '100%',
       }}
@@ -456,7 +540,7 @@ function HabitWeekStrip({
           style={{
             flexDirection: 'row',
             marginLeft: -effectiveWidth,
-            transform: [{ translateX: dragX }],
+            transform: [{ translateX }],
             width: effectiveWidth * 3,
           }}
         >
@@ -467,7 +551,14 @@ function HabitWeekStrip({
           ].map(({ days, key }) => (
             <View
               key={key}
-              style={{ paddingHorizontal: 4, paddingVertical: 8, width: effectiveWidth }}
+              style={{
+                flexBasis: effectiveWidth,
+                flexGrow: 0,
+                flexShrink: 0,
+                paddingHorizontal: 4,
+                paddingVertical: 8,
+                width: effectiveWidth,
+              }}
             >
               <WeekDaysRow
                 days={days}
@@ -551,7 +642,7 @@ function HabitDayList({
   logicalDayRolloverHour,
   onDetails,
   onOutcome,
-  onToggle,
+  onCycle,
   saving,
   states,
 }: {
@@ -561,7 +652,7 @@ function HabitDayList({
   logicalDayRolloverHour: number;
   onDetails: (habitId: string) => void;
   onOutcome: (habitId: string, outcome: HabitDayOutcome | null) => void;
-  onToggle: (habitId: string) => void;
+  onCycle: (habitId: string) => void;
   saving: boolean;
   states: HabitDayState[];
 }) {
@@ -585,7 +676,7 @@ function HabitDayList({
                 selectedDay={day}
                 logicalDayRolloverHour={logicalDayRolloverHour}
                 onDetails={() => onDetails(habit.id)}
-                onToggle={() => onToggle(habit.id)}
+                onCycle={() => onCycle(habit.id)}
                 onOutcome={(outcome) => onOutcome(habit.id, outcome)}
               />
             ))}
@@ -615,7 +706,7 @@ function HabitListItem({
   selectedDay,
   saving,
   logicalDayRolloverHour,
-  onToggle,
+  onCycle,
   onDetails,
   onOutcome,
 }: {
@@ -625,7 +716,7 @@ function HabitListItem({
   selectedDay: HabitDayState['logicalDay'];
   saving: boolean;
   logicalDayRolloverHour: number;
-  onToggle: () => void;
+  onCycle: () => void;
   onDetails: () => void;
   onOutcome: (outcome: HabitDayOutcome | null) => void;
 }) {
@@ -671,10 +762,11 @@ function HabitListItem({
       testID={`habit-card-${habit.id}`}
     >
       <Pressable
-        accessibilityHint="Toggles this habit for the selected day. Long press for more actions."
+        accessibilityHint="Cycles this habit through not done, done, failed, and skipped. Long press for more actions."
         accessibilityLabel={`${habit.name}. ${statusLabel}. ${streak.current} current streak. Signals: ${habitSignalSummary(state ?? null)}.`}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: complete, disabled: saving }}
+        accessibilityValue={{ text: statusLabel }}
         delayLongPress={500}
         disabled={saving}
         onLongPress={() => {
@@ -688,7 +780,7 @@ function HabitListItem({
             longPressed.current = false;
             return;
           }
-          onToggle();
+          onCycle();
         }}
         style={({ pressed }) => ({
           alignItems: 'center',
@@ -699,7 +791,7 @@ function HabitListItem({
                 : complete
                   ? colors.success.background
                   : colors.surface,
-            borderColor: complete ? colors.success.foreground : colors.border,
+            borderColor: colors.border,
           }),
           flexDirection: 'row',
           minHeight: 72,
@@ -719,14 +811,15 @@ function HabitListItem({
       >
         <Row alignment="center" spacing={12} style={{ width: '100%' }}>
           <Pressable
-            accessibilityHint="Toggles this habit for the selected day"
+            accessibilityHint="Cycles this habit through not done, done, failed, and skipped"
             accessibilityLabel={`${habit.name}, ${statusLabel}`}
+            accessibilityValue={{ text: statusLabel }}
             accessibilityRole="button"
             accessibilityState={{ disabled: saving }}
             disabled={saving}
             onPress={(event) => {
               event.stopPropagation();
-              onToggle();
+              onCycle();
             }}
             style={({ pressed }) => ({
               alignItems: 'center',
@@ -751,27 +844,30 @@ function HabitListItem({
               />
             ) : null}
           </Pressable>
-          <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flex: 1, justifyContent: 'center', minWidth: 0 }}>
             <Text
               numberOfLines={1}
-              textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600' }}
+              textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
             >
               {habit.name}
             </Text>
-            {outcome ? (
-              <View style={{ marginTop: 2 }}>
-                <Text numberOfLines={1} textStyle={{ color: colors.textMuted, fontSize: 12 }}>
-                  {statusLabel}
-                </Text>
-              </View>
-            ) : null}
+            <Text
+              numberOfLines={1}
+              textStyle={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
+            >
+              {statusLabel}
+            </Text>
           </View>
-          <Column alignment="end" spacing={0} style={{ width: 82 }}>
-            <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
+          <View style={{ alignItems: 'flex-end', justifyContent: 'center', width: 82 }}>
+            <Text
+              textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
+            >
               {String(streak.current)}
             </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 11 }}>Current Streak</Text>
-          </Column>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>
+              Current Streak
+            </Text>
+          </View>
         </Row>
       </Pressable>
       {menuAnchor ? (
