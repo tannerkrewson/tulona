@@ -77,50 +77,33 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
   const isWeb = Platform.OS === 'web';
   const webSurface = 'var(--tulona-surface)';
   const webBorder = 'var(--tulona-border)';
-  const [activeState, setActiveState] = useState<{
-    catalog: CatalogCollection | null;
-    activeTransition: TimeTransition | null;
-  }>({ catalog: null, activeTransition: null });
+  const store = runtime.trackerStore;
+  const catalog = store((state) => state.catalog);
+  const activeTransition = store((state) => state.activeTransition);
+  const lastActivityTransition = store((state) => state.lastActivityTransition);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const activeTransition = activeState.activeTransition;
-  const catalog = activeState.catalog;
+  const isActive = activeTransition !== null && activeTransition.activityId !== null;
+  const activeTransitionId = isActive ? activeTransition.id : null;
+  const activeTransitionTimestamp = isActive ? activeTransition.timestamp : null;
 
   useEffect(() => {
-    let cancelled = false;
-    const reconcile = async () => {
-      try {
-        const [nextCatalog, nextTransition] = await Promise.all([
-          runtime.catalogService.read(),
-          runtime.trackerService.getActiveTransition(),
-        ]);
-        if (!cancelled) setActiveState({ catalog: nextCatalog, activeTransition: nextTransition });
-      } catch {
-        // The catalog screen owns the visible persistence error surface.
-      }
-    };
-    void reconcile();
-    const timer = setInterval(() => void reconcile(), 1000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [runtime]);
-
-  useEffect(() => {
-    if (!activeTransition) return undefined;
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    if (!isActive || activeTransitionTimestamp === null) return undefined;
+    const updateNow = () => setNowMs(Date.now());
+    updateNow();
+    const timer = setInterval(updateNow, 1000);
     return () => clearInterval(timer);
-  }, [activeTransition]);
+  }, [activeTransitionId, activeTransitionTimestamp, isActive]);
 
-  if (!activeTransition || activeTransition.activityId === null) return null;
+  const displayedTransition = isActive ? activeTransition : lastActivityTransition;
+  if (!displayedTransition || displayedTransition.activityId === null) return null;
 
-  const resolved = activeItem(catalog, activeTransition);
-  const activeActivityId = activeTransition.activityId;
+  const resolved = activeItem(catalog, displayedTransition);
+  const activeActivityId = displayedTransition.activityId;
   const name = resolved?.item.name ?? 'Current activity';
   const context = resolved?.folder?.name ?? null;
-  const elapsedMs = Math.max(0, nowMs - timestampMs(activeTransition.timestamp));
+  const elapsedMs = isActive ? Math.max(0, nowMs - timestampMs(displayedTransition.timestamp)) : 0;
   const configuredColor = resolved?.item.color ?? resolved?.displayColor;
   const accent =
     configuredColor && /^#[0-9a-f]{6}$/i.test(configuredColor.trim())
@@ -138,7 +121,7 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
     const destination =
       activeRoutine && routineOwnsActivity(activeRoutine, activeActivityId)
         ? `/routine/${activeRoutine.routineId}`
-        : `/activity-session/${activeTransition.id}`;
+        : `/activity-session/${displayedTransition.id}`;
     router.push(destination as Href);
   };
 
@@ -150,16 +133,35 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
       const activeRoutine = await runtime.routineService.getActive();
       if (activeRoutine?.status === 'running') {
         await runtime.routineService.pause();
-        if (await runtime.trackerService.getActiveTransition()) {
-          await runtime.trackerService.switchActivity(null);
-        }
-      } else {
-        await runtime.trackerService.switchActivity(null);
       }
-      await runtime.trackerStore.getState().refresh();
-      setActiveState((current) => ({ ...current, activeTransition: null }));
+      const current = await runtime.trackerService.getActiveTransition();
+      if (current && current.activityId !== null) {
+        await store.getState().switchActivity(null);
+      } else {
+        await store.getState().refresh();
+      }
     } catch (pauseError) {
       setActionError(errorText(pauseError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const play = async () => {
+    const activityId = lastActivityTransition?.activityId;
+    if (busy || activityId === undefined || activityId === null) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const activeRoutine = await runtime.routineService.getActive();
+      if (activeRoutine?.status === 'paused' && routineOwnsActivity(activeRoutine, activityId)) {
+        await runtime.routineService.resume();
+        await store.getState().switchActivity(activityId, { source: 'routine' });
+      } else {
+        await store.getState().switchActivity(activityId);
+      }
+    } catch (playError) {
+      setActionError(errorText(playError));
     } finally {
       setBusy(false);
     }
@@ -184,16 +186,21 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
         testID="active-activity-bar"
       >
         <Pressable
-          accessibilityLabel="Pause active activity"
+          accessibilityHint={
+            isActive ? undefined : 'Starts a new tracking session for this activity'
+          }
+          accessibilityLabel={isActive ? 'Pause active activity' : `Start ${name}`}
           accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
           disabled={busy}
-          onPress={() => void pause()}
+          onPress={() => void (isActive ? pause() : play())}
           style={[styles.pauseButton, { backgroundColor: accent }]}
+          testID={isActive ? 'active-activity-pause' : 'active-activity-play'}
         >
           <AppIcon
-            accessibilityLabel="Pause"
+            accessibilityLabel={isActive ? 'Pause' : 'Play'}
             color={onAccent}
-            name="pause"
+            name={isActive ? 'pause' : 'play'}
             size={25}
             strokeWidth={3}
           />
@@ -231,7 +238,7 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
               ) : null}
             </View>
             <DurationText
-              durationMs={elapsedMs}
+              durationMs={isActive ? elapsedMs : 0}
               textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}
             />
           </View>
