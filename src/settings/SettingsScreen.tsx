@@ -5,7 +5,14 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
-import { errorText, getRowSurfaceStyle, ROW_SURFACE_BORDER_WIDTH, Screen } from '@ui';
+import {
+  errorText,
+  getRowSurfaceLayoutStyle,
+  getRowSurfaceStyle,
+  ROW_SURFACE_BORDER_WIDTH,
+  ROW_SURFACE_CONTENT_GAP,
+  Screen,
+} from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { settingsCategories } from './settings-categories';
@@ -33,14 +40,12 @@ function SettingsCategoryRow({
         backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
         borderBottomColor: colors.border,
         borderBottomWidth: isLast ? 0 : ROW_SURFACE_BORDER_WIDTH,
-        minHeight: 66,
         opacity: pressed ? 0.78 : 1,
-        paddingHorizontal: 16,
         width: '100%',
       })}
       testID={`settings-category-${category.id}`}
     >
-      <Row alignment="center" spacing={12} style={{ height: 66, width: '100%' }}>
+      <Row alignment="center" spacing={ROW_SURFACE_CONTENT_GAP} style={getRowSurfaceLayoutStyle()}>
         <View
           style={{
             alignItems: 'center',

@@ -14,6 +14,7 @@
     "test:domain": "tsx tests/domain-calculations.ts",
     "test:habits": "tsx tests/habits.ts",
     "test:theme": "tsx tests/theme-colors.ts",
+    "test:card-geometry": "tsx tests/card-geometry.ts",
     "test:pwa-ui": "tsx tests/pwa-ui-regressions.ts",
     "test:settings-ui": "tsx tests/settings-ui-regressions.ts",
     "test:persistence": "tsx tests/persistence-checks.ts",
