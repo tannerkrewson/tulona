@@ -1,31 +1,16 @@
-import { Column, Picker, Row, Text } from '@expo/ui';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Column, Row, Text } from '@expo/ui';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import {
-  formatDuration,
-  timestampMs,
-  toTimestamp,
-  type TimeTransition,
-  type TrackableItem,
-} from '@domain';
+import { formatDuration, timestampMs, type TimeTransition } from '@domain';
 import { useAppTheme } from '@theme';
-import { AccessiblePicker, AccessibleTextInput, AppButton, errorText, Screen } from '@ui';
+import { AppButton, errorText, Screen } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
-
-function localInputValue(timestamp: string): string {
-  const date = new Date(timestamp);
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function parseLocalInput(value: string): number | null {
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : null;
-}
+import type { TransitionContext } from './tracker-service';
+import { orderTransitions } from './tracker-engine';
 
 function readableDateTime(value: number | null): string {
   return value === null
@@ -34,6 +19,30 @@ function readableDateTime(value: number | null): string {
         dateStyle: 'medium',
         timeStyle: 'short',
       });
+}
+
+function visibleAdjacentTransition(
+  transitions: readonly TimeTransition[],
+  transition: TimeTransition,
+  direction: 'previous' | 'following'
+): TimeTransition | null {
+  const ordered = orderTransitions(
+    transitions.filter((candidate) => candidate.status === 'recorded')
+  );
+  const index = ordered.findIndex((candidate) => candidate.id === transition.id);
+  if (index < 0) return null;
+  const transitionMs = timestampMs(transition.timestamp);
+  if (direction === 'previous') {
+    return (
+      [...ordered.slice(0, index)]
+        .reverse()
+        .find((candidate) => timestampMs(candidate.timestamp) < transitionMs) ?? null
+    );
+  }
+  return (
+    ordered.slice(index + 1).find((candidate) => timestampMs(candidate.timestamp) > transitionMs) ??
+    null
+  );
 }
 
 function SessionError({ message, onRetry }: { message: string; onRetry: () => void }) {
@@ -122,17 +131,48 @@ function ActivitySessionContent({
   const transitions = store((state) => state.transitions);
   const activeTransition = store((state) => state.activeTransition);
   const persistenceError = store((state) => state.persistenceError);
-  const transition: TimeTransition | null =
+  const storeTransition: TimeTransition | null =
     transitions.find((candidate) => candidate.id === transitionId) ??
     (activeTransition?.id === transitionId ? activeTransition : null);
+  const [transitionContext, setTransitionContext] = useState<TransitionContext | null>(null);
+  const [contextLoading, setContextLoading] = useState(true);
+  const [contextError, setContextError] = useState<string | null>(null);
+  const contextRequest = useRef(0);
+  const transition: TimeTransition | null =
+    storeTransition ?? transitionContext?.transition ?? null;
   const isActive = transition?.id === activeTransition?.id && transition?.activityId !== null;
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [editingTime, setEditingTime] = useState(false);
-  const [startValue, setStartValue] = useState(() =>
-    transition ? localInputValue(transition.timestamp) : ''
-  );
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const loadTransitionContext = useCallback(() => {
+    const requestId = contextRequest.current + 1;
+    contextRequest.current = requestId;
+    setTransitionContext(null);
+    setContextLoading(true);
+    setContextError(null);
+    void runtime.trackerService
+      .getTransitionContext(transitionId)
+      .then((nextContext) => {
+        if (contextRequest.current !== requestId) return;
+        setTransitionContext(nextContext);
+        setContextLoading(false);
+      })
+      .catch((error: unknown) => {
+        if (contextRequest.current !== requestId) return;
+        setContextError(errorText(error));
+        setContextLoading(false);
+      });
+  }, [runtime, transitionId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTransitionContext();
+      return () => {
+        contextRequest.current += 1;
+      };
+    }, [loadTransitionContext])
+  );
 
   useEffect(() => {
     if (!isActive) return undefined;
@@ -147,27 +187,37 @@ function ActivitySessionContent({
           message={
             persistenceError
               ? errorText(persistenceError)
-              : 'This activity session is no longer available.'
+              : (contextError ?? 'This activity session is no longer available.')
           }
-          onRetry={() => void store.getState().hydrate()}
+          onRetry={() => {
+            void store.getState().hydrate();
+            loadTransitionContext();
+          }}
         />
       </Screen>
     );
   }
 
   const resolved = resolveCatalogItem(catalog, transition.activityId ?? '');
-  const items = [...catalog.activities, ...catalog.routines].sort((left, right) =>
-    left.name.localeCompare(right.name)
-  );
-  const following = transitions
-    .filter(
-      (candidate) =>
-        candidate.status === 'recorded' &&
-        timestampMs(candidate.timestamp) > timestampMs(transition.timestamp)
-    )
-    .sort((left, right) => timestampMs(left.timestamp) - timestampMs(right.timestamp))[0];
+  const activityName =
+    resolved?.item.name ??
+    (transition.activityId === null ? 'No activity' : 'Unavailable activity');
+  const contextMatches = transitionContext?.transition?.id === transition.id;
+  const previous =
+    contextMatches && transitionContext
+      ? transitionContext.previous
+      : visibleAdjacentTransition(transitions, transition, 'previous');
+  const following =
+    contextMatches && transitionContext
+      ? transitionContext.following
+      : visibleAdjacentTransition(transitions, transition, 'following');
   const endMs = following ? timestampMs(following.timestamp) : isActive ? nowMs : null;
   const durationMs = endMs === null ? 0 : Math.max(0, endMs - timestampMs(transition.timestamp));
+  const previousName = previous?.activityId
+    ? (resolveCatalogItem(catalog, previous.activityId)?.item.name ?? 'previous activity')
+    : 'previous state';
+  const canSnapToPrevious =
+    previous !== null && timestampMs(previous.timestamp) < timestampMs(transition.timestamp);
 
   const runAction = async (action: () => Promise<void>) => {
     if (busy) return;
@@ -182,22 +232,20 @@ function ActivitySessionContent({
     }
   };
 
-  const saveTime = () =>
+  const snapToPrevious = () =>
     void runAction(async () => {
-      const nextMs = parseLocalInput(startValue);
-      if (nextMs === null) throw new Error('Enter a valid start date and time.');
-      await store.getState().editTransition(transition.id, { timestamp: toTimestamp(nextMs) });
-      setStartValue(localInputValue(toTimestamp(nextMs)));
-      setEditingTime(false);
+      await store.getState().snapTransitionStartToPrevious(transition.id);
+      loadTransitionContext();
     });
 
-  const changeActivity = (value: string) =>
+  const resetToNow = () =>
     void runAction(async () => {
-      await store.getState().reassignTransition(transition.id, value || null);
+      await store.getState().resetActiveStartToNow(transition.id);
+      loadTransitionContext();
     });
 
   return (
-    <Screen onBack={() => router.back()} title={resolved?.item.name ?? 'Activity session'}>
+    <Screen onBack={() => router.back()} title="Activity session">
       <Column spacing={16} style={{ width: '100%' }} testID="activity-session-screen">
         <Column
           spacing={10}
@@ -215,7 +263,7 @@ function ActivitySessionContent({
             {isActive ? 'ACTIVE SESSION' : 'SESSION'}
           </Text>
           <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
-            {resolved?.item.name ?? 'No activity'}
+            {activityName}
           </Text>
           <Row alignment="center" spacing={8} style={{ width: '100%' }}>
             <Column style={{ width: '48%' }}>
@@ -240,60 +288,63 @@ function ActivitySessionContent({
 
         <Column spacing={8} style={{ width: '100%' }}>
           <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>Activity</Text>
-          <AccessiblePicker
-            enabled={!busy}
-            label="Activity for this session"
-            onValueChange={changeActivity}
-            selectedValue={transition.activityId ?? ''}
-            testID="activity-session-activity"
-          >
-            <Picker.Item label="No activity" value="" />
-            {items.map((item: TrackableItem) => (
-              <Picker.Item key={item.id} label={item.name} value={item.id} />
-            ))}
-          </AccessiblePicker>
+          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+            Select a different activity or routine for this session.
+          </Text>
+          <AppButton
+            disabled={busy}
+            label="Choose activity"
+            onPress={() =>
+              router.push(
+                `/activity-session/activity-chooser?transitionId=${encodeURIComponent(transition.id)}`
+              )
+            }
+            style={{ height: 48, width: '100%' }}
+            testID="activity-session-choose-activity"
+            variant="outlined"
+          />
         </Column>
 
-        <Column spacing={8} style={{ width: '100%' }}>
+        <Column spacing={8} style={{ width: '100%' }} testID="activity-session-corrections">
           <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-            Start time
+            Correct start time
           </Text>
-          {editingTime ? (
-            <Column spacing={8} style={{ width: '100%' }}>
-              <AccessibleTextInput
-                label="Session start time"
-                onChangeText={setStartValue}
-                testID="activity-session-start-input"
-                defaultValue={startValue}
-              />
-              <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-                <AppButton
-                  disabled={busy}
-                  label="Save time"
-                  onPress={saveTime}
-                  style={{ height: 46, width: '48%' }}
-                  testID="activity-session-save-time"
-                />
-                <AppButton
-                  disabled={busy}
-                  label="Cancel"
-                  onPress={() => setEditingTime(false)}
-                  style={{ height: 46, width: '48%' }}
-                  testID="activity-session-cancel-time"
-                  variant="outlined"
-                />
-              </Row>
-            </Column>
-          ) : (
-            <AppButton
-              disabled={busy}
-              label="Adjust start time"
-              onPress={() => setEditingTime(true)}
-              style={{ height: 48 }}
-              testID="activity-session-adjust-time"
-              variant="outlined"
-            />
-          )}
+          <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+            {contextLoading && !previous
+              ? 'Checking for a preceding transition...'
+              : previous
+                ? `Snap this start to the end of ${previousName} (${readableDateTime(timestampMs(previous.timestamp))}).`
+                : 'There is no preceding transition to use as an activity end.'}
+          </Text>
+          <AppButton
+            disabled={busy || !canSnapToPrevious}
+            label={
+              contextLoading && !previous
+                ? 'Checking previous activity'
+                : canSnapToPrevious
+                  ? 'Snap to previous activity end'
+                  : previous
+                    ? 'Already at previous activity end'
+                    : 'No previous activity end available'
+            }
+            onPress={snapToPrevious}
+            style={{ height: 48, width: '100%' }}
+            testID="activity-session-snap-previous"
+            variant="outlined"
+          />
+          <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+            {isActive
+              ? 'For the active session, reset the start only when it began just now.'
+              : 'Reset to now is available only for the active session.'}
+          </Text>
+          <AppButton
+            disabled={busy || !isActive}
+            label={isActive ? 'Reset start to now' : 'Reset start to now (active only)'}
+            onPress={resetToNow}
+            style={{ height: 48, width: '100%' }}
+            testID="activity-session-reset-now"
+            variant="outlined"
+          />
         </Column>
 
         {actionError ? (
