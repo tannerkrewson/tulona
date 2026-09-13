@@ -2,6 +2,22 @@ import type { HabitDayOutcome, HabitDayState, HabitSchedule } from '@domain';
 
 export const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
+/** The explicit outcome order shared by tap cycling and the long-press actions. */
+export const habitOutcomeCycle: readonly (HabitDayOutcome | null)[] = [
+  null,
+  'done',
+  'failed',
+  'skipped',
+];
+
+export function nextHabitOutcome(
+  outcome: HabitDayOutcome | null | undefined
+): HabitDayOutcome | null {
+  const currentIndex = habitOutcomeCycle.indexOf(outcome ?? null);
+  const nextIndex = (currentIndex < 0 ? 0 : currentIndex + 1) % habitOutcomeCycle.length;
+  return habitOutcomeCycle[nextIndex];
+}
+
 export function formatHabitSchedule(schedule: HabitSchedule): string {
   switch (schedule.kind) {
     case 'daily':
