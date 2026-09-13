@@ -218,7 +218,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
                 Past midnight reminder
               </Text>
               <Text textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}>
-                {`The calendar day has changed, but your logical day rolls over at ${formatHabitRolloverHour(logicalDayRolloverHour)}. You are viewing ${formatHabitDay(selectedDay)}; entries saved now stay on that logical day.`}
+                {`It’s after midnight. Your logical day rolls over at ${formatHabitRolloverHour(logicalDayRolloverHour)}. Check that you’re logging the intended day; entries saved now apply to ${formatHabitDay(selectedDay)}.`}
               </Text>
               <Pressable
                 accessibilityHint="Dismisses this reminder without changing habit data"

@@ -56,7 +56,8 @@ export function formatHabitDay(value: LogicalDayKey): string {
 
 /**
  * Returns true when a fresh calendar rollover can make the selected logical
- * day surprising. Historical selections never trigger this reminder.
+ * day surprising. Show the reminder for the current or immediately previous
+ * logical day; older history is an intentional selection.
  */
 export function isPastMidnightHabitDay(
   selectedDay: LogicalDayKey,
@@ -68,16 +69,19 @@ export function isPastMidnightHabitDay(
   const calendarDay = logicalDayKey(now, { rolloverHour: 0 });
   const logicalDay = logicalDayKey(now, { rolloverHour });
   const localHour = localNow.getHours();
+  const previousLogicalDay = shiftLogicalDay(logicalDay, -1, { rolloverHour });
 
   if (calendarDay !== logicalDay) {
     // For a delayed rollover, the current logical day still belongs to the
-    // previous calendar date until the configured hour arrives.
-    return selectedDay === logicalDay && localHour < rolloverHour;
+    // previous calendar date until the configured hour arrives. The prior
+    // logical day is already historical in this case.
+    return localHour < rolloverHour && selectedDay === logicalDay;
   }
 
   // Midnight rollover has no pre-rollover period. Keep its prior-day reminder
   // useful through the early morning, while treating later history as intent.
-  return localHour < 6 && selectedDay === shiftLogicalDay(logicalDay, -1, { rolloverHour });
+  if (rolloverHour > 0) return false;
+  return localHour < 6 && (selectedDay === logicalDay || selectedDay === previousLogicalDay);
 }
 
 export function formatHabitRolloverHour(rolloverHour: number): string {
