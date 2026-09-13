@@ -18,7 +18,15 @@ import type { ViewStyle } from 'react-native';
 import type { Habit, HabitDayOutcome, HabitDayState, LogicalDayKey } from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { EmptyState, errorText, getRowSurfaceStyle, Screen } from '@ui';
+import {
+  EmptyState,
+  errorText,
+  getRowSurfaceStyle,
+  ROW_SURFACE_CONTENT_GAP,
+  ROW_SURFACE_ICON_SIZE,
+  ROW_SURFACE_PADDING_HORIZONTAL,
+  Screen,
+} from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
@@ -188,6 +196,9 @@ const WEEK_SWIPE_THRESHOLD = 40;
 const WEEK_SETTLE_DURATION = 180;
 const HABIT_MENU_WIDTH = 220;
 const HABIT_MENU_HEIGHT = 190;
+// Habit cards intentionally exceed the compact row height: the optional
+// outcome subtitle and the current-streak summary need a second text line.
+const HABIT_ROW_MIN_HEIGHT = 72;
 
 function webGestureStyle(touchAction: 'pan-y' | 'none'): ViewStyle | undefined {
   if (Platform.OS !== 'web') return undefined;
@@ -702,9 +713,9 @@ function HabitListItem({
             borderColor: complete ? colors.success.foreground : colors.border,
           }),
           flexDirection: 'row',
-          minHeight: 72,
+          minHeight: HABIT_ROW_MIN_HEIGHT,
           opacity: saving ? 0.55 : pressed ? 0.72 : 1,
-          paddingHorizontal: 12,
+          paddingHorizontal: ROW_SURFACE_PADDING_HORIZONTAL,
           paddingVertical: 10,
           userSelect: 'none',
           width: '100%',
@@ -717,7 +728,7 @@ function HabitListItem({
         })}
         testID={`toggle-habit-${habit.id}`}
       >
-        <Row alignment="center" spacing={12} style={{ width: '100%' }}>
+        <Row alignment="center" spacing={ROW_SURFACE_CONTENT_GAP} style={{ width: '100%' }}>
           <Pressable
             accessibilityHint="Toggles this habit for the selected day"
             accessibilityLabel={`${habit.name}, ${statusLabel}`}
@@ -734,10 +745,10 @@ function HabitListItem({
               borderColor: statusBackground,
               borderRadius: 8,
               borderWidth: 1,
-              height: 40,
+              height: ROW_SURFACE_ICON_SIZE,
               justifyContent: 'center',
               opacity: saving ? 0.55 : pressed ? 0.72 : 1,
-              width: 40,
+              width: ROW_SURFACE_ICON_SIZE,
             })}
             testID={`status-habit-${habit.id}`}
           >
