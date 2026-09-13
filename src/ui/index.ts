@@ -15,7 +15,16 @@ export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { IconButton, type IconButtonProps, type IconButtonVariant } from './IconButton';
 export { IconPicker, searchIconCatalog, type IconPickerProps } from './IconPicker';
 export { ReorderControls, type ReorderControlsProps } from './ReorderControls';
-export { getRowSurfaceStyle, ROW_SURFACE_BORDER_WIDTH, ROW_SURFACE_RADIUS } from './row-surface';
+export {
+  getRowSurfaceLayoutStyle,
+  getRowSurfaceStyle,
+  ROW_SURFACE_BORDER_WIDTH,
+  ROW_SURFACE_CONTENT_GAP,
+  ROW_SURFACE_HEIGHT,
+  ROW_SURFACE_ICON_SIZE,
+  ROW_SURFACE_PADDING_HORIZONTAL,
+  ROW_SURFACE_RADIUS,
+} from './row-surface';
 export { Screen, type ScreenProps } from './Screen';
 export { isIOSSafari, isIOSSafariEnvironment, type IOSWebEnvironment } from './platform';
 export { errorText } from './error-text';

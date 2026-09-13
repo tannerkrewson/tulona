@@ -4,6 +4,7 @@ import { AppIcon, normalizeIconName, type IconName } from '@icons';
 import { useAppTheme } from '@theme';
 
 import { AppButton } from './AppButton';
+import { getRowSurfaceStyle } from './row-surface';
 
 export interface EmptyStateProps {
   title: string;
@@ -30,10 +31,7 @@ export function EmptyState({
       alignment="center"
       spacing={12}
       style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 14,
-        borderWidth: 1,
+        ...getRowSurfaceStyle({ backgroundColor: colors.surface, borderColor: colors.border }),
         paddingHorizontal: 20,
         paddingVertical: 24,
         width: '100%',

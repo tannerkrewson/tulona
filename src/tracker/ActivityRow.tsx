@@ -3,7 +3,13 @@ import { Pressable, View } from 'react-native';
 
 import type { TrackableItem } from '@domain';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { AppButton, getRowSurfaceStyle } from '@ui';
+import {
+  AppButton,
+  getRowSurfaceLayoutStyle,
+  getRowSurfaceStyle,
+  ROW_SURFACE_CONTENT_GAP,
+  ROW_SURFACE_ICON_SIZE,
+} from '@ui';
 import { AppIcon } from '@icons';
 
 import { CatalogEditActions } from './CatalogEditActions';
@@ -49,23 +55,19 @@ export function ActivityRow({
       backgroundColor: active ? accent : colors.surface,
       borderColor: active ? accent : colors.border,
     }),
-    alignItems: 'center',
-    flexDirection: 'row',
-    height: 64,
-    paddingHorizontal: 12,
-    width: '100%',
+    ...getRowSurfaceLayoutStyle(),
   } as const;
   const rowContent = (
-    <Row alignment="center" spacing={12} style={{ width: '100%' }}>
+    <Row alignment="center" spacing={ROW_SURFACE_CONTENT_GAP} style={{ width: '100%' }}>
       <View
         style={{
           alignItems: 'center',
           backgroundColor: active ? onAccent : accent,
           borderRadius: 10,
-          height: 40,
+          height: ROW_SURFACE_ICON_SIZE,
           justifyContent: 'center',
           opacity: active ? 0.9 : 1,
-          width: 40,
+          width: ROW_SURFACE_ICON_SIZE,
         }}
       >
         <AppIcon

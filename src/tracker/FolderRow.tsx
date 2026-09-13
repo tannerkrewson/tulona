@@ -4,7 +4,13 @@ import { View } from 'react-native';
 import type { Folder } from '@domain';
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
-import { AppButton } from '@ui';
+import {
+  AppButton,
+  getRowSurfaceLayoutStyle,
+  getRowSurfaceStyle,
+  ROW_SURFACE_CONTENT_GAP,
+  ROW_SURFACE_ICON_SIZE,
+} from '@ui';
 
 export interface FolderRowProps {
   folder: Folder;
@@ -13,7 +19,7 @@ export interface FolderRowProps {
   testID?: string;
 }
 
-/** A low-chrome folder row that is visually distinct from trackable items. */
+/** A catalog folder row with the same measured surface geometry as activities. */
 export function FolderRow({ folder, disabled = false, onPress, testID }: FolderRowProps) {
   const { colors } = useAppTheme();
   return (
@@ -21,24 +27,19 @@ export function FolderRow({ folder, disabled = false, onPress, testID }: FolderR
       disabled={disabled}
       onPress={onPress}
       style={{
-        backgroundColor: colors.background,
-        borderColor: 'transparent',
-        borderRadius: 14,
-        borderWidth: 0,
-        height: 68,
-        paddingHorizontal: 12,
-        width: '100%',
+        ...getRowSurfaceStyle({ backgroundColor: colors.surface, borderColor: colors.border }),
+        ...getRowSurfaceLayoutStyle(),
       }}
       testID={testID}
       variant="outlined"
     >
-      <Row alignment="center" spacing={12} style={{ width: '100%' }}>
+      <Row alignment="center" spacing={ROW_SURFACE_CONTENT_GAP} style={{ width: '100%' }}>
         <View
           style={{
             alignItems: 'center',
-            height: 40,
+            height: ROW_SURFACE_ICON_SIZE,
             justifyContent: 'center',
-            width: 40,
+            width: ROW_SURFACE_ICON_SIZE,
           }}
         >
           <AppIcon
