@@ -18,6 +18,7 @@
     "test:card-geometry": "tsx tests/card-geometry.ts",
     "test:pwa-ui": "tsx tests/pwa-ui-regressions.ts",
     "test:settings-ui": "tsx tests/settings-ui-regressions.ts",
+    "test:active-session": "tsx tests/active-session-regressions.ts",
     "test:persistence": "tsx tests/persistence-checks.ts",
     "test:tracker": "tsx tests/tracker-engine.ts",
     "test:tracker-ui": "tsx tests/tracker-ui-regressions.ts",
