@@ -12,6 +12,7 @@ import { logicalDayKey, shiftLogicalDay } from '@domain';
 import { PersistenceError } from '@data';
 import type { CatalogServiceApi } from '../catalog/catalog-service';
 
+import { nextHabitOutcome } from './habit-format';
 import type { CreateHabitInput, HabitServiceApi, UpdateHabitInput } from './habit-service';
 
 export interface HabitStoreOptions {
@@ -36,6 +37,7 @@ export interface HabitStoreState {
   hydrate(): Promise<void>;
   refresh(): Promise<void>;
   toggleManual(habitId: string, logicalDay?: LogicalDayKey): Promise<HabitDayState>;
+  cycleOutcome(habitId: string, logicalDay?: LogicalDayKey): Promise<HabitDayState>;
   setManualCompletion(
     habitId: string,
     logicalDay: LogicalDayKey,
@@ -168,6 +170,12 @@ export function createHabitStore(service: HabitServiceApi, options: HabitStoreOp
           logicalDay,
           existing?.manual === true ? null : true
         );
+      },
+      cycleOutcome: (habitId, logicalDay = get().today) => {
+        const existing = get().states.find(
+          (state) => state.habitId === habitId && state.logicalDay === logicalDay
+        );
+        return get().setOutcome(habitId, logicalDay, nextHabitOutcome(existing?.outcome));
       },
       setManualCompletion: (habitId, logicalDay, completed) =>
         runMutation(() => service.setManualCompletion(habitId, logicalDay, completed)),

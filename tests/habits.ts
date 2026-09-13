@@ -5,11 +5,13 @@ import {
   evaluateHabitTrigger,
   evaluateHabitSchedule,
   calculateHabitStreak,
+  nextHabitOutcome,
   habitDaySwipeTarget,
   habitWeekDays,
   habitWeekSwipeTarget,
   shiftHabitDay,
   shiftHabitWeek,
+  isPastMidnightHabitDay,
   isHabitScheduledDay,
 } from '../src/habits';
 import type {
@@ -18,6 +20,7 @@ import type {
   Habit,
   HabitDayState,
   HabitMonthCollection,
+  HabitDayOutcome,
   MonthKey,
   TimeInterval,
   Transition,
@@ -212,6 +215,26 @@ async function run(): Promise<void> {
       habitDaySwipeTarget('2026-08-26', -1, '2026-08-26', 5) === '2026-08-25',
     'habit day swipes move one day and reject future pages'
   );
+  assert(
+    nextHabitOutcome(null) === 'done' &&
+      nextHabitOutcome('done') === 'failed' &&
+      nextHabitOutcome('failed') === 'skipped' &&
+      nextHabitOutcome('skipped') === null,
+    'habit outcomes cycle in the same order as the long-press actions'
+  );
+  assert(
+    isPastMidnightHabitDay('2026-08-30', new Date(2026, 7, 31, 1, 30), 3),
+    'the configured rollover window identifies the prior logical day after midnight'
+  );
+  assert(
+    !isPastMidnightHabitDay('2026-08-29', new Date(2026, 7, 31, 1, 30), 3) &&
+      !isPastMidnightHabitDay('2026-08-31', new Date(2026, 7, 31, 3, 0), 3) &&
+      isPastMidnightHabitDay('2026-08-30', new Date(2026, 7, 31, 1, 30), 0) &&
+      !isPastMidnightHabitDay('2026-08-30', new Date(2026, 7, 31, 8, 0), 0) &&
+      isPastMidnightHabitDay('2026-08-30', new Date(2026, 7, 31, 7, 0), 9) &&
+      !isPastMidnightHabitDay('2026-08-30', new Date(2026, 7, 31, 9, 0), 9),
+    'past-midnight reminders exclude ordinary history, preserve rollover boundaries, and cover midnight early mornings'
+  );
 
   const dailyStates = ['2026-08-28', '2026-08-29'].map((logicalDay) => ({
     habitId: ids.habit,
@@ -349,6 +372,15 @@ async function run(): Promise<void> {
     schedule: { kind: 'daily' },
   });
   assert(emojiHabit.iconName === '🌿', 'habit records must persist system emoji values');
+  let outcome: HabitDayOutcome | null = null;
+  for (const expected of ['done', 'failed', 'skipped', null] as const) {
+    outcome = nextHabitOutcome(outcome);
+    await habitService.setOutcome(emojiHabit.id, '2026-08-30', outcome);
+    assert(
+      repository.states.get(`${emojiHabit.id}:2026-08-30`)?.outcome === expected,
+      'cycled habit outcomes must persist each user-facing state'
+    );
+  }
   await habitService.setManualCompletion(ids.habit, '2026-08-30', true);
   await habitService.setAutomaticCompletion(ids.habit, '2026-08-30', false);
   await habitService.setAutomaticCompletion(ids.habit, '2026-08-30', true);

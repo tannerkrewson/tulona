@@ -13,6 +13,7 @@
     "format": "prettier --check .",
     "test:domain": "tsx tests/domain-calculations.ts",
     "test:habits": "tsx tests/habits.ts",
+    "test:habit-ui": "tsx tests/habit-ui-regressions.ts",
     "test:theme": "tsx tests/theme-colors.ts",
     "test:card-geometry": "tsx tests/card-geometry.ts",
     "test:pwa-ui": "tsx tests/pwa-ui-regressions.ts",
