@@ -36,13 +36,14 @@ assert(
   'not-done subtitles must be stable and title/streak text must share line metrics'
 );
 assert(
-  habitItem.includes("borderColor: 'transparent'") &&
-    habitItem.includes('borderWidth: 0') &&
+  habitItem.includes('getRowSurfaceStyle') &&
     habitItem.includes('backgroundColor: colors.surface') &&
+    !habitItem.includes('borderColor:') &&
+    !habitItem.includes('borderWidth:') &&
     !habitItem.includes('colors.success.background') &&
     !habitItem.includes('colors.warning.background') &&
     !habitItem.includes('colors.danger.background'),
-  'habit cards must use a light borderless surface without state background colors'
+  'habit cards must use the shared borderless surface without state background colors'
 );
 assert(
   habitItem.includes('flexShrink: 0') &&
@@ -78,8 +79,8 @@ assert(
   'habit day pages must use a full-bleed clipped viewport with explicit per-page insets'
 );
 assert(
-  appScreen.includes('const screenBackground = backgroundColor ?? colors.surface'),
-  'app screens must use the shared surface as their default page background'
+  appScreen.includes('const screenBackground = backgroundColor ?? colors.background'),
+  'app screens must use the theme background so habit surfaces remain visibly distinct'
 );
 
 console.log('Validated habit outcome, warning, typography, border, and pager regressions.');

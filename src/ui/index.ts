@@ -20,11 +20,13 @@ export {
   getRowSurfaceStyle,
   ROW_SURFACE_BORDER_WIDTH,
   ROW_SURFACE_CONTENT_GAP,
+  ROW_SURFACE_DIVIDER_WIDTH,
   ROW_SURFACE_HEIGHT,
   ROW_SURFACE_ICON_SIZE,
   ROW_SURFACE_LIST_GAP,
   ROW_SURFACE_PADDING_HORIZONTAL,
   ROW_SURFACE_RADIUS,
+  ROW_SURFACE_SHADOW,
 } from './row-surface';
 export { Screen, type ScreenProps } from './Screen';
 export { isIOSSafari, isIOSSafariEnvironment, type IOSWebEnvironment } from './platform';

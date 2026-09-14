@@ -5,23 +5,24 @@ export const ROW_SURFACE_PADDING_HORIZONTAL = 12;
 export const ROW_SURFACE_CONTENT_GAP = 12;
 export const ROW_SURFACE_ICON_SIZE = 40;
 export const ROW_SURFACE_RADIUS = 14;
-export const ROW_SURFACE_BORDER_WIDTH = 1;
+export const ROW_SURFACE_BORDER_WIDTH = 0;
+export const ROW_SURFACE_DIVIDER_WIDTH = 1;
 export const ROW_SURFACE_LIST_GAP = 8;
+export const ROW_SURFACE_SHADOW: ViewStyle = {
+  elevation: 3,
+  shadowColor: '#000000',
+  shadowOffset: { height: 2, width: 0 },
+  shadowOpacity: 0.14,
+  shadowRadius: 4,
+};
 
-export function getRowSurfaceStyle({
-  backgroundColor,
-  borderColor,
-  borderWidth = ROW_SURFACE_BORDER_WIDTH,
-}: {
-  backgroundColor: string;
-  borderColor: string;
-  borderWidth?: number;
-}): ViewStyle {
+/** Shared borderless, elevated surface for compact rows and collection cards. */
+export function getRowSurfaceStyle({ backgroundColor }: { backgroundColor: string }): ViewStyle {
   return {
     backgroundColor,
-    borderColor,
     borderRadius: ROW_SURFACE_RADIUS,
-    borderWidth,
+    borderWidth: ROW_SURFACE_BORDER_WIDTH,
+    ...ROW_SURFACE_SHADOW,
   };
 }
 

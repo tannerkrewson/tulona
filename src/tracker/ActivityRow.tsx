@@ -53,8 +53,6 @@ export function ActivityRow({
   const rowStyle = {
     ...getRowSurfaceStyle({
       backgroundColor: active ? accent : colors.surface,
-      borderColor: 'transparent',
-      borderWidth: 0,
     }),
     ...getRowSurfaceLayoutStyle(),
   } as const;
