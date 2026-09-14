@@ -20,6 +20,7 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
+const appScreen = read('src/ui/AppScreen.tsx');
 const activityRow = read('src/tracker/ActivityRow.tsx');
 const folderRow = read('src/tracker/FolderRow.tsx');
 const habitList = read('src/habits/HabitListScreen.tsx');
@@ -87,6 +88,8 @@ assert(
   emptyState.includes('getRowSurfaceStyle'),
   'collection empty states must reuse the shared surface outline'
 );
-console.log(
-  'Validated shared catalog/list geometry; global frame scope remains a human follow-up.'
+assert(
+  appScreen.includes('const screenBackground = backgroundColor ?? colors.surface'),
+  'screens must use the shared surface instead of a contrasting page frame by default'
 );
+console.log('Validated shared catalog/list geometry and default page surface ownership.');

@@ -94,7 +94,7 @@ export function AppScreen({
 }: AppScreenProps) {
   const { colorScheme, colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const screenBackground = backgroundColor ?? colors.background;
+  const screenBackground = backgroundColor ?? colors.surface;
   const frameStyle = {
     backgroundColor: screenBackground,
     paddingLeft: 20 + insets.left,

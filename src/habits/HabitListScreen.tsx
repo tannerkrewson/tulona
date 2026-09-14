@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ViewStyle } from 'react-native';
 
 import type { Habit, HabitDayOutcome, HabitDayState, LogicalDayKey } from '@domain';
@@ -120,6 +121,7 @@ export default function HabitListScreen() {
 
 function HabitListContent({ store }: { store: HabitStore }) {
   const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const habits = store((state) => state.habits);
   const states = store((state) => state.states);
@@ -129,6 +131,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
   const saving = store((state) => state.saving);
   const persistenceError = store((state) => state.persistenceError);
   const [clockMs, setClockMs] = useState(() => Date.now());
+  const [contentWidth, setContentWidth] = useState(0);
   const [dismissedPastMidnightDay, setDismissedPastMidnightDay] = useState<LogicalDayKey | null>(
     null
   );
@@ -174,7 +177,10 @@ function HabitListContent({ store }: { store: HabitStore }) {
 
   return (
     <Screen scrollable={false} testID="habits-screen">
-      <View style={{ flex: 1, gap: 14, minHeight: 0, width: '100%' }}>
+      <View
+        onLayout={(event) => setContentWidth(event.nativeEvent.layout.width)}
+        style={{ flex: 1, gap: 14, minHeight: 0, width: '100%' }}
+      >
         <HabitHeader
           onAdd={() => router.push('/habit/new')}
           title="Habits"
@@ -245,6 +251,8 @@ function HabitListContent({ store }: { store: HabitStore }) {
           </View>
         ) : null}
         <HabitDayPager
+          contentWidth={contentWidth}
+          horizontalInsets={{ left: 20 + insets.left, right: 20 + insets.right }}
           onSelectDay={selectDay}
           renderDay={renderDay}
           rolloverHour={logicalDayRolloverHour}
@@ -277,12 +285,16 @@ function webGestureStyle(touchAction: 'pan-y' | 'none'): ViewStyle | undefined {
 }
 
 function HabitDayPager({
+  contentWidth,
+  horizontalInsets,
   selectedDay,
   today,
   rolloverHour,
   onSelectDay,
   renderDay,
 }: {
+  contentWidth: number;
+  horizontalInsets: { left: number; right: number };
   selectedDay: LogicalDayKey;
   today: LogicalDayKey;
   rolloverHour: number;
@@ -290,12 +302,14 @@ function HabitDayPager({
   renderDay: (day: LogicalDayKey) => ReactNode;
 }) {
   const { width: viewportWidth } = useWindowDimensions();
-  const [pageWidth, setPageWidth] = useState(0);
   const [dragX] = useState(() => new Animated.Value(0));
   const gestureLock = useRef({ locked: false });
   const useNativeDriver = Platform.OS !== 'web';
   const gestureStyle = webGestureStyle('pan-y');
-  const effectiveWidth = pageWidth > 0 ? pageWidth : Math.max(viewportWidth - 40, 280);
+  const insetWidth = horizontalInsets.left + horizontalInsets.right;
+  const measuredContentWidth =
+    contentWidth > 0 ? contentWidth : Math.max(Math.min(viewportWidth - insetWidth, 720), 280);
+  const effectiveWidth = measuredContentWidth + insetWidth;
   const pageGap = 12;
   const pageStride = effectiveWidth + pageGap;
 
@@ -388,8 +402,17 @@ function HabitDayPager({
   return (
     <View
       {...panResponder.panHandlers}
-      onLayout={(event) => setPageWidth(event.nativeEvent.layout.width)}
-      style={[{ flex: 1, minHeight: 0, overflow: 'hidden', width: '100%' }, gestureStyle]}
+      style={[
+        {
+          flex: 1,
+          marginLeft: -horizontalInsets.left,
+          marginRight: -horizontalInsets.right,
+          minHeight: 0,
+          overflow: 'hidden',
+          width: effectiveWidth,
+        },
+        gestureStyle,
+      ]}
       testID="habit-day-navigation"
     >
       <Animated.View
@@ -420,6 +443,8 @@ function HabitDayPager({
               flexShrink: 0,
               marginRight: pageGap,
               minHeight: 0,
+              paddingLeft: horizontalInsets.left,
+              paddingRight: horizontalInsets.right,
               width: effectiveWidth,
             }}
           >

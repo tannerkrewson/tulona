@@ -9,6 +9,7 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
+const appScreen = read('src/ui/AppScreen.tsx');
 const habitList = read('src/habits/HabitListScreen.tsx');
 const habitStore = read('src/habits/habit-store.ts');
 const weekPagerStart = habitList.indexOf('function HabitWeekStrip(');
@@ -52,11 +53,17 @@ assert(
   habitList.includes('const pageGap = 12') &&
     habitList.includes('marginRight: pageGap') &&
     habitList.includes('flexShrink: 0') &&
+    habitList.includes('marginLeft: -horizontalInsets.left') &&
+    habitList.includes('paddingLeft: horizontalInsets.left') &&
     habitList.includes("overflow: 'hidden'") &&
     !habitList.includes(
       "borderColor: colors.border,\n        borderRadius: 12,\n        borderWidth: 1,\n        overflow: 'hidden'"
     ),
-  'habit day pages must have explicit non-shrinking spacing inside a clipped viewport'
+  'habit day pages must use a full-bleed clipped viewport with explicit per-page insets'
+);
+assert(
+  appScreen.includes('const screenBackground = backgroundColor ?? colors.surface'),
+  'app screens must use the shared surface as their default page background'
 );
 
 console.log('Validated habit outcome, warning, typography, border, and pager regressions.');
