@@ -53,6 +53,8 @@ export interface TrackerRepositoryApi {
   readMonth(month: MonthKey): Promise<TrackerMonthCollection>;
   readMonths(start: MonthKey, end: MonthKey): Promise<Transition[]>;
   readRange(startMs: number, endMs: number): Promise<Transition[]>;
+  /** Optional full-history read used by one-time compatibility backfills. */
+  readAll?(): Promise<Transition[]>;
   writeMonth(collection: TrackerMonthCollection): Promise<void>;
   upsertTransitions(
     transitions: readonly Transition[],
@@ -78,7 +80,7 @@ export class TrackerRepository implements TrackerRepositoryApi {
   private readonly journal: OperationJournal;
 
   constructor(
-    database: KeyValueDatabase,
+    private readonly database: KeyValueDatabase,
     private readonly namespace: DatasetNamespace
   ) {
     this.store = new DatasetStore(database);
@@ -115,6 +117,21 @@ export class TrackerRepository implements TrackerRepositoryApi {
     startDate.setDate(1);
     startDate.setMonth(startDate.getMonth() - 1);
     return this.readMonths(monthKey(startDate), monthKey(endMs));
+  }
+
+  /** Reads every persisted tracker month without making History render do so. */
+  async readAll(): Promise<Transition[]> {
+    if (this.database.keys) {
+      const prefix = `${this.namespace.key('tracker')}:`;
+      const months = (await this.database.keys())
+        .filter((key) => key.startsWith(prefix))
+        .map((key) => key.slice(prefix.length))
+        .filter((suffix) => /^\d{4}-(0[1-9]|1[0-2])$/.test(suffix))
+        .sort();
+      if (months.length === 0) return [];
+      return this.readMonths(months[0] as MonthKey, months.at(-1) as MonthKey);
+    }
+    return this.readRange(0, Date.now());
   }
 
   async writeMonth(collection: TrackerMonthCollection): Promise<void> {

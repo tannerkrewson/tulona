@@ -277,6 +277,7 @@ export function materializeIntervals(
           ...clipped,
           activityId: current.transition.activityId,
           transitionId: current.transition.id,
+          activitySnapshot: current.transition.activitySnapshot,
         });
       }
     }
@@ -292,6 +293,7 @@ export function materializeIntervals(
         ...clipped,
         activityId: current.transition.activityId,
         transitionId: current.transition.id,
+        activitySnapshot: current.transition.activitySnapshot,
       });
     }
   }

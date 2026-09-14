@@ -3,6 +3,7 @@ import {
   materializeIntervals,
   timestampMs,
   type IsoTimestamp,
+  type HistoricalActivitySnapshot,
   type MaterializeOptions,
   type TimeInterval,
   type TimeTransition,
@@ -130,4 +131,6 @@ export interface TransitionInput {
   timestamp: Date | number | IsoTimestamp;
   source?: TimeTransition['source'];
   note?: string | null;
+  /** Optional direct snapshot for imports or callers with an already-resolved catalog item. */
+  activitySnapshot?: HistoricalActivitySnapshot | null;
 }
