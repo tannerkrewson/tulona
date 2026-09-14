@@ -4,3 +4,4 @@ export {
   type HistoryRange,
   type HistoryScreenProps,
 } from './HistoryScreen';
+export { loadHistoryPeriodData, type HistoryPeriodData } from './history-period-data';
