@@ -97,7 +97,7 @@ export function ActivitySessionScreen({ transitionId }: ActivitySessionScreenPro
 
   if (!runtime) {
     return (
-      <Screen onBack={() => router.back()} title="Activity session">
+      <Screen onBack={() => router.back()} title="Session">
         {loadError ? (
           <SessionError
             message={loadError}
@@ -144,6 +144,7 @@ function ActivitySessionContent({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
 
   const loadTransitionContext = useCallback(() => {
     const requestId = contextRequest.current + 1;
@@ -182,7 +183,7 @@ function ActivitySessionContent({
 
   if (!catalog || !transition) {
     return (
-      <Screen onBack={() => router.back()} title="Activity session">
+      <Screen onBack={() => router.back()} title="Session">
         <SessionError
           message={
             persistenceError
@@ -244,11 +245,24 @@ function ActivitySessionContent({
       loadTransitionContext();
     });
 
+  const openDeleteConfirmation = () => {
+    if (busy) return;
+    setActionError(null);
+    setDeleteConfirmationOpen(true);
+  };
+
+  const confirmDeleteSession = () =>
+    void runAction(async () => {
+      await store.getState().deleteTransition(transition.id, { confirm: true });
+      setDeleteConfirmationOpen(false);
+      router.back();
+    });
+
   return (
-    <Screen onBack={() => router.back()} title="Activity session">
+    <Screen onBack={() => router.back()} title={activityName}>
       <Column spacing={16} style={{ width: '100%' }} testID="activity-session-screen">
         <Column
-          spacing={10}
+          spacing={14}
           style={{
             backgroundColor: colors.surface,
             borderColor: colors.border,
@@ -259,12 +273,23 @@ function ActivitySessionContent({
           }}
           testID="activity-session-summary"
         >
-          <Text textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '700' }}>
-            {isActive ? 'ACTIVE SESSION' : 'SESSION'}
-          </Text>
-          <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
-            {activityName}
-          </Text>
+          <Column spacing={4} style={{ width: '100%' }}>
+            <Text
+              numberOfLines={2}
+              textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}
+            >
+              {activityName}
+            </Text>
+            <Text
+              textStyle={{
+                color: isActive ? colors.active.foreground : colors.textMuted,
+                fontSize: 13,
+                fontWeight: '700',
+              }}
+            >
+              {isActive ? 'Active' : 'Recorded'}
+            </Text>
+          </Column>
           <Row alignment="center" spacing={8} style={{ width: '100%' }}>
             <Column style={{ width: '48%' }}>
               <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>Started</Text>
@@ -281,31 +306,50 @@ function ActivitySessionContent({
           </Row>
           <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
             {endMs === null
-              ? 'End time is recorded when another activity starts.'
+              ? isActive
+                ? 'In progress'
+                : 'End not recorded'
               : formatDuration(durationMs)}
           </Text>
         </Column>
 
-        <Column spacing={8} style={{ width: '100%' }}>
-          <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>Activity</Text>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-            Select a different activity or routine for this session.
-          </Text>
-          <AppButton
-            disabled={busy}
-            label="Choose activity"
-            onPress={() =>
-              router.push(
-                `/activity-session/activity-chooser?transitionId=${encodeURIComponent(transition.id)}`
-              )
-            }
-            style={{ height: 48, width: '100%' }}
-            testID="activity-session-choose-activity"
-            variant="outlined"
-          />
+        <Column spacing={10} style={{ width: '100%' }} testID="activity-session-actions">
+          <Row alignment="center" spacing={10} style={{ width: '100%' }}>
+            <AppButton
+              disabled={busy}
+              label="Choose activity"
+              onPress={() =>
+                router.push(
+                  `/activity-session/activity-chooser?transitionId=${encodeURIComponent(transition.id)}`
+                )
+              }
+              style={{ height: 44, width: '48%' }}
+              testID="activity-session-choose-activity"
+              variant="outlined"
+            />
+            <AppButton
+              disabled={busy}
+              label="Delete session"
+              onPress={openDeleteConfirmation}
+              style={{ height: 44, width: '48%' }}
+              testID="activity-session-delete"
+              variant="outlined"
+            />
+          </Row>
         </Column>
 
-        <Column spacing={8} style={{ width: '100%' }} testID="activity-session-corrections">
+        <Column
+          spacing={12}
+          style={{
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderRadius: 16,
+            borderWidth: 1,
+            padding: 16,
+            width: '100%',
+          }}
+          testID="activity-session-corrections"
+        >
           <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
             Correct start time
           </Text>
@@ -313,42 +357,83 @@ function ActivitySessionContent({
             {contextLoading && !previous
               ? 'Checking for a preceding transition...'
               : previous
-                ? `Snap this start to the end of ${previousName} (${readableDateTime(timestampMs(previous.timestamp))}).`
-                : 'There is no preceding transition to use as an activity end.'}
+                ? `Previous: ${previousName} · ${readableDateTime(timestampMs(previous.timestamp))}`
+                : 'No previous transition available'}
           </Text>
-          <AppButton
-            disabled={busy || !canSnapToPrevious}
-            label={
-              contextLoading && !previous
-                ? 'Checking previous activity'
-                : canSnapToPrevious
-                  ? 'Snap to previous activity end'
-                  : previous
-                    ? 'Already at previous activity end'
-                    : 'No previous activity end available'
-            }
-            onPress={snapToPrevious}
-            style={{ height: 48, width: '100%' }}
-            testID="activity-session-snap-previous"
-            variant="outlined"
-          />
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-            {isActive
-              ? 'For the active session, reset the start only when it began just now.'
-              : 'Reset to now is available only for the active session.'}
-          </Text>
-          <AppButton
-            disabled={busy || !isActive}
-            label={isActive ? 'Reset start to now' : 'Reset start to now (active only)'}
-            onPress={resetToNow}
-            style={{ height: 48, width: '100%' }}
-            testID="activity-session-reset-now"
-            variant="outlined"
-          />
+          <Row alignment="center" spacing={10} style={{ width: '100%' }}>
+            <AppButton
+              disabled={busy || !canSnapToPrevious}
+              label={
+                contextLoading && !previous
+                  ? 'Checking previous activity'
+                  : canSnapToPrevious
+                    ? 'Snap to previous end'
+                    : previous
+                      ? 'Already at previous end'
+                      : 'No previous end available'
+              }
+              onPress={snapToPrevious}
+              style={{ height: 44, width: '48%' }}
+              testID="activity-session-snap-previous"
+              variant="outlined"
+            />
+            <AppButton
+              disabled={busy || !isActive}
+              label={isActive ? 'Reset start to now' : 'Reset start to now (active only)'}
+              onPress={resetToNow}
+              style={{ height: 44, width: '48%' }}
+              testID="activity-session-reset-now"
+              variant="outlined"
+            />
+          </Row>
         </Column>
 
+        {deleteConfirmationOpen ? (
+          <Column
+            spacing={10}
+            style={{
+              backgroundColor: colors.danger.background,
+              borderColor: colors.danger.foreground,
+              borderRadius: 14,
+              borderWidth: 1,
+              padding: 14,
+              width: '100%',
+            }}
+            testID="activity-session-delete-confirmation"
+          >
+            <Text textStyle={{ color: colors.danger.foreground, fontSize: 15, fontWeight: '700' }}>
+              Delete this session?
+            </Text>
+            <Text textStyle={{ color: colors.danger.foreground, fontSize: 14, lineHeight: 20 }}>
+              This removes the recorded session from history and cannot be undone.
+            </Text>
+            <Row alignment="center" spacing={10} style={{ width: '100%' }}>
+              <AppButton
+                disabled={busy}
+                label={busy ? 'Deleting...' : 'Delete session'}
+                onPress={confirmDeleteSession}
+                style={{ height: 44, width: '48%' }}
+                testID="activity-session-confirm-delete"
+              />
+              <AppButton
+                disabled={busy}
+                label="Cancel"
+                onPress={() => setDeleteConfirmationOpen(false)}
+                style={{ height: 44, width: '48%' }}
+                testID="activity-session-cancel-delete"
+                variant="outlined"
+              />
+            </Row>
+          </Column>
+        ) : null}
+
         {actionError ? (
-          <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{actionError}</Text>
+          <Text
+            testID="activity-session-action-error"
+            textStyle={{ color: colors.danger.foreground, fontSize: 14 }}
+          >
+            {actionError}
+          </Text>
         ) : null}
       </Column>
     </Screen>
