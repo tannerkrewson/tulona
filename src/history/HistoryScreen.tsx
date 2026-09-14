@@ -1,21 +1,33 @@
 import { Column, Text } from '@expo/ui';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+
 import {
+  currentHistoryPeriod,
   dateForLogicalDay,
+  formatHistoryPeriodTitle,
+  historyPeriodForDate,
   logicalDayKey,
+  nextHistoryPeriod,
   shiftLogicalDay,
+  shiftHistoryPeriod as shiftDomainHistoryPeriod,
   weekBounds,
+  type HistoryPeriod,
+  type HistoryPeriodKind,
   type LogicalDayKey,
 } from '@domain';
 import { useAppTheme } from '@theme';
-import { AppButton, AppScreen, EmptyState, getRowSurfaceStyle, IconButton } from '@ui';
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { AppButton, AppScreen, EmptyState, errorText, getRowSurfaceStyle, IconButton } from '@ui';
 
-export type HistoryRange = 'day' | 'week' | 'month' | 'year';
+import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
+import DayTimeline from './DayTimeline';
+
+export type HistoryRange = HistoryPeriodKind;
 export type HistoryContentState = 'loading' | 'empty' | 'error';
 
 export interface HistoryScreenProps {
-  /** Allows the later data views to replace the shell state without changing navigation. */
+  /** Allows a parent or a regression harness to replace the loaded state. */
   contentState?: HistoryContentState;
   errorMessage?: string;
   onRetry?: () => void;
@@ -30,10 +42,6 @@ const RANGE_OPTIONS: readonly { label: string; value: HistoryRange }[] = [
   { label: 'Year', value: 'year' },
 ];
 
-function shortDate(date: Date): string {
-  return date.toLocaleDateString([], { day: 'numeric', month: 'short' });
-}
-
 function dayLabel(anchor: LogicalDayKey, today: LogicalDayKey): string {
   if (anchor === today) return 'Today';
   if (anchor === shiftLogicalDay(today, -1)) return 'Yesterday';
@@ -44,41 +52,19 @@ function dayLabel(anchor: LogicalDayKey, today: LogicalDayKey): string {
   });
 }
 
-function weekLabel(anchor: LogicalDayKey): string {
-  const bounds = weekBounds(anchor);
-  const start = new Date(bounds.start.startMs);
-  const end = new Date(bounds.end.startMs);
-  if (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth()) {
-    return `${shortDate(start)}–${end.getDate()}`;
-  }
-  return `${shortDate(start)}–${end.toLocaleDateString([], {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })}`;
-}
-
 export function formatHistoryPeriodLabel(
   range: HistoryRange,
   anchor: LogicalDayKey,
   today: LogicalDayKey
 ): string {
   if (range === 'day') return dayLabel(anchor, today);
-  const date = dateForLogicalDay(anchor);
-  if (range === 'week') return weekLabel(anchor);
-  if (range === 'month') {
-    return date.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  if (range === 'week') {
+    const bounds = weekBounds(anchor);
+    const start = new Date(bounds.start.startMs);
+    const end = new Date(bounds.end.startMs);
+    return `${start.toLocaleDateString([], { month: 'short', day: 'numeric' })}–${end.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
   }
-  return date.toLocaleDateString([], { year: 'numeric' });
-}
-
-function periodStartMs(anchor: LogicalDayKey, range: HistoryRange): number {
-  if (range === 'day') return dateForLogicalDay(anchor).getTime();
-  if (range === 'week') return weekBounds(anchor).start.startMs;
-
-  const date = dateForLogicalDay(anchor);
-  if (range === 'month') return new Date(date.getFullYear(), date.getMonth(), 1).getTime();
-  return new Date(date.getFullYear(), 0, 1).getTime();
+  return formatHistoryPeriodTitle(historyPeriodForDate(range, anchor));
 }
 
 export function shiftHistoryPeriod(
@@ -86,25 +72,7 @@ export function shiftHistoryPeriod(
   range: HistoryRange,
   amount: -1 | 1
 ): LogicalDayKey {
-  if (range === 'day') return shiftLogicalDay(anchor, amount);
-  if (range === 'week') return shiftLogicalDay(anchor, amount * 7);
-
-  const date = dateForLogicalDay(anchor);
-  date.setDate(1);
-  if (range === 'month') date.setMonth(date.getMonth() + amount);
-  else {
-    date.setMonth(0);
-    date.setFullYear(date.getFullYear() + amount);
-  }
-  return logicalDayKey(date);
-}
-
-function isCurrentPeriod(
-  anchor: LogicalDayKey,
-  range: HistoryRange,
-  today: LogicalDayKey
-): boolean {
-  return periodStartMs(anchor, range) === periodStartMs(today, range);
+  return shiftDomainHistoryPeriod(historyPeriodForDate(range, anchor), amount).startLogicalDay;
 }
 
 function HistoryRangeSelector({
@@ -154,25 +122,24 @@ function HistoryRangeSelector({
 }
 
 function HistoryPeriodNavigation({
-  anchor,
-  range,
-  today,
+  period,
+  options,
+  nowMs,
   onChange,
   onToday,
   onPeriodLabelPress,
 }: {
-  anchor: LogicalDayKey;
-  range: HistoryRange;
-  today: LogicalDayKey;
+  period: HistoryPeriod;
+  options: { rolloverHour?: number; weekStartsOn?: number };
+  nowMs: number;
   onChange: (amount: -1 | 1) => void;
   onToday: () => void;
   onPeriodLabelPress?: () => void;
 }) {
   const { colors } = useAppTheme();
-  const label = formatHistoryPeriodLabel(range, anchor, today);
-  const current = isCurrentPeriod(anchor, range, today);
-  const nextAnchor = shiftHistoryPeriod(anchor, range, 1);
-  const nextDisabled = periodStartMs(nextAnchor, range) > periodStartMs(today, range);
+  const current = currentHistoryPeriod(period.kind, nowMs, options).key === period.key;
+  const nextDisabled = nextHistoryPeriod(period, options, nowMs) === null;
+  const label = formatHistoryPeriodTitle(period, nowMs, options);
 
   return (
     <Column spacing={10} style={{ width: '100%' }}>
@@ -181,7 +148,7 @@ function HistoryPeriodNavigation({
           accessibilityHint="Shows the previous history period"
           disabled={false}
           icon="chevron-left"
-          label={`Previous ${range}`}
+          label={`Previous ${period.kind}`}
           onPress={() => onChange(-1)}
           testID="history-previous"
           variant="muted"
@@ -210,7 +177,7 @@ function HistoryPeriodNavigation({
           }
           disabled={nextDisabled}
           icon="chevron-right"
-          label={`Next ${range}`}
+          label={`Next ${period.kind}`}
           onPress={() => onChange(1)}
           testID="history-next"
           variant="muted"
@@ -309,23 +276,148 @@ function HistoryStatePanel({
   );
 }
 
-/** Phone-first navigation shell for the replacement History tab. */
+function HistoryDayContent({
+  runtime,
+  period,
+}: {
+  runtime: RoutineRuntime;
+  period: HistoryPeriod;
+}) {
+  const store = runtime.trackerStore;
+  const catalog = store((state) => state.catalog);
+  const transitions = store((state) => state.transitions);
+  const loading = store((state) => state.loading);
+  const persistenceError = store((state) => state.persistenceError);
+  const [queryState, setQueryState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [queryError, setQueryError] = useState<string | null>(null);
+  const queryRequest = useRef(0);
+
+  const loadDay = useCallback(() => {
+    const requestId = queryRequest.current + 1;
+    queryRequest.current = requestId;
+    setQueryState('loading');
+    setQueryError(null);
+    store.getState().setRange({ startMs: period.startMs, endMs: period.endMs });
+    void store
+      .getState()
+      .hydrate()
+      .then(() => {
+        if (queryRequest.current === requestId) setQueryState('ready');
+      })
+      .catch((error: unknown) => {
+        if (queryRequest.current !== requestId) return;
+        setQueryError(errorText(error));
+        setQueryState('error');
+      });
+  }, [period.endMs, period.startMs, store]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDay();
+      return () => {
+        queryRequest.current += 1;
+      };
+    }, [loadDay])
+  );
+
+  if (queryState === 'loading' || loading) {
+    return <HistoryStatePanel contentState="loading" range="day" />;
+  }
+  if (queryState === 'error' || persistenceError) {
+    return (
+      <HistoryStatePanel
+        contentState="error"
+        errorMessage={queryError ?? errorText(persistenceError)}
+        onRetry={loadDay}
+        range="day"
+      />
+    );
+  }
+  if (!catalog) {
+    return (
+      <HistoryStatePanel
+        contentState="error"
+        errorMessage="The activity catalog is not available yet."
+        onRetry={loadDay}
+        range="day"
+      />
+    );
+  }
+
+  return <DayTimeline catalog={catalog} period={period} transitions={transitions} />;
+}
+
+/** Phone-first History shell with the real configured logical-day timeline. */
 export default function HistoryScreen({
-  contentState = 'empty',
+  contentState,
   errorMessage,
   onRetry,
   onPeriodLabelPress,
 }: HistoryScreenProps) {
   const { colors } = useAppTheme();
-  const [today] = useState<LogicalDayKey>(() => logicalDayKey(Date.now()));
+  const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [fallbackToday] = useState<LogicalDayKey>(() => logicalDayKey(Date.now()));
+  const [clockMs, setClockMs] = useState(() => Date.now());
   const [range, setRange] = useState<HistoryRange>('day');
-  const [anchor, setAnchor] = useState<LogicalDayKey>(today);
+  const [selectedAnchor, setSelectedAnchor] = useState<LogicalDayKey | null>(null);
+
+  const load = useCallback(() => {
+    setLoadError(null);
+    void loadRoutineRuntime()
+      .then(setRuntime)
+      .catch((error: unknown) => setLoadError(errorText(error)));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadRoutineRuntime()
+      .then((nextRuntime) => {
+        if (!cancelled) setRuntime(nextRuntime);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setLoadError(errorText(error));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setClockMs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const periodOptions = runtime
+    ? {
+        rolloverHour: runtime.settings.logicalDayRolloverHour,
+        weekStartsOn: runtime.settings.weekStartsOn,
+      }
+    : {};
+  const today = runtime
+    ? currentHistoryPeriod('day', clockMs, periodOptions).startLogicalDay
+    : fallbackToday;
+  const anchor = selectedAnchor ?? today;
+  const period = historyPeriodForDate(range, anchor, periodOptions);
 
   const changePeriod = (amount: -1 | 1) => {
-    const next = shiftHistoryPeriod(anchor, range, amount);
-    if (amount === 1 && periodStartMs(next, range) > periodStartMs(today, range)) return;
-    setAnchor(next);
+    const next = shiftDomainHistoryPeriod(period, amount, periodOptions);
+    if (amount === 1 && nextHistoryPeriod(period, periodOptions, clockMs) === null) return;
+    setSelectedAnchor(next.startLogicalDay);
   };
+
+  if (!runtime) {
+    return (
+      <AppScreen scrollable testID="history-screen" title="History">
+        <HistoryStatePanel
+          contentState={loadError ? 'error' : 'loading'}
+          errorMessage={loadError ?? undefined}
+          onRetry={loadError ? (onRetry ?? load) : undefined}
+          range={range}
+        />
+      </AppScreen>
+    );
+  }
 
   return (
     <AppScreen scrollable testID="history-screen" title="History">
@@ -341,20 +433,26 @@ export default function HistoryScreen({
         >
           <HistoryRangeSelector onChange={setRange} value={range} />
           <HistoryPeriodNavigation
-            anchor={anchor}
+            nowMs={clockMs}
             onChange={changePeriod}
             onPeriodLabelPress={onPeriodLabelPress}
-            onToday={() => setAnchor(today)}
-            range={range}
-            today={today}
+            onToday={() => setSelectedAnchor(null)}
+            options={periodOptions}
+            period={period}
           />
         </Column>
-        <HistoryStatePanel
-          contentState={contentState}
-          errorMessage={errorMessage}
-          onRetry={onRetry}
-          range={range}
-        />
+        {contentState ? (
+          <HistoryStatePanel
+            contentState={contentState}
+            errorMessage={errorMessage}
+            onRetry={onRetry}
+            range={range}
+          />
+        ) : range === 'day' ? (
+          <HistoryDayContent period={period} runtime={runtime} />
+        ) : (
+          <HistoryStatePanel contentState="empty" range={range} />
+        )}
       </Column>
     </AppScreen>
   );
