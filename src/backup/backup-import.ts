@@ -14,6 +14,7 @@ import type {
   RoutineRunHistory,
   RoutineSnapshot,
 } from '@domain';
+import { backfillHistoricalActivitySnapshots } from '@domain';
 
 export type BackupImportErrorCode =
   | 'invalid-json'
@@ -176,14 +177,18 @@ function normalizeDocument(value: unknown): Record<string, unknown> {
         };
       })
     : habits;
+  const normalizedTransitions =
+    input.transitions === undefined
+      ? undefined
+      : backfillHistoricalActivitySnapshots(
+          flattenCollection(input.transitions, 'transitions'),
+          normalizedCatalog
+        ).transitions;
   return {
     ...input,
     catalog: normalizedCatalog,
     routineDefinitions: normalizedCatalog.routines,
-    transitions:
-      input.transitions === undefined
-        ? undefined
-        : flattenCollection(input.transitions, 'transitions'),
+    transitions: normalizedTransitions,
     routineHistory:
       input.routineHistory === undefined
         ? undefined
@@ -239,7 +244,13 @@ function validateSemantics(backup: LifeTrackerBackup): string[] {
 
   const transitionIds = duplicateIds(backup.transitions, 'transition', errors);
   for (const transition of backup.transitions) {
-    if (transition.activityId !== null && !trackableIds.has(transition.activityId)) {
+    const hasMatchingSnapshot =
+      transition.activityId !== null && transition.activitySnapshot?.id === transition.activityId;
+    if (
+      transition.activityId !== null &&
+      !trackableIds.has(transition.activityId) &&
+      !hasMatchingSnapshot
+    ) {
       errors.push(
         `Transition "${transition.id}" references unknown trackable item "${transition.activityId}"`
       );

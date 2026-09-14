@@ -16,6 +16,8 @@ import {
   type DatasetNamespace,
 } from '@data';
 import {
+  createHistoricalActivitySnapshot,
+  historicalActivitySnapshotForCatalogItem,
   logicalDayBounds,
   logicalDayKey,
   type ActiveRoutine,
@@ -345,11 +347,24 @@ export class BootCoordinator {
     const trackerService = createTrackerService(repositories.tracker, {
       now: this.now,
       minimumActivityDurationMs: settings.minimumActivityDurationMs,
+      resolveActivitySnapshot: async (activityId, capturedAt) => {
+        const resolved = await catalogService.resolveItem(activityId);
+        return resolved
+          ? createHistoricalActivitySnapshot(resolved.item, resolved.folder, capturedAt)
+          : null;
+      },
       onMutation: (mutation) =>
         reconciliationHolder.current
           ? reconciliationHolder.current.reconcileTrackerEdit(mutation)
           : Promise.resolve(),
     });
+    try {
+      await trackerService.backfillHistoricalActivitySnapshots((activityId, capturedAt) =>
+        Promise.resolve(historicalActivitySnapshotForCatalogItem(catalog, activityId, capturedAt))
+      );
+    } catch (error) {
+      throw bootError('tracker', error);
+    }
     const habitService = createHabitService(repositories.habits, { catalog: catalogService });
     const reconciliation = createHabitReconciliationService(
       repositories.habits,

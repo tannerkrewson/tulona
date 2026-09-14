@@ -11,11 +11,13 @@ import type {
   Habit,
   HabitDayState,
   HabitMonthCollection,
+  HistoricalActivitySnapshot,
   RoutineDefinition,
   RoutineHistoryCollection,
   RoutineRunHistory,
   RoutineSnapshot,
   RoutineStep,
+  TimeGoal,
   Transition,
   TrackerMonthCollection,
 } from './models';
@@ -46,6 +48,26 @@ const month = z.string().refine((value) => {
 const nullableArchivedAt = isoTimestamp.nullable();
 const timestamps = { createdAt: isoTimestamp, updatedAt: isoTimestamp };
 const routineTrackingMode = z.enum(['overall', 'steps']);
+export const timeGoalSchema = z
+  .object({
+    type: z.enum(['target', 'limit']),
+    durationMs: z.number().int().positive(),
+    period: z.enum(['day', 'week', 'month']),
+  })
+  .passthrough();
+
+export const historicalActivitySnapshotSchema = z
+  .object({
+    id: uuid,
+    kind: z.enum(['activity', 'routine']),
+    name: z.string().min(1),
+    color: z.string().nullable(),
+    iconName: z.string().nullable(),
+    folderId: uuid.nullable(),
+    folderName: z.string().nullable(),
+    capturedAt: isoTimestamp.optional(),
+  })
+  .passthrough();
 
 export const folderSchema = z
   .object({
@@ -68,6 +90,7 @@ export const activitySchema = z
     sortOrder: z.number().int().nonnegative(),
     color: z.string().nullable(),
     iconName: z.string().nullable(),
+    timeGoal: timeGoalSchema.nullable().optional(),
     ...timestamps,
     archivedAt: nullableArchivedAt,
   })
@@ -131,8 +154,25 @@ export const transitionSchema = z
     createdAt: isoTimestamp,
     correctionOfId: uuid.nullable(),
     note: z.string().nullable(),
+    activitySnapshot: historicalActivitySnapshotSchema.nullable().optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((transition, context) => {
+    if (transition.activitySnapshot === null || transition.activitySnapshot === undefined) return;
+    if (transition.activityId === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['activitySnapshot'],
+        message: 'A stopped transition cannot have an activity snapshot',
+      });
+    } else if (transition.activitySnapshot.id !== transition.activityId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['activitySnapshot', 'id'],
+        message: 'Activity snapshot ID must match the transition activity ID',
+      });
+    }
+  });
 
 export const routineStepSnapshotSchema = z
   .object({
@@ -410,6 +450,9 @@ export const operationJournalEntrySchema = z
 export const initialSchemaVersionSchema = z.literal(1);
 
 export type FolderRecord = z.infer<typeof folderSchema> & Folder;
+export type TimeGoalRecord = z.infer<typeof timeGoalSchema> & TimeGoal;
+export type HistoricalActivitySnapshotRecord = z.infer<typeof historicalActivitySnapshotSchema> &
+  HistoricalActivitySnapshot;
 export type RoutineStepRecord = z.infer<typeof routineStepSchema> & RoutineStep;
 export type RoutineDefinitionRecord = z.infer<typeof routineDefinitionSchema> & RoutineDefinition;
 export type TransitionRecord = z.infer<typeof transitionSchema> & Transition;
@@ -432,6 +475,8 @@ export type HabitMonthCollectionRecord = z.infer<typeof habitMonthCollectionSche
 
 export const persistedSchemas = {
   folder: folderSchema,
+  timeGoal: timeGoalSchema,
+  historicalActivitySnapshot: historicalActivitySnapshotSchema,
   activity: activitySchema,
   routineStep: routineStepSchema,
   routineDefinition: routineDefinitionSchema,

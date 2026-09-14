@@ -23,6 +23,8 @@ export type RoutineStepEndBehavior = 'overtime' | 'auto-advance' | 'autoAdvance'
 export type RoutineStepCompletionOutcome = 'done' | 'skipped' | 'autoAdvanced';
 export type HabitSignalSource = 'manual' | 'automatic';
 export type HabitDayOutcome = 'done' | 'failed' | 'skipped';
+export type TimeGoalType = 'target' | 'limit';
+export type TimeGoalPeriod = 'day' | 'week' | 'month';
 
 export interface Timestamps {
   createdAt: IsoTimestamp;
@@ -31,6 +33,12 @@ export interface Timestamps {
 
 export interface Archivable {
   archivedAt: IsoTimestamp | null;
+}
+
+export interface TimeGoal {
+  type: TimeGoalType;
+  durationMs: number;
+  period: TimeGoalPeriod;
 }
 
 export interface Folder extends Timestamps, Archivable {
@@ -49,6 +57,8 @@ export interface Activity extends Timestamps, Archivable {
   sortOrder: number;
   color: string | null;
   iconName: string | null;
+  /** Optional target or limit used by History. Missing and null both mean disabled. */
+  timeGoal?: TimeGoal | null;
 }
 
 export interface RoutineStep extends Timestamps, Archivable {
@@ -89,6 +99,11 @@ export interface Transition {
   createdAt: IsoTimestamp;
   correctionOfId: UUID | null;
   note: string | null;
+  /**
+   * Immutable metadata captured when this transition was recorded. It is
+   * optional so pre-History records remain readable and can be backfilled.
+   */
+  activitySnapshot?: HistoricalActivitySnapshot | null;
 }
 
 /** Public tracker name for the raw transition-log record. */
@@ -99,6 +114,19 @@ export interface TimeInterval {
   endMs: number;
   activityId: UUID | null;
   transitionId: UUID;
+  activitySnapshot?: HistoricalActivitySnapshot | null;
+}
+
+/** Metadata needed to render history after the catalog record changes. */
+export interface HistoricalActivitySnapshot {
+  id: UUID;
+  kind: 'activity' | 'routine';
+  name: string;
+  color: string | null;
+  iconName: string | null;
+  folderId: UUID | null;
+  folderName: string | null;
+  capturedAt?: IsoTimestamp;
 }
 
 export interface RoutineStepSnapshot {

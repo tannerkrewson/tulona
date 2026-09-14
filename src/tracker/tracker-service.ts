@@ -4,6 +4,7 @@ import {
   monthKey,
   timestampMs,
   toTimestamp,
+  type HistoricalActivitySnapshot,
   type IsoTimestamp,
   type TimeTransition,
   type TrackerMonthCollection,
@@ -31,6 +32,7 @@ export interface SwitchActivityOptions {
   source?: TimeTransition['source'];
   note?: string | null;
   id?: UUID;
+  activitySnapshot?: HistoricalActivitySnapshot | null;
 }
 
 /** A non-tracker value committed in the same journal as a tracker switch. */
@@ -44,6 +46,7 @@ export interface TransitionEditInput {
   timestamp?: TimestampInput;
   source?: TimeTransition['source'];
   note?: string | null;
+  activitySnapshot?: HistoricalActivitySnapshot | null;
 }
 
 export interface TransitionContext {
@@ -76,10 +79,17 @@ export interface TrackerMutation {
 
 export type TrackerMutationListener = (mutation: TrackerMutation) => Promise<unknown>;
 
+export type HistoricalActivitySnapshotResolver = (
+  activityId: UUID,
+  capturedAt?: IsoTimestamp
+) => Promise<HistoricalActivitySnapshot | null>;
+
 export interface TrackerServiceOptions {
   now?: () => TimestampInput;
   onMutation?: TrackerMutationListener;
   minimumActivityDurationMs?: number;
+  /** Resolves current catalog metadata when a new transition or reassignment is written. */
+  resolveActivitySnapshot?: HistoricalActivitySnapshotResolver;
 }
 
 export interface TrackerServiceApi {
@@ -177,7 +187,7 @@ function createTransition(input: TransitionInput, createdAt: IsoTimestamp): Time
   const id = input.id ?? createId();
   assertUuid(id, 'Transition ID');
   if (input.activityId !== null) assertUuid(input.activityId, 'Activity ID');
-  return {
+  const transition: TimeTransition = {
     id,
     activityId: input.activityId,
     timestamp: normalizeTimestamp(input.timestamp, 'Transition timestamp'),
@@ -187,6 +197,10 @@ function createTransition(input: TransitionInput, createdAt: IsoTimestamp): Time
     correctionOfId: null,
     note: input.note ?? null,
   };
+  if (input.activitySnapshot !== undefined) {
+    transition.activitySnapshot = input.activitySnapshot;
+  }
+  return transition;
 }
 
 function replaceInCollection(
@@ -206,6 +220,7 @@ function replaceInCollection(
 export class TrackerService implements TrackerServiceApi {
   private readonly now: () => TimestampInput;
   private readonly onMutation: TrackerMutationListener | null;
+  private readonly resolveActivitySnapshot: HistoricalActivitySnapshotResolver | null;
   private minimumActivityDurationMs: number;
 
   constructor(
@@ -214,6 +229,7 @@ export class TrackerService implements TrackerServiceApi {
   ) {
     this.now = options.now ?? (() => Date.now());
     this.onMutation = options.onMutation ?? null;
+    this.resolveActivitySnapshot = options.resolveActivitySnapshot ?? null;
     this.minimumActivityDurationMs = validateMinimumActivityDuration(
       options.minimumActivityDurationMs ?? 0
     );
@@ -221,6 +237,73 @@ export class TrackerService implements TrackerServiceApi {
 
   setMinimumActivityDurationMs(durationMs: number): void {
     this.minimumActivityDurationMs = validateMinimumActivityDuration(durationMs);
+  }
+
+  /**
+   * Backfills only transitions that lack historical metadata. This is intended
+   * for startup compatibility and is safe to repeat after an interrupted write.
+   */
+  async backfillHistoricalActivitySnapshots(
+    resolver?: HistoricalActivitySnapshotResolver
+  ): Promise<number> {
+    const resolve = resolver ?? this.resolveActivitySnapshot;
+    if (!resolve) return 0;
+    const transitions = this.repository.readAll
+      ? await this.repository.readAll()
+      : await this.repository.readRange(0, normalizeNow(this.now()));
+    const catalogSnapshots = new Map<string, HistoricalActivitySnapshot | null>();
+    const missing = transitions.filter(
+      (transition) =>
+        transition.activityId !== null &&
+        (transition.activitySnapshot === undefined || transition.activitySnapshot === null)
+    );
+    if (missing.length === 0) return 0;
+    const updated: TimeTransition[] = [];
+    for (const transition of transitions) {
+      if (
+        transition.activityId === null ||
+        (transition.activitySnapshot !== undefined && transition.activitySnapshot !== null)
+      ) {
+        updated.push(transition);
+        continue;
+      }
+      let snapshot = catalogSnapshots.get(transition.activityId);
+      if (snapshot === undefined && !catalogSnapshots.has(transition.activityId)) {
+        snapshot = await resolve(transition.activityId, transition.createdAt);
+        catalogSnapshots.set(transition.activityId, snapshot);
+      }
+      updated.push(snapshot ? { ...transition, activitySnapshot: snapshot } : transition);
+    }
+    const changed = updated.filter((transition, index) => transition !== transitions[index]);
+    if (changed.length === 0) return 0;
+    const months = new Set(changed.map((transition) => monthKey(transition.timestamp)));
+    const collections = await Promise.all(
+      [...months].map(async (month) => {
+        const collection = await this.repository.readMonth(month);
+        const replacements = new Map(
+          changed
+            .filter((transition) => monthKey(transition.timestamp) === month)
+            .map((transition) => [transition.id, transition])
+        );
+        return {
+          ...collection,
+          transitions: collection.transitions.map(
+            (transition) => replacements.get(transition.id) ?? transition
+          ),
+          latestTransitions: [],
+        };
+      })
+    );
+    const operationId = `tracker-history-snapshot-backfill-${changed
+      .map((transition) => transition.id)
+      .sort()
+      .join('-')}`;
+    await this.repository.writeCrossMonth(
+      collections,
+      operationId,
+      'tracker-history-snapshot-backfill'
+    );
+    return changed.length;
   }
 
   async getActiveTransition(at: TimestampInput = this.now()): Promise<TimeTransition | null> {
@@ -289,6 +372,7 @@ export class TrackerService implements TrackerServiceApi {
       timestamp,
       source: options.source ?? 'manual',
       note: options.note,
+      activitySnapshot: options.activitySnapshot,
     });
   }
 
@@ -328,6 +412,7 @@ export class TrackerService implements TrackerServiceApi {
         timestamp,
         source: options.source ?? 'manual',
         note: options.note,
+        activitySnapshot: options.activitySnapshot,
       },
       companionChanges
     );
@@ -387,7 +472,11 @@ export class TrackerService implements TrackerServiceApi {
     companionChanges: readonly TrackerCompanionChange[]
   ): Promise<TimeTransition> {
     const now = normalizeNow(this.now());
-    const transition = createTransition(input, normalizeTimestamp(now, 'Created at'));
+    const createdAt = normalizeTimestamp(now, 'Created at');
+    const transition = await this.withHistoricalSnapshot(
+      createTransition(input, createdAt),
+      createdAt
+    );
     assertNotFuture(transition.timestamp, now);
     const existing = await this.readHistory(now);
     if (existing.some((candidate) => candidate.id === transition.id)) {
@@ -493,6 +582,13 @@ export class TrackerService implements TrackerServiceApi {
       source: input.source ?? current.source,
       note: input.note === undefined ? current.note : input.note,
     };
+    if (input.activityId !== undefined && input.activityId !== current.activityId) {
+      next.activitySnapshot = await this.snapshotForExplicitActivityChange(
+        next.activityId,
+        input.activitySnapshot,
+        normalizeTimestamp(now, 'Snapshot captured at')
+      );
+    }
     if (next.activityId !== null) assertUuid(next.activityId, 'Activity ID');
     if (next.timestamp === current.timestamp && next.activityId !== current.activityId) {
       const merged = await this.mergeActiveRelabel(transitions, current, next.activityId, now);
@@ -725,6 +821,32 @@ export class TrackerService implements TrackerServiceApi {
       kind
     );
     return next;
+  }
+
+  private async withHistoricalSnapshot(
+    transition: TimeTransition,
+    capturedAt: IsoTimestamp
+  ): Promise<TimeTransition> {
+    if (transition.activityId === null) {
+      return { ...transition, activitySnapshot: null };
+    }
+    if (transition.activitySnapshot !== undefined) return transition;
+    if (!this.resolveActivitySnapshot) return transition;
+    return {
+      ...transition,
+      activitySnapshot: await this.resolveActivitySnapshot(transition.activityId, capturedAt),
+    };
+  }
+
+  private async snapshotForExplicitActivityChange(
+    activityId: UUID | null,
+    supplied: HistoricalActivitySnapshot | null | undefined,
+    capturedAt: IsoTimestamp
+  ): Promise<HistoricalActivitySnapshot | null | undefined> {
+    if (activityId === null) return null;
+    if (supplied !== undefined) return supplied;
+    if (!this.resolveActivitySnapshot) return undefined;
+    return this.resolveActivitySnapshot(activityId, capturedAt);
   }
 }
 
