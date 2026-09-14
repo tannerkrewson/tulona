@@ -12,7 +12,7 @@ const iconDefinitions = [
   { name: 'arrow-left', label: 'Back', keywords: ['previous', 'navigate', 'return'] },
   { name: 'archive', label: 'Archive', keywords: ['stored', 'past', 'hidden'] },
   { name: 'award', label: 'Award', keywords: ['goal', 'achievement', 'success'] },
-  { name: 'bar-chart-3', label: 'Insights', keywords: ['report', 'chart', 'analytics'] },
+  { name: 'bar-chart-3', label: 'Bar chart', keywords: ['report', 'chart', 'analytics'] },
   { name: 'book-open', label: 'Reading', keywords: ['book', 'study', 'learning'] },
   { name: 'brain', label: 'Focus', keywords: ['thinking', 'mind', 'meditation'] },
   { name: 'briefcase', label: 'Work', keywords: ['office', 'job', 'work'] },
