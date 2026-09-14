@@ -27,11 +27,11 @@ export function FolderRow({ folder, disabled = false, onPress, testID }: FolderR
       disabled={disabled}
       onPress={onPress}
       style={{
-        ...getRowSurfaceStyle({ backgroundColor: colors.surface, borderColor: colors.border }),
+        ...getRowSurfaceStyle({ backgroundColor: colors.surface }),
         ...getRowSurfaceLayoutStyle(),
       }}
       testID={testID}
-      variant="outlined"
+      variant="filled"
     >
       <Row alignment="center" spacing={ROW_SURFACE_CONTENT_GAP} style={{ width: '100%' }}>
         <View

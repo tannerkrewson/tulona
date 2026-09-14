@@ -3,11 +3,13 @@ import {
   getRowSurfaceStyle,
   ROW_SURFACE_BORDER_WIDTH,
   ROW_SURFACE_CONTENT_GAP,
+  ROW_SURFACE_DIVIDER_WIDTH,
   ROW_SURFACE_HEIGHT,
   ROW_SURFACE_ICON_SIZE,
   ROW_SURFACE_LIST_GAP,
   ROW_SURFACE_PADDING_HORIZONTAL,
   ROW_SURFACE_RADIUS,
+  ROW_SURFACE_SHADOW,
 } from '../src/ui/row-surface';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -36,7 +38,7 @@ const habitItemEnd = habitList.indexOf('function HabitAction(', habitItemStart);
 const habitItem = habitList.slice(habitItemStart, habitItemEnd);
 
 const compactRow = {
-  ...getRowSurfaceStyle({ backgroundColor: '#FFFFFF', borderColor: '#D4D4D4' }),
+  ...getRowSurfaceStyle({ backgroundColor: '#FFFFFF' }),
   ...getRowSurfaceLayoutStyle(),
 };
 
@@ -44,8 +46,15 @@ assert(
   compactRow.height === ROW_SURFACE_HEIGHT &&
     compactRow.paddingHorizontal === ROW_SURFACE_PADDING_HORIZONTAL &&
     compactRow.borderRadius === ROW_SURFACE_RADIUS &&
-    compactRow.borderWidth === ROW_SURFACE_BORDER_WIDTH,
-  'compact rows must share one height, inset, radius, and border weight'
+    compactRow.borderWidth === ROW_SURFACE_BORDER_WIDTH &&
+    ROW_SURFACE_BORDER_WIDTH === 0 &&
+    compactRow.shadowColor === ROW_SURFACE_SHADOW.shadowColor &&
+    compactRow.shadowOpacity === ROW_SURFACE_SHADOW.shadowOpacity &&
+    compactRow.shadowRadius === ROW_SURFACE_SHADOW.shadowRadius &&
+    compactRow.shadowOffset?.height === ROW_SURFACE_SHADOW.shadowOffset?.height &&
+    compactRow.shadowOffset?.width === ROW_SURFACE_SHADOW.shadowOffset?.width &&
+    compactRow.elevation === ROW_SURFACE_SHADOW.elevation,
+  'compact rows must share one height, inset, radius, borderless treatment, and shadow'
 );
 assert(
   ROW_SURFACE_CONTENT_GAP === ROW_SURFACE_PADDING_HORIZONTAL && ROW_SURFACE_ICON_SIZE === 40,
@@ -68,10 +77,11 @@ assert(
 );
 assert(
   folderRow.includes('backgroundColor: colors.surface') &&
-    folderRow.includes('borderColor: colors.border') &&
-    !folderRow.includes("borderColor: 'transparent'") &&
+    folderRow.includes('variant="filled"') &&
+    !folderRow.includes('variant="outlined"') &&
+    !folderRow.includes('borderColor: colors.border') &&
     !folderRow.includes('borderWidth: 0'),
-  'folder rows must retain their separate visible outline treatment'
+  'folder rows must use the same filled, borderless surface treatment as activities'
 );
 assert(
   activityRow.includes('active ? accent : colors.surface') &&
@@ -79,20 +89,20 @@ assert(
   'activity active-state color semantics must remain intact'
 );
 assert(
-  activityRow.includes("borderColor: 'transparent'") &&
-    activityRow.includes('borderWidth: 0') &&
-    activityRow.includes('variant="filled"'),
-  'activity rows must use a light filled surface without an outline'
+  activityRow.includes('variant="filled"') &&
+    !activityRow.includes('borderColor:') &&
+    !activityRow.includes('borderWidth:'),
+  'activity rows must delegate their borderless treatment to the shared surface primitive'
 );
 assert(
   habitItem.includes('getRowSurfaceStyle') &&
     habitItem.includes('backgroundColor: colors.surface') &&
-    habitItem.includes("borderColor: 'transparent'") &&
-    habitItem.includes('borderWidth: 0') &&
+    !habitItem.includes('borderColor:') &&
+    !habitItem.includes('borderWidth:') &&
     !habitItem.includes('colors.success.background') &&
     !habitItem.includes('colors.warning.background') &&
     !habitItem.includes('colors.danger.background'),
-  'habit rows must use one light borderless surface without state background colors'
+  'habit rows must delegate one borderless surface without state background colors'
 );
 assert(
   activitiesScreen.includes('spacing={ROW_SURFACE_LIST_GAP}') &&
@@ -116,15 +126,16 @@ assert(
 );
 assert(
   settingsScreen.includes('getRowSurfaceLayoutStyle()') &&
-    settingsScreen.includes('borderBottomWidth: isLast ? 0 : ROW_SURFACE_BORDER_WIDTH'),
+    settingsScreen.includes('borderBottomWidth: isLast ? 0 : ROW_SURFACE_DIVIDER_WIDTH') &&
+    ROW_SURFACE_DIVIDER_WIDTH === 1,
   'settings list rows must reuse compact geometry while retaining grouped dividers'
 );
 assert(
   emptyState.includes('getRowSurfaceStyle'),
-  'collection empty states must reuse the shared surface outline'
+  'collection empty states must reuse the shared surface treatment'
 );
 assert(
-  appScreen.includes('const screenBackground = backgroundColor ?? colors.surface'),
-  'screens must use the shared surface instead of a contrasting page frame by default'
+  appScreen.includes('const screenBackground = backgroundColor ?? colors.background'),
+  'screens must use the theme background so row surfaces remain visibly elevated'
 );
 console.log('Validated shared catalog/list geometry and default page surface ownership.');

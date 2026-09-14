@@ -817,8 +817,6 @@ function HabitListItem({
           alignItems: 'center',
           ...getRowSurfaceStyle({
             backgroundColor: colors.surface,
-            borderColor: 'transparent',
-            borderWidth: 0,
           }),
           flexDirection: 'row',
           minHeight: HABIT_ROW_MIN_HEIGHT,

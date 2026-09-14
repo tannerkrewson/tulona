@@ -31,7 +31,7 @@ export function EmptyState({
       alignment="center"
       spacing={12}
       style={{
-        ...getRowSurfaceStyle({ backgroundColor: colors.surface, borderColor: colors.border }),
+        ...getRowSurfaceStyle({ backgroundColor: colors.surface }),
         paddingHorizontal: 20,
         paddingVertical: 24,
         width: '100%',

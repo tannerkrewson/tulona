@@ -9,8 +9,8 @@ import {
   errorText,
   getRowSurfaceLayoutStyle,
   getRowSurfaceStyle,
-  ROW_SURFACE_BORDER_WIDTH,
   ROW_SURFACE_CONTENT_GAP,
+  ROW_SURFACE_DIVIDER_WIDTH,
   Screen,
 } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -39,7 +39,7 @@ function SettingsCategoryRow({
       style={({ pressed }) => ({
         backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
         borderBottomColor: colors.border,
-        borderBottomWidth: isLast ? 0 : ROW_SURFACE_BORDER_WIDTH,
+        borderBottomWidth: isLast ? 0 : ROW_SURFACE_DIVIDER_WIDTH,
         opacity: pressed ? 0.78 : 1,
         width: '100%',
       })}
@@ -86,7 +86,7 @@ function SettingsCategoryList({ router }: { router: ReturnType<typeof useRouter>
   return (
     <View
       style={{
-        ...getRowSurfaceStyle({ backgroundColor: colors.surface, borderColor: colors.border }),
+        ...getRowSurfaceStyle({ backgroundColor: colors.surface }),
         overflow: 'hidden',
         width: '100%',
       }}

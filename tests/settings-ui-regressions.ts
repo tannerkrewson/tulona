@@ -2,7 +2,9 @@ import { getSettingsCategory, settingsCategories } from '../src/settings/setting
 import {
   getRowSurfaceStyle,
   ROW_SURFACE_BORDER_WIDTH,
+  ROW_SURFACE_DIVIDER_WIDTH,
   ROW_SURFACE_RADIUS,
+  ROW_SURFACE_SHADOW,
 } from '../src/ui/row-surface';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -18,6 +20,7 @@ const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const settingsScreen = read('src/settings/SettingsScreen.tsx');
 const activityRow = read('src/tracker/ActivityRow.tsx');
+const folderRow = read('src/tracker/FolderRow.tsx');
 const habitList = read('src/habits/HabitListScreen.tsx');
 
 assert(
@@ -38,18 +41,29 @@ assert(
 );
 assert(
   settingsScreen.includes("overflow: 'hidden'") &&
-    settingsScreen.includes('borderBottomWidth: isLast ? 0 : ROW_SURFACE_BORDER_WIDTH'),
+    settingsScreen.includes('borderBottomWidth: isLast ? 0 : ROW_SURFACE_DIVIDER_WIDTH'),
   'settings list edges and dividers must render as one clipped surface'
 );
 assert(
-  activityRow.includes('getRowSurfaceStyle') && habitList.includes('getRowSurfaceStyle'),
-  'activity and habit rows must use the shared row surface treatment'
+  activityRow.includes('getRowSurfaceStyle') &&
+    folderRow.includes('getRowSurfaceStyle') &&
+    folderRow.includes('variant="filled"') &&
+    habitList.includes('getRowSurfaceStyle'),
+  'activity, folder, and habit rows must use the shared row surface treatment'
 );
-const rowSurface = getRowSurfaceStyle({ backgroundColor: '#FFFFFF', borderColor: '#D4D4D4' });
+const rowSurface = getRowSurfaceStyle({ backgroundColor: '#FFFFFF' });
 assert(
   rowSurface.borderRadius === ROW_SURFACE_RADIUS &&
-    rowSurface.borderWidth === ROW_SURFACE_BORDER_WIDTH,
-  'shared row surfaces must keep one consistent border weight and radius'
+    rowSurface.borderWidth === ROW_SURFACE_BORDER_WIDTH &&
+    rowSurface.borderWidth === 0 &&
+    rowSurface.shadowColor === ROW_SURFACE_SHADOW.shadowColor &&
+    rowSurface.shadowOpacity === ROW_SURFACE_SHADOW.shadowOpacity &&
+    rowSurface.shadowRadius === ROW_SURFACE_SHADOW.shadowRadius &&
+    rowSurface.shadowOffset?.height === ROW_SURFACE_SHADOW.shadowOffset?.height &&
+    rowSurface.shadowOffset?.width === ROW_SURFACE_SHADOW.shadowOffset?.width &&
+    rowSurface.elevation === ROW_SURFACE_SHADOW.elevation &&
+    ROW_SURFACE_DIVIDER_WIDTH === 1,
+  'shared row surfaces must keep one consistent borderless radius, shadow, and divider token'
 );
 
 console.log('Validated settings navigation, list layout, and shared row-surface regressions.');
