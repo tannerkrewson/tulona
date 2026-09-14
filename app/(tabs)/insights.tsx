@@ -1,5 +1,6 @@
-import InsightsScreen from '../../src/reporting/InsightsScreen';
+import HistoryScreen from '../../src/history/HistoryScreen';
 
-export default function InsightsRoute() {
-  return <InsightsScreen />;
+/** Transitional filename retained until the old Insights routes are cleaned up. */
+export default function HistoryRoute() {
+  return <HistoryScreen />;
 }

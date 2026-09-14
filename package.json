@@ -15,6 +15,7 @@
     "test:habits": "tsx tests/habits.ts",
     "test:habit-ui": "tsx tests/habit-ui-regressions.ts",
     "test:theme": "tsx tests/theme-colors.ts",
+    "test:history-ui": "tsx tests/history-ui-regressions.ts",
     "test:card-geometry": "tsx tests/card-geometry.ts",
     "test:pwa-ui": "tsx tests/pwa-ui-regressions.ts",
     "test:settings-ui": "tsx tests/settings-ui-regressions.ts",
