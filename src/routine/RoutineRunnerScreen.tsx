@@ -9,13 +9,15 @@ import {
   formatCountdownMs,
   timestampMs,
   type ActiveRoutine,
+  type CatalogCollection,
   type RoutineStepStatus,
 } from '@domain';
 import { AppIcon } from '@icons';
-import { useAppTheme } from '@theme';
+import { getAccessibleTextColor, useAppTheme } from '@theme';
 import { errorText, IconButton, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
+import { inheritRoutineStepMetadata, resolveCatalogItem } from '../catalog/catalog-service';
 import { routineTiming } from './routine-engine';
 import { loadRoutineRuntime, type RoutineRuntime } from './routine-runtime';
 
@@ -102,6 +104,43 @@ function orderedSteps(active: ActiveRoutine) {
   return [...active.routineSnapshot.steps].sort((left, right) => left.sortOrder - right.sortOrder);
 }
 
+function validHexColor(color: string | null | undefined): string | null {
+  return color && /^#[0-9a-f]{6}$/i.test(color.trim()) ? color.trim() : null;
+}
+
+function routineStepVisual(
+  step: ActiveRoutine['routineSnapshot']['steps'][number],
+  trackingMode: ActiveRoutine['routineSnapshot']['trackingMode'],
+  catalog: CatalogCollection | null
+) {
+  if (trackingMode !== 'steps' || !catalog || step.activityId === null) return step;
+  const inherited = inheritRoutineStepMetadata(catalog, step);
+  const resolved = resolveCatalogItem(catalog, step.activityId);
+  return {
+    ...inherited,
+    color: inherited.color ?? resolved?.displayColor ?? null,
+    iconName: inherited.iconName ?? resolved?.item.iconName ?? null,
+  };
+}
+
+function routineStyle(
+  active: ActiveRoutine,
+  catalog: CatalogCollection | null,
+  fallbackColor: string
+): { accent: string; iconName: string } {
+  const routine = catalog?.routines.find((candidate) => candidate.id === active.routineId);
+  const resolved = routine && catalog ? resolveCatalogItem(catalog, routine.id) : null;
+  const accent =
+    validHexColor(active.routineSnapshot.color) ??
+    validHexColor(routine?.color) ??
+    resolved?.displayColor ??
+    fallbackColor;
+  return {
+    accent,
+    iconName: active.routineSnapshot.iconName ?? routine?.iconName ?? 'repeat',
+  };
+}
+
 function RunnerError({
   message,
   palette,
@@ -131,10 +170,11 @@ function RunnerError({
 export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const router = useRouter();
   const { colorScheme } = useAppTheme();
-  const RUNNER = runnerPalette(colorScheme);
+  const BASE_RUNNER = runnerPalette(colorScheme);
   const { width } = useWindowDimensions();
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [active, setActive] = useState<ActiveRoutine | null>(null);
+  const [catalog, setCatalog] = useState<CatalogCollection | null>(null);
   const [nowMs, setNowMs] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -183,13 +223,17 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     setLoadError(null);
     void loadRoutineRuntime()
       .then(async (nextRuntime) => {
-        const restored = await nextRuntime.routineService.recover();
-        return { nextRuntime, restored };
+        const [restored, nextCatalog] = await Promise.all([
+          nextRuntime.routineService.recover(),
+          nextRuntime.catalogService.read(),
+        ]);
+        return { nextRuntime, nextCatalog, restored };
       })
-      .then(({ nextRuntime, restored }) => {
+      .then(({ nextRuntime, nextCatalog, restored }) => {
         if (cancelled) return;
         setNowMs(Date.now());
         setRuntime(nextRuntime);
+        setCatalog(nextCatalog);
         routeRecovered(restored);
       })
       .catch((error: unknown) => {
@@ -283,17 +327,20 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   if (!active || !runtime) {
     return (
       <Screen
-        backgroundColor={RUNNER.background}
+        backgroundColor={BASE_RUNNER.background}
         onBack={goBack}
         scrollable={false}
         title="Routine"
       >
         <Column alignment="center" spacing={16} style={{ width: '100%' }}>
-          <AppIcon name="timer" color={RUNNER.accent} size={40} />
-          <Text textStyle={{ color: RUNNER.text, fontSize: 24, fontWeight: '700' }}>
+          <AppIcon name="timer" color={BASE_RUNNER.accent} size={40} />
+          <Text textStyle={{ color: BASE_RUNNER.text, fontSize: 24, fontWeight: '700' }}>
             Routine runner
           </Text>
-          <RunnerError message={loadError ?? 'Restoring the persisted routine...'} palette={RUNNER}>
+          <RunnerError
+            message={loadError ?? 'Restoring the persisted routine...'}
+            palette={BASE_RUNNER}
+          >
             <RecoveryActions onBack={goBack} onRetry={restore} testID="routine-recovery" />
           </RunnerError>
         </Column>
@@ -307,12 +354,12 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   if (!currentStep) {
     return (
       <Screen
-        backgroundColor={RUNNER.background}
+        backgroundColor={BASE_RUNNER.background}
         onBack={goBack}
         scrollable={false}
         title="Routine"
       >
-        <RunnerError message="The active routine has no current step." palette={RUNNER}>
+        <RunnerError message="The active routine has no current step." palette={BASE_RUNNER}>
           <RecoveryActions onBack={goBack} testID="routine-step-recovery" />
         </RunnerError>
       </Screen>
@@ -333,6 +380,32 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const isPaused = active.status === 'paused';
   const pausedElapsedMs =
     isPaused && active.pausedAt ? Math.max(0, nowMs - timestampMs(active.pausedAt)) : 0;
+  const isStepTracked = active.routineSnapshot.trackingMode === 'steps';
+  const currentVisual = routineStepVisual(
+    currentStep,
+    active.routineSnapshot.trackingMode,
+    catalog
+  );
+  const nextVisual = nextStep
+    ? routineStepVisual(nextStep, active.routineSnapshot.trackingMode, catalog)
+    : null;
+  const routineVisual = routineStyle(active, catalog, BASE_RUNNER.accent);
+  const RUNNER: RunnerPalette = {
+    ...BASE_RUNNER,
+    accent: isStepTracked
+      ? (validHexColor(currentVisual.color) ?? BASE_RUNNER.accent)
+      : routineVisual.accent,
+    accentText: getAccessibleTextColor(
+      isStepTracked
+        ? (validHexColor(currentVisual.color) ?? BASE_RUNNER.accent)
+        : routineVisual.accent
+    ),
+  };
+  const currentIcon = isStepTracked ? currentVisual.iconName || 'activity' : routineVisual.iconName;
+  const nextIcon = isStepTracked ? nextVisual?.iconName || 'activity' : routineVisual.iconName;
+  const nextIconColor = isStepTracked
+    ? (validHexColor(nextVisual?.color) ?? RUNNER.muted)
+    : RUNNER.accent;
 
   return (
     <Screen backgroundColor={RUNNER.background} scrollable testID="routine-runner">
@@ -358,7 +431,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
                 numberOfLines={2}
                 textStyle={{ color: RUNNER.text, fontSize: 30, fontWeight: '800', lineHeight: 34 }}
               >
-                {currentStep.name || 'Current step'}
+                {currentVisual.name || 'Current step'}
               </Text>
             </Column>
           </View>
@@ -428,7 +501,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
                   </Text>
                   <AppIcon name="chevron-down" color={RUNNER.muted} size={16} />
                 </Pressable>
-                <AppIcon name={currentStep.iconName || 'timer'} color={RUNNER.accent} size={70} />
+                <AppIcon name={currentIcon} color={RUNNER.accent} size={70} />
                 <Text
                   textStyle={{
                     color: timing.isOvertime ? RUNNER.danger : RUNNER.text,
@@ -491,54 +564,52 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           </RunnerError>
         ) : null}
 
-        {!isPaused ? (
-          <Row alignment="center" style={styles.controlRow}>
-            <RoundControl
-              disabled={busy}
-              icon="clock"
-              label="Add time"
-              onPress={() => setAddTimeOpen(true)}
-              palette={RUNNER}
-              size={52}
-              testID="open-add-time"
-            />
-            <RoundControl
-              disabled={busy}
-              icon="pause"
-              label="Pause routine"
-              onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.pause())}
-              palette={RUNNER}
-              size={58}
-              testID="routine-pause"
-            />
-            <RoundControl
-              disabled={busy}
-              emphasis
-              icon="check"
-              label="Complete current step"
-              onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.done())}
-              palette={RUNNER}
-              size={78}
-              testID="routine-done"
-            />
-            <RoundControl
-              disabled={busy}
-              icon="skip-forward"
-              label="Skip or move current step"
-              onPress={() => setSkipOpen(true)}
-              palette={RUNNER}
-              size={58}
-              testID="routine-skip"
-            />
-          </Row>
-        ) : null}
+        <Row alignment="center" style={styles.controlRow}>
+          <RoundControl
+            disabled={busy || isPaused}
+            icon="clock"
+            label="Add time"
+            onPress={() => setAddTimeOpen(true)}
+            palette={RUNNER}
+            size={52}
+            testID="open-add-time"
+          />
+          <RoundControl
+            disabled={busy || isPaused}
+            icon="pause"
+            label="Pause routine"
+            onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.pause())}
+            palette={RUNNER}
+            size={58}
+            testID="routine-pause"
+          />
+          <RoundControl
+            disabled={busy || isPaused}
+            emphasis
+            icon="check"
+            label="Complete current step"
+            onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.done())}
+            palette={RUNNER}
+            size={78}
+            testID="routine-done"
+          />
+          <RoundControl
+            disabled={busy || isPaused}
+            icon="skip-forward"
+            label="Skip or move current step"
+            onPress={() => setSkipOpen(true)}
+            palette={RUNNER}
+            size={58}
+            testID="routine-skip"
+          />
+        </Row>
 
         {nextStep ? (
           <Row alignment="center" spacing={10} style={styles.nextRow}>
             <Text textStyle={{ color: RUNNER.muted, fontSize: 11, fontWeight: '700' }}>Next</Text>
-            <AppIcon name={nextStep.iconName || 'timer'} color={RUNNER.muted} size={17} />
+            <AppIcon name={nextIcon} color={nextIconColor} size={17} />
             <Text numberOfLines={1} textStyle={{ color: RUNNER.muted, fontSize: 15 }}>
-              {nextStep.name || 'Untitled step'}
+              {nextVisual?.name || 'Untitled step'}
             </Text>
           </Row>
         ) : null}
@@ -547,6 +618,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
       <RoutineStepsModal
         active={active}
         busy={busy}
+        catalog={catalog}
         onClose={() => setRoutineMenuOpen(false)}
         palette={RUNNER}
         onJump={(stepId) =>
@@ -565,10 +637,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
         busy={busy}
         palette={RUNNER}
         onAdd={(addedTimeMs) =>
-          void runAction(
-            (nextRuntime) => nextRuntime.routineService.addTime(addedTimeMs),
-            () => setAddTimeOpen(false)
-          )
+          void runAction((nextRuntime) => nextRuntime.routineService.addTime(addedTimeMs))
         }
         onClose={() => setAddTimeOpen(false)}
         onReset={() =>
@@ -606,9 +675,22 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           void runAction(
             async (nextRuntime) => {
               await nextRuntime.routineService.cancelAndFinalize();
-              router.replace('/(tabs)');
             },
-            () => setStopOpen(false)
+            () => {
+              setStopOpen(false);
+              router.replace('/(tabs)');
+            }
+          )
+        }
+        onDiscard={() =>
+          void runAction(
+            async (nextRuntime) => {
+              await nextRuntime.routineService.cancelAndDiscard();
+            },
+            () => {
+              setStopOpen(false);
+              router.replace('/(tabs)');
+            }
           )
         }
         visible={stopOpen}
@@ -763,7 +845,7 @@ function ModalAction({
   testID,
 }: {
   disabled?: boolean;
-  icon: 'arrow-left' | 'check' | 'chevron-down' | 'skip-forward';
+  icon: 'arrow-left' | 'check' | 'chevron-down' | 'skip-forward' | 'trash-2';
   label: string;
   onPress: () => void;
   palette: RunnerPalette;
@@ -916,6 +998,7 @@ function SkipModal({
 function RoutineStepsModal({
   active,
   busy,
+  catalog,
   onClose,
   onJump,
   onMove,
@@ -924,6 +1007,7 @@ function RoutineStepsModal({
 }: {
   active: ActiveRoutine;
   busy: boolean;
+  catalog: CatalogCollection | null;
   onClose: () => void;
   onJump: (stepId: string) => void;
   onMove: (stepId: string, direction: 'up' | 'down') => void;
@@ -935,6 +1019,7 @@ function RoutineStepsModal({
     <RunnerModal onClose={onClose} palette={palette} title="Steps" visible={visible}>
       <Column spacing={10} style={{ width: '100%' }}>
         {steps.map((step, index) => {
+          const visual = routineStepVisual(step, active.routineSnapshot.trackingMode, catalog);
           const session = active.stepSessions.find((candidate) => candidate.stepId === step.id);
           const status = session?.status ?? 'pending';
           const icon =
@@ -960,18 +1045,26 @@ function RoutineStepsModal({
               }}
             >
               <Pressable
-                accessibilityLabel={`Open ${step.name || 'step'}`}
+                accessibilityLabel={`Open ${visual.name || 'step'}`}
                 accessibilityRole="button"
                 disabled={busy}
                 onPress={() => onJump(step.id)}
                 style={({ pressed }) => [styles.stepTouchable, { opacity: pressed ? 0.7 : 1 }]}
                 testID={`routine-jump-step-${step.id}`}
               >
-                <AppIcon color={statusColor(status, palette)} name={icon} size={21} />
+                <AppIcon
+                  color={
+                    status === 'active'
+                      ? (validHexColor(visual.color) ?? palette.accent)
+                      : statusColor(status, palette)
+                  }
+                  name={status === 'active' ? visual.iconName || 'activity' : icon}
+                  size={21}
+                />
                 <View style={styles.stepText}>
                   <Column spacing={2}>
                     <Text textStyle={{ color: palette.text, fontSize: 15, fontWeight: '700' }}>
-                      {`${index + 1}. ${step.name || 'Untitled step'}`}
+                      {`${index + 1}. ${visual.name || 'Untitled step'}`}
                     </Text>
                     <Text textStyle={{ color: palette.muted, fontSize: 13 }}>
                       {`${stepStatusLabel(status)} · ${compactDuration(
@@ -982,7 +1075,7 @@ function RoutineStepsModal({
                 </View>
               </Pressable>
               <Pressable
-                accessibilityLabel={`Move ${step.name || 'step'} up`}
+                accessibilityLabel={`Move ${visual.name || 'step'} up`}
                 accessibilityRole="button"
                 disabled={busy || index === 0}
                 onPress={() => onMove(step.id, 'up')}
@@ -995,7 +1088,7 @@ function RoutineStepsModal({
                 <AppIcon color={palette.text} name="chevron-up" size={18} />
               </Pressable>
               <Pressable
-                accessibilityLabel={`Move ${step.name || 'step'} down`}
+                accessibilityLabel={`Move ${visual.name || 'step'} down`}
                 accessibilityRole="button"
                 disabled={busy || index === steps.length - 1}
                 onPress={() => onMove(step.id, 'down')}
@@ -1018,12 +1111,14 @@ function RoutineStepsModal({
 function StopModal({
   busy,
   onClose,
+  onDiscard,
   onStop,
   palette,
   visible,
 }: {
   busy: boolean;
   onClose: () => void;
+  onDiscard: () => void;
   onStop: () => void;
   palette: RunnerPalette;
   visible: boolean;
@@ -1040,10 +1135,11 @@ function StopModal({
       />
       <ModalAction
         disabled={busy}
-        icon="arrow-left"
-        label="Keep running"
-        onPress={onClose}
+        icon="trash-2"
+        label="Stop and discard"
+        onPress={onDiscard}
         palette={palette}
+        testID="discard-stop-routine"
       />
     </RunnerModal>
   );

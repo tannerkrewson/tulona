@@ -614,3 +614,13 @@ export function cancelRoutine(
   next.pausedAt = null;
   return next;
 }
+
+/** Marks a cancelled run for discard recovery without creating history. */
+export function abandonRoutine(
+  activeRoutine: ActiveRoutine,
+  at: RoutineTimestampInput = Date.now()
+): ActiveRoutine {
+  const next = cancelRoutine(activeRoutine, at);
+  next.status = 'abandoned';
+  return next;
+}

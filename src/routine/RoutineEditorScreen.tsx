@@ -28,7 +28,11 @@ import {
 } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
-import type { CatalogService, CreateRoutineStepInput } from '../catalog/catalog-service';
+import {
+  inheritRoutineStepMetadata,
+  type CatalogService,
+  type CreateRoutineStepInput,
+} from '../catalog/catalog-service';
 import { loadRoutineRuntime } from './routine-runtime';
 
 const ROOT_VALUE = '__root__';
@@ -55,7 +59,7 @@ interface StepDraft {
 
 type EditableStep = Pick<
   RoutineStep,
-  'id' | 'activityId' | 'name' | 'durationMs' | 'iconName' | 'endBehavior' | 'notes'
+  'id' | 'activityId' | 'name' | 'durationMs' | 'color' | 'iconName' | 'endBehavior' | 'notes'
 >;
 
 export interface RoutineEditorScreenProps {
@@ -88,8 +92,9 @@ function draftFromStep(step: EditableStep): StepDraft {
 }
 
 function emptyDraft(activities: readonly Activity[], trackingMode: RoutineTrackingMode): StepDraft {
+  const firstActivity = activities.find((activity) => activity.archivedAt === null);
   return {
-    activityId: trackingMode === 'steps' ? (activities[0]?.id ?? '') : '',
+    activityId: trackingMode === 'steps' ? (firstActivity?.id ?? '') : '',
     title: '',
     iconName: '',
     hours: '0',
@@ -128,15 +133,18 @@ function inputFromDraft(
   if (trackingMode === 'steps' && !draft.activityId) {
     throw new Error('Choose an activity for this step');
   }
-  return {
+  const input: CreateRoutineStepInput = {
     ...(draft.id ? { id: draft.id } : {}),
     activityId: trackingMode === 'steps' ? (draft.activityId as UUID) : null,
-    name: draft.title.trim() || null,
     durationMs: durationFromDraft(draft),
     endBehavior: draft.endBehavior,
     notes: draft.notes.trim() || null,
-    iconName: draft.iconName.trim() || null,
   };
+  if (trackingMode === 'overall') {
+    input.name = draft.title.trim() || null;
+    input.iconName = draft.iconName.trim() || null;
+  }
+  return input;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -284,6 +292,7 @@ function StepForm({
   const availableActivities = activities.filter(
     (activity) => activity.archivedAt === null || activity.id === draft.activityId
   );
+  const selectedActivity = activities.find((activity) => activity.id === draft.activityId) ?? null;
   const update = (changes: Partial<StepDraft>) => onChange({ ...draft, ...changes });
   return (
     <Column
@@ -301,45 +310,73 @@ function StepForm({
       <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
         {draft.id ? 'Edit step' : 'Add step'}
       </Text>
-      <Field label="Step title">
-        <Input
-          label="Step title"
-          value={draft.title}
-          onChangeText={(title) => update({ title })}
-          placeholder="What will you do?"
-          testID="step-title"
-        />
-      </Field>
       {trackingMode === 'steps' ? (
-        <Field label="Activity tracked by this step">
-          <AccessiblePicker
-            label="Activity tracked by this step"
-            selectedValue={draft.activityId}
-            onValueChange={(activityId) => update({ activityId })}
-            testID="step-activity-picker"
-          >
-            <Picker.Item label="Choose an activity" value="" />
-            {availableActivities.map((activity) => (
-              <Picker.Item
-                key={activity.id}
-                label={activity.archivedAt ? `${activity.name} (archived)` : activity.name}
-                value={activity.id}
+        <>
+          <Field label="Activity tracked by this step">
+            <AccessiblePicker
+              label="Activity tracked by this step"
+              selectedValue={draft.activityId}
+              onValueChange={(activityId) => update({ activityId })}
+              testID="step-activity-picker"
+            >
+              <Picker.Item label="Choose an activity" value="" />
+              {availableActivities.map((activity) => (
+                <Picker.Item
+                  key={activity.id}
+                  label={activity.archivedAt ? `${activity.name} (archived)` : activity.name}
+                  value={activity.id}
+                />
+              ))}
+            </AccessiblePicker>
+          </Field>
+          {selectedActivity ? (
+            <Row
+              alignment="center"
+              spacing={10}
+              style={{
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: 10,
+                borderWidth: 1,
+                padding: 10,
+                width: '100%',
+              }}
+              testID="step-activity-preview"
+            >
+              <AppIcon
+                name={selectedActivity.iconName || 'activity'}
+                color={selectedActivity.color || colors.primary}
+                size={24}
               />
-            ))}
-          </AccessiblePicker>
-        </Field>
+              <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>
+                {selectedActivity.name}
+              </Text>
+            </Row>
+          ) : null}
+        </>
       ) : (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-          This routine tracks continuously. Each step is part of the same routine activity.
-        </Text>
+        <>
+          <Field label="Step title">
+            <Input
+              label="Step title"
+              value={draft.title}
+              onChangeText={(title) => update({ title })}
+              placeholder="What will you do?"
+              testID="step-title"
+            />
+          </Field>
+          <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+            This routine tracks continuously. Each step is part of the same routine activity.
+          </Text>
+          <Field label="Step icon">
+            <IconPicker
+              value={draft.iconName || null}
+              onChange={(iconName) => update({ iconName: iconName ?? '' })}
+              testID="step-icon-picker"
+            />
+          </Field>
+        </>
       )}
-      <Field label="Step icon">
-        <IconPicker
-          value={draft.iconName || null}
-          onChange={(iconName) => update({ iconName: iconName ?? '' })}
-          testID="step-icon-picker"
-        />
-      </Field>
       <Field label="Duration">
         <DurationPicker
           hours={Number(draft.hours) || 0}
@@ -435,7 +472,7 @@ function StepRow({
         <AppIcon
           accessibilityLabel={`Icon for step ${index + 1}`}
           name={step.iconName || 'timer'}
-          color={colors.primary}
+          color={step.color ?? colors.primary}
           size={25}
         />
         <Column spacing={3}>
@@ -765,24 +802,33 @@ function RoutineEditorForm({
     setEditingStepId(null);
   };
 
-  const steps = routine
-    ? [...routine.steps].sort((left, right) => left.sortOrder - right.sortOrder)
-    : newSteps.map((step, index) => ({
-        id: step.id ?? createId(),
-        activityId: trackingMode === 'steps' ? (step.activityId as UUID) : null,
-        name: step.title || null,
-        durationMs: (() => {
-          try {
-            return durationFromDraft(step);
-          } catch {
-            return 0;
-          }
-        })(),
-        sortOrder: index,
-        iconName: step.iconName || null,
-        endBehavior: step.endBehavior,
-        notes: step.notes || null,
-      }));
+  const steps: EditableStep[] = routine
+    ? [...routine.steps]
+        .sort((left, right) => left.sortOrder - right.sortOrder)
+        .map((step) =>
+          trackingMode === 'steps' ? inheritRoutineStepMetadata(catalog, step) : step
+        )
+    : newSteps.map((step) => {
+        const editableStep: EditableStep = {
+          id: step.id ?? createId(),
+          activityId: trackingMode === 'steps' ? (step.activityId as UUID) : null,
+          name: step.title || null,
+          durationMs: (() => {
+            try {
+              return durationFromDraft(step);
+            } catch {
+              return 0;
+            }
+          })(),
+          color: null,
+          iconName: step.iconName || null,
+          endBehavior: step.endBehavior,
+          notes: step.notes || null,
+        };
+        return trackingMode === 'steps'
+          ? inheritRoutineStepMetadata(catalog, editableStep)
+          : editableStep;
+      });
 
   return (
     <Screen

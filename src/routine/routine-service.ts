@@ -18,6 +18,7 @@ import type {
 import { PersistenceError, type RoutineRepositoryApi } from '@data';
 import {
   addRoutineTime as addRoutineTimeState,
+  abandonRoutine as abandonRoutineState,
   advanceRoutine as advanceRoutineState,
   cancelRoutine as cancelRoutineState,
   catchUpRoutine,
@@ -95,6 +96,7 @@ export interface RoutineServiceApi {
   finalizeCompletion(at?: RoutineTimestampInput): Promise<RoutineFinalizationResult>;
   finalizeCancellation(at?: RoutineTimestampInput): Promise<RoutineFinalizationResult>;
   cancelAndFinalize(at?: RoutineTimestampInput): Promise<RoutineFinalizationResult>;
+  cancelAndDiscard(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   selectNextActivity(activityId: UUID | null): Promise<TimeTransition>;
   markAlarmFired(stepId: UUID): Promise<ActiveRoutine>;
   recover(at?: RoutineTimestampInput): Promise<ActiveRoutine | null>;
@@ -297,6 +299,16 @@ export class RoutineService implements RoutineServiceApi {
     return this.finalizeCancellation(at);
   }
 
+  async cancelAndDiscard(at: RoutineTimestampInput = this.now()): Promise<ActiveRoutine> {
+    await this.ensureJournalRecovered();
+    const current = activeRequired(await this.routineRepository.readActive());
+    const active = current.status === 'abandoned' ? current : abandonRoutineState(current, at);
+    if (active !== current) await this.routineRepository.writeActive(active);
+    await this.stopRoutineAt(active, 'Routine discarded');
+    await this.routineRepository.clearActive();
+    return active;
+  }
+
   async selectNextActivity(activityId: UUID | null): Promise<TimeTransition> {
     await this.ensureJournalRecovered();
     const currentActive = await this.routineRepository.readActive();
@@ -385,6 +397,11 @@ export class RoutineService implements RoutineServiceApi {
           return null;
         }
         await this.persistAwaitingCompletion(result.activeRoutine);
+      }
+      if (result.activeRoutine.status === 'abandoned') {
+        await this.stopRoutineAt(result.activeRoutine, 'Routine discarded');
+        await this.routineRepository.clearActive();
+        return null;
       }
       if (result.activeRoutine.status === 'cancelled') {
         const run = routineRunHistory(result.activeRoutine, 'cancelled');

@@ -226,6 +226,29 @@ function validateStepNotes(notes: string | null | undefined): string | null {
   return notes.trim() || null;
 }
 
+type RoutineStepMetadataCarrier = Pick<RoutineStep, 'activityId' | 'name' | 'color' | 'iconName'>;
+
+/**
+ * Step-tracked routines keep a small display snapshot for history and offline
+ * rendering, but the selected activity is the source of truth for that
+ * metadata. Missing activities deliberately fall back to the stored fields so
+ * older valid records remain readable.
+ */
+export function inheritRoutineStepMetadata<T extends RoutineStepMetadataCarrier>(
+  catalog: CatalogCollection,
+  step: T
+): T {
+  if (step.activityId === null) return step;
+  const activity = catalog.activities.find((candidate) => candidate.id === step.activityId);
+  if (!activity) return step;
+  return {
+    ...step,
+    name: activity.name,
+    color: activity.color,
+    iconName: isIconValue(activity.iconName) ? activity.iconName : null,
+  };
+}
+
 function assertCatalogInvariants(catalog: CatalogCollection): void {
   const ids = new Set<string>();
   const folders = new Set<string>();
@@ -326,18 +349,35 @@ function nextFolderOrder(catalog: CatalogCollection): number {
   return Math.max(-1, ...catalog.folders.map((folder) => folder.sortOrder)) + 1;
 }
 
-function snapshotSteps(routine: RoutineDefinition): RoutineSnapshot['steps'] {
-  return sortByOrder(routine.steps).map((step, index) => ({
-    id: step.id,
-    activityId: routine.trackingMode === 'overall' ? null : step.activityId,
-    name: step.name,
-    durationMs: step.durationMs,
-    sortOrder: index,
-    color: step.color,
-    iconName: step.iconName,
-    endBehavior: validateEndBehavior(step.endBehavior),
-    notes: validateStepNotes(step.notes),
-  }));
+function snapshotSteps(
+  routine: RoutineDefinition,
+  catalog: CatalogCollection,
+  defaultColor: string
+): RoutineSnapshot['steps'] {
+  return sortByOrder(routine.steps).map((step, index) => {
+    const normalized =
+      routine.trackingMode === 'steps' ? inheritRoutineStepMetadata(catalog, step) : step;
+    const activity =
+      normalized.activityId === null
+        ? null
+        : catalog.activities.find((candidate) => candidate.id === normalized.activityId);
+    return {
+      id: normalized.id,
+      activityId: routine.trackingMode === 'overall' ? null : normalized.activityId,
+      name: normalized.name,
+      durationMs: normalized.durationMs,
+      sortOrder: index,
+      // Capture the rendered activity color for an active run while retaining
+      // raw standalone colors on catalog step records.
+      color:
+        routine.trackingMode === 'steps' && activity
+          ? resolveDisplayColor(activity, catalog.folders, defaultColor)
+          : normalized.color,
+      iconName: normalized.iconName,
+      endBehavior: validateEndBehavior(normalized.endBehavior),
+      notes: validateStepNotes(normalized.notes),
+    };
+  });
 }
 
 export function resolveDisplayColor(
@@ -618,15 +658,20 @@ export class CatalogService implements CatalogServiceApi {
       id: duplicateId,
       name: options.name === undefined ? `${source.name} copy` : validateName(options.name),
       sortOrder: nextSiblingOrder(catalog, source.folderId),
-      steps: source.steps.map((step) => ({
-        ...step,
-        id: createId(),
-        activityId: source.trackingMode === 'overall' ? null : step.activityId,
-        endBehavior: validateEndBehavior(step.endBehavior),
-        notes: validateStepNotes(step.notes),
-        createdAt: now,
-        updatedAt: now,
-      })),
+      steps: source.steps.map((step) => {
+        const duplicateStep: RoutineStep = {
+          ...step,
+          id: createId(),
+          activityId: source.trackingMode === 'overall' ? null : step.activityId,
+          endBehavior: validateEndBehavior(step.endBehavior),
+          notes: validateStepNotes(step.notes),
+          createdAt: now,
+          updatedAt: now,
+        };
+        return source.trackingMode === 'steps'
+          ? inheritRoutineStepMetadata(catalog, duplicateStep)
+          : duplicateStep;
+      }),
       createdAt: now,
       updatedAt: now,
       archivedAt: null,
@@ -637,13 +682,17 @@ export class CatalogService implements CatalogServiceApi {
   }
 
   async snapshotRoutine(id: UUID, capturedAt?: IsoTimestamp): Promise<RoutineSnapshot> {
-    const routine = await this.getRoutine(id);
+    const catalog = await this.read();
+    const routine = catalog.routines.find((candidate) => candidate.id === id);
+    if (!routine) throw new PersistenceError('validation', `Unknown routine "${id}"`);
     const timestamp = capturedAt === undefined ? this.timestamp() : toTimestamp(capturedAt);
     return {
       id: routine.id,
       name: routine.name,
       trackingMode: routine.trackingMode,
-      steps: snapshotSteps(routine),
+      color: resolveDisplayColor(routine, catalog.folders, this.defaultColor),
+      iconName: routine.iconName,
+      steps: snapshotSteps(routine, catalog, this.defaultColor),
       capturedAt: timestamp,
     };
   }
@@ -668,20 +717,27 @@ export class CatalogService implements CatalogServiceApi {
     const step: RoutineStep = {
       id: stepId,
       activityId,
-      name: input.name === undefined ? null : validateStepNotes(input.name),
+      name:
+        routine.trackingMode === 'steps'
+          ? null
+          : input.name === undefined
+            ? null
+            : validateStepNotes(input.name),
       durationMs: validateDuration(input.durationMs),
       sortOrder: routine.steps.length,
-      color: validateColor(input.color),
-      iconName: validateIcon(input.iconName),
+      color: routine.trackingMode === 'steps' ? null : validateColor(input.color),
+      iconName: routine.trackingMode === 'steps' ? null : validateIcon(input.iconName),
       endBehavior: validateEndBehavior(input.endBehavior),
       notes: validateStepNotes(input.notes),
       createdAt: now,
       updatedAt: now,
       archivedAt: null,
     };
+    const normalizedStep =
+      routine.trackingMode === 'steps' ? inheritRoutineStepMetadata(catalog, step) : step;
     const nextRoutine: RoutineDefinition = {
       ...routine,
-      steps: normalizeRoutineStepOrder([...routine.steps, step]),
+      steps: normalizeRoutineStepOrder([...routine.steps, normalizedStep]),
       updatedAt: now,
     };
     await this.write({
@@ -722,11 +778,26 @@ export class CatalogService implements CatalogServiceApi {
     const nextStep: RoutineStep = {
       ...current,
       activityId,
-      name: input.name === undefined ? current.name : validateStepNotes(input.name),
+      name:
+        routine.trackingMode === 'steps'
+          ? current.name
+          : input.name === undefined
+            ? current.name
+            : validateStepNotes(input.name),
       durationMs:
         input.durationMs === undefined ? current.durationMs : validateDuration(input.durationMs),
-      color: input.color === undefined ? current.color : validateColor(input.color),
-      iconName: input.iconName === undefined ? current.iconName : validateIcon(input.iconName),
+      color:
+        routine.trackingMode === 'steps'
+          ? current.color
+          : input.color === undefined
+            ? current.color
+            : validateColor(input.color),
+      iconName:
+        routine.trackingMode === 'steps'
+          ? current.iconName
+          : input.iconName === undefined
+            ? current.iconName
+            : validateIcon(input.iconName),
       endBehavior:
         input.endBehavior === undefined
           ? validateEndBehavior(current.endBehavior)
@@ -737,12 +808,14 @@ export class CatalogService implements CatalogServiceApi {
           : validateStepNotes(input.notes),
       updatedAt: this.timestamp(),
     };
+    const normalizedStep =
+      routine.trackingMode === 'steps' ? inheritRoutineStepMetadata(catalog, nextStep) : nextStep;
     const nextRoutine = {
       ...routine,
       steps: normalizeRoutineStepOrder(
-        routine.steps.map((step) => (step.id === stepId ? nextStep : step))
+        routine.steps.map((step) => (step.id === stepId ? normalizedStep : step))
       ),
-      updatedAt: nextStep.updatedAt,
+      updatedAt: normalizedStep.updatedAt,
     };
     await this.write({
       ...catalog,
@@ -750,7 +823,7 @@ export class CatalogService implements CatalogServiceApi {
         candidate.id === routineId ? nextRoutine : candidate
       ),
     });
-    return nextStep;
+    return normalizedStep;
   }
 
   async duplicateRoutineStep(
@@ -774,7 +847,12 @@ export class CatalogService implements CatalogServiceApi {
     const duplicate: RoutineStep = {
       ...source,
       id: duplicateId,
-      name: options.name === undefined ? source.name : validateStepNotes(options.name),
+      name:
+        routine.trackingMode === 'steps'
+          ? source.name
+          : options.name === undefined
+            ? source.name
+            : validateStepNotes(options.name),
       sortOrder: sourceIndex + 1,
       endBehavior: validateEndBehavior(source.endBehavior),
       notes: validateStepNotes(source.notes),
@@ -782,8 +860,10 @@ export class CatalogService implements CatalogServiceApi {
       updatedAt: now,
       archivedAt: null,
     };
+    const normalizedDuplicate =
+      routine.trackingMode === 'steps' ? inheritRoutineStepMetadata(catalog, duplicate) : duplicate;
     const steps = [...ordered];
-    steps.splice(sourceIndex + 1, 0, duplicate);
+    steps.splice(sourceIndex + 1, 0, normalizedDuplicate);
     const nextRoutine = { ...routine, steps: normalizeRoutineStepOrder(steps), updatedAt: now };
     await this.write({
       ...catalog,
@@ -926,16 +1006,20 @@ export class CatalogService implements CatalogServiceApi {
         endBehavior: validateEndBehavior(candidate.endBehavior),
         notes: validateStepNotes(candidate.notes),
       };
-      const result = routineStepSchema.safeParse(normalizedStep);
+      const inheritedStep =
+        trackingMode === 'steps'
+          ? inheritRoutineStepMetadata(catalog, normalizedStep)
+          : normalizedStep;
+      const result = routineStepSchema.safeParse(inheritedStep);
       if (!result.success) validation(`Routine step failed validation: ${result.error.message}`);
-      if (seen.has(candidate.id)) validation(`Duplicate routine step ID "${candidate.id}"`);
-      seen.add(candidate.id);
-      if (trackingMode === 'steps' && candidate.activityId === null) {
-        validation(`Step-tracked routine requires an activity for step "${candidate.id}"`);
+      if (seen.has(inheritedStep.id)) validation(`Duplicate routine step ID "${inheritedStep.id}"`);
+      seen.add(inheritedStep.id);
+      if (trackingMode === 'steps' && inheritedStep.activityId === null) {
+        validation(`Step-tracked routine requires an activity for step "${inheritedStep.id}"`);
       }
-      if (candidate.activityId !== null && !activities.has(candidate.activityId))
-        validation(`Routine step "${candidate.id}" references an unknown activity`);
-      validateDuration(candidate.durationMs);
+      if (inheritedStep.activityId !== null && !activities.has(inheritedStep.activityId))
+        validation(`Routine step "${inheritedStep.id}" references an unknown activity`);
+      validateDuration(inheritedStep.durationMs);
       return result.data as RoutineStep;
     });
     return sortByOrder(parsed).map((step, index) => ({ ...step, sortOrder: index }));
