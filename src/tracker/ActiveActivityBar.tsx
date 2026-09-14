@@ -178,6 +178,10 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
       if (activeRoutine?.status === 'paused' && routineOwnsActivity(activeRoutine, activityId)) {
         await runtime.routineService.resume();
         await store.getState().switchActivity(activityId, { source: 'routine' });
+        router.push(`/routine/${activeRoutine.routineId}` as Href);
+      } else if (resolved?.item.kind === 'routine' && activeRoutine === null) {
+        await runtime.routineService.startRoutine(resolved.item.id);
+        router.push(`/routine/${resolved.item.id}` as Href);
       } else {
         await store.getState().switchActivity(activityId);
       }
