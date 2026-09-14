@@ -44,8 +44,15 @@ assert(
 assert(
   activeBar.includes("activeRoutine?.status === 'paused'") &&
     activeBar.includes('runtime.routineService.resume()') &&
-    activeBar.includes("store.getState().switchActivity(activityId, { source: 'routine' })"),
+    activeBar.includes("store.getState().switchActivity(activityId, { source: 'routine' })") &&
+    activeBar.includes("router.push(`/routine/${activeRoutine.routineId}` as Href)"),
   'idle play must preserve paused routine resume semantics'
+);
+assert(
+  activeBar.includes("resolved?.item.kind === 'routine' && activeRoutine === null") &&
+    activeBar.includes('runtime.routineService.startRoutine(resolved.item.id)') &&
+    activeBar.includes("router.push(`/routine/${resolved.item.id}` as Href)"),
+  'idle play must start an inactive routine from its full runner view'
 );
 assert(
   activeBar.includes("activeRoutine?.status === 'running'") &&
