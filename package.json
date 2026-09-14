@@ -23,6 +23,7 @@
     "test:tracker": "tsx tests/tracker-engine.ts",
     "test:tracker-ui": "tsx tests/tracker-ui-regressions.ts",
     "test:routine": "tsx tests/routine-service.ts",
+    "test:routine-ui": "tsx tests/routine-ui-regressions.ts",
     "test:integration": "tsx tests/integration-coordinator.ts",
     "test:icons": "tsx tests/icon-values.ts",
     "web:export": "expo export --platform web --output-dir dist --clear && node scripts/prepare-static-site.cjs",
