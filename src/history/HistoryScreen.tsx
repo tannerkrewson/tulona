@@ -31,6 +31,9 @@ import { AppButton, AppScreen, EmptyState, errorText, getRowSurfaceStyle, IconBu
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import DayTimeline from './DayTimeline';
 import { HistoryDateJumpSheet } from './HistoryDateJumpSheet';
+import MonthView from './MonthView';
+import WeekView from './WeekView';
+import YearView from './YearView';
 
 export type HistoryRange = HistoryPeriodKind;
 export type HistoryContentState = 'loading' | 'empty' | 'error';
@@ -438,6 +441,22 @@ export default function HistoryScreen({
     setDateJumpVisible(true);
   }, [onPeriodLabelPress]);
 
+  const selectHistoryPeriod = useCallback(
+    (nextPeriod: HistoryPeriod) => {
+      if (nextPeriod.startMs > clockMs) return;
+      setRange(nextPeriod.kind);
+      setSelectedAnchor(nextPeriod.startLogicalDay);
+    },
+    [clockMs]
+  );
+
+  const selectWeekDay = useCallback(
+    (logicalDay: LogicalDayKey) => {
+      selectHistoryPeriod(historyPeriodForDate('day', logicalDay, periodOptions));
+    },
+    [periodOptions, selectHistoryPeriod]
+  );
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -502,8 +521,12 @@ export default function HistoryScreen({
             />
           ) : range === 'day' ? (
             <HistoryDayContent period={period} runtime={runtime} />
+          ) : range === 'week' ? (
+            <WeekView onDayPress={selectWeekDay} period={period} runtime={runtime} />
+          ) : range === 'month' ? (
+            <MonthView onDayPress={selectHistoryPeriod} period={period} runtime={runtime} />
           ) : (
-            <HistoryStatePanel contentState="empty" range={range} />
+            <YearView onMonthPress={selectHistoryPeriod} period={period} runtime={runtime} />
           )}
         </View>
       </Column>
