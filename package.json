@@ -14,6 +14,7 @@
     "test:domain": "tsx tests/domain-calculations.ts",
     "test:history-domain": "tsx tests/history-domain.ts",
     "test:history-session": "tsx tests/history-session-editing.ts",
+    "test:catalog-editor": "tsx tests/catalog-editor-regressions.ts",
     "test:habits": "tsx tests/habits.ts",
     "test:habit-ui": "tsx tests/habit-ui-regressions.ts",
     "test:theme": "tsx tests/theme-colors.ts",
