@@ -56,11 +56,7 @@ assert(
   rowSurface.borderRadius === ROW_SURFACE_RADIUS &&
     rowSurface.borderWidth === ROW_SURFACE_BORDER_WIDTH &&
     rowSurface.borderWidth === 0 &&
-    rowSurface.shadowColor === ROW_SURFACE_SHADOW.shadowColor &&
-    rowSurface.shadowOpacity === ROW_SURFACE_SHADOW.shadowOpacity &&
-    rowSurface.shadowRadius === ROW_SURFACE_SHADOW.shadowRadius &&
-    rowSurface.shadowOffset?.height === ROW_SURFACE_SHADOW.shadowOffset?.height &&
-    rowSurface.shadowOffset?.width === ROW_SURFACE_SHADOW.shadowOffset?.width &&
+    rowSurface.boxShadow === ROW_SURFACE_SHADOW.boxShadow &&
     rowSurface.elevation === ROW_SURFACE_SHADOW.elevation &&
     ROW_SURFACE_DIVIDER_WIDTH === 1,
   'shared row surfaces must keep one consistent borderless radius, shadow, and divider token'

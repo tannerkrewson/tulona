@@ -714,8 +714,7 @@ function ProgressRing({
   return (
     <Svg
       height={size}
-      pointerEvents="none"
-      style={StyleSheet.absoluteFill}
+      style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}
       viewBox={`0 0 ${size} ${size}`}
       width={size}
     >

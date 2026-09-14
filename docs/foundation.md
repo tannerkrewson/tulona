@@ -4,7 +4,7 @@ The foundation shell leaves feature agents a small set of stable interfaces.
 
 ## Routes
 
-`app/(tabs)` provides the four required tabs: Tracker, Habits, Insights, and
+`app/(tabs)` provides the four required tabs: Tracker, Habits, History, and
 Settings. The root stack reserves routes for folders, history, activities,
 routines, habits, folder editing, and backup. Routine routes live outside the
 tab group, so the normal tab bar is not part of the routine runner surface.

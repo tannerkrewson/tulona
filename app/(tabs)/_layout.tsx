@@ -35,7 +35,7 @@ export default function TabLayout() {
           height: (isWeb ? `calc(64px + ${safeAreaBottom})` : 64) as unknown as number,
           paddingBottom: (isWeb ? `calc(6px + ${safeAreaBottom})` : 6) as unknown as number,
           paddingTop: 6,
-          shadowOpacity: 0,
+          boxShadow: 'none',
         },
         tabBarBackground: () => (
           <View

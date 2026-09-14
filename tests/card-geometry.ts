@@ -48,11 +48,7 @@ assert(
     compactRow.borderRadius === ROW_SURFACE_RADIUS &&
     compactRow.borderWidth === ROW_SURFACE_BORDER_WIDTH &&
     ROW_SURFACE_BORDER_WIDTH === 0 &&
-    compactRow.shadowColor === ROW_SURFACE_SHADOW.shadowColor &&
-    compactRow.shadowOpacity === ROW_SURFACE_SHADOW.shadowOpacity &&
-    compactRow.shadowRadius === ROW_SURFACE_SHADOW.shadowRadius &&
-    compactRow.shadowOffset?.height === ROW_SURFACE_SHADOW.shadowOffset?.height &&
-    compactRow.shadowOffset?.width === ROW_SURFACE_SHADOW.shadowOffset?.width &&
+    compactRow.boxShadow === ROW_SURFACE_SHADOW.boxShadow &&
     compactRow.elevation === ROW_SURFACE_SHADOW.elevation,
   'compact rows must share one height, inset, radius, borderless treatment, and shadow'
 );
