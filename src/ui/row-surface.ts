@@ -9,11 +9,8 @@ export const ROW_SURFACE_BORDER_WIDTH = 0;
 export const ROW_SURFACE_DIVIDER_WIDTH = 1;
 export const ROW_SURFACE_LIST_GAP = 8;
 export const ROW_SURFACE_SHADOW: ViewStyle = {
+  boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.14)',
   elevation: 3,
-  shadowColor: '#000000',
-  shadowOffset: { height: 2, width: 0 },
-  shadowOpacity: 0.14,
-  shadowRadius: 4,
 };
 
 /** Shared borderless, elevated surface for compact rows and collection cards. */

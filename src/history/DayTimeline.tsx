@@ -233,9 +233,9 @@ function DayRail({
       testID="history-day-rail"
     >
       <View
-        pointerEvents="none"
         style={[
           styles.hourRail,
+          { pointerEvents: 'none' },
           {
             backgroundColor: colors.border,
             height: layout.railHeight,
@@ -244,13 +244,16 @@ function DayRail({
         ]}
       />
       {layout.hourTicks.map((tick) => (
-        <View key={tick.atMs} pointerEvents="none" style={[styles.hourTick, { top: tick.y }]}>
+        <View key={tick.atMs} style={[styles.hourTick, { pointerEvents: 'none', top: tick.y }]}>
           <Text textStyle={{ color: colors.textMuted, fontSize: 11, textAlign: 'right' }}>
             {tick.label}
           </Text>
         </View>
       ))}
-      <View pointerEvents="none" style={StyleSheet.absoluteFill} testID="history-connectors">
+      <View
+        style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}
+        testID="history-connectors"
+      >
         <Svg height={layout.contentHeight} width="100%">
           {layout.rows.map((row, index) => {
             const key = sessionKey(row);
@@ -285,13 +288,13 @@ function DayRail({
         return (
           <View
             key={`marker-${key}`}
-            pointerEvents="none"
             style={[
               styles.railMarker,
               {
                 backgroundColor: item.color,
                 height: Math.max(DAY_TIMELINE_MIN_MARKER_HEIGHT, row.markerHeight),
                 left: RAIL_LEFT,
+                pointerEvents: 'none',
                 top: row.markerTop,
                 width: RAIL_WIDTH,
               },
@@ -311,10 +314,14 @@ function DayRail({
         return sameColorAdjacent ? (
           <View
             key={`separator-${key}`}
-            pointerEvents="none"
             style={[
               styles.sameColorSeparator,
-              { backgroundColor: colors.background, left: RAIL_LEFT, top: row.trueStartY - 0.5 },
+              {
+                backgroundColor: colors.background,
+                left: RAIL_LEFT,
+                pointerEvents: 'none',
+                top: row.trueStartY - 0.5,
+              },
             ]}
           />
         ) : null;

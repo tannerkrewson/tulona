@@ -38,11 +38,11 @@ Evidence root: `/tmp/opencode/tulona-qa-05`
 - PASS, cancel navigation after durable finalization. `Cancel routine` showed confirmation; `Yes, cancel routine` returned to `/tulona/` with `No active activity`. Evidence: `screenshots/routine-cancel-confirmation.png`, `screenshots/routine-cancelled-return.png`.
 - PASS, runner recovery error. Direct `/tulona/routine/not-a-routine` showed `Routine unavailable`, `There is no active routine to resume`, `Retry`, `Back to tracker`, and `Export raw local data`. Evidence: `screenshots/error-missing-routine.png`.
 
-## Habits And Insights
+## Habits And History
 
 - PASS, manual habit. Fresh session `qa05-habits2` opened `/tulona/habits`, marked `Morning Routine` complete, and showed `Completed manually`, a one-day streak, and `Signals: manual`. Evidence: `screenshots/habits-starter-list.png`, `screenshots/habits-manual-complete.png`.
 - PASS, automatic/time-linked habit. `/tulona/habit/new` configured `Tracked activity time`, source `Morning Routine`, and a one-second threshold. After tracked time and switching to `Work`, `/tulona/habits` showed `Automatic tracked minutes`, `Completed automatically`, a one-day streak, and `Signals: automatic`. Evidence: `screenshots/habit-automatic-tracked-form.png`, `screenshots/habit-automatic-created.png`, `screenshots/habits-automatic-trigger-running.png`, `screenshots/habits-automatic-trigger-completed.png`.
-- PASS, insights today/day/week. Fresh session `qa05-insights2` opened `/tulona/insights`, verified day view for `Sunday, August 30`, switched to week view, returned to day view, and used `Today`. Empty-state totals and timeline text were visible. Evidence: `snapshots/insights.txt`, `snapshots/insights-week.txt`, `screenshots/insights-empty-or-starter.png`, `screenshots/insights-week-view.png`, `screenshots/insights-today-day-view.png`.
+- PASS, history today/day/week. Fresh session `qa05-insights2` opened `/tulona/history`, verified day view for `Sunday, August 30`, switched to week view, returned to day view, and used `Today`. Empty-state totals and timeline text were visible. Evidence: `snapshots/insights.txt`, `snapshots/insights-week.txt`, `screenshots/insights-empty-or-starter.png`, `screenshots/insights-week-view.png`, `screenshots/insights-today-day-view.png`.
 
 ## Backup, Project Site, And PWA
 

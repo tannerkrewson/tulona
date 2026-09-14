@@ -103,11 +103,9 @@ export function HabitHeader({
       {editOpen && editActions.length > 0 ? (
         <View
           style={{
+            boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
             position: 'absolute',
             right: 0,
-            shadowColor: '#000',
-            shadowOpacity: 0.15,
-            shadowRadius: 12,
             top: 54,
             width: 210,
           }}

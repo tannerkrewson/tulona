@@ -1018,6 +1018,7 @@ function HabitActionMenu({
         <View
           style={{
             backgroundColor: colors.surface,
+            boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.18)',
             borderColor: colors.border,
             borderRadius: 12,
             borderWidth: 1,
@@ -1025,10 +1026,6 @@ function HabitActionMenu({
             left,
             padding: 5,
             position: 'absolute',
-            shadowColor: '#000000',
-            shadowOffset: { height: 4, width: 0 },
-            shadowOpacity: 0.18,
-            shadowRadius: 10,
             top,
             width: HABIT_MENU_WIDTH,
             zIndex: 10,
