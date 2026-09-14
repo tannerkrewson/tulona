@@ -1,5 +1,5 @@
 import { Column, Text } from '@expo/ui';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { View } from 'react-native';
 
 import type { TimeTransition } from '@domain';
@@ -46,16 +46,6 @@ export function HistoricalSessionEditor({
   );
   const [startError, setStartError] = useState<string | null>(null);
   const [endError, setEndError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setStartValue(localDateTimeValue(transition.timestamp));
-    setStartError(null);
-  }, [transition.timestamp]);
-
-  useEffect(() => {
-    setEndValue(following ? localDateTimeValue(following.timestamp) : '');
-    setEndError(null);
-  }, [following?.timestamp]);
 
   const saveStart = async () => {
     const nextStart = parseLocalDateTime(startValue);

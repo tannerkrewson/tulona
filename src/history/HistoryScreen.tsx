@@ -1,7 +1,15 @@
 import { Column, Text } from '@expo/ui';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+} from 'react-native';
+import type { ViewStyle } from 'react-native';
 
 import {
   currentHistoryPeriod,
@@ -22,6 +30,7 @@ import { AppButton, AppScreen, EmptyState, errorText, getRowSurfaceStyle, IconBu
 
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import DayTimeline from './DayTimeline';
+import { HistoryDateJumpSheet } from './HistoryDateJumpSheet';
 
 export type HistoryRange = HistoryPeriodKind;
 export type HistoryContentState = 'loading' | 'empty' | 'error';
@@ -41,6 +50,16 @@ const RANGE_OPTIONS: readonly { label: string; value: HistoryRange }[] = [
   { label: 'Month', value: 'month' },
   { label: 'Year', value: 'year' },
 ];
+
+function historyGestureStyle(): ViewStyle | undefined {
+  if (Platform.OS !== 'web') return undefined;
+  return {
+    touchAction: 'pan-y',
+    userSelect: 'none',
+    WebkitUserSelect: 'none',
+    WebkitTouchCallout: 'none',
+  } as unknown as ViewStyle;
+}
 
 function dayLabel(anchor: LogicalDayKey, today: LogicalDayKey): string {
   if (anchor === today) return 'Today';
@@ -361,6 +380,7 @@ export default function HistoryScreen({
   const [clockMs, setClockMs] = useState(() => Date.now());
   const [range, setRange] = useState<HistoryRange>('day');
   const [selectedAnchor, setSelectedAnchor] = useState<LogicalDayKey | null>(null);
+  const [dateJumpVisible, setDateJumpVisible] = useState(false);
 
   const load = useCallback(() => {
     setLoadError(null);
@@ -388,23 +408,50 @@ export default function HistoryScreen({
     return () => clearInterval(timer);
   }, []);
 
-  const periodOptions = runtime
-    ? {
-        rolloverHour: runtime.settings.logicalDayRolloverHour,
-        weekStartsOn: runtime.settings.weekStartsOn,
-      }
-    : {};
+  const periodOptions = useMemo(
+    () =>
+      runtime
+        ? {
+            rolloverHour: runtime.settings.logicalDayRolloverHour,
+            weekStartsOn: runtime.settings.weekStartsOn,
+          }
+        : {},
+    [runtime]
+  );
   const today = runtime
     ? currentHistoryPeriod('day', clockMs, periodOptions).startLogicalDay
     : fallbackToday;
   const anchor = selectedAnchor ?? today;
   const period = historyPeriodForDate(range, anchor, periodOptions);
 
-  const changePeriod = (amount: -1 | 1) => {
-    const next = shiftDomainHistoryPeriod(period, amount, periodOptions);
-    if (amount === 1 && nextHistoryPeriod(period, periodOptions, clockMs) === null) return;
-    setSelectedAnchor(next.startLogicalDay);
-  };
+  const changePeriod = useCallback(
+    (amount: -1 | 1) => {
+      const next = shiftDomainHistoryPeriod(period, amount, periodOptions);
+      if (amount === 1 && nextHistoryPeriod(period, periodOptions, clockMs) === null) return;
+      setSelectedAnchor(next.startLogicalDay);
+    },
+    [clockMs, period, periodOptions]
+  );
+
+  const openDateJump = useCallback(() => {
+    onPeriodLabelPress?.();
+    setDateJumpVisible(true);
+  }, [onPeriodLabelPress]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          Math.abs(gesture.dx) > 12 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+        onMoveShouldSetPanResponderCapture: (_, gesture) =>
+          Math.abs(gesture.dx) > 12 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+        onPanResponderRelease: (_, gesture) => {
+          if (Math.abs(gesture.dx) < 56) return;
+          changePeriod(gesture.dx < 0 ? 1 : -1);
+        },
+      }),
+    [changePeriod]
+  );
 
   if (!runtime) {
     return (
@@ -435,25 +482,44 @@ export default function HistoryScreen({
           <HistoryPeriodNavigation
             nowMs={clockMs}
             onChange={changePeriod}
-            onPeriodLabelPress={onPeriodLabelPress}
+            onPeriodLabelPress={openDateJump}
             onToday={() => setSelectedAnchor(null)}
             options={periodOptions}
             period={period}
           />
         </Column>
-        {contentState ? (
-          <HistoryStatePanel
-            contentState={contentState}
-            errorMessage={errorMessage}
-            onRetry={onRetry}
-            range={range}
-          />
-        ) : range === 'day' ? (
-          <HistoryDayContent period={period} runtime={runtime} />
-        ) : (
-          <HistoryStatePanel contentState="empty" range={range} />
-        )}
+        <View
+          {...panResponder.panHandlers}
+          style={[styles.historyContent, historyGestureStyle()]}
+          testID="history-period-content"
+        >
+          {contentState ? (
+            <HistoryStatePanel
+              contentState={contentState}
+              errorMessage={errorMessage}
+              onRetry={onRetry}
+              range={range}
+            />
+          ) : range === 'day' ? (
+            <HistoryDayContent period={period} runtime={runtime} />
+          ) : (
+            <HistoryStatePanel contentState="empty" range={range} />
+          )}
+        </View>
       </Column>
+      <HistoryDateJumpSheet
+        key={`${period.kind}-${period.key}-${dateJumpVisible ? 'open' : 'closed'}`}
+        nowMs={clockMs}
+        onClose={() => setDateJumpVisible(false)}
+        onSelect={(nextPeriod) => {
+          setRange(nextPeriod.kind);
+          setSelectedAnchor(nextPeriod.startLogicalDay);
+          setDateJumpVisible(false);
+        }}
+        options={periodOptions}
+        period={period}
+        visible={dateJumpVisible}
+      />
     </AppScreen>
   );
 }
@@ -478,6 +544,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
+    width: '100%',
+  },
+  historyContent: {
     width: '100%',
   },
   periodLabel: {
