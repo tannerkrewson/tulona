@@ -273,6 +273,8 @@ const HABIT_MENU_HEIGHT = 190;
 // Habit cards intentionally exceed the compact row height: the optional
 // outcome subtitle and the current-streak summary need a second text line.
 const HABIT_ROW_MIN_HEIGHT = 72;
+const HABIT_ROW_TEXT_BLOCK_HEIGHT = 38;
+const HABIT_ROW_STREAK_WIDTH = 96;
 
 function webGestureStyle(touchAction: 'pan-y' | 'none'): ViewStyle | undefined {
   if (Platform.OS !== 'web') return undefined;
@@ -770,14 +772,7 @@ function HabitListItem({
   });
   const statusIcon =
     outcome === 'failed' ? 'x' : outcome === 'skipped' ? 'skip-forward' : complete ? 'check' : null;
-  const statusBackground =
-    outcome === 'failed'
-      ? colors.danger.background
-      : outcome === 'skipped'
-        ? colors.warning.background
-        : complete
-          ? colors.success.background
-          : accent;
+  const statusBackground = accent;
   const statusColor = getAccessibleTextColor(statusBackground);
   const statusLabel = habitOutcomeLabel(outcome) ?? habitCompletionLabel(state ?? null);
   const menuOpen = menuAnchor !== null;
@@ -821,13 +816,9 @@ function HabitListItem({
         style={({ pressed }) => ({
           alignItems: 'center',
           ...getRowSurfaceStyle({
-            backgroundColor:
-              outcome === 'skipped'
-                ? colors.surfaceMuted
-                : complete
-                  ? colors.success.background
-                  : colors.surface,
-            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            borderColor: 'transparent',
+            borderWidth: 0,
           }),
           flexDirection: 'row',
           minHeight: HABIT_ROW_MIN_HEIGHT,
@@ -860,9 +851,7 @@ function HabitListItem({
             style={({ pressed }) => ({
               alignItems: 'center',
               backgroundColor: statusBackground,
-              borderColor: statusBackground,
               borderRadius: 8,
-              borderWidth: 1,
               height: ROW_SURFACE_ICON_SIZE,
               justifyContent: 'center',
               opacity: saving ? 0.55 : pressed ? 0.72 : 1,
@@ -880,7 +869,14 @@ function HabitListItem({
               />
             ) : null}
           </Pressable>
-          <View style={{ flex: 1, justifyContent: 'center', minWidth: 0 }}>
+          <View
+            style={{
+              flex: 1,
+              height: HABIT_ROW_TEXT_BLOCK_HEIGHT,
+              justifyContent: 'center',
+              minWidth: 0,
+            }}
+          >
             <Text
               numberOfLines={1}
               textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
@@ -894,13 +890,27 @@ function HabitListItem({
               {statusLabel}
             </Text>
           </View>
-          <View style={{ alignItems: 'flex-end', justifyContent: 'center', width: 82 }}>
+          <View
+            style={{
+              alignItems: 'flex-end',
+              flexShrink: 0,
+              height: HABIT_ROW_TEXT_BLOCK_HEIGHT,
+              justifyContent: 'center',
+              marginLeft: 'auto',
+              minWidth: HABIT_ROW_STREAK_WIDTH,
+              width: HABIT_ROW_STREAK_WIDTH,
+            }}
+          >
             <Text
+              numberOfLines={1}
               textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
             >
               {String(streak.current)}
             </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>
+            <Text
+              numberOfLines={1}
+              textStyle={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
+            >
               Current Streak
             </Text>
           </View>

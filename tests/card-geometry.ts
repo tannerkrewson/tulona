@@ -5,6 +5,7 @@ import {
   ROW_SURFACE_CONTENT_GAP,
   ROW_SURFACE_HEIGHT,
   ROW_SURFACE_ICON_SIZE,
+  ROW_SURFACE_LIST_GAP,
   ROW_SURFACE_PADDING_HORIZONTAL,
   ROW_SURFACE_RADIUS,
 } from '../src/ui/row-surface';
@@ -29,6 +30,10 @@ const emptyState = read('src/ui/EmptyState.tsx');
 const activitiesScreen = read('src/tracker/ActivitiesScreen.tsx');
 const folderDetail = read('src/tracker/FolderDetailScreen.tsx');
 const chooser = read('src/routine/NextActivityChooserScreen.tsx');
+const activityChooser = read('src/tracker/ActivitySessionActivityChooserScreen.tsx');
+const habitItemStart = habitList.indexOf('function HabitListItem(');
+const habitItemEnd = habitList.indexOf('function HabitAction(', habitItemStart);
+const habitItem = habitList.slice(habitItemStart, habitItemEnd);
 
 const compactRow = {
   ...getRowSurfaceStyle({ backgroundColor: '#FFFFFF', borderColor: '#D4D4D4' }),
@@ -66,7 +71,7 @@ assert(
     folderRow.includes('borderColor: colors.border') &&
     !folderRow.includes("borderColor: 'transparent'") &&
     !folderRow.includes('borderWidth: 0'),
-  'folder rows must use the same visible outline treatment as activities'
+  'folder rows must retain their separate visible outline treatment'
 );
 assert(
   activityRow.includes('active ? accent : colors.surface') &&
@@ -74,10 +79,40 @@ assert(
   'activity active-state color semantics must remain intact'
 );
 assert(
-  habitList.includes('getRowSurfaceStyle') &&
-    habitList.includes('HABIT_ROW_MIN_HEIGHT = 72') &&
+  activityRow.includes("borderColor: 'transparent'") &&
+    activityRow.includes('borderWidth: 0') &&
+    activityRow.includes('variant="filled"'),
+  'activity rows must use a light filled surface without an outline'
+);
+assert(
+  habitItem.includes('getRowSurfaceStyle') &&
+    habitItem.includes('backgroundColor: colors.surface') &&
+    habitItem.includes("borderColor: 'transparent'") &&
+    habitItem.includes('borderWidth: 0') &&
+    !habitItem.includes('colors.success.background') &&
+    !habitItem.includes('colors.warning.background') &&
+    !habitItem.includes('colors.danger.background'),
+  'habit rows must use one light borderless surface without state background colors'
+);
+assert(
+  activitiesScreen.includes('spacing={ROW_SURFACE_LIST_GAP}') &&
+    activityChooser.includes('spacing={ROW_SURFACE_LIST_GAP}') &&
+    chooser.includes('spacing={ROW_SURFACE_LIST_GAP}') &&
+    ROW_SURFACE_LIST_GAP === 8,
+  'tracker and activity chooser rows must use one shared list gap'
+);
+assert(
+  habitList.includes('HABIT_ROW_MIN_HEIGHT = 72') &&
     habitList.includes('outcome subtitle and the current-streak summary'),
-  'habit cards must share the surface outline while documenting their taller content exception'
+  'habit cards must document their taller content exception'
+);
+assert(
+  habitItem.includes('HABIT_ROW_STREAK_WIDTH') &&
+    habitItem.includes('minWidth: HABIT_ROW_STREAK_WIDTH') &&
+    habitItem.includes("marginLeft: 'auto'") &&
+    habitItem.includes('flexShrink: 0') &&
+    habitItem.includes('Current Streak'),
+  'habit streak metrics must stay in a fixed right-aligned non-wrapping column'
 );
 assert(
   settingsScreen.includes('getRowSurfaceLayoutStyle()') &&

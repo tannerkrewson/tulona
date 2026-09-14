@@ -53,7 +53,8 @@ export function ActivityRow({
   const rowStyle = {
     ...getRowSurfaceStyle({
       backgroundColor: active ? accent : colors.surface,
-      borderColor: active ? accent : colors.border,
+      borderColor: 'transparent',
+      borderWidth: 0,
     }),
     ...getRowSurfaceLayoutStyle(),
   } as const;
@@ -135,7 +136,7 @@ export function ActivityRow({
       onPress={onPress}
       style={rowStyle}
       testID={testID}
-      variant="outlined"
+      variant="filled"
     >
       {rowContent}
     </AppButton>
