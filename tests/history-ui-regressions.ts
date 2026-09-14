@@ -10,11 +10,11 @@ function assert(condition: unknown, message: string): asserts condition {
 const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const tabs = read('app/(tabs)/_layout.tsx');
-const route = read('app/(tabs)/insights.tsx');
+const route = read('app/(tabs)/history.tsx');
 const history = read('src/history/HistoryScreen.tsx');
 
 assert(
-  tabs.includes('name="insights"') &&
+  tabs.includes('name="history"') &&
     tabs.includes("title: 'History'") &&
     tabs.includes("tabBarAccessibilityLabel: 'History tab'") &&
     tabs.includes('name="clock"'),
@@ -23,8 +23,8 @@ assert(
 assert(
   route.includes('../../src/history/HistoryScreen') &&
     route.includes('<HistoryScreen />') &&
-    !route.includes('InsightsScreen'),
-  'the visible third tab route must render the new History shell instead of old Insights UI'
+    !route.includes('reporting'),
+  'the visible third tab route must render the new History shell instead of retired reporting UI'
 );
 assert(
   history.includes('title="History"') &&
@@ -71,7 +71,7 @@ assert(
     history.includes('dateForLogicalDay') &&
     !history.includes("from '@reporting") &&
     !history.includes("from '../reporting"),
-  'the shell must use existing date helpers and remain disconnected from old Insights reporting'
+  'the shell must use existing date helpers and remain disconnected from the retired reporting layer'
 );
 
 console.log('Validated History tab shell, period navigation, accessibility, and state surfaces.');

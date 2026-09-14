@@ -8,5 +8,4 @@ export { FolderDetailScreen, type FolderDetailScreenProps } from './FolderDetail
 export { ActiveActivityBar } from './ActiveActivityBar';
 export { ActivityRow, type ActivityRowProps } from './ActivityRow';
 export { FolderRow, type FolderRowProps } from './FolderRow';
-export { default as HistoryScreen } from './HistoryScreen';
 export { default as TrackerCatalogScreen } from './TrackerCatalogScreen';

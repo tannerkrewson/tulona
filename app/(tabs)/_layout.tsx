@@ -77,7 +77,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="insights"
+        name="history"
         options={{
           title: 'History',
           tabBarAccessibilityLabel: 'History tab',
