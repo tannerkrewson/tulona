@@ -25,6 +25,8 @@ const ids = {
   rootRoutine: '88888888-8888-4888-8888-888888888888',
   step: '99999999-9999-4999-8999-999999999999',
   secondStep: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  stepRoutine: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+  stepRoutineStep: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
 };
 
 const timestamp = '2026-08-30T00:00:00.000Z';
@@ -195,6 +197,68 @@ async function run(): Promise<void> {
     'historical resolution must retain archived folder references'
   );
   await service.restoreFolder(folder.id);
+
+  repository.catalog = {
+    ...repository.catalog,
+    activities: repository.catalog.activities.map((item) =>
+      item.id === ids.childActivity ? { ...item, iconName: 'heart' } : item
+    ),
+  };
+  const stepRoutine = await service.createRoutine({
+    id: ids.stepRoutine,
+    name: 'Step routine',
+    color: '#010203',
+    iconName: 'repeat',
+    folderId: folder.id,
+    trackingMode: 'steps',
+    steps: [
+      {
+        id: ids.stepRoutineStep,
+        activityId: ids.childActivity,
+        name: 'Custom step name is ignored',
+        color: '#AABBCC',
+        iconName: 'trash-2',
+        durationMs: 60_000,
+      },
+    ],
+  });
+  assert(
+    stepRoutine.steps[0]?.name === 'Child activity' &&
+      stepRoutine.steps[0]?.color === '#778899' &&
+      stepRoutine.steps[0]?.iconName === 'heart',
+    'step-tracked routine steps inherit the selected activity metadata'
+  );
+  const stepSnapshot = await service.snapshotRoutine(ids.stepRoutine, timestamp);
+  assert(
+    stepSnapshot.color === folder.color &&
+      stepSnapshot.iconName === 'repeat' &&
+      stepSnapshot.steps[0]?.name === 'Child activity' &&
+      stepSnapshot.steps[0]?.color === folder.color &&
+      stepSnapshot.steps[0]?.iconName === 'heart',
+    'step snapshots capture the parent and selected activity styling'
+  );
+  const updatedStep = await service.updateRoutineStep(ids.stepRoutine, ids.stepRoutineStep, {
+    activityId: ids.rootActivity,
+    name: 'Another custom name is ignored',
+    color: '#DDEEFF',
+    iconName: 'trash-2',
+    durationMs: 30_000,
+  });
+  assert(
+    updatedStep.name === 'Root activity' &&
+      updatedStep.color === '#445566' &&
+      updatedStep.iconName === null,
+    'step updates inherit metadata after changing the selected activity'
+  );
+  const duplicatedStep = await service.duplicateRoutineStep(ids.stepRoutine, ids.stepRoutineStep, {
+    name: 'Duplicate custom name is ignored',
+  });
+  assert(
+    duplicatedStep.name === 'Root activity' &&
+      duplicatedStep.color === '#445566' &&
+      duplicatedStep.iconName === null,
+    'step duplication keeps selected activity metadata instead of custom fields'
+  );
 
   await service.reorderItem(ids.secondRootActivity, 'up');
   const rootItems = (await service.read()).activities

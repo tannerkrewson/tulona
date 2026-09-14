@@ -356,6 +356,11 @@ async function run(): Promise<void> {
     durationMs: 30_000,
     name: 'Reset step',
   });
+  const stepDefinitions = (await stepTracked.catalogService.getRoutine(routineId)).steps;
+  assert(
+    stepDefinitions[0]?.name === 'Focus' && stepDefinitions[1]?.name === 'Reset',
+    'step-tracked routine definitions inherit activity names'
+  );
   const stepRun = await stepTracked.routineService.startRoutine(routineId, {
     id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
     startedAt,
@@ -384,6 +389,25 @@ async function run(): Promise<void> {
   assert(
     stepRun.id === 'ffffffff-ffff-4fff-8fff-ffffffffffff',
     'step run persists its supplied ID'
+  );
+
+  const discarded = await createServices(new MemoryStorage());
+  discarded.setNow(at(190_000));
+  const discardedRun = await discarded.routineService.startRoutine(routineId, {
+    id: 'abababab-abab-4aba-8aba-abababababab',
+    startedAt: at(190_000),
+  });
+  discarded.setNow(at(195_000));
+  const discardedActive = await discarded.routineService.cancelAndDiscard(at(195_000));
+  assert(
+    discardedActive.id === discardedRun.id && discardedActive.status === 'abandoned',
+    'discarding a routine marks the in-progress run as abandoned'
+  );
+  assert(
+    (await discarded.routineRepository.readActive()) === null &&
+      (await discarded.routineRepository.readHistory('2026-08')).runs.length === 0 &&
+      (await discarded.trackerService.getActiveTransition(at(195_000)))?.activityId === null,
+    'discarding a routine clears active state without writing history'
   );
 
   const pausedRoutine = await createServices(new MemoryStorage());

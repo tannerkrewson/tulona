@@ -117,6 +117,10 @@ export interface RoutineSnapshot {
   id: UUID;
   name: string;
   trackingMode: RoutineTrackingMode;
+  /** Captured parent routine styling; optional for snapshots written before this field existed. */
+  color?: string | null;
+  /** Captured parent routine icon; optional for snapshots written before this field existed. */
+  iconName?: string | null;
   steps: RoutineStepSnapshot[];
   capturedAt: IsoTimestamp;
 }

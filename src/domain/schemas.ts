@@ -152,6 +152,8 @@ export const routineSnapshotSchema = z
     id: uuid,
     name: z.string().min(1),
     trackingMode: routineTrackingMode,
+    color: z.string().nullable().optional(),
+    iconName: z.string().nullable().optional(),
     steps: z.array(routineStepSnapshotSchema),
     capturedAt: isoTimestamp,
   })

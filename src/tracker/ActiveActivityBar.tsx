@@ -40,6 +40,25 @@ function routineOwnsActivity(routine: ActiveRoutine, activityId: string): boolea
   return routine.routineSnapshot.steps.some((step) => step.activityId === activityId);
 }
 
+/** Finds the persisted length of an idle activity session from its next stop/switch. */
+function activityDurationMs(
+  transitions: readonly TimeTransition[],
+  transition: TimeTransition
+): number {
+  try {
+    const startMs = timestampMs(transition.timestamp);
+    const index = transitions.findIndex((candidate) => candidate.id === transition.id);
+    if (index < 0) return 0;
+    const following = transitions.slice(index + 1).find((candidate) => {
+      if (candidate.status !== 'recorded') return false;
+      return timestampMs(candidate.timestamp) >= startMs;
+    });
+    return following ? Math.max(0, timestampMs(following.timestamp) - startMs) : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** Loads once at the shell boundary so the player survives catalog navigation. */
 export function ActiveActivityBar() {
   const pathname = usePathname();
@@ -81,6 +100,7 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
   const catalog = store((state) => state.catalog);
   const activeTransition = store((state) => state.activeTransition);
   const lastActivityTransition = store((state) => state.lastActivityTransition);
+  const transitions = store((state) => state.transitions);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -104,6 +124,7 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
   const name = resolved?.item.name ?? 'Current activity';
   const context = resolved?.folder?.name ?? null;
   const elapsedMs = isActive ? Math.max(0, nowMs - timestampMs(displayedTransition.timestamp)) : 0;
+  const previousDurationMs = isActive ? 0 : activityDurationMs(transitions, displayedTransition);
   const configuredColor = resolved?.item.color ?? resolved?.displayColor;
   const accent =
     configuredColor && /^#[0-9a-f]{6}$/i.test(configuredColor.trim())
@@ -194,15 +215,16 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
           accessibilityState={{ disabled: busy }}
           disabled={busy}
           onPress={() => void (isActive ? pause() : play())}
-          style={[styles.pauseButton, { backgroundColor: accent }]}
+          style={[styles.pauseButton, { backgroundColor: isActive ? accent : colors.surfaceMuted }]}
           testID={isActive ? 'active-activity-pause' : 'active-activity-play'}
         >
           <AppIcon
             accessibilityLabel={isActive ? 'Pause' : 'Play'}
-            color={onAccent}
+            color={isActive ? onAccent : accent}
+            fill={isActive ? 'none' : accent}
             name={isActive ? 'pause' : 'play'}
             size={25}
-            strokeWidth={3}
+            strokeWidth={isActive ? 3 : 0}
           />
         </Pressable>
         <Pressable
@@ -238,7 +260,7 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
               ) : null}
             </View>
             <DurationText
-              durationMs={isActive ? elapsedMs : 0}
+              durationMs={isActive ? elapsedMs : previousDurationMs}
               textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}
             />
           </View>
