@@ -9,6 +9,7 @@ import { AppButton, errorText, Screen } from '@ui';
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
+import { HistoricalSessionEditor } from './HistoricalSessionEditor';
 import type { TransitionContext } from './tracker-service';
 import { orderTransitions } from './tracker-engine';
 
@@ -201,6 +202,7 @@ function ActivitySessionContent({
 
   const resolved = resolveCatalogItem(catalog, transition.activityId ?? '');
   const activityName =
+    transition.activitySnapshot?.name ??
     resolved?.item.name ??
     (transition.activityId === null ? 'No activity' : 'Unavailable activity');
   const contextMatches = transitionContext?.transition?.id === transition.id;
@@ -215,7 +217,9 @@ function ActivitySessionContent({
   const endMs = following ? timestampMs(following.timestamp) : isActive ? nowMs : null;
   const durationMs = endMs === null ? 0 : Math.max(0, endMs - timestampMs(transition.timestamp));
   const previousName = previous?.activityId
-    ? (resolveCatalogItem(catalog, previous.activityId)?.item.name ?? 'previous activity')
+    ? (previous.activitySnapshot?.name ??
+      resolveCatalogItem(catalog, previous.activityId)?.item.name ??
+      'previous activity')
     : 'previous state';
   const canSnapToPrevious =
     previous !== null && timestampMs(previous.timestamp) < timestampMs(transition.timestamp);
@@ -242,6 +246,19 @@ function ActivitySessionContent({
   const resetToNow = () =>
     void runAction(async () => {
       await store.getState().resetActiveStartToNow(transition.id);
+      loadTransitionContext();
+    });
+
+  const saveHistoricalStart = (nextTimestamp: number) =>
+    runAction(async () => {
+      await store.getState().editTransition(transition.id, { timestamp: nextTimestamp });
+      loadTransitionContext();
+    });
+
+  const saveHistoricalEnd = (nextTimestamp: number) =>
+    runAction(async () => {
+      if (!following) return;
+      await store.getState().editTransition(following.id, { timestamp: nextTimestamp });
       loadTransitionContext();
     });
 
@@ -337,6 +354,17 @@ function ActivitySessionContent({
             />
           </Row>
         </Column>
+
+        {!isActive ? (
+          <HistoricalSessionEditor
+            key={`${transition.id}-${transition.timestamp}-${following?.timestamp ?? 'open'}`}
+            busy={busy}
+            following={following}
+            onSaveEnd={saveHistoricalEnd}
+            onSaveStart={saveHistoricalStart}
+            transition={transition}
+          />
+        ) : null}
 
         <Column
           spacing={12}
