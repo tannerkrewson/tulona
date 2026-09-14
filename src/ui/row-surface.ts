@@ -6,19 +6,22 @@ export const ROW_SURFACE_CONTENT_GAP = 12;
 export const ROW_SURFACE_ICON_SIZE = 40;
 export const ROW_SURFACE_RADIUS = 14;
 export const ROW_SURFACE_BORDER_WIDTH = 1;
+export const ROW_SURFACE_LIST_GAP = 8;
 
 export function getRowSurfaceStyle({
   backgroundColor,
   borderColor,
+  borderWidth = ROW_SURFACE_BORDER_WIDTH,
 }: {
   backgroundColor: string;
   borderColor: string;
+  borderWidth?: number;
 }): ViewStyle {
   return {
     backgroundColor,
     borderColor,
     borderRadius: ROW_SURFACE_RADIUS,
-    borderWidth: ROW_SURFACE_BORDER_WIDTH,
+    borderWidth,
   };
 }
 

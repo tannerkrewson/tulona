@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Activity, CatalogCollection, Folder, RoutineDefinition } from '@domain';
 import { useAppTheme } from '@theme';
-import { errorText, Screen } from '@ui';
+import { errorText, ROW_SURFACE_LIST_GAP, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
@@ -257,7 +257,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
             }}
           />
         ) : null}
-        <Column spacing={5} style={{ width: '100%' }}>
+        <Column spacing={ROW_SURFACE_LIST_GAP} style={{ width: '100%' }}>
           {folders.map((folder) => (
             <Column key={folder.id} spacing={6} style={{ width: '100%' }}>
               <FolderRow

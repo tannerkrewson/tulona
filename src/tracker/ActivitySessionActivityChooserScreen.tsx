@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { CatalogCollection, Folder, TimeTransition, TrackableItem, UUID } from '@domain';
 import { useAppTheme } from '@theme';
-import { AppButton, errorText, Screen } from '@ui';
+import { AppButton, errorText, ROW_SURFACE_LIST_GAP, Screen } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -163,7 +163,11 @@ export function ActivitySessionActivityChooserScreen({
       onBack={() => (folderId === null ? returnToSession() : setFolderId(null))}
       title={currentFolder?.name ?? 'Choose activity'}
     >
-      <Column spacing={16} style={{ width: '100%' }} testID="activity-session-activity-chooser">
+      <Column
+        spacing={ROW_SURFACE_LIST_GAP}
+        style={{ width: '100%' }}
+        testID="activity-session-activity-chooser"
+      >
         <Text textStyle={{ color: colors.textMuted, fontSize: 15, lineHeight: 21 }}>
           {`Choose a replacement for ${currentName}. Activities and routines are both available.`}
         </Text>

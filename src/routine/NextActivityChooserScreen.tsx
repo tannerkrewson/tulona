@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { ActiveRoutine, CatalogCollection, UUID } from '@domain';
 import { useAppTheme } from '@theme';
-import { AppButton, errorText, Screen } from '@ui';
+import { AppButton, errorText, ROW_SURFACE_LIST_GAP, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { ActivityRow } from '../tracker/ActivityRow';
@@ -140,7 +140,7 @@ export function NextActivityChooserScreen() {
       onBack={() => (folderId === null ? router.replace('/(tabs)') : setFolderId(null))}
       title={title}
     >
-      <Column spacing={18} style={{ width: '100%' }}>
+      <Column spacing={ROW_SURFACE_LIST_GAP} style={{ width: '100%' }}>
         <Text textStyle={{ color: colors.textMuted, fontSize: 16, lineHeight: 22 }}>
           {`${active.routineSnapshot.name} completed at ${shortTime(active.completedAt)}. Choose the next tracked item.`}
         </Text>

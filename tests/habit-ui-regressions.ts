@@ -12,6 +12,9 @@ const read = (relativePath: string) => fs.readFileSync(path.join(root, relativeP
 const appScreen = read('src/ui/AppScreen.tsx');
 const habitList = read('src/habits/HabitListScreen.tsx');
 const habitStore = read('src/habits/habit-store.ts');
+const habitItemStart = habitList.indexOf('function HabitListItem(');
+const habitItemEnd = habitList.indexOf('function HabitAction(', habitItemStart);
+const habitItem = habitList.slice(habitItemStart, habitItemEnd);
 const weekPagerStart = habitList.indexOf('function HabitWeekStrip(');
 const weekDaysStart = habitList.indexOf('function WeekDaysRow(');
 const weekPager = habitList.slice(weekPagerStart, weekDaysStart);
@@ -33,9 +36,22 @@ assert(
   'not-done subtitles must be stable and title/streak text must share line metrics'
 );
 assert(
-  habitList.includes('borderColor: colors.border') &&
-    !habitList.includes('borderColor: complete ? colors.success.foreground : colors.border'),
-  'habit card borders must not change by completion state'
+  habitItem.includes("borderColor: 'transparent'") &&
+    habitItem.includes('borderWidth: 0') &&
+    habitItem.includes('backgroundColor: colors.surface') &&
+    !habitItem.includes('colors.success.background') &&
+    !habitItem.includes('colors.warning.background') &&
+    !habitItem.includes('colors.danger.background'),
+  'habit cards must use a light borderless surface without state background colors'
+);
+assert(
+  habitItem.includes('flexShrink: 0') &&
+    habitItem.includes("marginLeft: 'auto'") &&
+    habitItem.includes('minWidth: HABIT_ROW_STREAK_WIDTH') &&
+    habitItem.includes('width: HABIT_ROW_STREAK_WIDTH') &&
+    habitItem.includes('numberOfLines={1}') &&
+    habitItem.includes('Current Streak'),
+  'habit current-streak metrics must stay aligned in a fixed single-line right column'
 );
 assert(
   habitList.includes('habit-past-midnight-warning') &&
