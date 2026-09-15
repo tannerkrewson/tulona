@@ -1,3 +1,5 @@
+import { ROW_SURFACE_RADIUS } from '../src/ui/row-surface';
+
 /* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -18,6 +20,11 @@ const habitItem = habitList.slice(habitItemStart, habitItemEnd);
 const weekPagerStart = habitList.indexOf('function HabitWeekStrip(');
 const weekDaysStart = habitList.indexOf('function WeekDaysRow(');
 const weekPager = habitList.slice(weekPagerStart, weekDaysStart);
+const metricTargetStart = habitItem.indexOf('testID={`toggle-habit-metric-${habit.id}`}');
+const metricTarget = habitItem.slice(
+  habitItem.lastIndexOf('<Pressable', metricTargetStart),
+  habitItem.indexOf('</Pressable>', metricTargetStart) + '</Pressable>'.length
+);
 
 assert(
   habitStore.includes('cycleOutcome') && habitStore.includes('nextHabitOutcome(existing?.outcome)'),
@@ -55,6 +62,40 @@ assert(
   'habit current-streak metrics must stay aligned in a fixed single-line right column'
 );
 assert(
+  weekPager.includes('borderRadius: ROW_SURFACE_RADIUS') &&
+    weekPager.includes("overflow: 'hidden'") &&
+    ROW_SURFACE_RADIUS === 14,
+  'the week scroller must clip with the same corner radius as habit rows'
+);
+assert(
+  habitList.includes("const [metricMode, setMetricMode] = useState<HabitMetricMode>('streak');") &&
+    habitList.includes('toggleHabitMetricMode(mode)') &&
+    habitList.includes('onToggleMetricDisplay={toggleMetricDisplay}') &&
+    habitList.includes('metricMode={metricMode}') &&
+    habitItem.includes('const totalDays = habitCompletionCount(states);') &&
+    habitItem.includes("metricMode === 'total-days' ? totalDays : streak.current") &&
+    habitItem.includes("metricMode === 'total-days' ? 'Total Days' : 'Current Streak'"),
+  'one shared habit metric mode must render current streak or completed total days'
+);
+assert(
+  metricTarget.includes('event.stopPropagation();') &&
+    metricTarget.includes('onToggleMetricDisplay();') &&
+    metricTarget.includes("alignSelf: 'stretch'") &&
+    metricTarget.includes("marginLeft: 'auto'") &&
+    metricTarget.includes('minWidth: HABIT_ROW_STREAK_WIDTH') &&
+    metricTarget.includes('width: HABIT_ROW_STREAK_WIDTH') &&
+    habitItem.includes("style={{ height: HABIT_ROW_MIN_HEIGHT, width: '100%' }}"),
+  'the streak metric target must span its full row-height column without bubbling to the row'
+);
+assert(
+  habitItem.includes('testID={`toggle-habit-${habit.id}`}') &&
+    habitItem.includes('onPress={() => {') &&
+    habitItem.includes('onCycle();') &&
+    habitItem.includes('testID={`status-habit-${habit.id}`}') &&
+    habitItem.includes('event.stopPropagation();'),
+  'the row and status control must retain their existing outcome-cycle taps'
+);
+assert(
   habitList.includes('habit-past-midnight-warning') &&
     habitList.includes('formatHabitRolloverHour(logicalDayRolloverHour)') &&
     habitList.includes('Dismisses this reminder without changing habit data') &&
@@ -83,4 +124,6 @@ assert(
   'app screens must use the theme background so habit surfaces remain visibly distinct'
 );
 
-console.log('Validated habit outcome, warning, typography, border, and pager regressions.');
+console.log(
+  'Validated habit metric toggling/counts, hit-target boundaries, outcome cycling, warning, typography, border, and pager regressions.'
+);

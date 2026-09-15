@@ -2,6 +2,12 @@ import type { HabitDayOutcome, HabitDayState, HabitSchedule } from '@domain';
 
 export const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
+export type HabitMetricMode = 'streak' | 'total-days';
+
+export function toggleHabitMetricMode(mode: HabitMetricMode): HabitMetricMode {
+  return mode === 'streak' ? 'total-days' : 'streak';
+}
+
 /** The explicit outcome order shared by tap cycling and the long-press actions. */
 export const habitOutcomeCycle: readonly (HabitDayOutcome | null)[] = [
   null,

@@ -26,6 +26,7 @@ import {
   ROW_SURFACE_CONTENT_GAP,
   ROW_SURFACE_ICON_SIZE,
   ROW_SURFACE_PADDING_HORIZONTAL,
+  ROW_SURFACE_RADIUS,
   Screen,
 } from '@ui';
 
@@ -41,9 +42,15 @@ import {
   shiftHabitWeek,
   sundayFirstWeekdayLabels,
 } from './date-navigation';
-import { habitCompletionLabel, habitOutcomeLabel, habitSignalSummary } from './habit-format';
+import {
+  habitCompletionLabel,
+  habitOutcomeLabel,
+  habitSignalSummary,
+  toggleHabitMetricMode,
+  type HabitMetricMode,
+} from './habit-format';
 import { loadHabitStore } from './habit-runtime';
-import { calculateHabitStreak, habitCompleted } from './streak';
+import { calculateHabitStreak, habitCompleted, habitCompletionCount } from './streak';
 import type { HabitStore } from './habit-store';
 
 export default function HabitListScreen() {
@@ -132,6 +139,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
   const persistenceError = store((state) => state.persistenceError);
   const [clockMs, setClockMs] = useState(() => Date.now());
   const [contentWidth, setContentWidth] = useState(0);
+  const [metricMode, setMetricMode] = useState<HabitMetricMode>('streak');
   const [dismissedPastMidnightDay, setDismissedPastMidnightDay] = useState<LogicalDayKey | null>(
     null
   );
@@ -158,6 +166,10 @@ function HabitListContent({ store }: { store: HabitStore }) {
     (day: LogicalDayKey) => runAction(() => store.getState().selectDay(day)),
     [runAction, store]
   );
+  const toggleMetricDisplay = useCallback(
+    () => setMetricMode((mode) => toggleHabitMetricMode(mode)),
+    []
+  );
 
   const renderDay = (day: LogicalDayKey) => (
     <HabitDayList
@@ -170,6 +182,8 @@ function HabitListContent({ store }: { store: HabitStore }) {
         runAction(() => store.getState().setOutcome(habitId, day, outcome))
       }
       onCycle={(habitId) => runAction(() => store.getState().cycleOutcome(habitId, day))}
+      onToggleMetricDisplay={toggleMetricDisplay}
+      metricMode={metricMode}
       saving={saving}
       states={states}
     />
@@ -568,6 +582,7 @@ function HabitWeekStrip({
       onLayout={(event) => setPageWidth(event.nativeEvent.layout.width)}
       style={{
         backgroundColor: colors.surface,
+        borderRadius: ROW_SURFACE_RADIUS,
         overflow: 'hidden',
         width: '100%',
       }}
@@ -681,6 +696,8 @@ function HabitDayList({
   onDetails,
   onOutcome,
   onCycle,
+  onToggleMetricDisplay,
+  metricMode,
   saving,
   states,
 }: {
@@ -691,6 +708,8 @@ function HabitDayList({
   onDetails: (habitId: string) => void;
   onOutcome: (habitId: string, outcome: HabitDayOutcome | null) => void;
   onCycle: (habitId: string) => void;
+  onToggleMetricDisplay: () => void;
+  metricMode: HabitMetricMode;
   saving: boolean;
   states: HabitDayState[];
 }) {
@@ -713,9 +732,11 @@ function HabitDayList({
                 states={states.filter((candidate) => candidate.habitId === habit.id)}
                 selectedDay={day}
                 logicalDayRolloverHour={logicalDayRolloverHour}
+                metricMode={metricMode}
                 onDetails={() => onDetails(habit.id)}
                 onCycle={() => onCycle(habit.id)}
                 onOutcome={(outcome) => onOutcome(habit.id, outcome)}
+                onToggleMetricDisplay={onToggleMetricDisplay}
               />
             ))}
           </Column>
@@ -747,6 +768,8 @@ function HabitListItem({
   onCycle,
   onDetails,
   onOutcome,
+  onToggleMetricDisplay,
+  metricMode,
 }: {
   habit: Habit;
   state: HabitDayState | undefined;
@@ -757,6 +780,8 @@ function HabitListItem({
   onCycle: () => void;
   onDetails: () => void;
   onOutcome: (outcome: HabitDayOutcome | null) => void;
+  onToggleMetricDisplay: () => void;
+  metricMode: HabitMetricMode;
 }) {
   const { colors } = useAppTheme();
   const [menuAnchor, setMenuAnchor] = useState<HabitMenuAnchor | null>(null);
@@ -770,6 +795,9 @@ function HabitListItem({
     rolloverHour: logicalDayRolloverHour,
     weekStartsOn: 0,
   });
+  const totalDays = habitCompletionCount(states);
+  const metricValue = metricMode === 'total-days' ? totalDays : streak.current;
+  const metricLabel = metricMode === 'total-days' ? 'Total Days' : 'Current Streak';
   const statusIcon =
     outcome === 'failed' ? 'x' : outcome === 'skipped' ? 'skip-forward' : complete ? 'check' : null;
   const statusBackground = accent;
@@ -794,7 +822,7 @@ function HabitListItem({
     >
       <Pressable
         accessibilityHint="Cycles this habit through not done, done, failed, and skipped. Long press for more actions."
-        accessibilityLabel={`${habit.name}. ${statusLabel}. ${streak.current} current streak. Signals: ${habitSignalSummary(state ?? null)}.`}
+        accessibilityLabel={`${habit.name}. ${statusLabel}. ${metricValue} ${metricLabel.toLowerCase()}. Signals: ${habitSignalSummary(state ?? null)}.`}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: complete, disabled: saving }}
         accessibilityValue={{ text: statusLabel }}
@@ -822,7 +850,7 @@ function HabitListItem({
           minHeight: HABIT_ROW_MIN_HEIGHT,
           opacity: saving ? 0.55 : pressed ? 0.72 : 1,
           paddingHorizontal: ROW_SURFACE_PADDING_HORIZONTAL,
-          paddingVertical: 10,
+          paddingVertical: 0,
           userSelect: 'none',
           width: '100%',
           ...(Platform.OS === 'web'
@@ -834,7 +862,11 @@ function HabitListItem({
         })}
         testID={`toggle-habit-${habit.id}`}
       >
-        <Row alignment="center" spacing={ROW_SURFACE_CONTENT_GAP} style={{ width: '100%' }}>
+        <Row
+          alignment="center"
+          spacing={ROW_SURFACE_CONTENT_GAP}
+          style={{ height: HABIT_ROW_MIN_HEIGHT, width: '100%' }}
+        >
           <Pressable
             accessibilityHint="Cycles this habit through not done, done, failed, and skipped"
             accessibilityLabel={`${habit.name}, ${statusLabel}`}
@@ -888,30 +920,41 @@ function HabitListItem({
               {statusLabel}
             </Text>
           </View>
-          <View
+          <Pressable
+            accessibilityHint="Toggles all visible habits between current streak and total days"
+            accessibilityLabel={`${metricLabel}: ${metricValue}`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: saving }}
+            accessibilityValue={{ text: String(metricValue) }}
+            disabled={saving}
+            onPress={(event) => {
+              event.stopPropagation();
+              onToggleMetricDisplay();
+            }}
             style={{
               alignItems: 'flex-end',
+              alignSelf: 'stretch',
               flexShrink: 0,
-              height: HABIT_ROW_TEXT_BLOCK_HEIGHT,
               justifyContent: 'center',
               marginLeft: 'auto',
               minWidth: HABIT_ROW_STREAK_WIDTH,
               width: HABIT_ROW_STREAK_WIDTH,
             }}
+            testID={`toggle-habit-metric-${habit.id}`}
           >
             <Text
               numberOfLines={1}
               textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
             >
-              {String(streak.current)}
+              {String(metricValue)}
             </Text>
             <Text
               numberOfLines={1}
               textStyle={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
             >
-              Current Streak
+              {metricLabel}
             </Text>
-          </View>
+          </Pressable>
         </Row>
       </Pressable>
       {menuAnchor ? (

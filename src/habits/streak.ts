@@ -142,5 +142,13 @@ export function habitCompleted(
   return state?.outcome === 'done' || state?.manual === true || state?.automatic === true;
 }
 
+export function habitCompletionCount(states: readonly HabitDayState[]): number {
+  const completedDays = new Set<LogicalDayKey>();
+  for (const state of states) {
+    if (habitCompleted(state)) completedDays.add(state.logicalDay);
+  }
+  return completedDays.size;
+}
+
 export const getHabitStreak = calculateHabitStreak;
 export const calculateStreaks = calculateHabitStreak;
