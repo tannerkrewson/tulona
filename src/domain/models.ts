@@ -373,6 +373,8 @@ export interface GoalStatusDefinition {
 /** Goal-wide settings, shared by every goal in the active dataset. */
 export interface GoalSettings {
   reviewDay: number;
+  /** Number of previous weekly status circles available to goal rows. */
+  historicalCircleCount: number;
   statusDefinitions: GoalStatusDefinition[];
 }
 
