@@ -15,7 +15,10 @@ export type DatasetCollection =
   | 'active-routine'
   | 'routine-history'
   | 'habits'
-  | 'habit-days';
+  | 'habit-days'
+  | 'goals'
+  | 'goal-settings'
+  | 'goal-weeks';
 
 export function datasetPrefix(datasetId: UUID): string {
   if (!isUuid(datasetId)) {

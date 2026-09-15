@@ -3,15 +3,7 @@ import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
-import type {
-  Activity,
-  CatalogCollection,
-  Folder,
-  TimeGoal,
-  TimeGoalPeriod,
-  TimeGoalType,
-  UUID,
-} from '@domain';
+import type { Activity, CatalogCollection, Folder, UUID } from '@domain';
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
 import {
@@ -19,8 +11,6 @@ import {
   AccessibleTextInput,
   AppButton,
   ColorPicker,
-  DurationPicker,
-  type DurationValue,
   errorText,
   IconPicker,
   ReorderControls,
@@ -32,10 +22,6 @@ import type { CatalogService } from './catalog-service';
 import { loadRoutineRuntime } from '../routine/routine-runtime';
 
 const ROOT_VALUE = '__root__';
-const TIME_GOAL_NONE = 'none' as const;
-const DEFAULT_TIME_GOAL_DURATION_MS = 30 * 60 * 1000;
-
-type TimeGoalEditorType = TimeGoalType | typeof TIME_GOAL_NONE;
 
 async function loadActiveCatalogService(): Promise<CatalogService> {
   return (await loadRoutineRuntime()).catalogService;
@@ -190,105 +176,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function durationValueFromMilliseconds(durationMs: number | undefined): DurationValue {
-  const normalizedDurationMs =
-    durationMs !== undefined && Number.isFinite(durationMs) && durationMs > 0
-      ? Math.floor(durationMs)
-      : DEFAULT_TIME_GOAL_DURATION_MS;
-  const totalSeconds = Math.floor(normalizedDurationMs / 1000);
-  return {
-    hours: Math.floor(totalSeconds / 3600),
-    minutes: Math.floor(totalSeconds / 60) % 60,
-    seconds: totalSeconds % 60,
-  };
-}
-
-function durationValueToMilliseconds(duration: DurationValue): number {
-  if (
-    !Number.isInteger(duration.hours) ||
-    !Number.isInteger(duration.minutes) ||
-    !Number.isInteger(duration.seconds) ||
-    duration.hours < 0 ||
-    duration.minutes < 0 ||
-    duration.seconds < 0
-  ) {
-    return 0;
-  }
-  return ((duration.hours * 60 + duration.minutes) * 60 + duration.seconds) * 1000;
-}
-
-function buildTimeGoal(
-  type: TimeGoalEditorType,
-  duration: DurationValue,
-  period: TimeGoalPeriod
-): TimeGoal | null {
-  if (type === TIME_GOAL_NONE) return null;
-  const durationMs = durationValueToMilliseconds(duration);
-  if (durationMs <= 0) throw new Error('Time goal duration must be greater than zero.');
-  return { type, durationMs, period };
-}
-
-function TimeGoalEditor({
-  type,
-  duration,
-  period,
-  onTypeChange,
-  onDurationChange,
-  onPeriodChange,
-}: {
-  type: TimeGoalEditorType;
-  duration: DurationValue;
-  period: TimeGoalPeriod;
-  onTypeChange: (value: TimeGoalEditorType) => void;
-  onDurationChange: (value: DurationValue) => void;
-  onPeriodChange: (value: TimeGoalPeriod) => void;
-}) {
-  const { colors } = useAppTheme();
-  return (
-    <Column spacing={12} style={{ paddingTop: 16, width: '100%' }} testID="activity-time-goal">
-      <Column style={{ backgroundColor: colors.border, height: 1, width: '100%' }} />
-      <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>Time goal</Text>
-      <Field label="Goal type">
-        <AccessiblePicker
-          label="Time goal type"
-          onValueChange={(next) => onTypeChange(String(next) as TimeGoalEditorType)}
-          selectedValue={type}
-          testID="activity-time-goal-type"
-        >
-          <Picker.Item label="None" value={TIME_GOAL_NONE} />
-          <Picker.Item label="Target" value="target" />
-          <Picker.Item label="Limit" value="limit" />
-        </AccessiblePicker>
-      </Field>
-      {type !== TIME_GOAL_NONE ? (
-        <>
-          <Field label="Duration">
-            <DurationPicker
-              hours={duration.hours}
-              minutes={duration.minutes}
-              onChange={onDurationChange}
-              seconds={duration.seconds}
-              testID="activity-time-goal-duration"
-            />
-          </Field>
-          <Field label="Cadence">
-            <AccessiblePicker
-              label="Time goal cadence"
-              onValueChange={(next) => onPeriodChange(String(next) as TimeGoalPeriod)}
-              selectedValue={period}
-              testID="activity-time-goal-period"
-            >
-              <Picker.Item label="Day" value="day" />
-              <Picker.Item label="Week" value="week" />
-              <Picker.Item label="Month" value="month" />
-            </AccessiblePicker>
-          </Field>
-        </>
-      ) : null}
-    </Column>
-  );
-}
-
 function FolderPicker({
   folders,
   currentFolderId,
@@ -393,15 +280,6 @@ function ActivityEditor({
   const [name, setName] = useState(activity?.name ?? '');
   const [color, setColor] = useState(activity?.color ?? '');
   const [folderId, setFolderId] = useState(activity?.folderId ?? initialFolderId ?? ROOT_VALUE);
-  const [timeGoalType, setTimeGoalType] = useState<TimeGoalEditorType>(
-    activity?.timeGoal?.type ?? TIME_GOAL_NONE
-  );
-  const [timeGoalDuration, setTimeGoalDuration] = useState<DurationValue>(() =>
-    durationValueFromMilliseconds(activity?.timeGoal?.durationMs)
-  );
-  const [timeGoalPeriod, setTimeGoalPeriod] = useState<TimeGoalPeriod>(
-    activity?.timeGoal?.period ?? 'day'
-  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
@@ -427,21 +305,12 @@ function ActivityEditor({
   };
 
   const save = () => {
-    let timeGoal: TimeGoal | null;
-    try {
-      timeGoal = buildTimeGoal(timeGoalType, timeGoalDuration, timeGoalPeriod);
-    } catch (goalError) {
-      setError(errorText(goalError));
-      return;
-    }
-
     void run(async () => {
       const selectedFolderId = folderId === ROOT_VALUE ? null : (folderId as UUID);
       if (activity) {
         const nextInput = {
           name,
           color: color.trim() || null,
-          timeGoal,
           ...(selectedFolderId !== originalFolderId ? { folderId: selectedFolderId } : {}),
         };
         await service.updateActivity(activity.id, nextInput);
@@ -450,7 +319,6 @@ function ActivityEditor({
           name,
           color: color.trim() || null,
           folderId: selectedFolderId,
-          timeGoal,
         });
       }
     });
@@ -514,14 +382,6 @@ function ActivityEditor({
             onChange={setFolderId}
           />
         </Field>
-        <TimeGoalEditor
-          duration={timeGoalDuration}
-          onDurationChange={setTimeGoalDuration}
-          onPeriodChange={setTimeGoalPeriod}
-          onTypeChange={setTimeGoalType}
-          period={timeGoalPeriod}
-          type={timeGoalType}
-        />
         <ActionError
           message={error}
           onBack={onBack}
