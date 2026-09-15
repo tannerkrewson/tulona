@@ -1,12 +1,10 @@
 import type {
-  Activity,
   CatalogCollection,
   Folder,
   HistoricalActivitySnapshot,
   IsoTimestamp,
   LogicalDayKey,
   MonthKey,
-  TimeGoal,
   TimeInterval,
   TimeTransition,
   TrackableItem,
@@ -87,32 +85,6 @@ export interface HistoryDayTotal extends HistoryAggregation {
   logicalDay: LogicalDayKey;
   period: HistoryPeriod;
 }
-
-export interface TimeGoalProgress {
-  activityId: UUID;
-  goal: TimeGoal;
-  period: HistoryPeriod;
-  trackedMs: number;
-  goalMs: number;
-  percentage: number;
-  remainingMs: number;
-  completed: boolean;
-  exceeded: boolean;
-}
-
-export interface TimeGoalAdherence {
-  activityId: UUID;
-  goal: TimeGoal;
-  period: HistoryPeriod;
-  periods: TimeGoalProgress[];
-  completedPeriods: number;
-  eligiblePeriods: number;
-  totalPeriods: number;
-}
-
-export type TimeGoalEvaluation =
-  | { kind: 'progress'; progress: TimeGoalProgress }
-  | { kind: 'adherence'; adherence: TimeGoalAdherence };
 
 function validatePeriodOptions(options: HistoryPeriodOptions): Required<HistoryPeriodOptions> {
   const rolloverHour = options.rolloverHour ?? 0;
@@ -688,136 +660,4 @@ export function aggregateHistoryByDay(
     );
   }
   return days;
-}
-
-function durationForActivity(
-  sessions: readonly HistorySession[],
-  activityId: UUID,
-  range: MillisecondRange
-): number {
-  return sessions.reduce(
-    (total, session) =>
-      session.activityId === activityId ? total + historySessionOverlapMs(session, range) : total,
-    0
-  );
-}
-
-function goalProgress(
-  activityId: UUID,
-  goal: TimeGoal,
-  period: HistoryPeriod,
-  sessions: readonly HistorySession[]
-): TimeGoalProgress {
-  const trackedMs = durationForActivity(sessions, activityId, period);
-  const completed =
-    goal.type === 'target' ? trackedMs >= goal.durationMs : trackedMs <= goal.durationMs;
-  return {
-    activityId,
-    goal,
-    period,
-    trackedMs,
-    goalMs: goal.durationMs,
-    percentage: goal.durationMs > 0 ? trackedMs / goal.durationMs : 0,
-    remainingMs: goal.type === 'target' ? Math.max(0, goal.durationMs - trackedMs) : 0,
-    completed,
-    exceeded: goal.type === 'limit' && trackedMs > goal.durationMs,
-  };
-}
-
-function goalForActivity(activity: Pick<Activity, 'id' | 'timeGoal'>): TimeGoal | null {
-  return activity.timeGoal ?? null;
-}
-
-function periodsForGoal(
-  viewedPeriod: HistoryPeriod,
-  goalPeriod: Exclude<HistoryPeriodKind, 'year'>,
-  options: HistoryPeriodOptions
-): HistoryPeriod[] {
-  const periods: HistoryPeriod[] = [];
-  let candidate = historyPeriodForDate(goalPeriod, viewedPeriod.startMs, options);
-  while (candidate.endMs <= viewedPeriod.startMs) {
-    const next = nextHistoryPeriod(candidate, options);
-    if (!next) break;
-    candidate = next;
-  }
-  while (candidate.startMs < viewedPeriod.endMs) {
-    periods.push(candidate);
-    const next = nextHistoryPeriod(candidate, options);
-    if (!next) break;
-    candidate = next;
-  }
-  return periods;
-}
-
-export function calculateTimeGoalProgress(
-  activity: Pick<Activity, 'id' | 'timeGoal'>,
-  sessions: readonly HistorySession[],
-  period: HistoryPeriod
-): TimeGoalProgress | null {
-  const goal = goalForActivity(activity);
-  if (!goal) return null;
-  return goalProgress(activity.id, goal, period, sessions);
-}
-
-export function calculateTimeGoalAdherence(
-  activity: Pick<Activity, 'id' | 'timeGoal'>,
-  sessions: readonly HistorySession[],
-  viewedPeriod: HistoryPeriod,
-  options: HistoryPeriodOptions = {},
-  nowMs = Date.now()
-): TimeGoalAdherence | null {
-  const goal = goalForActivity(activity);
-  if (!goal) return null;
-  if (!Number.isFinite(nowMs)) throw new RangeError('Current time must be finite');
-  const periods = periodsForGoal(viewedPeriod, goal.period, options).map((period) => {
-    const visiblePeriod = clipInterval(period, viewedPeriod);
-    const progress = goalProgress(activity.id, goal, period, visiblePeriod ? sessions : []);
-    if (!visiblePeriod) return progress;
-    return {
-      ...progress,
-      trackedMs: durationForActivity(sessions, activity.id, visiblePeriod),
-      percentage:
-        goal.durationMs > 0
-          ? durationForActivity(sessions, activity.id, visiblePeriod) / goal.durationMs
-          : 0,
-      remainingMs:
-        goal.type === 'target'
-          ? Math.max(0, goal.durationMs - durationForActivity(sessions, activity.id, visiblePeriod))
-          : 0,
-      completed:
-        goal.type === 'target'
-          ? durationForActivity(sessions, activity.id, visiblePeriod) >= goal.durationMs
-          : durationForActivity(sessions, activity.id, visiblePeriod) <= goal.durationMs,
-      exceeded:
-        goal.type === 'limit' &&
-        durationForActivity(sessions, activity.id, visiblePeriod) > goal.durationMs,
-    };
-  });
-  const eligible = periods.filter((period) => period.period.startMs <= nowMs);
-  return {
-    activityId: activity.id,
-    goal,
-    period: viewedPeriod,
-    periods,
-    completedPeriods: eligible.filter((period) => period.completed).length,
-    eligiblePeriods: eligible.length,
-    totalPeriods: periods.length,
-  };
-}
-
-export function evaluateTimeGoal(
-  activity: Pick<Activity, 'id' | 'timeGoal'>,
-  sessions: readonly HistorySession[],
-  period: HistoryPeriod,
-  options: HistoryPeriodOptions = {},
-  nowMs = Date.now()
-): TimeGoalEvaluation | null {
-  const goal = goalForActivity(activity);
-  if (!goal) return null;
-  if (period.kind === goal.period) {
-    const progress = calculateTimeGoalProgress(activity, sessions, period);
-    return progress ? { kind: 'progress', progress } : null;
-  }
-  const adherence = calculateTimeGoalAdherence(activity, sessions, period, options, nowMs);
-  return adherence ? { kind: 'adherence', adherence } : null;
 }

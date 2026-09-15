@@ -10,7 +10,6 @@ import { AppButton } from '@ui';
 import type { RoutineRuntime } from '../routine/routine-runtime';
 import {
   BreakdownToggle,
-  GoalProgress,
   HistoryChart,
   PeriodSummary,
   RankedDurationList,
@@ -236,28 +235,6 @@ export default function MonthView({
         />
         <RankedDurationList items={rankedItems} testID={`${testID}-ranked`} />
       </View>
-
-      {data.goals.length > 0 ? (
-        <View style={styles.section} testID={`${testID}-goals`}>
-          <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>Goals</Text>
-          <View style={styles.goalList}>
-            {data.goals.map((goal) => {
-              const activity = data.catalog.activities.find(
-                (candidate) => candidate.id === goal.activityId
-              );
-              return (
-                <GoalProgress
-                  activityColor={activity?.color}
-                  activityName={goal.activityName}
-                  evaluation={goal.evaluation}
-                  key={goal.activityId}
-                  testID={`${testID}-goal-${goal.activityId}`}
-                />
-              );
-            })}
-          </View>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -265,10 +242,6 @@ export default function MonthView({
 const styles = StyleSheet.create({
   container: {
     gap: 16,
-    width: '100%',
-  },
-  goalList: {
-    gap: 10,
     width: '100%',
   },
   section: {

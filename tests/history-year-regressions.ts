@@ -57,12 +57,6 @@ assert(
   'YearView must keep annual summary and Activities/Folders breakdown compact and shared'
 );
 assert(
-  yearView.includes('data.goals.length > 0') &&
-    yearView.includes('GoalProgress') &&
-    yearView.includes('activityColorForGoal'),
-  'YearView must render goal adherence only when real goals exist and preserve activity colors'
-);
-assert(
   yearView.includes('currentHistoryPeriod') &&
     yearView.includes('setInterval(() => setNowMs(Date.now()), 60_000)'),
   'YearView must refresh a current running year without replacing the persisted session'
@@ -146,5 +140,5 @@ assertEqual(
 );
 
 console.log(
-  'Validated History Year props, calendar-month chart navigation, running refresh, goals, and snapshot-aware aggregation.'
+  'Validated History Year props, calendar-month chart navigation, running refresh, and snapshot-aware aggregation.'
 );

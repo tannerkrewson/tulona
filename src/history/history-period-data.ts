@@ -2,7 +2,6 @@ import {
   aggregateHistory,
   aggregateHistoryByDay,
   comparisonHistoryPeriod,
-  evaluateTimeGoal,
   materializeHistorySessions,
   type CatalogCollection,
   type HistoryAggregation,
@@ -10,7 +9,6 @@ import {
   type HistoryPeriod,
   type HistoryPeriodOptions,
   type HistorySession,
-  type TimeGoalEvaluation,
 } from '@domain';
 
 import type { RoutineRuntime } from '../routine/routine-runtime';
@@ -24,7 +22,6 @@ export interface HistoryPeriodData {
   aggregation: HistoryAggregation;
   comparisonAggregation: HistoryAggregation;
   days: HistoryDayTotal[];
-  goals: Array<{ activityId: string; activityName: string; evaluation: TimeGoalEvaluation }>;
 }
 
 /**
@@ -56,10 +53,6 @@ export async function loadHistoryPeriodData(
   const aggregation = aggregateHistory(sessions, period, catalog);
   const comparisonAggregation = aggregateHistory(comparisonSessions, comparisonPeriod, catalog);
   const days = aggregateHistoryByDay(sessions, period, options, catalog);
-  const goals = catalog.activities.flatMap((activity) => {
-    const evaluation = evaluateTimeGoal(activity, sessions, period, options, nowMs);
-    return evaluation ? [{ activityId: activity.id, activityName: activity.name, evaluation }] : [];
-  });
 
   return {
     period,
@@ -70,6 +63,5 @@ export async function loadHistoryPeriodData(
     aggregation,
     comparisonAggregation,
     days,
-    goals,
   };
 }

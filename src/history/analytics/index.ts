@@ -2,7 +2,6 @@ export { AnalyticsEmptyState, type AnalyticsEmptyStateProps } from './AnalyticsE
 export { ActivityCompositionBar, type ActivityCompositionBarProps } from './ActivityCompositionBar';
 export { BreakdownToggle, type BreakdownToggleProps } from './BreakdownToggle';
 export { ChartContainer, type ChartContainerProps } from './ChartContainer';
-export { GoalProgress, type GoalProgressProps } from './GoalProgress';
 export { HistoryChart, type HistoryChartProps } from './HistoryChart';
 export { PeriodSummary, type PeriodSummaryProps } from './PeriodSummary';
 export { RankedDurationList, type RankedDurationListProps } from './RankedDurationList';
@@ -13,9 +12,6 @@ export {
   comparePeriods,
   formatAnalyticsDuration,
   formatAnalyticsPercentage,
-  formatGoalPeriod,
-  formatGoalType,
-  goalEvaluationLabel,
   rankedDurationItems,
   type ActivityCompositionSegment,
   type HistoryBreakdownMode,

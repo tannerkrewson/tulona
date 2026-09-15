@@ -23,8 +23,9 @@ export type RoutineStepEndBehavior = 'overtime' | 'auto-advance' | 'autoAdvance'
 export type RoutineStepCompletionOutcome = 'done' | 'skipped' | 'autoAdvanced';
 export type HabitSignalSource = 'manual' | 'automatic';
 export type HabitDayOutcome = 'done' | 'failed' | 'skipped';
-export type TimeGoalType = 'target' | 'limit';
-export type TimeGoalPeriod = 'day' | 'week' | 'month';
+export type GoalOverallStatus = 'in-progress' | 'future' | 'completed' | 'gave-up';
+export type GoalStatusColor = 'green' | 'yellow' | 'red' | 'light-grey';
+export type GoalSourceKind = 'activity' | 'habit';
 
 export interface Timestamps {
   createdAt: IsoTimestamp;
@@ -33,12 +34,6 @@ export interface Timestamps {
 
 export interface Archivable {
   archivedAt: IsoTimestamp | null;
-}
-
-export interface TimeGoal {
-  type: TimeGoalType;
-  durationMs: number;
-  period: TimeGoalPeriod;
 }
 
 export interface Folder extends Timestamps, Archivable {
@@ -57,8 +52,6 @@ export interface Activity extends Timestamps, Archivable {
   sortOrder: number;
   color: string | null;
   iconName: string | null;
-  /** Optional target or limit used by History. Missing and null both mean disabled. */
-  timeGoal?: TimeGoal | null;
 }
 
 export interface RoutineStep extends Timestamps, Archivable {
@@ -305,4 +298,49 @@ export interface RoutineHistoryCollection {
 export interface HabitMonthCollection {
   month: MonthKey;
   states: HabitDayState[];
+}
+
+/** A weekly goal links its identity to optional measurable app sources. */
+export interface GoalSourceLink {
+  kind: GoalSourceKind;
+  id: UUID;
+}
+
+export interface Goal extends Timestamps {
+  id: UUID;
+  title: string;
+  description: string | null;
+  sourceLinks: GoalSourceLink[];
+  overallStatus: GoalOverallStatus;
+}
+
+export interface GoalCollection {
+  goals: Goal[];
+}
+
+/** One editable status and note for a goal in one canonical week. */
+export interface GoalWeeklyStatus {
+  goalId: UUID;
+  weekStart: LogicalDayKey;
+  statusId: UUID;
+  note: string | null;
+  updatedAt: IsoTimestamp;
+}
+
+export interface GoalStatusDefinition {
+  id: UUID;
+  name: string;
+  color: GoalStatusColor;
+  sortOrder: number;
+}
+
+/** Goal-wide settings, shared by every goal in the active dataset. */
+export interface GoalSettings {
+  reviewDay: number;
+  statusDefinitions: GoalStatusDefinition[];
+}
+
+export interface GoalWeekCollection {
+  weekStart: LogicalDayKey;
+  statuses: GoalWeeklyStatus[];
 }

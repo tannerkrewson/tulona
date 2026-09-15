@@ -6,7 +6,6 @@ import {
   normalizeRoutineStepOrder,
   routineStepSchema,
   sortByOrder,
-  timeGoalSchema,
   toTimestamp,
   type Activity,
   type CatalogCollection,
@@ -19,7 +18,6 @@ import {
   type RoutineStepEndBehavior,
   type RoutineStep,
   type TrackableItem,
-  type TimeGoal,
   type UUID,
 } from '../domain';
 import { isIconValue } from '../icons/icon-names';
@@ -60,14 +58,12 @@ export interface CreateActivityInput {
   iconName?: string | null;
   id?: UUID;
   folderId?: UUID | null;
-  timeGoal?: TimeGoal | null;
 }
 
 export interface UpdateActivityInput {
   name?: string;
   color?: string | null;
   folderId?: UUID | null;
-  timeGoal?: TimeGoal | null;
 }
 
 export interface CreateRoutineInput extends CatalogStyleInput {
@@ -204,13 +200,6 @@ function validateIcon(iconName: string | null | undefined): string | null {
   return iconName;
 }
 
-function validateTimeGoal(goal: TimeGoal | null | undefined): TimeGoal | null | undefined {
-  if (goal === undefined || goal === null) return goal;
-  const result = timeGoalSchema.safeParse(goal);
-  if (!result.success) validation(`Activity time goal is invalid: ${result.error.message}`);
-  return result.data as TimeGoal;
-}
-
 function validateDuration(durationMs: number): number {
   if (!Number.isInteger(durationMs) || durationMs <= 0)
     validation('Routine step duration must be a positive integer in milliseconds');
@@ -280,7 +269,6 @@ function assertCatalogInvariants(catalog: CatalogCollection): void {
     // Activity iconName is a legacy persisted field. Activity rows no longer
     // expose custom icons, but old values must remain readable and intact.
     if (item.kind === 'routine') validateIcon(item.iconName);
-    if (item.kind === 'activity') validateTimeGoal(item.timeGoal);
     if (ids.has(item.id)) validation(`Duplicate catalog ID "${item.id}"`);
     ids.add(item.id);
     if (item.folderId !== null && !folders.has(item.folderId)) {
@@ -539,7 +527,6 @@ export class CatalogService implements CatalogServiceApi {
       sortOrder: nextSiblingOrder(catalog, folderId),
       color: validateColor(input.color),
       iconName: null,
-      timeGoal: validateTimeGoal(input.timeGoal) ?? null,
       createdAt: now,
       updatedAt: now,
       archivedAt: null,
@@ -566,10 +553,6 @@ export class CatalogService implements CatalogServiceApi {
       sortOrder: moved ? nextSiblingOrder(catalog, folderId, id) : current.sortOrder,
       color: input.color === undefined ? current.color : validateColor(input.color),
       iconName: current.iconName,
-      timeGoal:
-        input.timeGoal === undefined
-          ? current.timeGoal
-          : (validateTimeGoal(input.timeGoal) ?? null),
       updatedAt: this.timestamp(),
     };
     const next = normalizeCatalogOrders({

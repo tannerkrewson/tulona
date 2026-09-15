@@ -16,7 +16,6 @@ import type { RoutineRuntime } from '../routine/routine-runtime';
 
 import {
   BreakdownToggle,
-  GoalProgress,
   HistoryChart,
   PeriodSummary,
   RankedDurationList,
@@ -137,14 +136,6 @@ function WeekErrorState({
   );
 }
 
-function goalColor(data: HistoryPeriodData, activityId: string): string | null {
-  const activity = data.catalog.activities.find((candidate) => candidate.id === activityId);
-  if (activity?.color) return activity.color;
-  return (
-    data.aggregation.activities.find((candidate) => candidate.id === activityId)?.color ?? null
-  );
-}
-
 function WeekContent({
   data,
   days,
@@ -211,23 +202,6 @@ function WeekContent({
         />
         <RankedDurationList items={breakdownItems} testID={`${testID}-breakdown-list`} />
       </View>
-
-      {data.goals.length > 0 ? (
-        <View style={styles.section} testID={`${testID}-goals`}>
-          <SectionHeading title="Goals" />
-          <View style={styles.goalList}>
-            {data.goals.map((goal) => (
-              <GoalProgress
-                activityColor={goalColor(data, goal.activityId)}
-                activityName={goal.activityName}
-                evaluation={goal.evaluation}
-                key={goal.activityId}
-                testID={`${testID}-goal-${goal.activityId}`}
-              />
-            ))}
-          </View>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -304,10 +278,6 @@ export default WeekView;
 const styles = StyleSheet.create({
   content: {
     gap: 18,
-    width: '100%',
-  },
-  goalList: {
-    gap: 8,
     width: '100%',
   },
   retryWrap: {
