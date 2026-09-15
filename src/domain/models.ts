@@ -26,6 +26,10 @@ export type HabitDayOutcome = 'done' | 'failed' | 'skipped';
 export type GoalOverallStatus = 'in-progress' | 'future' | 'completed' | 'gave-up';
 export type GoalStatusColor = 'green' | 'yellow' | 'red' | 'light-grey';
 export type GoalSourceKind = 'activity' | 'habit';
+export type GoalEvaluationMode = 'manual' | 'automatic';
+export type GoalRuleOutcome = 'good' | 'partial' | 'no-progress';
+export type GoalHabitRuleMeasurement = 'completed-days' | 'no-skipped' | 'every-day';
+export type GoalActivityDurationComparison = 'at-least' | 'at-most';
 
 export interface Timestamps {
   createdAt: IsoTimestamp;
@@ -306,12 +310,44 @@ export interface GoalSourceLink {
   id: UUID;
 }
 
+/** The global status definition selected for each measured rule outcome. */
+export interface GoalRuleStatusIds {
+  good: UUID;
+  partial: UUID;
+  noProgress: UUID;
+}
+
+export interface GoalHabitEvaluationRule {
+  kind: 'habit';
+  habitId: UUID;
+  measurement: GoalHabitRuleMeasurement;
+  /** Required only for completed-days; counts completed scheduled days. */
+  targetCount?: number;
+  statusIds: GoalRuleStatusIds;
+}
+
+export interface GoalActivityDurationEvaluationRule {
+  kind: 'activity-duration';
+  activityId: UUID;
+  comparison: GoalActivityDurationComparison;
+  /** Weekly duration target in milliseconds. */
+  targetMs: number;
+  /** Optional baseline used to identify partial reduction for at-most rules. */
+  baselineMs?: number;
+  statusIds: GoalRuleStatusIds;
+}
+
+export type GoalEvaluationRule = GoalHabitEvaluationRule | GoalActivityDurationEvaluationRule;
+
 export interface Goal extends Timestamps {
   id: UUID;
   title: string;
   description: string | null;
   sourceLinks: GoalSourceLink[];
   overallStatus: GoalOverallStatus;
+  /** Defaults to manual when reading goals written before automatic rules existed. */
+  evaluationMode: GoalEvaluationMode;
+  rules: GoalEvaluationRule[];
 }
 
 export interface GoalCollection {

@@ -94,12 +94,77 @@ export const activitySchema = z
 
 export const goalOverallStatusSchema = z.enum(['in-progress', 'future', 'completed', 'gave-up']);
 export const goalStatusColorSchema = z.enum(['green', 'yellow', 'red', 'light-grey']);
+export const goalEvaluationModeSchema = z.enum(['manual', 'automatic']);
 export const goalSourceLinkSchema = z
   .object({
     kind: z.enum(['activity', 'habit']),
     id: uuid,
   })
   .strict();
+export const goalRuleStatusIdsSchema = z
+  .object({
+    good: uuid,
+    partial: uuid,
+    noProgress: uuid,
+  })
+  .strict();
+export const goalHabitRuleMeasurementSchema = z.enum(['completed-days', 'no-skipped', 'every-day']);
+export const goalHabitEvaluationRuleSchema = z
+  .object({
+    kind: z.literal('habit'),
+    habitId: uuid,
+    measurement: goalHabitRuleMeasurementSchema,
+    targetCount: z.number().int().min(1).max(7).optional(),
+    statusIds: goalRuleStatusIdsSchema,
+  })
+  .strict()
+  .superRefine((rule, context) => {
+    if (rule.measurement === 'completed-days' && rule.targetCount === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['targetCount'],
+        message: 'Completed-days habit rules require a target count',
+      });
+    }
+    if (rule.measurement !== 'completed-days' && rule.targetCount !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['targetCount'],
+        message: 'Only completed-days habit rules may define a target count',
+      });
+    }
+  });
+export const goalActivityDurationComparisonSchema = z.enum(['at-least', 'at-most']);
+export const goalActivityDurationEvaluationRuleSchema = z
+  .object({
+    kind: z.literal('activity-duration'),
+    activityId: uuid,
+    comparison: goalActivityDurationComparisonSchema,
+    targetMs: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+    baselineMs: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+    statusIds: goalRuleStatusIdsSchema,
+  })
+  .strict()
+  .superRefine((rule, context) => {
+    if (rule.baselineMs !== undefined && rule.baselineMs < rule.targetMs) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['baselineMs'],
+        message: 'An at-most rule baseline must not be below its target',
+      });
+    }
+    if (rule.comparison === 'at-least' && rule.baselineMs !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['baselineMs'],
+        message: 'Only at-most duration rules may define a baseline',
+      });
+    }
+  });
+export const goalEvaluationRuleSchema = z.discriminatedUnion('kind', [
+  goalHabitEvaluationRuleSchema,
+  goalActivityDurationEvaluationRuleSchema,
+]);
 export const goalSchema = z
   .object({
     id: uuid,
@@ -107,6 +172,8 @@ export const goalSchema = z
     description: z.string().nullable(),
     sourceLinks: z.array(goalSourceLinkSchema),
     overallStatus: goalOverallStatusSchema,
+    evaluationMode: goalEvaluationModeSchema.default('manual'),
+    rules: z.array(goalEvaluationRuleSchema).default([]),
     ...timestamps,
   })
   .strict();
@@ -521,6 +588,7 @@ export type RoutineHistoryCollectionRecord = z.infer<typeof routineHistoryCollec
 export type HabitMonthCollectionRecord = z.infer<typeof habitMonthCollectionSchema> &
   HabitMonthCollection;
 export type GoalRecord = z.infer<typeof goalSchema> & Goal;
+export type GoalEvaluationRuleRecord = z.infer<typeof goalEvaluationRuleSchema>;
 export type GoalWeeklyStatusRecord = z.infer<typeof goalWeeklyStatusSchema> & GoalWeeklyStatus;
 export type GoalStatusDefinitionRecord = z.infer<typeof goalStatusDefinitionSchema> &
   GoalStatusDefinition;
@@ -534,6 +602,7 @@ export const persistedSchemas = {
   historicalActivitySnapshot: historicalActivitySnapshotSchema,
   activity: activitySchema,
   goal: goalSchema,
+  goalEvaluationRule: goalEvaluationRuleSchema,
   goalWeeklyStatus: goalWeeklyStatusSchema,
   goalStatusDefinition: goalStatusDefinitionSchema,
   goalSettings: goalSettingsSchema,
