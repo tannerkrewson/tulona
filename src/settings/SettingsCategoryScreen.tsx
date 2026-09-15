@@ -8,6 +8,7 @@ import { AccessiblePicker, AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { getSettingsCategory, type SettingsCategory } from './settings-categories';
+import GoalsSettingsPanel from './GoalsSettingsPanel';
 import { PrototypeDataReset, SettingsActionError } from './SettingsFeedback';
 import { loadSettingsStore } from './settings-runtime';
 import type { SettingsStore } from './settings-store';
@@ -189,6 +190,8 @@ function CategoryControls({ category, router, store }: CategoryContentProps) {
           value={settings.showArchived}
         />
       );
+    case 'goals':
+      return <GoalsSettingsPanel />;
     case 'data':
       return (
         <Column spacing={16} style={{ width: '100%' }}>

@@ -19,6 +19,8 @@
     "test:history-year": "tsx tests/history-year-regressions.ts",
     "test:history-session": "tsx tests/history-session-editing.ts",
     "test:goals": "tsx tests/goals.ts",
+    "test:goal-settings": "tsx tests/goal-settings.ts",
+    "test:goal-settings-ui": "tsx tests/goal-settings-ui-regressions.ts",
     "test:goal-evaluation": "tsx tests/goal-evaluation.ts",
     "test:history-analytics": "tsx tests/history-analytics.ts",
     "test:habits": "tsx tests/habits.ts",
