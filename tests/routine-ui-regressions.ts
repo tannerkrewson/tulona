@@ -13,6 +13,8 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 const runner = read('src/routine/RoutineRunnerScreen.tsx');
+const editor = read('src/routine/RoutineEditorScreen.tsx');
+const recovery = read('src/orchestration/RecoveryActions.tsx');
 const activeBar = read('src/tracker/ActiveActivityBar.tsx');
 
 assert(
@@ -37,6 +39,29 @@ assert(
     runner.includes('currentStep,') &&
     runner.includes('name={currentIcon}'),
   'routine runner uses parent or current-step activity styling'
+);
+assert(
+  editor.includes("onSaved={() => router.replace('/(tabs)')}") &&
+    editor.includes('onSaved: () => void') &&
+    editor.includes('await service.createRoutine({') &&
+    editor.includes('await service.updateRoutine(routine.id') &&
+    editor.includes('onSaved();') &&
+    !editor.includes('onCreated'),
+  'routine create and save must return to the Tracker route'
+);
+const closeControlStart = recovery.indexOf('<IconButton');
+const closeControlEnd = recovery.indexOf('/>', closeControlStart);
+const closeControl = recovery.slice(closeControlStart, closeControlEnd);
+assert(
+  recovery.includes('onClose?: () => void') &&
+    recovery.includes('icon="x"') &&
+    recovery.includes('testID={`${testID}-close`}') &&
+    recovery.includes('const close = onClose ?? onBack;') &&
+    !recovery.includes('Back to tracker') &&
+    !recovery.includes('testID={`${testID}-back`}') &&
+    closeControl.includes('onPress={close}') &&
+    !closeControl.includes('disabled='),
+  'recovery errors must replace Back to tracker with an always-enabled X close action'
 );
 assert(
   activeBar.includes('const previousDurationMs = isActive ? 0 : activityDurationMs') &&

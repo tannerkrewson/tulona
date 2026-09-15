@@ -1,5 +1,5 @@
 import { Column, Text } from '@expo/ui';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -32,7 +32,7 @@ import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runt
 import DayTimeline from './DayTimeline';
 import { HistoryDateJumpSheet } from './HistoryDateJumpSheet';
 import MonthView from './MonthView';
-import WeekView from './WeekView';
+import HistoryWeekView from './WeekView';
 import YearView from './YearView';
 
 export type HistoryRange = HistoryPeriodKind;
@@ -148,18 +148,15 @@ function HistoryPeriodNavigation({
   options,
   nowMs,
   onChange,
-  onToday,
   onPeriodLabelPress,
 }: {
   period: HistoryPeriod;
   options: { rolloverHour?: number; weekStartsOn?: number };
   nowMs: number;
   onChange: (amount: -1 | 1) => void;
-  onToday: () => void;
   onPeriodLabelPress?: () => void;
 }) {
   const { colors } = useAppTheme();
-  const current = currentHistoryPeriod(period.kind, nowMs, options).key === period.key;
   const nextDisabled = nextHistoryPeriod(period, options, nowMs) === null;
   const label = formatHistoryPeriodTitle(period, nowMs, options);
 
@@ -205,17 +202,6 @@ function HistoryPeriodNavigation({
           variant="muted"
         />
       </View>
-      {!current ? (
-        <View style={styles.todayButtonWrap}>
-          <AppButton
-            label="Today"
-            onPress={onToday}
-            style={{ height: 40, width: 92 }}
-            testID="history-today"
-            variant="outlined"
-          />
-        </View>
-      ) : null}
     </Column>
   );
 }
@@ -377,6 +363,7 @@ export default function HistoryScreen({
   onPeriodLabelPress,
 }: HistoryScreenProps) {
   const { colors } = useAppTheme();
+  const router = useRouter();
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [fallbackToday] = useState<LogicalDayKey>(() => logicalDayKey(Date.now()));
@@ -384,6 +371,11 @@ export default function HistoryScreen({
   const [range, setRange] = useState<HistoryRange>('day');
   const [selectedAnchor, setSelectedAnchor] = useState<LogicalDayKey | null>(null);
   const [dateJumpVisible, setDateJumpVisible] = useState(false);
+
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)');
+  }, [router]);
 
   const load = useCallback(() => {
     setLoadError(null);
@@ -426,6 +418,8 @@ export default function HistoryScreen({
     : fallbackToday;
   const anchor = selectedAnchor ?? today;
   const period = historyPeriodForDate(range, anchor, periodOptions);
+  const currentPeriod = currentHistoryPeriod(range, clockMs, periodOptions);
+  const isCurrentPeriod = currentPeriod.key === period.key;
 
   const changePeriod = useCallback(
     (amount: -1 | 1) => {
@@ -474,7 +468,7 @@ export default function HistoryScreen({
 
   if (!runtime) {
     return (
-      <AppScreen scrollable testID="history-screen" title="History">
+      <AppScreen onBack={goBack} scrollable testID="history-screen" title="History">
         <HistoryStatePanel
           contentState={loadError ? 'error' : 'loading'}
           errorMessage={loadError ?? undefined}
@@ -486,7 +480,23 @@ export default function HistoryScreen({
   }
 
   return (
-    <AppScreen scrollable testID="history-screen" title="History">
+    <AppScreen
+      headerRight={
+        !isCurrentPeriod ? (
+          <AppButton
+            label="Today"
+            onPress={() => setSelectedAnchor(null)}
+            style={{ height: 40, width: 92 }}
+            testID="history-today"
+            variant="outlined"
+          />
+        ) : null
+      }
+      onBack={goBack}
+      scrollable
+      testID="history-screen"
+      title="History"
+    >
       <Column spacing={16} style={{ width: '100%' }}>
         <Column
           spacing={14}
@@ -502,7 +512,6 @@ export default function HistoryScreen({
             nowMs={clockMs}
             onChange={changePeriod}
             onPeriodLabelPress={openDateJump}
-            onToday={() => setSelectedAnchor(null)}
             options={periodOptions}
             period={period}
           />
@@ -522,7 +531,7 @@ export default function HistoryScreen({
           ) : range === 'day' ? (
             <HistoryDayContent period={period} runtime={runtime} />
           ) : range === 'week' ? (
-            <WeekView onDayPress={selectWeekDay} period={period} runtime={runtime} />
+            <HistoryWeekView onDayPress={selectWeekDay} period={period} runtime={runtime} />
           ) : range === 'month' ? (
             <MonthView onDayPress={selectHistoryPeriod} period={period} runtime={runtime} />
           ) : (
@@ -584,8 +593,5 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.72,
-  },
-  todayButtonWrap: {
-    alignSelf: 'center',
   },
 });

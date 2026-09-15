@@ -3,11 +3,13 @@ import { useState } from 'react';
 
 import { downloadRawDataJson } from '../backup/web-download';
 import { bootCoordinator } from './boot-coordinator';
-import { errorText } from '@ui';
+import { errorText, IconButton } from '@ui';
 import { useAppTheme } from '@theme';
 
 export interface RecoveryActionsProps {
   onRetry?: () => void;
+  onClose?: () => void;
+  /** Legacy callers may still provide route-back behavior; the old button is no longer rendered. */
   onBack?: () => void;
   testID?: string;
   retryTestID?: string;
@@ -17,6 +19,7 @@ export interface RecoveryActionsProps {
 /** Keeps durable-data failures recoverable without hiding the original error. */
 export function RecoveryActions({
   onRetry,
+  onClose,
   onBack,
   testID = 'recovery-actions',
   retryTestID,
@@ -24,6 +27,7 @@ export function RecoveryActions({
 }: RecoveryActionsProps) {
   const { colors } = useAppTheme();
   const [rawError, setRawError] = useState<string | null>(null);
+  const close = onClose ?? onBack;
 
   const exportRaw = () => {
     setRawError(null);
@@ -48,13 +52,15 @@ export function RecoveryActions({
             testID={retryTestID ?? `${testID}-retry`}
           />
         ) : null}
-        {onBack ? (
-          <Button
-            disabled={disabled}
-            label="Back to tracker"
-            onPress={onBack}
-            testID={`${testID}-back`}
-            variant="text"
+        {close ? (
+          <IconButton
+            accessibilityHint="Dismisses this error"
+            color={colors.danger.foreground}
+            icon="x"
+            label="Close error"
+            onPress={close}
+            testID={`${testID}-close`}
+            variant="plain"
           />
         ) : null}
         <Button

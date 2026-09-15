@@ -1,4 +1,4 @@
-import { Column, Host, Row, ScrollView, Text } from '@expo/ui';
+import { Column, Host, Row, ScrollView, Spacer, Text } from '@expo/ui';
 import type { ComponentProps, ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ export interface AppScreenProps {
   onBack?: () => void;
   children: ReactNode;
   title?: string;
+  headerRight?: ReactNode;
   description?: string;
   scrollable?: boolean;
   testID?: string;
@@ -34,10 +35,12 @@ const hostStyles = StyleSheet.create({
 
 function TitleRow({
   colors,
+  headerRight,
   onBack,
   title,
 }: {
   colors: ThemeColors;
+  headerRight?: ReactNode;
   onBack?: () => void;
   title?: string;
 }) {
@@ -62,6 +65,8 @@ function TitleRow({
           {title}
         </Text>
       ) : null}
+      <View style={titleRowStyles.spacer} />
+      {headerRight}
     </View>
   );
 }
@@ -73,6 +78,9 @@ const titleRowStyles = StyleSheet.create({
     gap: 4,
     height: 42,
     width: '100%',
+  },
+  spacer: {
+    flex: 1,
   },
 });
 
@@ -87,6 +95,7 @@ export function AppScreen({
   onBack,
   children,
   title,
+  headerRight,
   description,
   scrollable = true,
   testID,
@@ -117,7 +126,9 @@ export function AppScreen({
       >
         <View style={[hostStyles.fill, frameStyle]}>
           <View style={hostStyles.content}>
-            {onBack || title ? <TitleRow colors={colors} onBack={onBack} title={title} /> : null}
+            {onBack || title || headerRight ? (
+              <TitleRow colors={colors} headerRight={headerRight} onBack={onBack} title={title} />
+            ) : null}
             {description ? (
               <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>{description}</Text>
             ) : null}
@@ -140,7 +151,7 @@ export function AppScreen({
         paddingTop: 22 + insets.top,
       }}
     >
-      {onBack || title ? (
+      {onBack || title || headerRight ? (
         <Row alignment="center" spacing={4} style={{ height: 42, width: '100%' }}>
           {onBack ? (
             <IconButton
@@ -161,6 +172,8 @@ export function AppScreen({
               {title}
             </Text>
           ) : null}
+          <Spacer flexible />
+          {headerRight}
         </Row>
       ) : null}
       {description ? (
