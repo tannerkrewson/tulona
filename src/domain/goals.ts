@@ -20,6 +20,9 @@ export interface GoalWeekOptions {
 export type GoalOverallStatusFilter = GoalOverallStatus | 'all';
 
 export const DEFAULT_GOAL_REVIEW_DAY = 0;
+export const DEFAULT_GOAL_HISTORICAL_CIRCLE_COUNT = 8;
+export const MIN_GOAL_HISTORICAL_CIRCLE_COUNT = 1;
+export const MAX_GOAL_HISTORICAL_CIRCLE_COUNT = 52;
 
 const DEFAULT_STATUS_IDS = {
   goodProgress: '00000000-0000-4000-8000-000000000001',
@@ -59,6 +62,7 @@ export const DEFAULT_GOAL_STATUS_DEFINITIONS: readonly GoalStatusDefinition[] = 
 export function defaultGoalSettings(): GoalSettings {
   return {
     reviewDay: DEFAULT_GOAL_REVIEW_DAY,
+    historicalCircleCount: DEFAULT_GOAL_HISTORICAL_CIRCLE_COUNT,
     statusDefinitions: DEFAULT_GOAL_STATUS_DEFINITIONS.map((definition) => ({ ...definition })),
   };
 }

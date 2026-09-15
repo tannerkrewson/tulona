@@ -197,6 +197,7 @@ export const goalStatusDefinitionSchema = z
 export const goalSettingsSchema = z
   .object({
     reviewDay: z.number().int().min(0).max(6),
+    historicalCircleCount: z.number().int().min(1).max(52),
     statusDefinitions: z.array(goalStatusDefinitionSchema),
   })
   .strict();

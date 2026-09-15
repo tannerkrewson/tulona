@@ -21,6 +21,12 @@ export const settingsCategories = [
     path: '/settings/catalog',
   },
   {
+    id: 'goals',
+    title: 'Goals',
+    icon: 'award',
+    path: '/settings/goals',
+  },
+  {
     id: 'data',
     title: 'Data',
     icon: 'upload',
