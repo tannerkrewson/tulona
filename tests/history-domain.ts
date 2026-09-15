@@ -4,13 +4,10 @@ import {
   aggregateHistory,
   aggregateHistoryByDay,
   backfillHistoricalActivitySnapshots,
-  calculateTimeGoalAdherence,
-  calculateTimeGoalProgress,
   clipHistorySession,
   comparisonHistoryPeriod,
   createHistoricalActivitySnapshot,
   currentHistoryPeriod,
-  evaluateTimeGoal,
   historicalActivitySnapshotForCatalogItem,
   historyDayPeriod,
   logicalDayBounds,
@@ -22,7 +19,6 @@ import {
   materializeHistorySessions,
   nextHistoryPeriod,
   previousHistoryPeriod,
-  timeGoalSchema,
   timestampMs,
   type Activity,
   type CatalogCollection,
@@ -124,13 +120,7 @@ function folder(id: UUID, name: string): Folder {
   };
 }
 
-function activity(
-  id: UUID,
-  name: string,
-  folderId: UUID | null,
-  color: string,
-  timeGoal?: Activity['timeGoal']
-): Activity {
+function activity(id: UUID, name: string, folderId: UUID | null, color: string): Activity {
   const timestamp = '2026-09-01T00:00:00.000Z';
   return {
     id,
@@ -143,7 +133,6 @@ function activity(
     createdAt: timestamp,
     updatedAt: timestamp,
     archivedAt: null,
-    ...(timeGoal === undefined ? {} : { timeGoal }),
   };
 }
 
@@ -466,60 +455,6 @@ assertEqual(
 );
 assertEqual(weekDays[1].totalMs, 0, 'daily grouping leaves the following day empty after clipping');
 
-// Goal progress supports direct matching and larger-range adherence without counting future units.
-const targetActivity = activity(ids.first, 'Goal activity', null, '#123456', {
-  type: 'target',
-  durationMs: 30 * 60 * 1000,
-  period: 'day',
-});
-assert(
-  timeGoalSchema.safeParse(targetActivity.timeGoal).success,
-  'goal schema accepts a valid goal'
-);
-const goalDay = historyDayPeriod('2026-09-10', { rolloverHour: 0 });
-const goalSessions = [
-  session(ids.transitionA, ids.first, goalDay.startMs, goalDay.startMs + 20 * 60 * 1000),
-];
-const progress = calculateTimeGoalProgress(targetActivity, goalSessions, goalDay);
-assertEqual(progress?.trackedMs, 20 * 60 * 1000, 'target progress uses activity overlap');
-assertEqual(progress?.remainingMs, 10 * 60 * 1000, 'target progress reports remaining time');
-assert(progress?.completed === false, 'incomplete target is not marked complete');
-const adherence = calculateTimeGoalAdherence(
-  targetActivity,
-  goalSessions,
-  historyWeekPeriod('2026-09-10', { rolloverHour: 0, weekStartsOn: 1 }),
-  { rolloverHour: 0, weekStartsOn: 1 },
-  goalDay.startMs + 2 * 60 * 60 * 1000
-);
-assert(
-  adherence !== null && adherence.eligiblePeriods > 0,
-  'goal adherence excludes future periods'
-);
-assert(
-  evaluateTimeGoal(
-    targetActivity,
-    goalSessions,
-    historyWeekPeriod('2026-09-10', { rolloverHour: 0, weekStartsOn: 1 }),
-    { rolloverHour: 0, weekStartsOn: 1 },
-    goalDay.startMs + 2 * 60 * 60 * 1000
-  )?.kind === 'adherence',
-  'larger History ranges use adherence rather than one giant goal'
-);
-const limitActivity = activity(ids.second, 'Limit activity', null, '#123456', {
-  type: 'limit',
-  durationMs: 60 * 60 * 1000,
-  period: 'day',
-});
-const limit = calculateTimeGoalProgress(
-  limitActivity,
-  [session(ids.transitionB, ids.second, goalDay.startMs, goalDay.startMs + 70 * 60 * 1000)],
-  goalDay
-);
-assert(
-  limit?.exceeded === true && limit.completed === false,
-  'limit goals expose overuse explicitly'
-);
-
 async function run(): Promise<void> {
   // New writes snapshot catalog metadata; timestamp edits preserve it, reassignment refreshes it.
   const repository = new MemoryTrackerRepository();
@@ -590,9 +525,7 @@ async function run(): Promise<void> {
     'backup validation permits deleted activities when a snapshot identifies them'
   );
 
-  console.log(
-    'Validated History periods, snapshots, aggregation, goals, tracker writes, and backups.'
-  );
+  console.log('Validated History periods, snapshots, aggregation, tracker writes, and backups.');
 }
 
 run().catch((error: unknown) => {

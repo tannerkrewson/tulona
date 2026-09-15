@@ -6,7 +6,6 @@ import {
   aggregateHistory,
   currentHistoryPeriod,
   historyMonthPeriod,
-  type CatalogCollection,
   type HistoryPeriod,
   type HistoryPeriodOptions,
   type MonthKey,
@@ -15,13 +14,7 @@ import { useAppTheme } from '@theme';
 import { AppButton, errorText, getRowSurfaceStyle } from '@ui';
 
 import type { RoutineRuntime } from '../routine/routine-runtime';
-import {
-  BreakdownToggle,
-  GoalProgress,
-  HistoryChart,
-  PeriodSummary,
-  RankedDurationList,
-} from './analytics';
+import { BreakdownToggle, HistoryChart, PeriodSummary, RankedDurationList } from './analytics';
 import {
   buildTotalChartData,
   formatAnalyticsDuration,
@@ -214,18 +207,6 @@ function StatePanel({
   );
 }
 
-function activityColorForGoal(
-  catalog: CatalogCollection,
-  activityId: string,
-  fallbackActivities: HistoryPeriodData['aggregation']['activities']
-): string | null {
-  return (
-    catalog.activities.find((activity) => activity.id === activityId)?.color ??
-    fallbackActivities.find((activity) => activity.id === activityId)?.color ??
-    null
-  );
-}
-
 function YearSummary({
   averageMs,
   averageMonthCount,
@@ -364,27 +345,6 @@ export default function YearView({ period, runtime, onMonthPress, testID }: Year
         />
         <RankedDurationList items={rankedItems} testID="history-year-breakdown-list" />
       </View>
-
-      {data.goals.length > 0 ? (
-        <View style={styles.section} testID="history-year-goals">
-          <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>Goals</Text>
-          <View style={styles.goalList}>
-            {data.goals.map((goal) => (
-              <GoalProgress
-                activityColor={activityColorForGoal(
-                  data.catalog,
-                  goal.activityId,
-                  data.aggregation.activities
-                )}
-                activityName={goal.activityName}
-                evaluation={goal.evaluation}
-                key={goal.activityId}
-                testID={`history-year-goal-${goal.activityId}`}
-              />
-            ))}
-          </View>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -413,9 +373,5 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     marginBottom: 0,
-  },
-  goalList: {
-    gap: 10,
-    width: '100%',
   },
 });

@@ -3,8 +3,6 @@ import {
   type HistoryActivityTotal,
   type HistoryAggregation,
   type HistoryDayTotal,
-  type TimeGoalEvaluation,
-  type TimeGoalPeriod,
 } from '@domain';
 
 export type HistoryBreakdownMode = 'activities' | 'folders';
@@ -73,15 +71,6 @@ export function formatAnalyticsPercentage(fraction: number): string {
   const safeFraction = Number.isFinite(fraction) ? Math.max(0, fraction) : 0;
   const percentage = Math.round(safeFraction * 100);
   return percentage === 0 && safeFraction > 0 ? '<1%' : `${percentage}%`;
-}
-
-export function formatGoalPeriod(period: TimeGoalPeriod, plural = false): string {
-  const label = period === 'day' ? 'day' : period === 'week' ? 'week' : 'month';
-  return plural ? `${label}s` : label;
-}
-
-export function formatGoalType(type: 'target' | 'limit'): string {
-  return type === 'target' ? 'Target' : 'Limit';
 }
 
 /**
@@ -260,12 +249,4 @@ export function buildTotalChartData(
       'tracked-time': safeDuration(point.totalMs),
     })),
   };
-}
-
-export function goalEvaluationLabel(evaluation: TimeGoalEvaluation, activityName: string): string {
-  const goal =
-    evaluation.kind === 'progress' ? evaluation.progress.goal : evaluation.adherence.goal;
-  const kind = formatGoalType(goal.type).toLowerCase();
-  const period = formatGoalPeriod(goal.period);
-  return `${activityName} ${kind} goal for each ${period}`;
 }

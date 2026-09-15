@@ -4,6 +4,7 @@ export * from './database';
 export * from './dataset-store';
 export * from './errors';
 export * from './habit-repository';
+export * from './goal-repository';
 export * from './indexed-db-storage';
 export * from './journal';
 export * from './journal-types';

@@ -4,6 +4,7 @@ import {
   createCatalogRepository,
   createDatasetManager,
   createHabitRepository,
+  createGoalRepository,
   createRoutineRepository,
   createSettingsRepository,
   createTrackerRepository,
@@ -33,6 +34,7 @@ import { BackupService } from '../backup/backup-service';
 import { createHabitReconciliationService, type HabitReconciliationService } from '../habits';
 import { createHabitService, type HabitService } from '../habits/habit-service';
 import { createHabitStore, type HabitStore } from '../habits/habit-store';
+import { createGoalService, type GoalService } from '../goals/goal-service';
 import { createReportingService, type ReportingService } from '../reporting/reporting-service';
 import { createRoutineAlarmService, type RoutineAlarmService } from '../routine/routine-alarm';
 import { createRoutineService, type RoutineService } from '../routine/routine-service';
@@ -42,7 +44,14 @@ import { createTrackerService, type TrackerService } from '../tracker/tracker-se
 import { createTrackerStore, type TrackerStore } from '../tracker/tracker-store';
 
 export type BootStage =
-  'metadata' | 'journal' | 'settings' | 'catalog' | 'routine-recovery' | 'tracker' | 'habits';
+  | 'metadata'
+  | 'journal'
+  | 'settings'
+  | 'catalog'
+  | 'goals'
+  | 'routine-recovery'
+  | 'tracker'
+  | 'habits';
 
 export type BootDestination =
   { kind: 'tabs' } | { kind: 'runner'; routineId: UUID } | { kind: 'chooser' };
@@ -93,6 +102,7 @@ export interface BootRepositories {
   tracker: ReturnType<typeof createTrackerRepository>;
   routine: ReturnType<typeof createRoutineRepository>;
   habits: ReturnType<typeof createHabitRepository>;
+  goals: ReturnType<typeof createGoalRepository>;
   backup: BackupRepository;
 }
 
@@ -102,6 +112,7 @@ export interface BootServices {
   tracker: TrackerService;
   routine: RoutineService;
   habits: HabitService;
+  goals: GoalService;
   reconciliation: HabitReconciliationService;
   reporting: ReportingService;
   backup: BackupService;
@@ -292,6 +303,7 @@ export class BootCoordinator {
       tracker: createTrackerRepository(this.database, namespace),
       routine: createRoutineRepository(this.database, namespace),
       habits: createHabitRepository(this.database, namespace),
+      goals: createGoalRepository(this.database, namespace),
       backup: new BackupRepository(this.database),
     };
 
@@ -317,6 +329,17 @@ export class BootCoordinator {
     }
 
     const runtimeHolder: { current: BootFeatureRuntime | null } = { current: null };
+    const goalService = createGoalService(repositories.goals, {
+      rolloverHour: () =>
+        runtimeHolder.current?.settings.logicalDayRolloverHour ?? settings.logicalDayRolloverHour,
+      weekStartsOn: () => runtimeHolder.current?.settings.weekStartsOn ?? settings.weekStartsOn,
+    });
+    try {
+      await goalService.read();
+      await goalService.readSettings();
+    } catch (error) {
+      throw bootError('goals', error);
+    }
     const settingsService = createSettingsService(repositories.settings, {
       onUpdated: (nextSettings) => {
         const current = runtimeHolder.current;
@@ -421,6 +444,7 @@ export class BootCoordinator {
       tracker: trackerService,
       routine: routineService,
       habits: habitService,
+      goals: goalService,
       reconciliation,
       reporting,
       backup,
