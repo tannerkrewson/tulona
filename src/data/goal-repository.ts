@@ -83,6 +83,7 @@ function validateSettings(value: unknown): GoalSettings {
   }
   return {
     reviewDay: parsed.reviewDay,
+    historicalCircleCount: parsed.historicalCircleCount,
     statusDefinitions: parsed.statusDefinitions.map((definition) => ({ ...definition })),
   };
 }

@@ -6,6 +6,8 @@ import {
   goalSourceLinkSchema,
   goalStatusDefinitionSchema,
   goalWeekIdentity,
+  MAX_GOAL_HISTORICAL_CIRCLE_COUNT,
+  MIN_GOAL_HISTORICAL_CIRCLE_COUNT,
   type Goal,
   type GoalCollection,
   type GoalEvaluationMode,
@@ -66,6 +68,7 @@ export interface UpdateGoalStatusDefinitionInput {
 
 export interface GoalSettingsPatch {
   reviewDay?: number;
+  historicalCircleCount?: number;
 }
 
 export interface SetGoalWeeklyStatusInput {
@@ -283,7 +286,17 @@ export class GoalService implements GoalServiceApi {
     if (!Number.isInteger(reviewDay) || reviewDay < 0 || reviewDay > 6) {
       validation('Goal review day must be an integer from 0 through 6');
     }
-    const next = { ...current, reviewDay };
+    const historicalCircleCount = patch.historicalCircleCount ?? current.historicalCircleCount;
+    if (
+      !Number.isInteger(historicalCircleCount) ||
+      historicalCircleCount < MIN_GOAL_HISTORICAL_CIRCLE_COUNT ||
+      historicalCircleCount > MAX_GOAL_HISTORICAL_CIRCLE_COUNT
+    ) {
+      validation(
+        `Goal historical circle count must be an integer from ${MIN_GOAL_HISTORICAL_CIRCLE_COUNT} through ${MAX_GOAL_HISTORICAL_CIRCLE_COUNT}`
+      );
+    }
+    const next = { ...current, reviewDay, historicalCircleCount };
     await this.repository.writeSettings(next);
     return next;
   }
