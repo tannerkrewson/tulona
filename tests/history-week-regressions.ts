@@ -12,10 +12,6 @@ function assert(condition: unknown, message: string): asserts condition {
 const root = path.resolve(process.cwd());
 const week = fs.readFileSync(path.join(root, 'src/history/WeekView.tsx'), 'utf8');
 const loader = fs.readFileSync(path.join(root, 'src/history/history-period-data.ts'), 'utf8');
-const goalProgress = fs.readFileSync(
-  path.join(root, 'src/history/analytics/GoalProgress.tsx'),
-  'utf8'
-);
 
 assert(
   week.includes('runtime: RoutineRuntime') &&
@@ -33,8 +29,7 @@ assert(
   loader.includes('comparisonHistoryPeriod(period, options)') &&
     loader.includes('trackerService.query(period, nowMs)') &&
     loader.includes('trackerService.query(comparisonPeriod, nowMs)') &&
-    loader.includes('aggregateHistoryByDay(sessions, period, options, catalog)') &&
-    loader.includes('evaluateTimeGoal(activity, sessions, period, options, nowMs)'),
+    loader.includes('aggregateHistoryByDay(sessions, period, options, catalog)'),
   'the shared loader must provide the current/comparison week and per-day real aggregation'
 );
 assert(
@@ -73,15 +68,6 @@ assert(
   'WeekView must use snapshot-aware Activities/Folders rankings without truncating them'
 );
 assert(
-  week.includes('data.goals.length > 0') &&
-    week.includes('<GoalProgress') &&
-    week.includes('evaluation={goal.evaluation}') &&
-    week.includes('activityColor={goalColor(data, goal.activityId)}') &&
-    goalProgress.includes('evaluation.adherence') &&
-    goalProgress.includes('Met ${completed} of ${eligible}'),
-  'goal progress must be conditional, real, and colored by the activity identity'
-);
-assert(
   week.includes('const WEEK_DAY_COUNT = 7') &&
     week.includes('Math.max(WEEK_DAY_COUNT, days.length)'),
   'WeekView must preserve all seven logical day positions for its average and chart'
@@ -107,5 +93,5 @@ const sundayWeek = historyWeekPeriod(new Date(2026, 8, 16, 12), {
 assert(sundayWeek.startLogicalDay === '2026-09-13', 'week start must honor Sunday preference');
 
 console.log(
-  'Validated History Week loader wiring, live/future handling, summary, chart, breakdown, goals, and week-start semantics.'
+  'Validated History Week loader wiring, live/future handling, summary, chart, breakdown, and week-start semantics.'
 );

@@ -12,12 +12,16 @@ import type {
   HabitDayState,
   HabitMonthCollection,
   HistoricalActivitySnapshot,
+  Goal,
+  GoalSettings,
+  GoalStatusDefinition,
+  GoalWeekCollection,
+  GoalWeeklyStatus,
   RoutineDefinition,
   RoutineHistoryCollection,
   RoutineRunHistory,
   RoutineSnapshot,
   RoutineStep,
-  TimeGoal,
   Transition,
   TrackerMonthCollection,
 } from './models';
@@ -48,13 +52,6 @@ const month = z.string().refine((value) => {
 const nullableArchivedAt = isoTimestamp.nullable();
 const timestamps = { createdAt: isoTimestamp, updatedAt: isoTimestamp };
 const routineTrackingMode = z.enum(['overall', 'steps']);
-export const timeGoalSchema = z
-  .object({
-    type: z.enum(['target', 'limit']),
-    durationMs: z.number().int().positive(),
-    period: z.enum(['day', 'week', 'month']),
-  })
-  .passthrough();
 
 export const historicalActivitySnapshotSchema = z
   .object({
@@ -90,11 +87,63 @@ export const activitySchema = z
     sortOrder: z.number().int().nonnegative(),
     color: z.string().nullable(),
     iconName: z.string().nullable(),
-    timeGoal: timeGoalSchema.nullable().optional(),
     ...timestamps,
     archivedAt: nullableArchivedAt,
   })
-  .passthrough();
+  .strict();
+
+export const goalOverallStatusSchema = z.enum(['in-progress', 'future', 'completed', 'gave-up']);
+export const goalStatusColorSchema = z.enum(['green', 'yellow', 'red', 'light-grey']);
+export const goalSourceLinkSchema = z
+  .object({
+    kind: z.enum(['activity', 'habit']),
+    id: uuid,
+  })
+  .strict();
+export const goalSchema = z
+  .object({
+    id: uuid,
+    title: z.string().trim().min(1),
+    description: z.string().nullable(),
+    sourceLinks: z.array(goalSourceLinkSchema),
+    overallStatus: goalOverallStatusSchema,
+    ...timestamps,
+  })
+  .strict();
+export const goalWeeklyStatusSchema = z
+  .object({
+    goalId: uuid,
+    weekStart: logicalDay,
+    statusId: uuid,
+    note: z.string().nullable(),
+    updatedAt: isoTimestamp,
+  })
+  .strict();
+export const goalStatusDefinitionSchema = z
+  .object({
+    id: uuid,
+    name: z.string().trim().min(1),
+    color: goalStatusColorSchema,
+    sortOrder: z.number().int().nonnegative(),
+  })
+  .strict();
+export const goalSettingsSchema = z
+  .object({
+    reviewDay: z.number().int().min(0).max(6),
+    statusDefinitions: z.array(goalStatusDefinitionSchema),
+  })
+  .strict();
+export const goalCollectionSchema = z
+  .object({
+    goals: z.array(goalSchema),
+  })
+  .strict();
+export const goalWeekCollectionSchema = z
+  .object({
+    weekStart: logicalDay,
+    statuses: z.array(goalWeeklyStatusSchema),
+  })
+  .strict();
 
 const routineStepShape = {
   id: uuid,
@@ -450,7 +499,6 @@ export const operationJournalEntrySchema = z
 export const initialSchemaVersionSchema = z.literal(1);
 
 export type FolderRecord = z.infer<typeof folderSchema> & Folder;
-export type TimeGoalRecord = z.infer<typeof timeGoalSchema> & TimeGoal;
 export type HistoricalActivitySnapshotRecord = z.infer<typeof historicalActivitySnapshotSchema> &
   HistoricalActivitySnapshot;
 export type RoutineStepRecord = z.infer<typeof routineStepSchema> & RoutineStep;
@@ -472,12 +520,25 @@ export type RoutineHistoryCollectionRecord = z.infer<typeof routineHistoryCollec
   RoutineHistoryCollection;
 export type HabitMonthCollectionRecord = z.infer<typeof habitMonthCollectionSchema> &
   HabitMonthCollection;
+export type GoalRecord = z.infer<typeof goalSchema> & Goal;
+export type GoalWeeklyStatusRecord = z.infer<typeof goalWeeklyStatusSchema> & GoalWeeklyStatus;
+export type GoalStatusDefinitionRecord = z.infer<typeof goalStatusDefinitionSchema> &
+  GoalStatusDefinition;
+export type GoalSettingsRecord = z.infer<typeof goalSettingsSchema> & GoalSettings;
+export type GoalCollectionRecord = z.infer<typeof goalCollectionSchema>;
+export type GoalWeekCollectionRecord = z.infer<typeof goalWeekCollectionSchema> &
+  GoalWeekCollection;
 
 export const persistedSchemas = {
   folder: folderSchema,
-  timeGoal: timeGoalSchema,
   historicalActivitySnapshot: historicalActivitySnapshotSchema,
   activity: activitySchema,
+  goal: goalSchema,
+  goalWeeklyStatus: goalWeeklyStatusSchema,
+  goalStatusDefinition: goalStatusDefinitionSchema,
+  goalSettings: goalSettingsSchema,
+  goalCollection: goalCollectionSchema,
+  goalWeekCollection: goalWeekCollectionSchema,
   routineStep: routineStepSchema,
   routineDefinition: routineDefinitionSchema,
   transition: transitionSchema,

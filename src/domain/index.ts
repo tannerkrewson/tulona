@@ -1,4 +1,5 @@
 export * from './models';
+export * from './goals';
 export * from './ordering';
 export * from './schemas';
 export * from './time';

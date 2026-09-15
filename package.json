@@ -18,7 +18,7 @@
     "test:history-month": "tsx tests/history-month-regressions.ts",
     "test:history-year": "tsx tests/history-year-regressions.ts",
     "test:history-session": "tsx tests/history-session-editing.ts",
-    "test:catalog-editor": "tsx tests/catalog-editor-regressions.ts",
+    "test:goals": "tsx tests/goals.ts",
     "test:history-analytics": "tsx tests/history-analytics.ts",
     "test:habits": "tsx tests/habits.ts",
     "test:habit-ui": "tsx tests/habit-ui-regressions.ts",

@@ -4,7 +4,6 @@ import {
   buildTotalChartData,
   comparePeriods,
   formatAnalyticsPercentage,
-  goalEvaluationLabel,
   rankedDurationItems,
 } from '../src/history/analytics/analytics-data';
 import type {
@@ -12,7 +11,6 @@ import type {
   HistoryDayTotal,
   HistoryFolderTotal,
   HistoryPeriod,
-  TimeGoalEvaluation,
 } from '../src/domain';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -178,24 +176,6 @@ assertEqual(
   'equal comparisons are explicit'
 );
 
-const goalEvaluation: TimeGoalEvaluation = {
-  kind: 'adherence',
-  adherence: {
-    activityId: 'activity-focus',
-    goal: { type: 'target', durationMs: 30 * 60 * 1000, period: 'day' },
-    period,
-    periods: [],
-    completedPeriods: 2,
-    eligiblePeriods: 3,
-    totalPeriods: 7,
-  },
-};
-assertEqual(
-  goalEvaluationLabel(goalEvaluation, 'Focus'),
-  'Focus target goal for each day',
-  'goal labels identify activity, type, and cadence'
-);
-
 console.log(
-  'Validated History analytics data transforms, snapshot identity, colors, comparisons, and goal labels.'
+  'Validated History analytics data transforms, snapshot identity, colors, and comparisons.'
 );

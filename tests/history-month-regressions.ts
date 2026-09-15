@@ -44,12 +44,6 @@ assert(
   'Month must expose Activities/Folders rankings without silently capping results'
 );
 assert(
-  month.includes('data.goals.length > 0') &&
-    month.includes('<GoalProgress') &&
-    month.includes('activityColor={activity?.color}'),
-  'Month must render direct or adherence goals only when goals exist'
-);
-assert(
   !month.includes('react-native-calendars') &&
     !month.includes('PieChart') &&
     !month.includes('Untracked'),
@@ -64,5 +58,5 @@ assert(
 );
 
 console.log(
-  'Validated History Month loading, comparison summary, daily chart accessibility, breakdowns, goals, and restrained phone-first scope.'
+  'Validated History Month loading, comparison summary, daily chart accessibility, breakdowns, and restrained phone-first scope.'
 );
