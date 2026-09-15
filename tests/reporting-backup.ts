@@ -5,8 +5,15 @@ import {
   datasetKey,
   type AsyncStorageLike,
 } from '../src/data';
-import type { CatalogCollection, AppSettings, Transition } from '../src/domain';
-import { logicalDayBounds } from '../src/domain';
+import type {
+  AppSettings,
+  CatalogCollection,
+  Goal,
+  GoalSettings,
+  GoalWeekCollection,
+  Transition,
+} from '../src/domain';
+import { defaultGoalSettings, logicalDayBounds } from '../src/domain';
 import {
   BACKUP_FORMAT,
   BackupMigrationRegistry,
@@ -28,6 +35,7 @@ const ids = {
   root: '33333333-3333-4333-8333-333333333333',
   oldDataset: '44444444-4444-4444-8444-444444444444',
   newDataset: '55555555-5555-4555-8555-555555555555',
+  goal: '66666666-6666-4666-8666-666666666666',
 };
 
 const timestamp = '2026-08-30T00:00:00.000Z';
@@ -81,6 +89,32 @@ const catalog: CatalogCollection = {
   ],
   routines: [],
 };
+const goalSettings: GoalSettings = defaultGoalSettings();
+const goal: Goal = {
+  id: ids.goal,
+  title: 'Make steady progress',
+  description: 'A goal included to verify structured backup round trips.',
+  sourceLinks: [],
+  overallStatus: 'in-progress',
+  evaluationMode: 'manual',
+  rules: [],
+  createdAt: timestamp,
+  updatedAt: timestamp,
+};
+const goalWeeks: GoalWeekCollection[] = [
+  {
+    weekStart: '2026-08-24',
+    statuses: [
+      {
+        goalId: ids.goal,
+        weekStart: '2026-08-24',
+        statusId: goalSettings.statusDefinitions[0]!.id,
+        note: 'Good first review.',
+        updatedAt: timestamp,
+      },
+    ],
+  },
+];
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -140,6 +174,9 @@ function backupDocument(): LifeTrackerBackup {
     activeRoutine: null,
     habits: [],
     habitDayStates: [],
+    goals: [goal],
+    goalSettings,
+    goalWeeks,
   };
 }
 
@@ -205,6 +242,25 @@ async function reportingChecks(): Promise<void> {
 async function backupChecks(): Promise<void> {
   const parsed = parseBackup(serializeBackup(backupDocument()));
   assert(parsed.summary.activities === 2, 'valid backup must produce a semantic summary');
+  assert(
+    parsed.summary.goals === 1 && parsed.summary.goalWeeklyStatuses === 1,
+    'structured backups must include goals and weekly statuses in their summary'
+  );
+  const {
+    goals: _goals,
+    goalSettings: _goalSettings,
+    goalWeeks: _goalWeeks,
+    ...backupWithoutReplacementGoals
+  } = backupDocument();
+  try {
+    parseBackup(backupWithoutReplacementGoals);
+    throw new Error('backups without replacement goals must be rejected');
+  } catch (error) {
+    assert(
+      error instanceof Error && error.message.includes('schema'),
+      'incompatible backups must require a reset rather than silently dropping goal data'
+    );
+  }
   const withTransientState = { ...backupDocument(), transientUiState: { selectedTab: 'backup' } };
   assert(
     !serializeBackup(withTransientState as LifeTrackerBackup).includes('transientUiState'),
@@ -267,8 +323,15 @@ async function backupChecks(): Promise<void> {
     activeRoutine: null,
     habits: [],
     habitDayStates: [],
+    goals: [goal],
+    goalSettings,
+    goalWeeks,
   });
   const backup = await exportBackup(repository, oldNamespace, { exportedAt: timestamp });
+  assert(
+    backup.goals.length === 1 && backup.goalWeeks[0]?.statuses.length === 1,
+    'backup export must include goals and weekly status history'
+  );
   const replacement = new DatasetReplacementService(database, manager, repository);
   const before = await manager.active();
   try {
@@ -331,6 +394,14 @@ async function backupChecks(): Promise<void> {
   assert(
     reloadedNamespace?.datasetId === ids.newDataset,
     'a fresh dataset manager hydrates the replacement as active'
+  );
+  const restored = await repository.read(reloadedNamespace!);
+  assert(
+    restored.goals.length === 1 &&
+      restored.goals[0]?.id === ids.goal &&
+      restored.goalSettings.historicalCircleCount === goalSettings.historicalCircleCount &&
+      restored.goalWeeks[0]?.statuses[0]?.note === 'Good first review.',
+    'restore must round-trip goals, goal settings, and weekly status history'
   );
   const repeated = await replacement.replaceCurrentData(serializeBackup(backup), {
     datasetId: ids.newDataset,

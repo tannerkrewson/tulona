@@ -135,7 +135,7 @@ export function ActivitySessionActivityChooserScreen({
         {error ? (
           <ChooserError message={error}>
             <RecoveryActions
-              onBack={returnToSession}
+              onClose={returnToSession}
               onRetry={retry}
               testID="activity-session-chooser-recovery"
             />
@@ -229,7 +229,7 @@ export function ActivitySessionActivityChooserScreen({
         {error ? (
           <ChooserError message={error}>
             <RecoveryActions
-              onBack={returnToSession}
+              onClose={returnToSession}
               onRetry={retry}
               testID="activity-session-chooser-action-recovery"
             />

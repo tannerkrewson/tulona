@@ -8,8 +8,11 @@ import type { LifeTrackerBackup, ParsedLifeTrackerBackup } from './backup-schema
 import type {
   Activity,
   CatalogCollection,
+  Goal,
   Folder,
   HabitDayState,
+  GoalSettings,
+  GoalWeekCollection,
   RoutineDefinition,
   RoutineRunHistory,
   RoutineSnapshot,
@@ -104,6 +107,8 @@ export interface BackupImportSummary {
   routineRuns: number;
   habits: number;
   habitDayStates: number;
+  goals: number;
+  goalWeeklyStatuses: number;
   archivedRecords: number;
   migrationsApplied: number[];
 }
@@ -198,6 +203,9 @@ function normalizeDocument(value: unknown): Record<string, unknown> {
       input.habitDayStates === undefined
         ? undefined
         : flattenCollection<HabitDayState>(input.habitDayStates, 'states'),
+    goals: input.goals as Goal[],
+    goalSettings: input.goalSettings as GoalSettings,
+    goalWeeks: input.goalWeeks as GoalWeekCollection[],
   };
 }
 
@@ -321,6 +329,55 @@ function validateSemantics(backup: LifeTrackerBackup): string[] {
     const key = `${state.habitId}:${state.logicalDay}`;
     if (stateKeys.has(key)) errors.push(`Duplicate habit day state "${key}"`);
     stateKeys.add(key);
+  }
+
+  const goalIds = duplicateIds(backup.goals, 'goal', errors);
+  const goalStatusIds = duplicateIds(backup.goalSettings.statusDefinitions, 'goal status', errors);
+  for (const goal of backup.goals) {
+    for (const source of goal.sourceLinks) {
+      const known = source.kind === 'habit' ? habitIds.has(source.id) : activityIds.has(source.id);
+      if (!known) {
+        errors.push(`Goal "${goal.id}" references unknown ${source.kind} "${source.id}"`);
+      }
+    }
+    for (const rule of goal.rules) {
+      if (rule.kind === 'habit' && !habitIds.has(rule.habitId)) {
+        errors.push(`Goal "${goal.id}" references unknown habit "${rule.habitId}"`);
+      }
+      if (rule.kind === 'activity-duration' && !activityIds.has(rule.activityId)) {
+        errors.push(`Goal "${goal.id}" references unknown activity "${rule.activityId}"`);
+      }
+      for (const statusId of Object.values(rule.statusIds)) {
+        if (!goalStatusIds.has(statusId)) {
+          errors.push(`Goal "${goal.id}" maps a rule outcome to unknown status "${statusId}"`);
+        }
+      }
+    }
+  }
+  const weekStarts = new Set<string>();
+  for (const week of backup.goalWeeks) {
+    if (weekStarts.has(week.weekStart)) {
+      errors.push(`Duplicate goal week "${week.weekStart}"`);
+    }
+    weekStarts.add(week.weekStart);
+    const weeklyGoalIds = new Set<string>();
+    for (const status of week.statuses) {
+      if (!goalIds.has(status.goalId)) {
+        errors.push(`Weekly goal status references unknown goal "${status.goalId}"`);
+      }
+      if (status.weekStart !== week.weekStart) {
+        errors.push(`Weekly goal status "${status.goalId}" belongs to another week`);
+      }
+      if (weeklyGoalIds.has(status.goalId)) {
+        errors.push(`Goal "${status.goalId}" has more than one status in week "${week.weekStart}"`);
+      }
+      weeklyGoalIds.add(status.goalId);
+      if (!goalStatusIds.has(status.statusId)) {
+        errors.push(
+          `Weekly goal status "${status.goalId}" uses unknown status "${status.statusId}"`
+        );
+      }
+    }
   }
   return errors;
 }
@@ -446,6 +503,8 @@ export function parseBackup(
       routineRuns: backup.routineHistory.length,
       habits: backup.habits.length,
       habitDayStates: backup.habitDayStates.length,
+      goals: backup.goals.length,
+      goalWeeklyStatuses: backup.goalWeeks.reduce((total, week) => total + week.statuses.length, 0),
       archivedRecords: [
         ...backup.catalog.folders,
         ...backup.catalog.activities,

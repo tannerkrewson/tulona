@@ -345,7 +345,7 @@ export interface Goal extends Timestamps {
   description: string | null;
   sourceLinks: GoalSourceLink[];
   overallStatus: GoalOverallStatus;
-  /** Defaults to manual when reading goals written before automatic rules existed. */
+  /** Weekly statuses are either manually reviewed or derived from rules. */
   evaluationMode: GoalEvaluationMode;
   rules: GoalEvaluationRule[];
 }

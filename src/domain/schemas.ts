@@ -172,8 +172,8 @@ export const goalSchema = z
     description: z.string().nullable(),
     sourceLinks: z.array(goalSourceLinkSchema),
     overallStatus: goalOverallStatusSchema,
-    evaluationMode: goalEvaluationModeSchema.default('manual'),
-    rules: z.array(goalEvaluationRuleSchema).default([]),
+    evaluationMode: goalEvaluationModeSchema,
+    rules: z.array(goalEvaluationRuleSchema),
     ...timestamps,
   })
   .strict();

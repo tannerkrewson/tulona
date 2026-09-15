@@ -9,8 +9,6 @@ import { useAppTheme } from '@theme';
 export interface RecoveryActionsProps {
   onRetry?: () => void;
   onClose?: () => void;
-  /** Legacy callers may still provide route-back behavior; the old button is no longer rendered. */
-  onBack?: () => void;
   testID?: string;
   retryTestID?: string;
   disabled?: boolean;
@@ -20,14 +18,12 @@ export interface RecoveryActionsProps {
 export function RecoveryActions({
   onRetry,
   onClose,
-  onBack,
   testID = 'recovery-actions',
   retryTestID,
   disabled = false,
 }: RecoveryActionsProps) {
   const { colors } = useAppTheme();
   const [rawError, setRawError] = useState<string | null>(null);
-  const close = onClose ?? onBack;
 
   const exportRaw = () => {
     setRawError(null);
@@ -52,13 +48,13 @@ export function RecoveryActions({
             testID={retryTestID ?? `${testID}-retry`}
           />
         ) : null}
-        {close ? (
+        {onClose ? (
           <IconButton
             accessibilityHint="Dismisses this error"
             color={colors.danger.foreground}
             icon="x"
             label="Close error"
-            onPress={close}
+            onPress={onClose}
             testID={`${testID}-close`}
             variant="plain"
           />

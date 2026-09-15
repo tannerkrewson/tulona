@@ -35,7 +35,7 @@ export function HabitErrorMessage({
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
       <RecoveryActions
-        onBack={onBack}
+        onClose={onBack}
         onRetry={onRetry}
         retryTestID={retryTestID}
         testID="habit-recovery"

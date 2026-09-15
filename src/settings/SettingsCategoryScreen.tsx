@@ -275,7 +275,7 @@ export default function SettingsCategoryScreen({
           {loadError ? (
             <RecoveryActions
               onRetry={load}
-              onBack={() => router.back()}
+              onClose={() => router.back()}
               retryTestID="settings-retry"
               testID="settings-load-recovery"
             />

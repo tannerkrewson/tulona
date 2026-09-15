@@ -43,7 +43,7 @@ export function SettingsActionError({
             .reload()
             .catch(() => undefined)
         }
-        onBack={onBack}
+        onClose={onBack}
         retryTestID="settings-reload"
         testID="settings-recovery"
       />

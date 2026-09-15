@@ -115,7 +115,7 @@ export function NextActivityChooserScreen() {
         <Column alignment="center" spacing={16} style={{ width: '100%' }}>
           <ChooserError message={error ?? 'Restoring the next-activity chooser...'}>
             <RecoveryActions
-              onBack={() => router.replace('/(tabs)')}
+              onClose={() => router.replace('/(tabs)')}
               onRetry={load}
               testID="chooser-recovery"
             />
@@ -186,7 +186,7 @@ export function NextActivityChooserScreen() {
         ) : null}
         <ChooserError message={error}>
           <RecoveryActions
-            onBack={() => router.replace('/(tabs)')}
+            onClose={() => router.replace('/(tabs)')}
             onRetry={() => {
               if (lastChoice.current) void choose(lastChoice.current);
               else load();

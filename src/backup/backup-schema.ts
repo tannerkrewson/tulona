@@ -6,6 +6,9 @@ import {
   catalogCollectionSchema,
   habitDayStateSchema,
   habitSchema,
+  goalSchema,
+  goalSettingsSchema,
+  goalWeekCollectionSchema,
   routineDefinitionSchema,
   routineRunHistorySchema,
   transitionSchema,
@@ -16,6 +19,9 @@ import type {
   CatalogCollection,
   Habit,
   HabitDayState,
+  Goal,
+  GoalSettings,
+  GoalWeekCollection,
   RoutineDefinition,
   RoutineRunHistory,
   Transition,
@@ -40,6 +46,9 @@ export interface LifeTrackerBackup {
   activeRoutine: ActiveRoutine | null;
   habits: Habit[];
   habitDayStates: HabitDayState[];
+  goals: Goal[];
+  goalSettings: GoalSettings;
+  goalWeeks: GoalWeekCollection[];
 }
 
 /**
@@ -61,6 +70,9 @@ export const backupInputSchema = z
     activeRoutine: activeRoutineSchema.nullable(),
     habits: z.unknown(),
     habitDayStates: z.unknown(),
+    goals: z.array(goalSchema),
+    goalSettings: goalSettingsSchema,
+    goalWeeks: z.array(goalWeekCollectionSchema),
   })
   .strip();
 
@@ -79,6 +91,9 @@ export const backupSchema = z
     activeRoutine: activeRoutineSchema.nullable(),
     habits: z.array(habitSchema),
     habitDayStates: z.array(habitDayStateSchema),
+    goals: z.array(goalSchema),
+    goalSettings: goalSettingsSchema,
+    goalWeeks: z.array(goalWeekCollectionSchema),
   })
   .strip();
 

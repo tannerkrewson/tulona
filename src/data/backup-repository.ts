@@ -5,6 +5,9 @@ import {
   type HabitDayState,
   type ActiveRoutine,
   type AppSettings,
+  type Goal,
+  type GoalSettings,
+  type GoalWeekCollection,
   type RoutineRunHistory,
   type Transition,
 } from '@domain';
@@ -13,6 +16,7 @@ import { CatalogRepository } from './catalog-repository';
 import type { KeyValueDatabase } from './database';
 import { PersistenceError } from './errors';
 import { HabitRepository } from './habit-repository';
+import { GoalRepository } from './goal-repository';
 import { RoutineRepository } from './routine-repository';
 import { SettingsRepository } from './settings-repository';
 import type { DatasetNamespace } from './namespaces';
@@ -26,6 +30,9 @@ export interface BackupDatasetSnapshot {
   activeRoutine: ActiveRoutine | null;
   habits: Habit[];
   habitDayStates: HabitDayState[];
+  goals: Goal[];
+  goalSettings: GoalSettings;
+  goalWeeks: GoalWeekCollection[];
 }
 
 export interface BackupRepositoryApi {
@@ -81,6 +88,19 @@ export function normalizeBackupSnapshot(snapshot: BackupDatasetSnapshot): Backup
       (left, right) => left.sortOrder - right.sortOrder || left.id.localeCompare(right.id)
     ),
     habitDayStates: sortStates(snapshot.habitDayStates),
+    goals: [...snapshot.goals].sort((left, right) => left.id.localeCompare(right.id)),
+    goalSettings: {
+      ...snapshot.goalSettings,
+      statusDefinitions: [...snapshot.goalSettings.statusDefinitions].sort(
+        (left, right) => left.sortOrder - right.sortOrder || left.id.localeCompare(right.id)
+      ),
+    },
+    goalWeeks: [...snapshot.goalWeeks]
+      .sort((left, right) => left.weekStart.localeCompare(right.weekStart))
+      .map((week) => ({
+        weekStart: week.weekStart,
+        statuses: [...week.statuses].sort((left, right) => left.goalId.localeCompare(right.goalId)),
+      })),
   };
 }
 
@@ -109,17 +129,31 @@ export class BackupRepository implements BackupRepositoryApi {
     const trackerRepository = new TrackerRepository(this.database, namespace);
     const routineRepository = new RoutineRepository(this.database, namespace);
     const habitRepository = new HabitRepository(this.database, namespace);
+    const goalRepository = new GoalRepository(this.database, namespace);
     const settingsRepository = new SettingsRepository(this.database, namespace);
-    const [catalog, settings, habits, activeRoutine, trackerMonths, historyMonths, habitMonths] =
-      await Promise.all([
-        catalogRepository.read(),
-        settingsRepository.read(),
-        habitRepository.readHabits(),
-        routineRepository.readActive(),
-        this.months(namespace, 'tracker'),
-        this.months(namespace, 'routine-history'),
-        this.months(namespace, 'habit-days'),
-      ]);
+    const [
+      catalog,
+      settings,
+      habits,
+      activeRoutine,
+      goals,
+      goalSettings,
+      goalWeeks,
+      trackerMonths,
+      historyMonths,
+      habitMonths,
+    ] = await Promise.all([
+      catalogRepository.read(),
+      settingsRepository.read(),
+      habitRepository.readHabits(),
+      routineRepository.readActive(),
+      goalRepository.readGoals(),
+      goalRepository.readSettings(),
+      goalRepository.readWeeks(),
+      this.months(namespace, 'tracker'),
+      this.months(namespace, 'routine-history'),
+      this.months(namespace, 'habit-days'),
+    ]);
     const transitions = (
       await Promise.all(trackerMonths.map((month) => trackerRepository.readMonth(month)))
     ).flatMap((collection) => collection.transitions);
@@ -137,6 +171,9 @@ export class BackupRepository implements BackupRepositoryApi {
       activeRoutine,
       habits,
       habitDayStates,
+      goals,
+      goalSettings,
+      goalWeeks,
     });
   }
 
@@ -146,10 +183,22 @@ export class BackupRepository implements BackupRepositoryApi {
     const trackerRepository = new TrackerRepository(this.database, namespace);
     const routineRepository = new RoutineRepository(this.database, namespace);
     const habitRepository = new HabitRepository(this.database, namespace);
+    const goalRepository = new GoalRepository(this.database, namespace);
     const settingsRepository = new SettingsRepository(this.database, namespace);
     await catalogRepository.write(normalized.catalog);
     await settingsRepository.write(normalized.settings);
     await habitRepository.writeHabits(normalized.habits);
+    await goalRepository.writeGoals(normalized.goals);
+    await goalRepository.writeSettings(normalized.goalSettings);
+    const existingGoalWeeks = await goalRepository.readWeeks();
+    const incomingGoalWeeks = new Set(normalized.goalWeeks.map((week) => week.weekStart));
+    for (const week of existingGoalWeeks) {
+      if (incomingGoalWeeks.has(week.weekStart)) continue;
+      for (const status of week.statuses) {
+        await goalRepository.deleteWeeklyStatus(status.goalId, status.weekStart);
+      }
+    }
+    for (const week of normalized.goalWeeks) await goalRepository.writeWeek(week);
 
     const trackerCollections = groupTransitions(normalized.transitions);
     if (trackerCollections.length > 0) {

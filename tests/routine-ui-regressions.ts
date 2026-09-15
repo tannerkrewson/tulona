@@ -56,10 +56,11 @@ assert(
   recovery.includes('onClose?: () => void') &&
     recovery.includes('icon="x"') &&
     recovery.includes('testID={`${testID}-close`}') &&
-    recovery.includes('const close = onClose ?? onBack;') &&
+    recovery.includes('onPress={onClose}') &&
+    !recovery.includes('onBack?: () => void') &&
     !recovery.includes('Back to tracker') &&
     !recovery.includes('testID={`${testID}-back`}') &&
-    closeControl.includes('onPress={close}') &&
+    closeControl.includes('onPress={onClose}') &&
     !closeControl.includes('disabled='),
   'recovery errors must replace Back to tracker with an always-enabled X close action'
 );
