@@ -144,6 +144,10 @@ function bootRoutingPreservesDeepLinks(): void {
     'boot must preserve a valid history deep link'
   );
   assert(
+    destinationAfterBoot({ kind: 'tabs' }, '/goals') === null,
+    'boot must preserve a valid Goals tab deep link'
+  );
+  assert(
     destinationAfterBoot({ kind: 'tabs' }, '/folder/folder-id') === null,
     'boot must preserve a valid folder deep link'
   );

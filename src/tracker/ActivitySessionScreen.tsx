@@ -46,7 +46,15 @@ function visibleAdjacentTransition(
   );
 }
 
-function SessionError({ message, onRetry }: { message: string; onRetry: () => void }) {
+function SessionError({
+  message,
+  onRetry,
+  onClose,
+}: {
+  message: string;
+  onRetry: () => void;
+  onClose: () => void;
+}) {
   const { colors } = useAppTheme();
   return (
     <Column
@@ -65,7 +73,7 @@ function SessionError({ message, onRetry }: { message: string; onRetry: () => vo
         Session unavailable
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
-      <RecoveryActions onRetry={onRetry} testID="activity-session-recovery" />
+      <RecoveryActions onClose={onClose} onRetry={onRetry} testID="activity-session-recovery" />
     </Column>
   );
 }
@@ -102,6 +110,7 @@ export function ActivitySessionScreen({ transitionId }: ActivitySessionScreenPro
         {loadError ? (
           <SessionError
             message={loadError}
+            onClose={() => router.back()}
             onRetry={() => {
               setLoadError(null);
               setRuntime(null);
@@ -191,6 +200,7 @@ function ActivitySessionContent({
               ? errorText(persistenceError)
               : (contextError ?? 'This activity session is no longer available.')
           }
+          onClose={() => router.back()}
           onRetry={() => {
             void store.getState().hydrate();
             loadTransitionContext();

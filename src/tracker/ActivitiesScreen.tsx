@@ -244,6 +244,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
             setEditMode((open) => !open);
             setCreateOpen(false);
           }}
+          onHistory={() => router.push('/history')}
           title="Tracker"
         />
         {visibleError ? (

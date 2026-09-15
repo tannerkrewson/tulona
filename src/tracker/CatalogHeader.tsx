@@ -15,6 +15,7 @@ export interface CatalogCreateAction {
 export interface CatalogHeaderProps {
   title: string;
   onBack?: () => void;
+  onHistory?: () => void;
   backLabel?: string;
   editMode: boolean;
   createOpen: boolean;
@@ -27,6 +28,7 @@ export interface CatalogHeaderProps {
 export function CatalogHeader({
   title,
   onBack,
+  onHistory,
   backLabel = 'Activities',
   editMode,
   createOpen,
@@ -75,6 +77,14 @@ export function CatalogHeader({
             {title}
           </Text>
           <Spacer flexible />
+          {onHistory ? (
+            <CatalogIconButton
+              icon="clock"
+              label="History"
+              onPress={onHistory}
+              testID="tracker-history"
+            />
+          ) : null}
           <CatalogIconButton
             icon={editMode ? 'check' : 'pencil'}
             label={editMode ? 'Done' : 'Edit'}
