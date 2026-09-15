@@ -7,6 +7,7 @@ import {
   createRoutineRepository,
   createSettingsRepository,
   createTrackerRepository,
+  clearLegacyLocalStorage,
   exportRawStorage,
   MetadataRepository,
   OperationJournal,
@@ -207,6 +208,7 @@ export class BootCoordinator {
   async clearAllData(): Promise<void> {
     if (this.inFlight) throw new Error('Cannot clear local data while hydration is running');
     await this.datasetManager.clearAll();
+    clearLegacyLocalStorage();
     this.reset();
   }
 

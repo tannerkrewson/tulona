@@ -214,6 +214,10 @@ export class OperationJournal {
       }
       current = { ...current, status: 'committed', updatedAt: now(), error: null };
       await this.writeEntry(current);
+      // A committed entry has served its crash-recovery purpose. Remove only
+      // the entry just completed; recovery intentionally leaves older
+      // committed entries untouched so existing data is never migrated here.
+      await this.forgetCommitted(current.id);
       return current;
     } catch (error) {
       const persistenceError =
@@ -244,5 +248,23 @@ export class OperationJournal {
     const value = JSON.stringify(result.data);
     await this.database.write(key, value);
     await this.database.verify(key, value);
+  }
+
+  private async forgetCommitted(id: string): Promise<void> {
+    // The data mutation and committed marker are already durable. Cleanup is
+    // best effort so a cleanup failure cannot report a successful mutation as
+    // failed; an unfinished entry is still retained if the commit did not
+    // complete.
+    try {
+      await this.database.remove(operationJournalKey(id));
+      const ids = await readIndex(this.database);
+      if (ids.includes(id))
+        await writeIndex(
+          this.database,
+          ids.filter((candidate) => candidate !== id)
+        );
+    } catch {
+      // A later user-initiated reset can remove stale committed journal data.
+    }
   }
 }
