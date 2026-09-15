@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { PersistenceError } from './errors';
+import { IndexedDbStorage } from './indexed-db-storage';
 
 export interface AsyncStorageLike {
   getItem(key: string): Promise<string | null>;
@@ -158,5 +159,7 @@ export class AsyncStorageDatabase implements KeyValueDatabase {
 }
 
 export function createAsyncStorageDatabase(storage?: AsyncStorageLike): KeyValueDatabase {
-  return new AsyncStorageDatabase(storage);
+  if (storage) return new AsyncStorageDatabase(storage);
+  if (typeof indexedDB !== 'undefined') return new AsyncStorageDatabase(new IndexedDbStorage());
+  return new AsyncStorageDatabase();
 }

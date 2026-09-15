@@ -42,6 +42,21 @@ class MemoryStorage implements AsyncStorageLike {
   }
 }
 
+class QuotaStorage extends MemoryStorage {
+  constructor(private readonly maxCharacters: number) {
+    super();
+  }
+
+  override async setItem(key: string, value: string): Promise<void> {
+    if (this.failOnKey === key) throw new Error(`write unavailable for ${key}`);
+    const nextSize = [...this.values.entries()]
+      .filter(([existingKey]) => existingKey !== key)
+      .reduce((total, [, existingValue]) => total + existingValue.length, value.length);
+    if (nextSize > this.maxCharacters) throw new Error('quota exceeded');
+    this.values.set(key, value);
+  }
+}
+
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
@@ -280,6 +295,45 @@ async function run(): Promise<void> {
   assert(
     (await database.read('raw-key')) === 'new',
     'replaying a committed journal does not duplicate the change'
+  );
+
+  const legacyEntry = {
+    id: 'legacy-committed-operation',
+    datasetId: namespace.datasetId,
+    kind: 'legacy-test',
+    status: 'committed' as const,
+    changes: [{ key: 'legacy-key', oldValue: 'old', newValue: 'new' }],
+    createdAt: '2026-08-29T00:00:00.000Z',
+    updatedAt: '2026-08-29T00:00:00.000Z',
+    error: null,
+  };
+  await database.write(operationJournalKey(legacyEntry.id), JSON.stringify(legacyEntry));
+  await database.write(JOURNAL_INDEX_KEY, JSON.stringify([legacyEntry.id]));
+  await journal.recoverUnfinished();
+  assert(
+    (await database.read(operationJournalKey(legacyEntry.id))) !== null &&
+      JSON.parse((await database.read(JOURNAL_INDEX_KEY)) ?? '[]').includes(legacyEntry.id),
+    'startup recovery must not migrate existing committed journal data'
+  );
+
+  const quotaStorage = new QuotaStorage(20_000);
+  const quotaDatabase = new AsyncStorageDatabase(quotaStorage);
+  const quotaJournal = new OperationJournal(quotaDatabase);
+  for (let index = 0; index < 30; index += 1) {
+    await quotaJournal.run({
+      id: `quota-operation-${index}`,
+      datasetId: namespace.datasetId,
+      kind: 'quota-test',
+      changes: [{ key: 'quota-payload', newValue: `${'x'.repeat(2_500)}-${index}` }],
+    });
+  }
+  const quotaIndex = JSON.parse((await quotaDatabase.read(JOURNAL_INDEX_KEY)) ?? '[]') as string[];
+  assert(quotaIndex.length === 0, 'completed journal operations must not retain an index entry');
+  assert(
+    [...quotaStorage.values.keys()].every(
+      (key) => !key.startsWith('tulona:journal:') || key === JOURNAL_INDEX_KEY
+    ),
+    'completed journal operations must not retain committed payloads'
   );
 
   const recoveryEntry = {
