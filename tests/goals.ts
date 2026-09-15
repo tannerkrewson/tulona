@@ -78,6 +78,8 @@ function baseGoal(overrides: Partial<Goal> = {}): Goal {
     description: null,
     sourceLinks: [],
     overallStatus: 'in-progress',
+    evaluationMode: 'manual',
+    rules: [],
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -132,6 +134,17 @@ async function run(): Promise<void> {
     !goalSchema.safeParse({ ...baseGoal(), title: '   ' }).success,
     'goals must reject whitespace-only titles'
   );
+  const migratedGoal = goalSchema.safeParse({
+    ...baseGoal(),
+    evaluationMode: undefined,
+    rules: undefined,
+  });
+  assert(
+    migratedGoal.success &&
+      migratedGoal.data.evaluationMode === 'manual' &&
+      migratedGoal.data.rules.length === 0,
+    'goals written before automatic evaluation must default to manual with no rules'
+  );
 
   const database = new AsyncStorageDatabase(new MemoryStorage());
   const datasetManager = createDatasetManager(database);
@@ -182,6 +195,10 @@ async function run(): Promise<void> {
   assert(first.title === 'Finish a meaningful project', 'goal titles must be normalized');
   assert(first.description === 'A description', 'goal descriptions must be normalized');
   assert(first.overallStatus === 'in-progress', 'new goals default to in-progress');
+  assert(
+    first.evaluationMode === 'manual' && first.rules.length === 0,
+    'new goals default to manual evaluation'
+  );
   assert(first.sourceLinks.length === 2, 'goal source links must round-trip in the domain');
   const reloadedFirst = await serviceFor(createGoalRepository(database, namespace)).getGoal(
     ids.first
