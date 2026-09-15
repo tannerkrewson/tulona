@@ -10,21 +10,40 @@ function assert(condition: unknown, message: string): asserts condition {
 const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const tabs = read('app/(tabs)/_layout.tsx');
-const route = read('app/(tabs)/history.tsx');
+const rootLayout = read('app/_layout.tsx');
+const historyRoute = read('app/history.tsx');
+const goalsRoute = read('app/(tabs)/goals.tsx');
 const history = read('src/history/HistoryScreen.tsx');
+const tracker = read('src/tracker/ActivitiesScreen.tsx');
+const catalogHeader = read('src/tracker/CatalogHeader.tsx');
 
 assert(
-  tabs.includes('name="history"') &&
-    tabs.includes("title: 'History'") &&
-    tabs.includes("tabBarAccessibilityLabel: 'History tab'") &&
-    tabs.includes('name="clock"'),
-  'the transitional third tab must present History with the neutral clock icon'
+  tabs.includes('name="goals"') &&
+    tabs.includes("title: 'Goals'") &&
+    tabs.includes("tabBarAccessibilityLabel: 'Goals tab'") &&
+    tabs.includes('name="award"') &&
+    !tabs.includes('name="history"'),
+  'the third tab slot must present Goals and no longer expose History'
 );
 assert(
-  route.includes('../../src/history/HistoryScreen') &&
-    route.includes('<HistoryScreen />') &&
-    !route.includes('reporting'),
-  'the visible third tab route must render the new History shell instead of retired reporting UI'
+  historyRoute.includes('../src/history/HistoryScreen') &&
+    historyRoute.includes('<HistoryScreen />') &&
+    rootLayout.includes('<Stack.Screen name="history" />') &&
+    !historyRoute.includes('reporting'),
+  'the root History route must render the History shell outside the tab navigator'
+);
+assert(
+  goalsRoute.includes('<Screen') &&
+    goalsRoute.includes('title="Goals"') &&
+    goalsRoute.includes('testID="goals-screen"'),
+  'the Goals tab must have only a reachable safe-area-aware placeholder route'
+);
+assert(
+  tracker.includes("onHistory={() => router.push('/history')}") &&
+    catalogHeader.includes('onHistory?: () => void') &&
+    catalogHeader.includes('testID="tracker-history"') &&
+    catalogHeader.includes('icon="clock"'),
+  'Tracker must expose History through a top-right header action'
 );
 assert(
   history.includes('title="History"') &&
@@ -46,8 +65,14 @@ assert(
     history.includes('history-period-label') &&
     history.includes('history-next') &&
     history.includes('history-today') &&
-    history.includes('nextDisabled'),
-  'History must expose period navigation, a current-period label, Today, and a future guard'
+    history.includes('nextDisabled') &&
+    history.includes('headerRight=') &&
+    history.includes('isCurrentPeriod') &&
+    history.includes('onPress={() => setSelectedAnchor(null)}') &&
+    history.includes('const goBack = useCallback') &&
+    history.includes("else router.replace('/(tabs)')") &&
+    !history.includes('todayButtonWrap'),
+  'History must place Today beside the header while retaining its current-period hide guard'
 );
 assert(
   history.includes('accessibilityRole="tab"') &&

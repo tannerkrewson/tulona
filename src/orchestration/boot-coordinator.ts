@@ -63,7 +63,7 @@ export function destinationAfterBoot(
   if (pathname === '/(tabs)') return null;
   if (
     pathname !== '/' &&
-    /^(?:\/history|\/backup|\/habits|\/settings|\/routine-chooser|\/folder\/[^/]+|\/activity\/[^/]+|\/activity-session\/[^/]+|\/routine\/[^/]+|\/routine-edit\/[^/]+|\/folder-edit\/[^/]+|\/habit\/[^/]+)$/.test(
+    /^(?:\/history|\/goals|\/backup|\/habits|\/settings|\/routine-chooser|\/folder\/[^/]+|\/activity\/[^/]+|\/activity-session\/[^/]+|\/routine\/[^/]+|\/routine-edit\/[^/]+|\/folder-edit\/[^/]+|\/habit\/[^/]+)$/.test(
       pathname
     )
   ) {

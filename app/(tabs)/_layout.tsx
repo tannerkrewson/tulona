@@ -77,13 +77,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="history"
+        name="goals"
         options={{
-          title: 'History',
-          tabBarAccessibilityLabel: 'History tab',
+          title: 'Goals',
+          tabBarAccessibilityLabel: 'Goals tab',
           tabBarIcon: ({ color, focused, size }) => (
             <AppIcon
-              name="clock"
+              name="award"
               color={isWeb ? (focused ? webTabActive : webTabInactive) : color}
               size={size}
             />
