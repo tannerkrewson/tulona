@@ -2,13 +2,17 @@ import {
   createId,
   filterGoalsByOverallStatus,
   goalSchema,
+  goalEvaluationRuleSchema,
   goalSourceLinkSchema,
   goalStatusDefinitionSchema,
   goalWeekIdentity,
   type Goal,
   type GoalCollection,
+  type GoalEvaluationMode,
+  type GoalEvaluationRule,
   type GoalOverallStatus,
   type GoalOverallStatusFilter,
+  type GoalRuleStatusIds,
   type GoalSettings,
   type GoalSourceLink,
   type GoalStatusColor,
@@ -27,6 +31,8 @@ export interface CreateGoalInput {
   description?: string | null;
   sourceLinks?: readonly GoalSourceLink[];
   overallStatus?: GoalOverallStatus;
+  evaluationMode?: GoalEvaluationMode;
+  rules?: readonly GoalEvaluationRuleInput[];
 }
 
 export interface UpdateGoalInput {
@@ -34,7 +40,18 @@ export interface UpdateGoalInput {
   description?: string | null;
   sourceLinks?: readonly GoalSourceLink[];
   overallStatus?: GoalOverallStatus;
+  evaluationMode?: GoalEvaluationMode;
+  rules?: readonly GoalEvaluationRuleInput[];
 }
+
+export type GoalRuleStatusIdsInput = Partial<GoalRuleStatusIds>;
+export type GoalEvaluationRuleInput =
+  | (Omit<Extract<GoalEvaluationRule, { kind: 'habit' }>, 'statusIds'> & {
+      statusIds?: GoalRuleStatusIdsInput;
+    })
+  | (Omit<Extract<GoalEvaluationRule, { kind: 'activity-duration' }>, 'statusIds'> & {
+      statusIds?: GoalRuleStatusIdsInput;
+    });
 
 export interface CreateGoalStatusDefinitionInput {
   id?: string;
@@ -128,6 +145,45 @@ function normalizedSourceLinks(value: readonly GoalSourceLink[] | undefined): Go
   return links;
 }
 
+function defaultRuleStatusIds(settings: GoalSettings): GoalRuleStatusIds {
+  const definitions = [...settings.statusDefinitions].sort(
+    (left, right) => left.sortOrder - right.sortOrder || left.id.localeCompare(right.id)
+  );
+  const first = definitions[0]?.id;
+  if (!first) validation('At least one goal status definition is required');
+  return {
+    good: first,
+    partial: definitions[1]?.id ?? first,
+    noProgress: definitions[2]?.id ?? definitions.at(-1)?.id ?? first,
+  };
+}
+
+function normalizedRules(
+  value: readonly GoalEvaluationRuleInput[] | readonly GoalEvaluationRule[] | undefined,
+  settings: GoalSettings
+): GoalEvaluationRule[] {
+  if (value === undefined) return [];
+  const defaults = defaultRuleStatusIds(settings);
+  return value.map((rule, index) => {
+    const candidate = {
+      ...rule,
+      statusIds: { ...defaults, ...rule.statusIds },
+    };
+    const parsed = goalEvaluationRuleSchema.safeParse(candidate);
+    if (!parsed.success) {
+      validation(`Goal rule ${index + 1} failed validation: ${parsed.error.message}`);
+    }
+    for (const [outcome, statusId] of Object.entries(parsed.data.statusIds)) {
+      if (!settings.statusDefinitions.some((definition) => definition.id === statusId)) {
+        validation(
+          `Goal rule ${index + 1} maps ${outcome} to unknown goal status definition "${statusId}"`
+        );
+      }
+    }
+    return parsed.data as GoalEvaluationRule;
+  });
+}
+
 function parseGoal(value: unknown): Goal {
   const parsed = goalSchema.safeParse(value);
   if (!parsed.success) validation(`Goal failed validation: ${parsed.error.message}`);
@@ -172,6 +228,7 @@ export class GoalService implements GoalServiceApi {
   async createGoal(input: CreateGoalInput): Promise<Goal> {
     assertNoGoalColor(input);
     const id = input.id ?? createId();
+    const settings = await this.repository.readSettings();
     const now = this.now();
     const goal = parseGoal({
       id,
@@ -179,6 +236,8 @@ export class GoalService implements GoalServiceApi {
       description: normalizedText(input.description, 'Goal description'),
       sourceLinks: normalizedSourceLinks(input.sourceLinks),
       overallStatus: input.overallStatus ?? 'in-progress',
+      evaluationMode: input.evaluationMode ?? 'manual',
+      rules: normalizedRules(input.rules, settings),
       createdAt: now,
       updatedAt: now,
     });
@@ -189,6 +248,7 @@ export class GoalService implements GoalServiceApi {
   async updateGoal(id: string, input: UpdateGoalInput): Promise<Goal> {
     assertNoGoalColor(input);
     const current = await this.getGoal(id);
+    const settings = await this.repository.readSettings();
     const next = parseGoal({
       ...current,
       title: input.title === undefined ? current.title : requiredText(input.title, 'Goal title'),
@@ -201,6 +261,8 @@ export class GoalService implements GoalServiceApi {
           ? current.sourceLinks
           : normalizedSourceLinks(input.sourceLinks),
       overallStatus: input.overallStatus ?? current.overallStatus,
+      evaluationMode: input.evaluationMode ?? current.evaluationMode,
+      rules: normalizedRules(input.rules ?? current.rules, settings),
       updatedAt: this.now(),
     });
     await this.repository.updateGoal(next);
@@ -274,6 +336,14 @@ export class GoalService implements GoalServiceApi {
     }
     if (settings.statusDefinitions.length === 1) {
       validation('At least one goal status definition is required');
+    }
+    const goals = await this.repository.readGoals();
+    if (
+      goals.some((goal) =>
+        goal.rules.some((rule) => Object.values(rule.statusIds).some((statusId) => statusId === id))
+      )
+    ) {
+      conflict(`Goal status definition "${id}" is used by an automatic goal rule`);
     }
     const weeks = await this.repository.readWeeks();
     if (weeks.some((week) => week.statuses.some((status) => status.statusId === id))) {
