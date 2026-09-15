@@ -5,6 +5,8 @@ import {
   evaluateHabitTrigger,
   evaluateHabitSchedule,
   calculateHabitStreak,
+  habitCompletionCount,
+  toggleHabitMetricMode,
   nextHabitOutcome,
   habitDaySwipeTarget,
   habitWeekDays,
@@ -221,6 +223,49 @@ async function run(): Promise<void> {
       nextHabitOutcome('failed') === 'skipped' &&
       nextHabitOutcome('skipped') === null,
     'habit outcomes cycle in the same order as the long-press actions'
+  );
+  assert(
+    toggleHabitMetricMode('streak') === 'total-days' &&
+      toggleHabitMetricMode('total-days') === 'streak',
+    'habit metric display toggles between current streak and total days'
+  );
+  const completionStates = [
+    {
+      habitId: ids.habit,
+      logicalDay: '2026-08-27',
+      manual: true,
+      automatic: null,
+      outcome: null,
+      updatedAt: createdAt,
+    },
+    {
+      habitId: ids.habit,
+      logicalDay: '2026-08-28',
+      manual: null,
+      automatic: true,
+      outcome: null,
+      updatedAt: createdAt,
+    },
+    {
+      habitId: ids.habit,
+      logicalDay: '2026-08-29',
+      manual: null,
+      automatic: null,
+      outcome: 'failed',
+      updatedAt: createdAt,
+    },
+    {
+      habitId: ids.habit,
+      logicalDay: '2026-08-30',
+      manual: null,
+      automatic: null,
+      outcome: 'skipped',
+      updatedAt: createdAt,
+    },
+  ] as HabitDayState[];
+  assert(
+    habitCompletionCount(completionStates) === 2,
+    'total days count completed logical days and excludes failed or skipped outcomes'
   );
   assert(
     isPastMidnightHabitDay('2026-08-30', new Date(2026, 7, 31, 1, 30), 3),
