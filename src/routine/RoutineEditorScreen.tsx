@@ -206,11 +206,11 @@ function Input({
 function ErrorMessage({
   message,
   onRetry,
-  onBack,
+  onClose,
 }: {
   message: string | null;
   onRetry?: () => void;
-  onBack?: () => void;
+  onClose?: () => void;
 }) {
   const { colors } = useAppTheme();
   if (!message) return null;
@@ -230,7 +230,7 @@ function ErrorMessage({
         Routine action failed
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
-      <RecoveryActions onBack={onBack} onRetry={onRetry} testID="routine-editor-recovery" />
+      <RecoveryActions onClose={onClose} onRetry={onRetry} testID="routine-editor-recovery" />
     </Column>
   );
 }
@@ -277,6 +277,7 @@ function StepForm({
   busy,
   error,
   onRetry,
+  onClose,
 }: {
   draft: StepDraft;
   activities: readonly Activity[];
@@ -287,6 +288,7 @@ function StepForm({
   busy: boolean;
   error: string | null;
   onRetry?: () => void;
+  onClose: () => void;
 }) {
   const { colors } = useAppTheme();
   const availableActivities = activities.filter(
@@ -411,7 +413,7 @@ function StepForm({
           multiline
         />
       </Field>
-      <ErrorMessage message={error} onBack={onCancel} onRetry={onRetry} />
+      <ErrorMessage message={error} onClose={onClose} onRetry={onRetry} />
       <Column spacing={8} style={{ width: '100%' }}>
         <AppButton
           disabled={busy}
@@ -599,6 +601,7 @@ function DeleteStepConfirmation({
 
 export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEditorScreenProps) {
   const router = useRouter();
+  const { colors } = useAppTheme();
   const [resource, setResource] = useState<EditorResource | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
@@ -628,14 +631,20 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
   if (!resource) {
     return (
       <Screen onBack={() => router.back()} title={id === NEW_ID ? 'New routine' : 'Routine editor'}>
-        <ErrorMessage
-          message={loadError ?? 'Loading routine editor...'}
-          onRetry={() => {
-            setLoadError(null);
-            setVersion((current) => current + 1);
-          }}
-          onBack={() => router.back()}
-        />
+        {loadError ? (
+          <ErrorMessage
+            message={loadError}
+            onClose={() => router.back()}
+            onRetry={() => {
+              setLoadError(null);
+              setVersion((current) => current + 1);
+            }}
+          />
+        ) : (
+          <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>
+            Loading routine editor...
+          </Text>
+        )}
       </Screen>
     );
   }
@@ -654,9 +663,8 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
       initialFolderId={initialFolderId}
       onBack={() => router.back()}
       resource={resource}
-      onCancel={() => router.back()}
       onChanged={refresh}
-      onCreated={(routineId) => router.replace(`/routine-edit/${routineId}`)}
+      onSaved={() => router.replace('/(tabs)')}
       onRun={runRoutine}
     />
   );
@@ -666,17 +674,15 @@ function RoutineEditorForm({
   resource,
   initialFolderId,
   onBack,
-  onCancel,
   onChanged,
-  onCreated,
+  onSaved,
   onRun,
 }: {
   resource: EditorResource;
   initialFolderId: UUID | null;
   onBack: () => void;
-  onCancel: () => void;
   onChanged: () => void;
-  onCreated: (routineId: UUID) => void;
+  onSaved: () => void;
   onRun: (routineId: UUID) => Promise<void>;
 }) {
   const { colors } = useAppTheme();
@@ -725,9 +731,9 @@ function RoutineEditorForm({
           iconName: iconName.trim() || null,
           folderId: selectedFolderId,
         });
-        onChanged();
+        onSaved();
       } else {
-        const created = await service.createRoutine({
+        await service.createRoutine({
           name,
           color: color.trim() || null,
           iconName: iconName.trim() || null,
@@ -735,7 +741,7 @@ function RoutineEditorForm({
           trackingMode,
           steps: newSteps.map((step) => inputFromDraft(step, trackingMode)),
         });
-        onCreated(created.id);
+        onSaved();
       }
     } catch (actionError) {
       setError(errorText(actionError));
@@ -917,7 +923,7 @@ function RoutineEditorForm({
         </Field>
         <ErrorMessage
           message={error}
-          onBack={onCancel}
+          onClose={() => setError(null)}
           onRetry={() => {
             if (lastAction.current) void lastAction.current();
           }}
@@ -955,6 +961,7 @@ function RoutineEditorForm({
             onChange={setDraft}
             onSave={() => void saveStep()}
             onCancel={() => setDraft(null)}
+            onClose={() => setError(null)}
             busy={busy}
             error={error}
             onRetry={() => {
@@ -976,6 +983,7 @@ function RoutineEditorForm({
                   setDraft(null);
                   setEditingStepId(null);
                 }}
+                onClose={() => setError(null)}
                 busy={busy}
                 error={error}
                 onRetry={() => {
