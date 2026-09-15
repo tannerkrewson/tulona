@@ -50,6 +50,9 @@ function Summary({ result }: { result: BackupImportResult }) {
         {`${summary.transitions} transitions, ${summary.routineRuns} routine runs, ${summary.habits} habits, ${summary.habitDayStates} habit day states`}
       </Text>
       <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>
+        {`${summary.goals} goals, ${summary.goalWeeklyStatuses} weekly goal statuses`}
+      </Text>
+      <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>
         {`${summary.archivedRecords} archived records retained`}
       </Text>
     </Column>
@@ -95,7 +98,7 @@ function ErrorPanel({
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 13 }}>
         Your current data was not replaced.
       </Text>
-      <RecoveryActions onBack={onBack} onRetry={onRetry} testID="backup-recovery" />
+      <RecoveryActions onClose={onBack} onRetry={onRetry} testID="backup-recovery" />
     </Column>
   );
 }

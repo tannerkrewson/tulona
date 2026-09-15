@@ -143,7 +143,7 @@ export default function SettingsScreen() {
             {loadError ? (
               <RecoveryActions
                 onRetry={load}
-                onBack={() => router.replace('/(tabs)')}
+                onClose={() => router.replace('/(tabs)')}
                 retryTestID="settings-retry"
                 testID="settings-load-recovery"
               />

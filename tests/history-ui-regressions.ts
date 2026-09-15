@@ -13,6 +13,7 @@ const tabs = read('app/(tabs)/_layout.tsx');
 const rootLayout = read('app/_layout.tsx');
 const historyRoute = read('app/history.tsx');
 const goalsRoute = read('app/(tabs)/goals.tsx');
+const goalsScreen = read('src/goals/GoalsScreen.tsx');
 const history = read('src/history/HistoryScreen.tsx');
 const tracker = read('src/tracker/ActivitiesScreen.tsx');
 const catalogHeader = read('src/tracker/CatalogHeader.tsx');
@@ -33,10 +34,32 @@ assert(
   'the root History route must render the History shell outside the tab navigator'
 );
 assert(
-  goalsRoute.includes('<Screen') &&
-    goalsRoute.includes('title="Goals"') &&
-    goalsRoute.includes('testID="goals-screen"'),
-  'the Goals tab must have only a reachable safe-area-aware placeholder route'
+  goalsRoute.includes('../src/goals/GoalsScreen') &&
+    goalsRoute.includes('<GoalsScreen />') &&
+    !goalsRoute.includes('coming soon'),
+  'the Goals tab must render the replacement weekly-goals screen rather than a placeholder'
+);
+assert(
+  goalsScreen.includes('goal-status-filter') &&
+    goalsScreen.includes('goal-list') &&
+    goalsScreen.includes('goal-history-circle') &&
+    goalsScreen.includes('historicalCircleCount'),
+  'Goals must expose overall filtering, weekly rows, historical status circles, and configured history length'
+);
+assert(
+  goalsScreen.includes('evaluateGoal') &&
+    goalsScreen.includes('trackerService.query') &&
+    goalsScreen.includes('goal-rule-add') &&
+    goalsScreen.includes('activity-duration') &&
+    goalsScreen.includes('every-day'),
+  'Goals must expose automatic habit and activity checks backed by live tracker data'
+);
+assert(
+  goalsScreen.includes('goal-review-prompt') &&
+    goalsScreen.includes('setWeeklyStatus') &&
+    goalsScreen.includes('goal-review-note') &&
+    goalsScreen.includes('reviewDay'),
+  'Goals must prompt and persist manual weekly statuses with notes on the configured review day'
 );
 assert(
   tracker.includes("onHistory={() => router.push('/history')}") &&

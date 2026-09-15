@@ -102,6 +102,7 @@ export interface GoalServiceApi {
   reorderStatusDefinitions(ids: readonly string[]): Promise<GoalStatusDefinition[]>;
   week(value: Date | number | string): ReturnType<typeof goalWeekIdentity>;
   readWeek(value: Date | number | string): Promise<GoalWeekCollection>;
+  readWeeks(): Promise<GoalWeekCollection[]>;
   setWeeklyStatus(input: SetGoalWeeklyStatusInput): Promise<GoalWeeklyStatus>;
   deleteWeeklyStatus(goalId: string, weekStart: Date | number | string): Promise<void>;
 }
@@ -394,6 +395,10 @@ export class GoalService implements GoalServiceApi {
 
   readWeek(value: Date | number | string): Promise<GoalWeekCollection> {
     return this.repository.readWeek(this.week(value).weekStart);
+  }
+
+  readWeeks(): Promise<GoalWeekCollection[]> {
+    return this.repository.readWeeks();
   }
 
   async setWeeklyStatus(input: SetGoalWeeklyStatusInput): Promise<GoalWeeklyStatus> {

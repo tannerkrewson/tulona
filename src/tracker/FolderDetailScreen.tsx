@@ -280,7 +280,7 @@ function FolderError({
         Folder unavailable
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
-      <RecoveryActions onBack={onBack} onRetry={onRetry} testID="folder-recovery" />
+      <RecoveryActions onClose={onBack} onRetry={onRetry} testID="folder-recovery" />
     </Column>
   );
 }

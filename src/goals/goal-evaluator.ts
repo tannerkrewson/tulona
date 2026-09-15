@@ -383,12 +383,12 @@ export function evaluateGoal(
     options.weekStartsOn ?? (suppliedIdentity ? new Date(suppliedIdentity.startMs).getDay() : 0);
   const week = asCanonicalWeek(weekValue, { rolloverHour, weekStartsOn });
   const nowMs = nowMilliseconds(options.now);
-  const mode = goal.evaluationMode ?? 'manual';
+  const mode = goal.evaluationMode;
   if (mode === 'manual') {
     return { mode, week, outcome: 'manual', statusId: null, rules: [] };
   }
 
-  const rules = goal.rules ?? [];
+  const rules = goal.rules;
   if (rules.length === 0) {
     return { mode, week, outcome: 'no-rules', statusId: null, rules: [] };
   }

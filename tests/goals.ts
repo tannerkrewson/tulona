@@ -134,16 +134,13 @@ async function run(): Promise<void> {
     !goalSchema.safeParse({ ...baseGoal(), title: '   ' }).success,
     'goals must reject whitespace-only titles'
   );
-  const migratedGoal = goalSchema.safeParse({
-    ...baseGoal(),
-    evaluationMode: undefined,
-    rules: undefined,
-  });
   assert(
-    migratedGoal.success &&
-      migratedGoal.data.evaluationMode === 'manual' &&
-      migratedGoal.data.rules.length === 0,
-    'goals written before automatic evaluation must default to manual with no rules'
+    !goalSchema.safeParse({
+      ...baseGoal(),
+      evaluationMode: undefined,
+      rules: undefined,
+    }).success,
+    'goal records must be reset rather than migrated when weekly evaluation fields are absent'
   );
 
   const database = new AsyncStorageDatabase(new MemoryStorage());

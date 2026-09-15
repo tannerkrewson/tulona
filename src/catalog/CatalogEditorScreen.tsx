@@ -93,7 +93,7 @@ export function CatalogEditorScreen({
           </Text>
           {loadError ? (
             <RecoveryActions
-              onBack={() => router.back()}
+              onClose={() => router.back()}
               onRetry={() => {
                 setLoadError(null);
                 setVersion((current) => current + 1);
@@ -161,7 +161,7 @@ function ActionError({
         Catalog action failed
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
-      <RecoveryActions onBack={onBack} onRetry={onRetry} testID="catalog-action-recovery" />
+      <RecoveryActions onClose={onBack} onRetry={onRetry} testID="catalog-action-recovery" />
     </Column>
   );
 }

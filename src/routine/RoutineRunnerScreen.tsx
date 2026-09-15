@@ -341,7 +341,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             message={loadError ?? 'Restoring the persisted routine...'}
             palette={BASE_RUNNER}
           >
-            <RecoveryActions onBack={goBack} onRetry={restore} testID="routine-recovery" />
+            <RecoveryActions onClose={goBack} onRetry={restore} testID="routine-recovery" />
           </RunnerError>
         </Column>
       </Screen>
@@ -360,7 +360,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
         title="Routine"
       >
         <RunnerError message="The active routine has no current step." palette={BASE_RUNNER}>
-          <RecoveryActions onBack={goBack} testID="routine-step-recovery" />
+          <RecoveryActions onClose={goBack} testID="routine-step-recovery" />
         </RunnerError>
       </Screen>
     );
@@ -560,7 +560,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
 
         {actionError ? (
           <RunnerError message={actionError} palette={RUNNER} title="Routine action failed">
-            <RecoveryActions onBack={goBack} onRetry={retry} testID="routine-action-recovery" />
+            <RecoveryActions onClose={goBack} onRetry={retry} testID="routine-action-recovery" />
           </RunnerError>
         ) : null}
 

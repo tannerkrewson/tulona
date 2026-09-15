@@ -36,6 +36,9 @@ export async function exportBackup(
     activeRoutine: snapshot.activeRoutine,
     habits: snapshot.habits,
     habitDayStates: snapshot.habitDayStates,
+    goals: snapshot.goals,
+    goalSettings: snapshot.goalSettings,
+    goalWeeks: snapshot.goalWeeks,
   };
   const result = backupSchema.safeParse(backup);
   if (!result.success) {

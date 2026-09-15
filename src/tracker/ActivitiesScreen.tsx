@@ -55,7 +55,7 @@ function CatalogError({
         {title}
       </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
-      <RecoveryActions onBack={onBack} onRetry={onRetry} testID="tracker-recovery" />
+      <RecoveryActions onClose={onBack} onRetry={onRetry} testID="tracker-recovery" />
     </Column>
   );
 }

@@ -161,6 +161,9 @@ function snapshotFromBackup(backup: LifeTrackerBackup) {
     activeRoutine: backup.activeRoutine,
     habits: backup.habits,
     habitDayStates: backup.habitDayStates,
+    goals: backup.goals,
+    goalSettings: backup.goalSettings,
+    goalWeeks: backup.goalWeeks,
   };
 }
 
