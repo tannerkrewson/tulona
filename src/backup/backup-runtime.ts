@@ -3,10 +3,12 @@ import { PersistenceError } from '@data';
 import { bootCoordinator } from '../orchestration/boot-coordinator';
 import type { ReportingService } from '../reporting/reporting-service';
 import { BackupService } from './backup-service';
+import { TimematorImportService } from './timemator-import';
 
 export interface BackupRuntime {
   backupService: BackupService;
   reportingService: ReportingService;
+  timematorImportService: TimematorImportService;
 }
 
 export async function loadBackupRuntime(): Promise<BackupRuntime> {
@@ -15,5 +17,6 @@ export async function loadBackupRuntime(): Promise<BackupRuntime> {
   return {
     backupService: result.runtime.services.backup,
     reportingService: result.runtime.services.reporting,
+    timematorImportService: result.runtime.services.timematorImport,
   };
 }
