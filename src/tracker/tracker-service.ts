@@ -41,6 +41,11 @@ export interface TrackerCompanionChange {
   newValue: string | null;
 }
 
+export interface BulkTransitionInsertOptions {
+  operationId?: string;
+  operationKind?: string;
+}
+
 export interface TransitionEditInput {
   activityId?: UUID | null;
   timestamp?: TimestampInput;
@@ -116,6 +121,10 @@ export interface TrackerServiceApi {
     nowMs: number
   ): ReturnType<typeof materializeTransitionIntervals>;
   insertTransition(input: TransitionInput): Promise<TimeTransition>;
+  insertTransitions(
+    inputs: readonly TransitionInput[],
+    options?: BulkTransitionInsertOptions
+  ): Promise<TimeTransition[]>;
   insertMissedSwitch(input: TransitionInput): Promise<TimeTransition>;
   editTransition(id: UUID, input: TransitionEditInput): Promise<TimeTransition>;
   reassignTransition(id: UUID, activityId: UUID | null): Promise<TimeTransition>;
@@ -465,6 +474,88 @@ export class TrackerService implements TrackerServiceApi {
 
   async insertTransition(input: TransitionInput): Promise<TimeTransition> {
     return this.insertTransitionWithCompanion(input, []);
+  }
+
+  async insertTransitions(
+    inputs: readonly TransitionInput[],
+    options: BulkTransitionInsertOptions = {}
+  ): Promise<TimeTransition[]> {
+    if (inputs.length === 0) return [];
+    const now = normalizeNow(this.now());
+    const createdAt = normalizeTimestamp(now, 'Created at');
+    const transitions: TimeTransition[] = [];
+    const ids = new Set<string>();
+    const snapshots = new Map<UUID, HistoricalActivitySnapshot | null>();
+    for (const input of inputs) {
+      let normalizedInput = input;
+      if (
+        input.activityId !== null &&
+        input.activitySnapshot === undefined &&
+        this.resolveActivitySnapshot
+      ) {
+        if (!snapshots.has(input.activityId)) {
+          snapshots.set(
+            input.activityId,
+            await this.resolveActivitySnapshot(input.activityId, createdAt)
+          );
+        }
+        normalizedInput = {
+          ...input,
+          activitySnapshot: snapshots.get(input.activityId) ?? null,
+        };
+      }
+      const transition = await this.withHistoricalSnapshot(
+        createTransition(normalizedInput, createdAt),
+        createdAt
+      );
+      assertNotFuture(transition.timestamp, now);
+      if (ids.has(transition.id)) {
+        throw new PersistenceError('conflict', `Transition "${transition.id}" is repeated`);
+      }
+      ids.add(transition.id);
+      transitions.push(transition);
+    }
+
+    const existing = await this.readHistory(now);
+    const existingIds = new Set(existing.map((transition) => transition.id));
+    const existingTimes = new Set(
+      existing
+        .filter((transition) => transition.status === 'recorded')
+        .map((transition) => transition.timestamp)
+    );
+    const insertedTimes = new Set<string>();
+    for (const transition of transitions) {
+      if (existingIds.has(transition.id)) {
+        throw new PersistenceError('conflict', `Transition "${transition.id}" already exists`);
+      }
+      if (existingTimes.has(transition.timestamp) || insertedTimes.has(transition.timestamp)) {
+        throw new PersistenceError(
+          'conflict',
+          `A recorded transition already exists at ${transition.timestamp}`
+        );
+      }
+      insertedTimes.add(transition.timestamp);
+    }
+
+    await this.repository.upsertTransitions(
+      transitions,
+      options.operationId ?? `tracker-transition-bulk-insert-${createId()}`,
+      options.operationKind ?? 'tracker-transition-bulk-insert'
+    );
+    const ordered = orderTransitions(transitions);
+    await this.notifyMutation({
+      kind: 'insert',
+      previous: null,
+      current: ordered.at(-1) ?? null,
+      affectedActivityIds: [
+        ...new Set(
+          transitions
+            .map((transition) => transition.activityId)
+            .filter((value): value is UUID => value !== null)
+        ),
+      ],
+    });
+    return transitions;
   }
 
   private async insertTransitionWithCompanion(

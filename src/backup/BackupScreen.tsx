@@ -11,6 +11,11 @@ import { bootCoordinator } from '../orchestration';
 import { BackupImportError, type BackupImportResult } from './backup-import';
 import { downloadBackupJson, downloadIntervalsCsv } from './web-download';
 import { loadBackupRuntime, type BackupRuntime } from './backup-runtime';
+import {
+  TimematorImportError,
+  type TimematorCsvPreview,
+  type TimematorImportResult,
+} from './timemator-import';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 function Summary({ result }: { result: BackupImportResult }) {
@@ -91,16 +96,101 @@ function ErrorPanel({
           size={18}
         />
         <Text textStyle={{ color: colors.danger.foreground, fontSize: 15, fontWeight: '700' }}>
-          Backup action failed
+          Data action failed
         </Text>
       </Row>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 13 }}>
-        Your current data was not replaced.
+        Your current data was not changed.
       </Text>
       <RecoveryActions onClose={onBack} onRetry={onRetry} testID="backup-recovery" />
     </Column>
   );
+}
+
+function formatPreviewTimestamp(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
+}
+
+function TimematorPreview({ preview }: { preview: TimematorCsvPreview }) {
+  const { colors } = useAppTheme();
+  return (
+    <Column
+      spacing={5}
+      style={{
+        backgroundColor: colors.active.background,
+        borderColor: colors.border,
+        borderRadius: 12,
+        borderWidth: 1,
+        padding: 12,
+        width: '100%',
+      }}
+      testID="timemator-import-preview"
+    >
+      <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>
+        Timemator export ready
+      </Text>
+      <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+        {`${preview.rowCount.toLocaleString()} rows · ${preview.activityCount} activities · ${preview.folderCount} folders`}
+      </Text>
+      <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+        {`${preview.gapCount} idle gaps will be preserved${preview.runningRowCount ? ` · ${preview.runningRowCount} running session` : ''}`}
+      </Text>
+      <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
+        {`${formatPreviewTimestamp(preview.firstTimestamp)} – ${formatPreviewTimestamp(preview.lastTimestamp)}`}
+      </Text>
+    </Column>
+  );
+}
+
+function TimematorImportSummary({ result }: { result: TimematorImportResult }) {
+  const { colors } = useAppTheme();
+  const { summary } = result;
+  return (
+    <Column
+      spacing={5}
+      style={{
+        backgroundColor: colors.success.background,
+        borderColor: colors.success.foreground,
+        borderRadius: 12,
+        borderWidth: 1,
+        padding: 12,
+        width: '100%',
+      }}
+      testID="timemator-import-summary"
+    >
+      <Text textStyle={{ color: colors.success.foreground, fontSize: 15, fontWeight: '700' }}>
+        Timemator data imported
+      </Text>
+      <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>
+        {`${summary.insertedTransitions} tracker transitions added · ${summary.skippedTransitions} already present`}
+      </Text>
+      <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>
+        {`${summary.createdActivities} activities created · ${summary.matchedActivities} existing activities matched`}
+      </Text>
+      <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>
+        {`${summary.createdFolders} folders created · ${summary.matchedFolders} existing folders matched`}
+      </Text>
+    </Column>
+  );
+}
+
+async function readPickerAsset(asset: DocumentPicker.DocumentPickerAsset): Promise<string> {
+  const fileAsset = asset as DocumentPicker.DocumentPickerAsset & {
+    file?: { text(): Promise<string> };
+  };
+  return fileAsset.file ? fileAsset.file.text() : (await fetch(asset.uri)).text();
+}
+
+function importErrorMessage(actionError: unknown): string {
+  if (actionError instanceof BackupImportError) {
+    return `${actionError.message}${actionError.details?.length ? `: ${actionError.details.join('; ')}` : ''}`;
+  }
+  if (actionError instanceof TimematorImportError) return actionError.message;
+  return errorText(actionError);
 }
 
 function BackupContent({ runtime }: { runtime: BackupRuntime }) {
@@ -111,6 +201,10 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
   const [importText, setImportText] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<BackupImportResult | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [timematorText, setTimematorText] = useState<string | null>(null);
+  const [timematorPreview, setTimematorPreview] = useState<TimematorCsvPreview | null>(null);
+  const [timematorResult, setTimematorResult] = useState<TimematorImportResult | null>(null);
+  const [timematorConfirming, setTimematorConfirming] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
 
@@ -161,19 +255,12 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
         type: 'application/json',
       });
       if (result.canceled) return;
-      const asset = result.assets[0] as DocumentPicker.DocumentPickerAsset & {
-        file?: { text(): Promise<string> };
-      };
-      const text = asset.file ? await asset.file.text() : await (await fetch(asset.uri)).text();
+      const text = await readPickerAsset(result.assets[0]);
       const parsed = runtime.backupService.inspectImport(text);
       setImportText(text);
       setImportResult(parsed);
     } catch (actionError) {
-      setError(
-        actionError instanceof BackupImportError
-          ? `${actionError.message}${actionError.details?.length ? `: ${actionError.details.join('; ')}` : ''}`
-          : errorText(actionError)
-      );
+      setError(importErrorMessage(actionError));
     } finally {
       setBusy(false);
     }
@@ -198,11 +285,57 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
     }
   };
 
+  const inspectTimematorFile = async () => {
+    lastAction.current = inspectTimematorFile;
+    setBusy(true);
+    setError(null);
+    setSuccess(null);
+    setTimematorResult(null);
+    setTimematorText(null);
+    setTimematorPreview(null);
+    setTimematorConfirming(false);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        multiple: false,
+        type: ['text/csv', 'text/plain', 'application/octet-stream'],
+      });
+      if (result.canceled) return;
+      const text = await readPickerAsset(result.assets[0]);
+      setTimematorText(text);
+      setTimematorPreview(runtime.timematorImportService.inspect(text));
+    } catch (actionError) {
+      setError(importErrorMessage(actionError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const importTimemator = async () => {
+    lastAction.current = importTimemator;
+    if (!timematorText) return;
+    setBusy(true);
+    setError(null);
+    setTimematorConfirming(false);
+    try {
+      const result = await runtime.timematorImportService.importCsv(timematorText);
+      setTimematorResult(result);
+      setTimematorText(null);
+      setTimematorPreview(null);
+      setSuccess('Timemator tracker data was added. Reload the tracker to see it.');
+      bootCoordinator.reset();
+    } catch (actionError) {
+      setError(importErrorMessage(actionError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Screen
       onBack={() => router.back()}
       title="Backup"
-      description="Export a copy or validate a backup before replacing this device's data."
+      description="Export a copy, restore a backup, or add tracker history from Timemator."
     >
       <Column spacing={14} style={{ width: '100%' }}>
         <Column
@@ -247,6 +380,84 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
             style={{ height: 50, width: '100%' }}
             testID="import-json"
           />
+        </Column>
+        <Column
+          spacing={10}
+          style={{
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderRadius: 16,
+            borderWidth: 1,
+            padding: 16,
+            width: '100%',
+          }}
+          testID="timemator-import-actions"
+        >
+          <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
+            Import Timemator tracker data
+          </Text>
+          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+            Add Timemator&apos;s semicolon-delimited export to your tracker. Existing activities are
+            matched by name; missing activities are created automatically.
+          </Text>
+          <AppButton
+            disabled={busy}
+            label="Choose Timemator CSV"
+            onPress={() => void inspectTimematorFile()}
+            style={{ height: 50, width: '100%' }}
+            testID="import-timemator-csv"
+          />
+          {timematorPreview ? <TimematorPreview preview={timematorPreview} /> : null}
+          {timematorPreview && timematorText ? (
+            timematorConfirming ? (
+              <Column
+                spacing={10}
+                style={{
+                  backgroundColor: colors.warning.background,
+                  borderColor: colors.warning.foreground,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  padding: 14,
+                  width: '100%',
+                }}
+                testID="timemator-import-confirmation"
+              >
+                <Text
+                  textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}
+                >
+                  Add this tracker history?
+                </Text>
+                <Text textStyle={{ color: colors.warning.foreground, fontSize: 14 }}>
+                  This adds the imported sessions to the current dataset and keeps your existing
+                  tracker data.
+                </Text>
+                <Column spacing={8} style={{ width: '100%' }}>
+                  <AppButton
+                    disabled={busy}
+                    label="Yes, import tracker data"
+                    onPress={() => void importTimemator()}
+                    style={{ height: 50, width: '100%' }}
+                    testID="confirm-timemator-import"
+                  />
+                  <AppButton
+                    label="Cancel"
+                    onPress={() => setTimematorConfirming(false)}
+                    style={{ height: 48, width: '100%' }}
+                    testID="cancel-timemator-import"
+                  />
+                </Column>
+              </Column>
+            ) : (
+              <AppButton
+                disabled={busy}
+                label="Review and import"
+                onPress={() => setTimematorConfirming(true)}
+                style={{ height: 52, width: '100%' }}
+                testID="review-timemator-import"
+              />
+            )
+          ) : null}
+          {timematorResult ? <TimematorImportSummary result={timematorResult} /> : null}
         </Column>
         {busy ? (
           <Text textStyle={{ color: colors.textMuted, fontSize: 14 }} testID="backup-progress">
@@ -342,6 +553,13 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
             testID="reload-after-restore"
           />
         ) : null}
+        {success?.startsWith('Timemator tracker data') ? (
+          <AppButton
+            label="Reload tracker"
+            onPress={() => router.replace('/(tabs)')}
+            testID="reload-after-timemator-import"
+          />
+        ) : null}
       </Column>
     </Screen>
   );
@@ -385,7 +603,7 @@ export default function BackupScreen() {
       <Screen
         onBack={() => router.back()}
         title="Backup"
-        description="Export a copy or validate a backup before replacing this device's data."
+        description="Export a copy, restore a backup, or add tracker history from Timemator."
       >
         <Text
           textStyle={{

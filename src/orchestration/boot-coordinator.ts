@@ -42,6 +42,10 @@ import { createSettingsService, type SettingsService } from '../settings/setting
 import { createSettingsStore, type SettingsStore } from '../settings/settings-store';
 import { createTrackerService, type TrackerService } from '../tracker/tracker-service';
 import { createTrackerStore, type TrackerStore } from '../tracker/tracker-store';
+import {
+  createTimematorImportService,
+  type TimematorImportService,
+} from '../backup/timemator-import';
 
 export type BootStage =
   | 'metadata'
@@ -116,6 +120,7 @@ export interface BootServices {
   reconciliation: HabitReconciliationService;
   reporting: ReportingService;
   backup: BackupService;
+  timematorImport: TimematorImportService;
   routineAlarm: RoutineAlarmService;
 }
 
@@ -413,6 +418,10 @@ export class BootCoordinator {
       catalog: catalogService,
       settings: settingsService,
     });
+    const timematorImport = createTimematorImportService({
+      catalog: catalogService,
+      tracker: trackerService,
+    });
     const backup = new BackupService(
       repositories.backup,
       this.datasetManager,
@@ -448,6 +457,7 @@ export class BootCoordinator {
       reconciliation,
       reporting,
       backup,
+      timematorImport,
       routineAlarm,
     };
     const stores: BootStores = {
