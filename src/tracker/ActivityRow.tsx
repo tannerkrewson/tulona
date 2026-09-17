@@ -13,6 +13,7 @@ import {
 import { AppIcon } from '@icons';
 
 import { CatalogEditActions } from './CatalogEditActions';
+import { TRACKER_ROW_FONT_SIZE, TRACKER_ROW_HEIGHT } from './catalog-row-geometry';
 
 export interface ActivityRowProps {
   item: TrackableItem;
@@ -63,7 +64,7 @@ export function ActivityRow({
     ...getRowSurfaceStyle({
       backgroundColor: active ? accent : inactiveBackground,
     }),
-    ...getRowSurfaceLayoutStyle(),
+    ...getRowSurfaceLayoutStyle({ height: TRACKER_ROW_HEIGHT }),
   } as const;
   const rowContent = (
     <Row alignment="center" spacing={ROW_SURFACE_CONTENT_GAP} style={{ width: '100%' }}>
@@ -106,7 +107,7 @@ export function ActivityRow({
         numberOfLines={1}
         textStyle={{
           color: active ? activeForeground : colors.text,
-          fontSize: 17,
+          fontSize: TRACKER_ROW_FONT_SIZE,
           fontWeight: active ? '700' : '600',
         }}
       >

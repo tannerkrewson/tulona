@@ -13,6 +13,7 @@ import {
 } from '@ui';
 
 import { CatalogEditActions } from './CatalogEditActions';
+import { TRACKER_ROW_FONT_SIZE, TRACKER_ROW_HEIGHT } from './catalog-row-geometry';
 
 export interface FolderRowProps {
   folder: Folder;
@@ -42,7 +43,7 @@ export function FolderRow({
     ...getRowSurfaceStyle({
       backgroundColor: colorScheme === 'dark' ? colors.surfaceMuted : colors.surface,
     }),
-    ...getRowSurfaceLayoutStyle(),
+    ...getRowSurfaceLayoutStyle({ height: TRACKER_ROW_HEIGHT }),
   } as const;
   const rowContent = (
     <Row alignment="center" spacing={ROW_SURFACE_CONTENT_GAP} style={{ width: '100%' }}>
@@ -63,7 +64,10 @@ export function FolderRow({
           strokeWidth={editMode ? 2.5 : 0}
         />
       </View>
-      <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 19, fontWeight: '600' }}>
+      <Text
+        numberOfLines={1}
+        textStyle={{ color: colors.text, fontSize: TRACKER_ROW_FONT_SIZE, fontWeight: '600' }}
+      >
         {folder.name}
       </Text>
       {!editMode ? <Spacer flexible /> : null}
