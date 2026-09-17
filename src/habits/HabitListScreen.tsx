@@ -33,6 +33,13 @@ import {
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
 import {
+  DEFAULT_HABIT_CATEGORY,
+  groupHabitsByCategory,
+  HABIT_CATEGORY_OPTIONS,
+  habitStartDay,
+  type HabitCategory,
+} from './categories';
+import {
   formatHabitDay,
   formatHabitRolloverHour,
   habitDaySwipeTarget,
@@ -140,15 +147,18 @@ function HabitListContent({ store }: { store: HabitStore }) {
   const [clockMs, setClockMs] = useState(() => Date.now());
   const [contentWidth, setContentWidth] = useState(0);
   const [metricMode, setMetricMode] = useState<HabitMetricMode>('streak');
+  const [selectedCategory, setSelectedCategory] = useState<HabitCategory>(DEFAULT_HABIT_CATEGORY);
   const [dismissedPastMidnightDay, setDismissedPastMidnightDay] = useState<LogicalDayKey | null>(
     null
   );
   const lastAction = useRef<(() => Promise<unknown>) | null>(null);
-  const activeHabits = habits
-    .filter((habit) => habit.archivedAt === null)
-    .sort((left, right) => left.sortOrder - right.sortOrder);
-  const archivedCount = habits.filter((habit) => habit.archivedAt !== null).length;
+  const habitsByCategory = useMemo(
+    () => groupHabitsByCategory(habits, today, { rolloverHour: logicalDayRolloverHour }),
+    [habits, logicalDayRolloverHour, today]
+  );
+  const visibleHabits = habitsByCategory[selectedCategory];
   const pastMidnightWarningVisible =
+    selectedCategory === 'active' &&
     isPastMidnightHabitDay(selectedDay, clockMs, logicalDayRolloverHour) &&
     dismissedPastMidnightDay !== selectedDay;
 
@@ -173,8 +183,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
 
   const renderDay = (day: LogicalDayKey) => (
     <HabitDayList
-      activeHabits={activeHabits}
-      archivedCount={archivedCount}
+      activeHabits={habitsByCategory.active}
       day={day}
       logicalDayRolloverHour={logicalDayRolloverHour}
       onDetails={(habitId) => router.push(`/habit/${habitId}`)}
@@ -208,73 +217,257 @@ function HabitListContent({ store }: { store: HabitStore }) {
             runAction(action ?? (() => store.getState().refresh()));
           }}
         />
-        <HabitWeekStrip
-          onSelectDay={selectDay}
-          rolloverHour={logicalDayRolloverHour}
-          selectedDay={selectedDay}
-          today={today}
+        <HabitCategorySwitcher
+          counts={habitsByCategory}
+          onChange={setSelectedCategory}
+          value={selectedCategory}
         />
-        {pastMidnightWarningVisible ? (
-          <View
-            accessibilityLiveRegion="polite"
-            accessibilityRole="alert"
-            style={{ width: '100%' }}
-            testID="habit-past-midnight-warning"
-          >
-            <Column
-              spacing={6}
-              style={{
-                backgroundColor: colors.warning.background,
-                borderColor: colors.warning.foreground,
-                borderRadius: 12,
-                borderWidth: 1,
-                padding: 14,
-                width: '100%',
-              }}
-            >
-              <Text
-                textStyle={{ color: colors.warning.foreground, fontSize: 14, fontWeight: '700' }}
+        {selectedCategory === 'active' ? (
+          <>
+            <HabitWeekStrip
+              onSelectDay={selectDay}
+              rolloverHour={logicalDayRolloverHour}
+              selectedDay={selectedDay}
+              today={today}
+            />
+            {pastMidnightWarningVisible ? (
+              <View
+                accessibilityLiveRegion="polite"
+                accessibilityRole="alert"
+                style={{ width: '100%' }}
+                testID="habit-past-midnight-warning"
               >
-                Past midnight reminder
-              </Text>
-              <Text textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}>
-                {`It’s after midnight. Your logical day rolls over at ${formatHabitRolloverHour(logicalDayRolloverHour)}. Check that you’re logging the intended day; entries saved now apply to ${formatHabitDay(selectedDay)}.`}
-              </Text>
-              <Pressable
-                accessibilityHint="Dismisses this reminder without changing habit data"
-                accessibilityLabel="Keep logging on this logical day"
-                accessibilityRole="button"
-                onPress={() => setDismissedPastMidnightDay(selectedDay)}
-                style={({ pressed }) => ({
-                  alignSelf: 'flex-start',
-                  borderRadius: 8,
-                  opacity: pressed ? 0.65 : 1,
-                  paddingHorizontal: 2,
-                  paddingVertical: 4,
-                })}
-                testID="habit-past-midnight-keep"
-              >
-                <NativeText
-                  selectable={false}
-                  style={{ color: colors.warning.foreground, fontSize: 14, fontWeight: '700' }}
+                <Column
+                  spacing={6}
+                  style={{
+                    backgroundColor: colors.warning.background,
+                    borderColor: colors.warning.foreground,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    padding: 14,
+                    width: '100%',
+                  }}
                 >
-                  Keep logging here
-                </NativeText>
-              </Pressable>
-            </Column>
-          </View>
-        ) : null}
-        <HabitDayPager
-          contentWidth={contentWidth}
-          horizontalInsets={{ left: 20 + insets.left, right: 20 + insets.right }}
-          onSelectDay={selectDay}
-          renderDay={renderDay}
-          rolloverHour={logicalDayRolloverHour}
-          selectedDay={selectedDay}
-          today={today}
-        />
+                  <Text
+                    textStyle={{
+                      color: colors.warning.foreground,
+                      fontSize: 14,
+                      fontWeight: '700',
+                    }}
+                  >
+                    Past midnight reminder
+                  </Text>
+                  <Text
+                    textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}
+                  >
+                    {`It’s after midnight. Your logical day rolls over at ${formatHabitRolloverHour(logicalDayRolloverHour)}. Check that you’re logging the intended day; entries saved now apply to ${formatHabitDay(selectedDay)}.`}
+                  </Text>
+                  <Pressable
+                    accessibilityHint="Dismisses this reminder without changing habit data"
+                    accessibilityLabel="Keep logging on this logical day"
+                    accessibilityRole="button"
+                    onPress={() => setDismissedPastMidnightDay(selectedDay)}
+                    style={({ pressed }) => ({
+                      alignSelf: 'flex-start',
+                      borderRadius: 8,
+                      opacity: pressed ? 0.65 : 1,
+                      paddingHorizontal: 2,
+                      paddingVertical: 4,
+                    })}
+                    testID="habit-past-midnight-keep"
+                  >
+                    <NativeText
+                      selectable={false}
+                      style={{ color: colors.warning.foreground, fontSize: 14, fontWeight: '700' }}
+                    >
+                      Keep logging here
+                    </NativeText>
+                  </Pressable>
+                </Column>
+              </View>
+            ) : null}
+            <HabitDayPager
+              contentWidth={contentWidth}
+              horizontalInsets={{ left: 20 + insets.left, right: 20 + insets.right }}
+              onSelectDay={selectDay}
+              renderDay={renderDay}
+              rolloverHour={logicalDayRolloverHour}
+              selectedDay={selectedDay}
+              today={today}
+            />
+          </>
+        ) : (
+          <HabitCategoryList
+            category={selectedCategory}
+            habits={visibleHabits}
+            onDetails={(habitId) => router.push(`/habit/${habitId}`)}
+            rolloverHour={logicalDayRolloverHour}
+          />
+        )}
       </View>
     </Screen>
+  );
+}
+
+function HabitCategorySwitcher({
+  counts,
+  onChange,
+  value,
+}: {
+  counts: Readonly<Record<HabitCategory, readonly Habit[]>>;
+  onChange: (category: HabitCategory) => void;
+  value: HabitCategory;
+}) {
+  const { colors } = useAppTheme();
+
+  return (
+    <View
+      accessibilityLabel="Habit categories"
+      style={[styles.categorySwitcher, { backgroundColor: colors.surfaceMuted }]}
+      testID="habit-category-switcher"
+    >
+      {HABIT_CATEGORY_OPTIONS.map((option) => {
+        const selected = option.value === value;
+        const count = counts[option.value].length;
+        return (
+          <Pressable
+            accessibilityLabel={`${option.label} habits, ${count}`}
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            key={option.value}
+            onPress={() => onChange(option.value)}
+            style={({ pressed }) => [
+              styles.categoryOption,
+              { backgroundColor: selected ? colors.primary : 'transparent' },
+              pressed ? styles.categoryPressed : null,
+            ]}
+            testID={`habit-category-${option.value}`}
+          >
+            <NativeText
+              selectable={false}
+              style={{
+                color: selected ? colors.onPrimary : colors.textMuted,
+                fontSize: 13,
+                fontWeight: '700',
+              }}
+            >
+              {`${option.label} (${count})`}
+            </NativeText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function HabitCategoryList({
+  category,
+  habits,
+  onDetails,
+  rolloverHour,
+}: {
+  category: Exclude<HabitCategory, 'active'>;
+  habits: readonly Habit[];
+  onDetails: (habitId: string) => void;
+  rolloverHour: number;
+}) {
+  const { colors } = useAppTheme();
+  const future = category === 'future';
+
+  return (
+    <ScrollView style={{ height: '100%', width: '100%' }}>
+      <Column spacing={12} style={{ paddingBottom: 20, paddingTop: 12, width: '100%' }}>
+        <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+          {future
+            ? 'These habits will become active when their scheduled start date arrives.'
+            : 'Archived habits keep their history and can be restored from their details.'}
+        </Text>
+        {habits.length === 0 ? (
+          <EmptyState
+            iconName={future ? 'calendar-days' : 'archive'}
+            testID={`habits-${category}-empty`}
+            title={future ? 'No future habits' : 'No archived habits'}
+          />
+        ) : (
+          <Column spacing={8} style={{ width: '100%' }}>
+            {habits.map((habit) => (
+              <HabitCategoryListItem
+                category={category}
+                habit={habit}
+                key={habit.id}
+                onDetails={() => onDetails(habit.id)}
+                rolloverHour={rolloverHour}
+              />
+            ))}
+          </Column>
+        )}
+      </Column>
+    </ScrollView>
+  );
+}
+
+function HabitCategoryListItem({
+  category,
+  habit,
+  onDetails,
+  rolloverHour,
+}: {
+  category: Exclude<HabitCategory, 'active'>;
+  habit: Habit;
+  onDetails: () => void;
+  rolloverHour: number;
+}) {
+  const { colors } = useAppTheme();
+  const future = category === 'future';
+  const subtitle = future
+    ? `Starts ${formatHabitDay(habitStartDay(habit, { rolloverHour }))}`
+    : 'Archived habit · Open details to restore';
+  const accent = habit.color ?? colors.primary;
+
+  return (
+    <Pressable
+      accessibilityHint="Opens habit details, where it can be edited or restored"
+      accessibilityLabel={`${habit.name}. ${subtitle}`}
+      accessibilityRole="button"
+      onPress={onDetails}
+      style={({ pressed }) => [
+        getRowSurfaceStyle({ backgroundColor: colors.surface }),
+        styles.categoryListItem,
+        pressed ? styles.categoryPressed : null,
+      ]}
+      testID={`habit-category-item-${category}-${habit.id}`}
+    >
+      <View style={[styles.categoryIcon, { backgroundColor: accent }]}>
+        <AppIcon
+          accessibilityLabel={future ? 'Future habit' : 'Archived habit'}
+          color={getAccessibleTextColor(accent)}
+          name={habit.iconName ?? (future ? 'calendar-days' : 'archive')}
+          size={20}
+        />
+      </View>
+      <View style={styles.categoryListText}>
+        <NativeText
+          numberOfLines={1}
+          selectable={false}
+          style={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
+        >
+          {habit.name}
+        </NativeText>
+        <NativeText
+          numberOfLines={1}
+          selectable={false}
+          style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}
+        >
+          {subtitle}
+        </NativeText>
+      </View>
+      <AppIcon
+        accessibilityLabel="Open details"
+        color={colors.textMuted}
+        name="chevron-right"
+        size={20}
+      />
+    </Pressable>
   );
 }
 
@@ -289,6 +482,48 @@ const HABIT_MENU_HEIGHT = 190;
 const HABIT_ROW_MIN_HEIGHT = 72;
 const HABIT_ROW_TEXT_BLOCK_HEIGHT = 38;
 const HABIT_ROW_STREAK_WIDTH = 96;
+
+const styles = StyleSheet.create({
+  categoryIcon: {
+    alignItems: 'center',
+    borderRadius: 8,
+    height: ROW_SURFACE_ICON_SIZE,
+    justifyContent: 'center',
+    width: ROW_SURFACE_ICON_SIZE,
+  },
+  categoryListItem: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    minHeight: HABIT_ROW_MIN_HEIGHT,
+    paddingHorizontal: ROW_SURFACE_PADDING_HORIZONTAL,
+    paddingVertical: 12,
+    width: '100%',
+  },
+  categoryListText: {
+    flex: 1,
+    marginLeft: ROW_SURFACE_CONTENT_GAP,
+    marginRight: ROW_SURFACE_CONTENT_GAP,
+    minWidth: 0,
+  },
+  categoryOption: {
+    alignItems: 'center',
+    borderRadius: 9,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: 8,
+  },
+  categoryPressed: {
+    opacity: 0.72,
+  },
+  categorySwitcher: {
+    borderRadius: 12,
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    width: '100%',
+  },
+});
 
 function webGestureStyle(touchAction: 'pan-y' | 'none'): ViewStyle | undefined {
   if (Platform.OS !== 'web') return undefined;
@@ -690,7 +925,6 @@ function WeekDaysRow({
 
 function HabitDayList({
   activeHabits,
-  archivedCount,
   day,
   logicalDayRolloverHour,
   onDetails,
@@ -702,7 +936,6 @@ function HabitDayList({
   states,
 }: {
   activeHabits: Habit[];
-  archivedCount: number;
   day: LogicalDayKey;
   logicalDayRolloverHour: number;
   onDetails: (habitId: string) => void;
@@ -713,7 +946,6 @@ function HabitDayList({
   saving: boolean;
   states: HabitDayState[];
 }) {
-  const { colors } = useAppTheme();
   return (
     <ScrollView style={{ height: '100%', width: '100%' }}>
       <Column spacing={12} style={{ paddingBottom: 20, paddingTop: 12, width: '100%' }}>
@@ -741,11 +973,6 @@ function HabitDayList({
             ))}
           </Column>
         )}
-        {archivedCount > 0 ? (
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-            {`${archivedCount} archived ${archivedCount === 1 ? 'habit' : 'habits'} remain available from their detail screen.`}
-          </Text>
-        ) : null}
       </Column>
     </ScrollView>
   );

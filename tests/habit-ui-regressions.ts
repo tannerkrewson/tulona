@@ -1,4 +1,5 @@
 import { ROW_SURFACE_RADIUS } from '../src/ui/row-surface';
+import { DEFAULT_HABIT_CATEGORY, HABIT_CATEGORY_OPTIONS } from '../src/habits';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require('node:fs');
@@ -24,6 +25,28 @@ const metricTargetStart = habitItem.indexOf('testID={`toggle-habit-metric-${habi
 const metricTarget = habitItem.slice(
   habitItem.lastIndexOf('<Pressable', metricTargetStart),
   habitItem.indexOf('</Pressable>', metricTargetStart) + '</Pressable>'.length
+);
+
+assert(
+  DEFAULT_HABIT_CATEGORY === 'active' &&
+    HABIT_CATEGORY_OPTIONS.map((option) => option.value).join(',') === 'active,future,archived',
+  'habit categories must expose Active as the default in active, future, archived order'
+);
+assert(
+  habitList.includes(
+    'const [selectedCategory, setSelectedCategory] = useState<HabitCategory>(DEFAULT_HABIT_CATEGORY);'
+  ) &&
+    habitList.includes('testID="habit-category-switcher"') &&
+    habitList.includes('accessibilityRole="tab"') &&
+    habitList.includes('testID={`habit-category-${option.value}`}') &&
+    habitList.includes("selectedCategory === 'active'"),
+  'habit list must expose an accessible category switcher with Active selected by default'
+);
+assert(
+  habitList.includes('function HabitCategoryList(') &&
+    habitList.includes('habit-category-item-${category}-${habit.id}') &&
+    habitList.includes('Opens habit details, where it can be edited or restored'),
+  'future and archived category rows must retain the existing detail and editing flow'
 );
 
 assert(

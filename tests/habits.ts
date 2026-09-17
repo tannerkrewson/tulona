@@ -15,6 +15,9 @@ import {
   shiftHabitWeek,
   isPastMidnightHabitDay,
   isHabitScheduledDay,
+  classifyHabit,
+  groupHabitsByCategory,
+  habitStartDay,
 } from '../src/habits';
 import type {
   Activity,
@@ -163,6 +166,41 @@ async function run(): Promise<void> {
   assert(
     isHabitScheduledDay({ kind: 'daily' }, '2026-08-30T02:00:00.000Z', { rolloverHour: 3 }),
     'daily schedules use logical days before recurrence evaluation'
+  );
+  const categoryActiveHabit = habit(ids.habit);
+  const categoryFutureHabit: Habit = {
+    ...habit(ids.secondHabit),
+    schedule: { kind: 'interval', everyDays: 2, startDate: '2026-09-01' },
+  };
+  const categoryArchivedHabit: Habit = {
+    ...habit('77777777-7777-4777-8777-777777777777'),
+    archivedAt: createdAt,
+  };
+  const categoryCreatedLaterHabit: Habit = {
+    ...habit('88888888-8888-4888-8888-888888888888'),
+    createdAt: '2026-09-01T00:00:00.000Z',
+  };
+  assert(
+    classifyHabit(categoryActiveHabit, '2026-08-30') === 'active' &&
+      classifyHabit(categoryFutureHabit, '2026-08-30') === 'future' &&
+      classifyHabit(categoryArchivedHabit, '2026-08-30') === 'archived' &&
+      classifyHabit(categoryArchivedHabit, '2026-09-30') === 'archived',
+    'habit categories must prioritize archived state and derive future from the existing interval start date'
+  );
+  assert(
+    habitStartDay(categoryFutureHabit) === '2026-09-01' &&
+      classifyHabit(categoryCreatedLaterHabit, '2026-08-30') === 'future',
+    'habit categories must use logical creation day for schedules without an explicit start date'
+  );
+  const groupedCategories = groupHabitsByCategory(
+    [categoryFutureHabit, categoryArchivedHabit, categoryActiveHabit],
+    '2026-08-30'
+  );
+  assert(
+    groupedCategories.active[0]?.id === ids.habit &&
+      groupedCategories.future[0]?.id === ids.secondHabit &&
+      groupedCategories.archived[0]?.id === categoryArchivedHabit.id,
+    'habit category grouping must place each record in exactly one ordered category'
   );
   assert(
     !isHabitScheduledDay({ kind: 'weekly', daysOfWeek: [1] }, '2026-08-30', { rolloverHour: 0 }),
@@ -417,6 +455,40 @@ async function run(): Promise<void> {
     schedule: { kind: 'daily' },
   });
   assert(emojiHabit.iconName === '🌿', 'habit records must persist system emoji values');
+  const futureHabit = await habitService.create({
+    id: ids.secondHabit,
+    name: 'Future habit',
+    schedule: { kind: 'interval', everyDays: 7, startDate: '2026-09-02' },
+  });
+  assert(
+    classifyHabit(futureHabit, '2026-08-30') === 'future' &&
+      !Object.prototype.hasOwnProperty.call(futureHabit, 'category'),
+    'future classification must be derived without adding a persisted category field'
+  );
+  const startedHabit = await habitService.update(ids.secondHabit, {
+    schedule: { kind: 'interval', everyDays: 7, startDate: '2026-08-30' },
+  });
+  assert(
+    classifyHabit(startedHabit, '2026-08-30') === 'active',
+    'editing an interval start date to today must transition a habit to active'
+  );
+  await habitService.archive(ids.secondHabit);
+  assert(
+    classifyHabit(await habitService.get(ids.secondHabit), '2026-08-30') === 'archived',
+    'archiving an active habit must transition it to archived'
+  );
+  await habitService.restore(ids.secondHabit);
+  assert(
+    classifyHabit(await habitService.get(ids.secondHabit), '2026-08-30') === 'active',
+    'restoring a started habit must transition it back to active'
+  );
+  const rescheduledFutureHabit = await habitService.update(ids.secondHabit, {
+    schedule: { kind: 'interval', everyDays: 7, startDate: '2026-09-02' },
+  });
+  assert(
+    classifyHabit(rescheduledFutureHabit, '2026-08-30') === 'future',
+    'editing an active interval start date into the future must transition it to future'
+  );
   let outcome: HabitDayOutcome | null = null;
   for (const expected of ['done', 'failed', 'skipped', null] as const) {
     outcome = nextHabitOutcome(outcome);
