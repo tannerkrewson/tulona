@@ -123,11 +123,13 @@ assert(
   'web tab icons must use live active/inactive theme variables'
 );
 assert(
-  activeBar.includes('const ACTIVE_BAR_BOTTOM = TAB_BAR_HEIGHT + ACTIVE_BAR_GAP') &&
+  activeBar.includes('const ACTIVE_BAR_BOTTOM = TAB_BAR_HEIGHT') &&
     activeBar.includes('calc(${ACTIVE_BAR_BOTTOM}px + var(--tulona-safe-area-bottom))') &&
-    activeBar.includes('height: ACTIVE_BAR_HEIGHT') &&
+    activeBar.includes('height: ACTIVE_ACTIVITY_BAR_HEIGHT') &&
+    activeBar.includes("width: '100%'") &&
+    activeBar.includes('borderTopWidth: 1') &&
     !activeBar.includes("pathname === '/' ? 82 : 14"),
-  'the floating activity bar must use one fixed height and stay above the tab bar'
+  'the active activity bar must meet the tab bar with one fixed full-width height'
 );
 assert(
   activeBar.includes("justifyContent: 'center'") &&

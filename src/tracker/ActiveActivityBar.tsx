@@ -21,9 +21,8 @@ function isCatalogPath(pathname: string): boolean {
 }
 
 const TAB_BAR_HEIGHT = 64;
-const ACTIVE_BAR_GAP = 18;
-const ACTIVE_BAR_BOTTOM = TAB_BAR_HEIGHT + ACTIVE_BAR_GAP;
-const ACTIVE_BAR_HEIGHT = 64;
+export const ACTIVE_ACTIVITY_BAR_HEIGHT = 64;
+const ACTIVE_BAR_BOTTOM = TAB_BAR_HEIGHT;
 
 function activeItem(
   catalog: CatalogCollection | null,
@@ -200,12 +199,12 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
           {
             backgroundColor: isWeb ? webSurface : colors.surface,
             borderColor: isWeb ? webBorder : colors.border,
-            // Keep the pill a fixed gap above the tab bar. The web tab bar's
-            // CSS height includes the cold-start-safe home-indicator inset.
+            // The web tab bar's CSS height includes the cold-start-safe
+            // home-indicator inset, so the bar can meet it exactly.
             bottom: (isWeb
               ? `calc(${ACTIVE_BAR_BOTTOM}px + var(--tulona-safe-area-bottom))`
               : ACTIVE_BAR_BOTTOM) as unknown as number,
-            height: ACTIVE_BAR_HEIGHT,
+            height: ACTIVE_ACTIVITY_BAR_HEIGHT,
           },
         ]}
         testID="active-activity-bar"
@@ -276,13 +275,11 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
 
 const styles = StyleSheet.create({
   bar: {
-    borderRadius: 18,
-    borderWidth: 1,
+    borderTopWidth: 1,
     flexDirection: 'row',
-    maxWidth: 720,
     overflow: 'hidden',
     position: 'absolute',
-    width: '94%',
+    width: '100%',
   },
   info: {
     flex: 1,
@@ -301,8 +298,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   overlay: {
-    alignItems: 'center',
-    paddingHorizontal: 14,
+    alignItems: 'stretch',
   },
   pauseButton: {
     alignItems: 'center',

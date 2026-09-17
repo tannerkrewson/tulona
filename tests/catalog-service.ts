@@ -265,8 +265,9 @@ async function run(): Promise<void> {
     .filter((activity) => activity.folderId === null)
     .sort((left, right) => left.sortOrder - right.sortOrder);
   assert(
-    rootItems[0]?.id === ids.secondRootActivity && rootItems[0].sortOrder === 0,
-    'Move Up must reorder root items'
+    rootItems[0]?.id === ids.secondRootActivity &&
+      rootItems[0].sortOrder < (rootItems[1]?.sortOrder ?? Number.MAX_SAFE_INTEGER),
+    'Move Up must reorder root items within the shared root order'
   );
   await service.reorderItem(ids.routine, 'up');
   const reorderedCatalog = await service.read();
@@ -307,15 +308,11 @@ async function run(): Promise<void> {
   };
   const normalized = await service.normalizeOrders();
   assert(
-    normalized.folders.every((item, index) => item.sortOrder === index),
-    'folder normalization must remove gaps'
-  );
-  assert(
-    [...normalized.activities, ...normalized.routines]
-      .filter((item) => item.folderId === null)
+    [...normalized.folders, ...normalized.activities, ...normalized.routines]
+      .filter((item) => !('folderId' in item) || item.folderId === null)
       .sort((left, right) => left.sortOrder - right.sortOrder)
       .every((item, index) => item.sortOrder === index),
-    'catalog item normalization must remove duplicate orders'
+    'shared root normalization must remove gaps'
   );
   assert(
     normalized.routines

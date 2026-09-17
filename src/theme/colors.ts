@@ -92,3 +92,12 @@ export function getAccessibleTextColor(background: string): '#111111' | '#FFFFFF
 
   return luminance > 0.179 ? '#111111' : '#FFFFFF';
 }
+
+/** Returns a deep shade for text and filled controls placed on a color. */
+export function getDarkerColor(value: string): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(value.trim());
+  if (!match) return '#111111';
+
+  const channels = [0, 2, 4].map((offset) => Number.parseInt(match[1].slice(offset, offset + 2), 16));
+  return `#${channels.map((channel) => Math.round(channel * 0.34).toString(16).padStart(2, '0')).join('')}`;
+}

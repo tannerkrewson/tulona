@@ -1,5 +1,6 @@
 export {
   getAccessibleTextColor,
+  getDarkerColor,
   getThemeColors,
   resolveColorScheme,
   themeColors,
