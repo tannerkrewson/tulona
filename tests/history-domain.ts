@@ -7,6 +7,7 @@ import {
   clipHistorySession,
   comparisonHistoryPeriod,
   createHistoricalActivitySnapshot,
+  defaultGoalSettings,
   currentHistoryPeriod,
   historicalActivitySnapshotForCatalogItem,
   historyDayPeriod,
@@ -518,6 +519,9 @@ async function run(): Promise<void> {
     activeRoutine: null,
     habits: [],
     habitDayStates: [],
+    goals: [],
+    goalSettings: defaultGoalSettings(),
+    goalWeeks: [],
   });
   assertEqual(
     backup.backup.transitions[0].activitySnapshot?.name,
