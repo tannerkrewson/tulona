@@ -24,7 +24,7 @@ const folderRow = read('src/tracker/FolderRow.tsx');
 const habitList = read('src/habits/HabitListScreen.tsx');
 
 assert(
-  settingsCategories.every((category) => !('subtitle' in category) && !('description' in category)),
+  settingsCategories.every((category) => !('subtitle' in category)),
   'main settings categories must remain subtitle-free'
 );
 assert(

@@ -30,7 +30,6 @@ import { PersistenceError } from '../data/errors';
 export interface CreateGoalInput {
   id?: string;
   title: string;
-  description?: string | null;
   sourceLinks?: readonly GoalSourceLink[];
   overallStatus?: GoalOverallStatus;
   evaluationMode?: GoalEvaluationMode;
@@ -39,7 +38,6 @@ export interface CreateGoalInput {
 
 export interface UpdateGoalInput {
   title?: string;
-  description?: string | null;
   sourceLinks?: readonly GoalSourceLink[];
   overallStatus?: GoalOverallStatus;
   evaluationMode?: GoalEvaluationMode;
@@ -237,7 +235,6 @@ export class GoalService implements GoalServiceApi {
     const goal = parseGoal({
       id,
       title: requiredText(input.title, 'Goal title'),
-      description: normalizedText(input.description, 'Goal description'),
       sourceLinks: normalizedSourceLinks(input.sourceLinks),
       overallStatus: input.overallStatus ?? 'in-progress',
       evaluationMode: input.evaluationMode ?? 'manual',
@@ -256,10 +253,6 @@ export class GoalService implements GoalServiceApi {
     const next = parseGoal({
       ...current,
       title: input.title === undefined ? current.title : requiredText(input.title, 'Goal title'),
-      description:
-        input.description === undefined
-          ? current.description
-          : normalizedText(input.description, 'Goal description'),
       sourceLinks:
         input.sourceLinks === undefined
           ? current.sourceLinks

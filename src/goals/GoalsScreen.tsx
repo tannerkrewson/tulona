@@ -388,11 +388,6 @@ function GoalRow({
         </View>
         <StatusBadge definition={definition} label={statusLabel} />
       </Row>
-      {goal.description ? (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-          {goal.description}
-        </Text>
-      ) : null}
       <StatusCircleHistory goal={goal} settings={settings} snapshots={historicalWeeks} />
       {status?.note ? (
         <Text
@@ -797,7 +792,6 @@ function GoalEditor({
 }) {
   const { colors } = useAppTheme();
   const [title, setTitle] = useState(goal?.title ?? '');
-  const [description, setDescription] = useState(goal?.description ?? '');
   const [overallStatus, setOverallStatus] = useState<Goal['overallStatus']>(
     goal?.overallStatus ?? 'in-progress'
   );
@@ -879,7 +873,6 @@ function GoalEditor({
       if (goal) {
         await service.updateGoal(goal.id, {
           title,
-          description,
           overallStatus,
           evaluationMode,
           rules: nextRules,
@@ -888,7 +881,6 @@ function GoalEditor({
       } else {
         await service.createGoal({
           title,
-          description,
           overallStatus,
           evaluationMode,
           rules: nextRules,
@@ -951,19 +943,6 @@ function GoalEditor({
           onChangeText={setTitle}
           placeholder="What do you want to move forward?"
           testID="goal-title"
-          textStyle={{ color: colors.text, fontSize: 16 }}
-        />
-      </Field>
-      <Field label="Description (optional)">
-        <AccessibleTextInput
-          defaultValue={description}
-          editable={!saving}
-          label="Goal description"
-          multiline
-          numberOfLines={3}
-          onChangeText={setDescription}
-          placeholder="Why does this goal matter?"
-          testID="goal-description"
           textStyle={{ color: colors.text, fontSize: 16 }}
         />
       </Field>
@@ -1361,11 +1340,6 @@ export default function GoalsScreen() {
             {visibleGoals.length === 0 ? (
               <EmptyState
                 actionLabel={filter === 'in-progress' ? 'Create your first goal' : undefined}
-                description={
-                  filter === 'in-progress'
-                    ? 'Weekly goals keep progress visible without adding another habit.'
-                    : 'No goals have this overall status.'
-                }
                 iconName="award"
                 onAction={filter === 'in-progress' ? () => setEditorId(NEW_GOAL_ID) : undefined}
                 testID="goals-empty"

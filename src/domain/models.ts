@@ -229,7 +229,6 @@ export interface Habit extends Timestamps, Archivable {
   sortOrder: number;
   schedule: HabitSchedule;
   trigger: HabitTrigger | null;
-  description: string | null;
   color: string | null;
   iconName: string | null;
 }
@@ -342,7 +341,6 @@ export type GoalEvaluationRule = GoalHabitEvaluationRule | GoalActivityDurationE
 export interface Goal extends Timestamps {
   id: UUID;
   title: string;
-  description: string | null;
   sourceLinks: GoalSourceLink[];
   overallStatus: GoalOverallStatus;
   /** Weekly statuses are either manually reviewed or derived from rules. */

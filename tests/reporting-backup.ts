@@ -93,7 +93,6 @@ const goalSettings: GoalSettings = defaultGoalSettings();
 const goal: Goal = {
   id: ids.goal,
   title: 'Make steady progress',
-  description: 'A goal included to verify structured backup round trips.',
   sourceLinks: [],
   overallStatus: 'in-progress',
   evaluationMode: 'manual',

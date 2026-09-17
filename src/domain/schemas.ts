@@ -169,7 +169,6 @@ export const goalSchema = z
   .object({
     id: uuid,
     title: z.string().trim().min(1),
-    description: z.string().nullable(),
     sourceLinks: z.array(goalSourceLinkSchema),
     overallStatus: goalOverallStatusSchema,
     evaluationMode: goalEvaluationModeSchema,
@@ -452,13 +451,12 @@ export const habitSchema = z
     sortOrder: z.number().int().nonnegative(),
     schedule: habitScheduleSchema,
     trigger: habitTriggerSchema.nullable(),
-    description: z.string().nullable(),
     color: z.string().nullable(),
     iconName: z.string().nullable(),
     ...timestamps,
     archivedAt: nullableArchivedAt,
   })
-  .passthrough();
+  .strict();
 
 export const habitDayStateSchema = z
   .object({

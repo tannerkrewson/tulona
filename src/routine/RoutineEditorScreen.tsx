@@ -840,13 +840,6 @@ function RoutineEditorForm({
     <Screen
       onBack={onBack}
       title={routine ? 'Edit routine' : 'New routine'}
-      description={
-        trackingMode === 'steps'
-          ? 'Build an ordered sequence with one tracked activity per step.'
-          : trackingMode === 'overall'
-            ? 'Build an ordered sequence that runs as one continuous activity.'
-            : 'Choose how time should be tracked, then add steps.'
-      }
     >
       <Column
         spacing={18}

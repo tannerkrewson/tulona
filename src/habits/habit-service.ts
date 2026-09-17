@@ -25,7 +25,6 @@ import { normalizeHabitTrigger, type HabitCatalogReferenceApi } from './trigger'
 
 export interface HabitStyleInput {
   name: string;
-  description?: string | null;
   color?: string | null;
   iconName?: string | null;
 }
@@ -39,7 +38,6 @@ export interface CreateHabitInput extends HabitStyleInput {
 
 export interface UpdateHabitInput {
   name?: string;
-  description?: string | null;
   color?: string | null;
   iconName?: string | null;
   schedule?: HabitSchedule;
@@ -115,11 +113,6 @@ function validateName(value: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     validation('Habit names must not be empty');
   }
-  return value.trim();
-}
-
-function validateDescription(value: string | null | undefined): string | null {
-  if (value === undefined || value === null || value.trim() === '') return null;
   return value.trim();
 }
 
@@ -231,7 +224,6 @@ export class HabitService implements HabitServiceApi {
         input.trigger === undefined || input.trigger === null
           ? null
           : await this.validatedTrigger(input.trigger),
-      description: validateDescription(input.description),
       color: validateColor(input.color),
       iconName: validateIcon(input.iconName),
       createdAt: now,
@@ -263,10 +255,6 @@ export class HabitService implements HabitServiceApi {
       sortOrder: validateSortOrder(input.sortOrder, current.sortOrder),
       schedule: input.schedule === undefined ? current.schedule : validateSchedule(input.schedule),
       trigger,
-      description:
-        input.description === undefined
-          ? current.description
-          : validateDescription(input.description),
       color: input.color === undefined ? current.color : validateColor(input.color),
       iconName: input.iconName === undefined ? current.iconName : validateIcon(input.iconName),
       updatedAt: this.timestamp(),

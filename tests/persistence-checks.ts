@@ -121,7 +121,6 @@ async function run(): Promise<void> {
     sortOrder: 0,
     schedule: { kind: 'daily' },
     trigger: null,
-    description: null,
     color: null,
     iconName: null,
     createdAt: '2026-08-29T00:00:00.000Z',

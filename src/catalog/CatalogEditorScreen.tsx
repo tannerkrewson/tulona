@@ -70,7 +70,6 @@ export function CatalogEditorScreen({
       <Screen
         onBack={() => router.back()}
         title={title}
-        description="Catalog changes are stored on this device."
       >
         <Column
           spacing={12}
@@ -328,7 +327,6 @@ function ActivityEditor({
     <Screen
       onBack={onBack}
       title={activity ? 'Edit activity' : 'New activity'}
-      description="Choose a root or one-level folder placement."
     >
       <Column
         spacing={18}
@@ -500,7 +498,6 @@ function FolderEditor({
     <Screen
       onBack={onBack}
       title={folder ? 'Edit folder' : 'New folder'}
-      description="Folders stay at one level; catalog items can be placed inside them."
     >
       <Column
         spacing={18}

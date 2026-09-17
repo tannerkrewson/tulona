@@ -13,7 +13,6 @@ export interface HabitHeaderAction {
 
 export interface HabitHeaderProps {
   title: string;
-  description?: string;
   onBack?: () => void;
   onAdd?: () => void;
   onToggleEdit?: () => void;
@@ -25,7 +24,6 @@ export interface HabitHeaderProps {
 /** Compact habits navigation shared by the list and detail screens. */
 export function HabitHeader({
   title,
-  description,
   onBack,
   onAdd,
   onToggleEdit,
@@ -80,11 +78,6 @@ export function HabitHeader({
           />
         ) : null}
       </Row>
-      {description ? (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 15, lineHeight: 22 }}>
-          {description}
-        </Text>
-      ) : null}
       {editOpen ? (
         <Pressable
           accessibilityLabel="Dismiss habit edit menu"
