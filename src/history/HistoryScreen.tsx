@@ -268,13 +268,7 @@ function HistoryStatePanel({
     );
   }
 
-  return (
-    <EmptyState
-      iconName="clock"
-      testID="history-empty"
-      title="No tracked activity"
-    />
-  );
+  return <EmptyState iconName="clock" testID="history-empty" title="No tracked activity" />;
 }
 
 function HistoryDayContent({

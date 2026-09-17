@@ -837,10 +837,7 @@ function RoutineEditorForm({
       });
 
   return (
-    <Screen
-      onBack={onBack}
-      title={routine ? 'Edit routine' : 'New routine'}
-    >
+    <Screen onBack={onBack} title={routine ? 'Edit routine' : 'New routine'}>
       <Column
         spacing={18}
         style={{

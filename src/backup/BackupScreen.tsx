@@ -332,10 +332,7 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
   };
 
   return (
-    <Screen
-      onBack={() => router.back()}
-      title="Backup"
-    >
+    <Screen onBack={() => router.back()} title="Backup">
       <Column spacing={14} style={{ width: '100%' }}>
         <Column
           spacing={10}
@@ -599,10 +596,7 @@ export default function BackupScreen() {
 
   if (!runtime) {
     return (
-      <Screen
-        onBack={() => router.back()}
-        title="Backup"
-      >
+      <Screen onBack={() => router.back()} title="Backup">
         <Text
           textStyle={{
             color: loadError ? colors.danger.foreground : colors.textMuted,
