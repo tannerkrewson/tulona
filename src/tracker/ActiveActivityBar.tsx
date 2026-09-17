@@ -224,10 +224,10 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
           <AppIcon
             accessibilityLabel={isActive ? 'Pause' : 'Play'}
             color={isActive ? onAccent : accent}
-            fill={isActive ? 'none' : accent}
+            fill={isActive ? onAccent : accent}
             name={isActive ? 'pause' : 'play'}
             size={25}
-            strokeWidth={isActive ? 3 : 0}
+            strokeWidth={0}
           />
         </Pressable>
         <Pressable

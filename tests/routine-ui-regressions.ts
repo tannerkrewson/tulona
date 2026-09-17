@@ -67,7 +67,8 @@ assert(
 assert(
   activeBar.includes('const previousDurationMs = isActive ? 0 : activityDurationMs') &&
     activeBar.includes('durationMs={isActive ? elapsedMs : previousDurationMs}') &&
-    activeBar.includes("fill={isActive ? 'none' : accent}") &&
+    activeBar.includes('fill={isActive ? onAccent : accent}') &&
+    activeBar.includes('strokeWidth={0}') &&
     activeBar.includes('backgroundColor: isActive ? accent : colors.surfaceMuted'),
-  'inactive activity preview shows its previous duration and solid colored play icon'
+  'activity preview preserves its previous duration and both playback states use solid icons'
 );

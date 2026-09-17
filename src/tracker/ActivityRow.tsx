@@ -13,7 +13,11 @@ import {
 import { AppIcon } from '@icons';
 
 import { CatalogEditActions } from './CatalogEditActions';
-import { TRACKER_ROW_FONT_SIZE, TRACKER_ROW_HEIGHT } from './catalog-row-geometry';
+import {
+  TRACKER_PLAYBACK_ICON_SIZE,
+  TRACKER_ROW_FONT_SIZE,
+  TRACKER_ROW_HEIGHT,
+} from './catalog-row-geometry';
 
 export interface ActivityRowProps {
   item: TrackableItem;
@@ -99,7 +103,7 @@ export function ActivityRow({
             solidIcon ? (editMode ? colors.textMuted : active ? activeForeground : accent) : 'none'
           }
           name={iconName}
-          size={20}
+          size={solidIcon ? TRACKER_PLAYBACK_ICON_SIZE : 20}
           strokeWidth={solidIcon ? 0 : 2.5}
         />
       </View>
