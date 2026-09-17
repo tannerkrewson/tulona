@@ -27,7 +27,6 @@ type TriggerKind = 'none' | HabitTrigger['kind'];
 
 interface HabitDraft {
   name: string;
-  description: string;
   color: string | null;
   scheduleKind: ScheduleKind;
   daysOfWeek: number[];
@@ -54,7 +53,6 @@ function thresholdFromTrigger(trigger: HabitTrigger | null): string {
 function draftFromHabit(habit: Habit | null): HabitDraft {
   return {
     name: habit?.name ?? '',
-    description: habit?.description ?? '',
     color: habit?.color ?? null,
     scheduleKind: habit?.schedule.kind ?? 'daily',
     daysOfWeek: habit?.schedule.kind === 'weekly' ? habit.schedule.daysOfWeek : [1, 2, 3, 4, 5],
@@ -134,7 +132,6 @@ function triggerFromDraft(draft: HabitDraft): HabitTrigger | null {
 function inputFromDraft(draft: HabitDraft) {
   return {
     name: draft.name,
-    description: draft.description.trim() || null,
     color: draft.color,
     schedule: scheduleFromDraft(draft),
     trigger: triggerFromDraft(draft),
@@ -380,7 +377,6 @@ function HabitEditorForm({
     <Screen
       onBack={onBack}
       title={habit ? 'Edit habit' : 'New habit'}
-      description="Choose a simple schedule and optionally connect evidence from your tracker."
     >
       <Column spacing={18} style={{ width: '100%' }}>
         <Column
@@ -409,16 +405,6 @@ function HabitEditorForm({
               placeholder="Habit name"
               testID="habit-name"
               value={draft.name}
-            />
-          </Field>
-          <Field label="Description (optional)">
-            <Input
-              label="Habit description"
-              multiline
-              onChangeText={(description) => update({ description })}
-              placeholder="What makes this habit useful?"
-              testID="habit-description"
-              value={draft.description}
             />
           </Field>
           <Field label="Color">

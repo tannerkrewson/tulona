@@ -75,7 +75,6 @@ function baseGoal(overrides: Partial<Goal> = {}): Goal {
   return {
     id: ids.first,
     title: 'A goal',
-    description: null,
     sourceLinks: [],
     overallStatus: 'in-progress',
     evaluationMode: 'manual',
@@ -183,14 +182,12 @@ async function run(): Promise<void> {
   const first = await service.createGoal({
     id: ids.first,
     title: '  Finish a meaningful project  ',
-    description: '  A description  ',
     sourceLinks: [
       { kind: 'activity', id: ids.activity },
       { kind: 'habit', id: ids.habit },
     ],
   });
   assert(first.title === 'Finish a meaningful project', 'goal titles must be normalized');
-  assert(first.description === 'A description', 'goal descriptions must be normalized');
   assert(first.overallStatus === 'in-progress', 'new goals default to in-progress');
   assert(
     first.evaluationMode === 'manual' && first.rules.length === 0,
@@ -244,14 +241,12 @@ async function run(): Promise<void> {
 
   const updated = await service.updateGoal(first.id, {
     title: '  Finish the meaningful project  ',
-    description: null,
     overallStatus: 'in-progress',
   });
   assert(
     updated.title === 'Finish the meaningful project',
     'goal edits must persist title changes'
   );
-  assert(updated.description === null, 'goal edits must persist description changes');
 
   const custom = await service.createStatusDefinition({
     id: ids.customStatus,

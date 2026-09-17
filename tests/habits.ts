@@ -62,7 +62,6 @@ function habit(id: string, trigger: Habit['trigger'] = null): Habit {
     sortOrder: 0,
     schedule: { kind: 'daily' },
     trigger,
-    description: null,
     color: null,
     iconName: null,
     createdAt,

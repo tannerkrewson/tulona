@@ -8,7 +8,6 @@ import { getRowSurfaceStyle } from './row-surface';
 
 export interface EmptyStateProps {
   title: string;
-  description?: string;
   iconName?: IconName | string | null;
   actionLabel?: string;
   onAction?: () => void;
@@ -18,7 +17,6 @@ export interface EmptyStateProps {
 /** A neutral, action-ready empty state for any feature collection. */
 export function EmptyState({
   title,
-  description,
   iconName = 'inbox',
   actionLabel,
   onAction,
@@ -44,13 +42,6 @@ export function EmptyState({
       >
         {title}
       </Text>
-      {description ? (
-        <Text
-          textStyle={{ color: colors.textMuted, fontSize: 15, lineHeight: 22, textAlign: 'center' }}
-        >
-          {description}
-        </Text>
-      ) : null}
       {actionLabel && onAction ? (
         <AppButton
           label={actionLabel}

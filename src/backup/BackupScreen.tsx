@@ -335,7 +335,6 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
     <Screen
       onBack={() => router.back()}
       title="Backup"
-      description="Export a copy, restore a backup, or add tracker history from Timemator."
     >
       <Column spacing={14} style={{ width: '100%' }}>
         <Column
@@ -603,7 +602,6 @@ export default function BackupScreen() {
       <Screen
         onBack={() => router.back()}
         title="Backup"
-        description="Export a copy, restore a backup, or add tracker history from Timemator."
       >
         <Text
           textStyle={{

@@ -15,7 +15,7 @@ import { AppButton, errorText, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
-import { formatHabitSchedule, habitCompletionLabel, habitSignalSummary } from './habit-format';
+import { habitCompletionLabel, habitSignalSummary } from './habit-format';
 import { loadHabitStore } from './habit-runtime';
 import { calculateHabitStreak, habitCompleted } from './streak';
 import type { HabitStore } from './habit-store';
@@ -161,7 +161,6 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
     <Screen testID="habit-detail-screen">
       <Column spacing={16} style={{ width: '100%' }}>
         <HabitHeader
-          description={formatHabitSchedule(habit.schedule)}
           editActions={[
             {
               label: 'Edit habit',
@@ -229,9 +228,6 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
               textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}
             >
               {habit.name}
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              {habit.description ?? 'No description added.'}
             </Text>
           </Column>
           <Row alignment="center" spacing={8} style={{ width: '100%' }}>

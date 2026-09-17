@@ -11,7 +11,6 @@ export interface AppScreenProps {
   children: ReactNode;
   title?: string;
   headerRight?: ReactNode;
-  description?: string;
   scrollable?: boolean;
   testID?: string;
   backgroundColor?: string;
@@ -96,7 +95,6 @@ export function AppScreen({
   children,
   title,
   headerRight,
-  description,
   scrollable = true,
   testID,
   backgroundColor,
@@ -128,9 +126,6 @@ export function AppScreen({
           <View style={hostStyles.content}>
             {onBack || title || headerRight ? (
               <TitleRow colors={colors} headerRight={headerRight} onBack={onBack} title={title} />
-            ) : null}
-            {description ? (
-              <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>{description}</Text>
             ) : null}
             {children}
           </View>
@@ -175,9 +170,6 @@ export function AppScreen({
           <Spacer flexible />
           {headerRight}
         </Row>
-      ) : null}
-      {description ? (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>{description}</Text>
       ) : null}
       {children}
     </Column>

@@ -65,7 +65,6 @@ function habit(id: string, schedule: Habit['schedule'] = { kind: 'daily' }): Hab
     sortOrder: 0,
     schedule,
     trigger: null,
-    description: null,
     color: null,
     iconName: null,
     createdAt: now,

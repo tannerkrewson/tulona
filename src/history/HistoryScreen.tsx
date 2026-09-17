@@ -210,12 +210,10 @@ function HistoryStatePanel({
   contentState,
   errorMessage,
   onRetry,
-  range,
 }: {
   contentState: HistoryContentState;
   errorMessage?: string;
   onRetry?: () => void;
-  range: HistoryRange;
 }) {
   const { colors } = useAppTheme();
 
@@ -272,11 +270,6 @@ function HistoryStatePanel({
 
   return (
     <EmptyState
-      description={
-        range === 'day'
-          ? 'Tracked sessions will appear here.'
-          : 'Tracked time for this period will appear here.'
-      }
       iconName="clock"
       testID="history-empty"
       title="No tracked activity"
@@ -329,7 +322,7 @@ function HistoryDayContent({
   );
 
   if (queryState === 'loading' || loading) {
-    return <HistoryStatePanel contentState="loading" range="day" />;
+    return <HistoryStatePanel contentState="loading" />;
   }
   if (queryState === 'error' || persistenceError) {
     return (
@@ -337,7 +330,6 @@ function HistoryDayContent({
         contentState="error"
         errorMessage={queryError ?? errorText(persistenceError)}
         onRetry={loadDay}
-        range="day"
       />
     );
   }
@@ -347,7 +339,6 @@ function HistoryDayContent({
         contentState="error"
         errorMessage="The activity catalog is not available yet."
         onRetry={loadDay}
-        range="day"
       />
     );
   }
@@ -473,7 +464,6 @@ export default function HistoryScreen({
           contentState={loadError ? 'error' : 'loading'}
           errorMessage={loadError ?? undefined}
           onRetry={loadError ? (onRetry ?? load) : undefined}
-          range={range}
         />
       </AppScreen>
     );
@@ -526,7 +516,6 @@ export default function HistoryScreen({
               contentState={contentState}
               errorMessage={errorMessage}
               onRetry={onRetry}
-              range={range}
             />
           ) : range === 'day' ? (
             <HistoryDayContent period={period} runtime={runtime} />
