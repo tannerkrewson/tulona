@@ -61,9 +61,7 @@ async function createServices(
 
 async function run(): Promise<void> {
   assert(
-    settingsCategories.every(
-      (category) => !('subtitle' in category)
-    ),
+    settingsCategories.every((category) => !('subtitle' in category)),
     'main settings categories must remain simple rows without subtitles'
   );
   for (const category of settingsCategories) {

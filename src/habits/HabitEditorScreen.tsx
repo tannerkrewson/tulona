@@ -374,10 +374,7 @@ function HabitEditorForm({
   };
 
   return (
-    <Screen
-      onBack={onBack}
-      title={habit ? 'Edit habit' : 'New habit'}
-    >
+    <Screen onBack={onBack} title={habit ? 'Edit habit' : 'New habit'}>
       <Column spacing={18} style={{ width: '100%' }}>
         <Column
           spacing={18}
