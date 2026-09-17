@@ -14,6 +14,8 @@ const rootLayout = read('app/_layout.tsx');
 const historyRoute = read('app/history.tsx');
 const goalsRoute = read('app/(tabs)/goals.tsx');
 const goalsScreen = read('src/goals/GoalsScreen.tsx');
+const goalReviewScreen = read('src/goals/GoalReviewScreen.tsx');
+const goalEditorScreen = read('src/goals/GoalEditorScreen.tsx');
 const history = read('src/history/HistoryScreen.tsx');
 const tracker = read('src/tracker/ActivitiesScreen.tsx');
 const catalogHeader = read('src/tracker/CatalogHeader.tsx');
@@ -55,11 +57,15 @@ assert(
   'Goals must expose automatic habit and activity checks backed by live tracker data'
 );
 assert(
-  goalsScreen.includes('goal-review-prompt') &&
+  goalsScreen.includes('router.push(`/goal-review/${goal.id}` as Href)') &&
+    goalsScreen.includes('goal-edit-mode') &&
+    goalsScreen.includes('reorderGoals') &&
+    goalReviewScreen.includes('ReviewPanel') &&
+    goalEditorScreen.includes('GoalEditor') &&
     goalsScreen.includes('setWeeklyStatus') &&
     goalsScreen.includes('goal-review-note') &&
-    goalsScreen.includes('reviewDay'),
-  'Goals must prompt and persist manual weekly statuses with notes on the configured review day'
+    !goalsScreen.includes('goal-review-prompt'),
+  'Goals must route review and editing to dedicated pages while persisting manual weekly statuses'
 );
 assert(
   tracker.includes("onHistory={() => router.push('/history')}") &&
