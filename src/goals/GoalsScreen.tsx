@@ -29,6 +29,7 @@ import {
   AccessiblePicker,
   AccessibleTextInput,
   AppButton,
+  ConfirmationModal,
   EmptyState,
   errorText,
   IconButton,
@@ -924,191 +925,169 @@ export function GoalEditor({
 
   const availableRuleSources = habits.length > 0 || catalog.activities.length > 0;
   return (
-    <Column
-      spacing={14}
-      style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.primary,
-        borderRadius: 14,
-        borderWidth: 1,
-        padding: 16,
-        width: '100%',
-      }}
-      testID="goal-editor"
-    >
-      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-        <View style={{ flex: 1 }}>
-          <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>
-            {goal ? 'Edit goal' : 'New goal'}
-          </Text>
-        </View>
-        <IconButton
-          icon="x"
-          label="Close goal editor"
-          onPress={onCancel}
-          testID="goal-editor-close"
-          variant="plain"
-        />
-      </Row>
-      <Field label="Goal name">
-        <AccessibleTextInput
-          defaultValue={title}
-          editable={!saving}
-          label="Goal name"
-          onChangeText={setTitle}
-          placeholder="What do you want to move forward?"
-          testID="goal-title"
-          textStyle={{ color: colors.text, fontSize: 16 }}
-        />
-      </Field>
-      <Field label="Overall status">
-        <AccessiblePicker
-          enabled={!saving}
-          label="Overall status"
-          onValueChange={(value) => setOverallStatus(String(value) as Goal['overallStatus'])}
-          selectedValue={overallStatus}
-          testID="goal-overall-status"
-        >
-          <Picker.Item label="Active" value="in-progress" />
-          <Picker.Item label="Future" value="future" />
-          <Picker.Item label="Completed" value="completed" />
-          <Picker.Item label="Gave up" value="gave-up" />
-        </AccessiblePicker>
-      </Field>
-      <Field label="Status mode">
-        <AccessiblePicker
-          enabled={!saving}
-          label="Status mode"
-          onValueChange={(value) => setEvaluationMode(String(value) as GoalEvaluationMode)}
-          selectedValue={evaluationMode}
-          testID="goal-evaluation-mode"
-        >
-          <Picker.Item label="Review" value="manual" />
-          <Picker.Item label="Rules" value="automatic" />
-        </AccessiblePicker>
-      </Field>
-      {evaluationMode === 'automatic' ? (
-        <Column spacing={10} style={{ width: '100%' }} testID="goal-rule-list">
-          <Column spacing={4} style={{ width: '100%' }}>
-            <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-              Weekly checks
+    <>
+      <Column
+        spacing={14}
+        style={{
+          backgroundColor: colors.surface,
+          borderColor: colors.primary,
+          borderRadius: 14,
+          borderWidth: 1,
+          padding: 16,
+          width: '100%',
+        }}
+        testID="goal-editor"
+      >
+        <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+          <View style={{ flex: 1 }}>
+            <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>
+              {goal ? 'Edit goal' : 'New goal'}
             </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-              A goal uses the least successful check for the week. Activity limits can measure time
-              spent doing or reducing an activity.
-            </Text>
-          </Column>
-          {rules.map((rule, index) => (
-            <RuleEditor
-              catalog={catalog}
-              disabled={saving}
-              habits={habits}
-              index={index}
-              key={'goal-rule-' + index}
-              onChange={(next) => updateRule(index, next)}
-              onRemove={() =>
-                setRules((current) =>
-                  current.filter((_, candidateIndex) => candidateIndex !== index)
-                )
-              }
-              rule={rule}
-              settings={settings}
-            />
-          ))}
-          <AppButton
-            disabled={saving || !availableRuleSources}
-            label="Add weekly check"
-            onPress={() =>
-              setRules((current) => [
-                ...current,
-                blankDraftRule('habit', settings, habits, catalog),
-              ])
-            }
-            style={{ width: '100%' }}
-            testID="goal-rule-add"
-            variant="outlined"
+          </View>
+          <IconButton
+            icon="x"
+            label="Close goal editor"
+            onPress={onCancel}
+            testID="goal-editor-close"
+            variant="plain"
           />
-          {!availableRuleSources ? (
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              Add a habit or activity before creating an automatic check.
-            </Text>
-          ) : null}
-        </Column>
-      ) : (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-          You will choose a shared status and write a note during your weekly review.
-        </Text>
-      )}
-      {error ? (
-        <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{error}</Text>
-      ) : null}
-      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-        <View style={{ flex: 1 }}>
-          <AppButton
-            disabled={saving}
-            label={goal ? 'Save goal' : 'Create goal'}
-            onPress={() => void save()}
-            style={{ width: '100%' }}
-            testID="goal-save"
+        </Row>
+        <Field label="Goal name">
+          <AccessibleTextInput
+            defaultValue={title}
+            editable={!saving}
+            label="Goal name"
+            onChangeText={setTitle}
+            placeholder="What do you want to move forward?"
+            testID="goal-title"
+            textStyle={{ color: colors.text, fontSize: 16 }}
           />
-        </View>
-        <AppButton
-          disabled={saving}
-          label="Cancel"
-          onPress={onCancel}
-          testID="goal-cancel"
-          variant="outlined"
-        />
-      </Row>
-      {goal ? (
-        <Column spacing={8} style={{ width: '100%' }}>
-          {!confirmDelete ? (
+        </Field>
+        <Field label="Overall status">
+          <AccessiblePicker
+            enabled={!saving}
+            label="Overall status"
+            onValueChange={(value) => setOverallStatus(String(value) as Goal['overallStatus'])}
+            selectedValue={overallStatus}
+            testID="goal-overall-status"
+          >
+            <Picker.Item label="Active" value="in-progress" />
+            <Picker.Item label="Future" value="future" />
+            <Picker.Item label="Completed" value="completed" />
+            <Picker.Item label="Gave up" value="gave-up" />
+          </AccessiblePicker>
+        </Field>
+        <Field label="Status mode">
+          <AccessiblePicker
+            enabled={!saving}
+            label="Status mode"
+            onValueChange={(value) => setEvaluationMode(String(value) as GoalEvaluationMode)}
+            selectedValue={evaluationMode}
+            testID="goal-evaluation-mode"
+          >
+            <Picker.Item label="Review" value="manual" />
+            <Picker.Item label="Rules" value="automatic" />
+          </AccessiblePicker>
+        </Field>
+        {evaluationMode === 'automatic' ? (
+          <Column spacing={10} style={{ width: '100%' }} testID="goal-rule-list">
+            <Column spacing={4} style={{ width: '100%' }}>
+              <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
+                Weekly checks
+              </Text>
+              <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+                A goal uses the least successful check for the week. Activity limits can measure
+                time spent doing or reducing an activity.
+              </Text>
+            </Column>
+            {rules.map((rule, index) => (
+              <RuleEditor
+                catalog={catalog}
+                disabled={saving}
+                habits={habits}
+                index={index}
+                key={'goal-rule-' + index}
+                onChange={(next) => updateRule(index, next)}
+                onRemove={() =>
+                  setRules((current) =>
+                    current.filter((_, candidateIndex) => candidateIndex !== index)
+                  )
+                }
+                rule={rule}
+                settings={settings}
+              />
+            ))}
             <AppButton
-              disabled={saving}
-              label="Delete goal"
-              onPress={() => setConfirmDelete(true)}
-              testID="goal-delete"
+              disabled={saving || !availableRuleSources}
+              label="Add weekly check"
+              onPress={() =>
+                setRules((current) => [
+                  ...current,
+                  blankDraftRule('habit', settings, habits, catalog),
+                ])
+              }
+              style={{ width: '100%' }}
+              testID="goal-rule-add"
               variant="outlined"
             />
-          ) : (
-            <Column
-              spacing={8}
-              style={{
-                backgroundColor: colors.warning.background,
-                borderColor: colors.warning.foreground,
-                borderRadius: 10,
-                borderWidth: 1,
-                padding: 12,
-                width: '100%',
-              }}
-              testID="goal-delete-confirmation"
-            >
-              <Text textStyle={{ color: colors.warning.foreground, fontSize: 14 }}>
-                Delete this goal and its weekly review history?
+            {!availableRuleSources ? (
+              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+                Add a habit or activity before creating an automatic check.
               </Text>
-              <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-                <View style={{ flex: 1 }}>
-                  <AppButton
-                    disabled={saving}
-                    label="Confirm delete"
-                    onPress={() => void deleteGoal()}
-                    style={{ width: '100%' }}
-                    testID="goal-confirm-delete"
-                  />
-                </View>
-                <AppButton
-                  disabled={saving}
-                  label="Keep goal"
-                  onPress={() => setConfirmDelete(false)}
-                  testID="goal-cancel-delete"
-                  variant="outlined"
-                />
-              </Row>
-            </Column>
-          )}
-        </Column>
+            ) : null}
+          </Column>
+        ) : (
+          <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+            You will choose a shared status and write a note during your weekly review.
+          </Text>
+        )}
+        {error ? (
+          <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{error}</Text>
+        ) : null}
+        <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+          <View style={{ flex: 1 }}>
+            <AppButton
+              disabled={saving}
+              label={goal ? 'Save goal' : 'Create goal'}
+              onPress={() => void save()}
+              style={{ width: '100%' }}
+              testID="goal-save"
+            />
+          </View>
+          <AppButton
+            disabled={saving}
+            label="Cancel"
+            onPress={onCancel}
+            testID="goal-cancel"
+            variant="outlined"
+          />
+        </Row>
+        {goal ? (
+          <AppButton
+            disabled={saving}
+            label="Delete goal"
+            onPress={() => setConfirmDelete(true)}
+            testID="goal-delete"
+            variant="outlined"
+          />
+        ) : null}
+      </Column>
+      {goal ? (
+        <ConfirmationModal
+          busy={saving}
+          cancelLabel="Keep goal"
+          cancelTestID="goal-cancel-delete"
+          confirmLabel="Confirm delete"
+          confirmTestID="goal-confirm-delete"
+          message="This also deletes the goal's weekly review history."
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => void deleteGoal()}
+          testID="goal-delete-confirmation"
+          title="Delete this goal?"
+          visible={confirmDelete}
+        />
       ) : null}
-    </Column>
+    </>
   );
 }
 

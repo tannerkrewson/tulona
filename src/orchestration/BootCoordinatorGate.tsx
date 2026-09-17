@@ -3,7 +3,7 @@ import { usePathname, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { downloadRawDataJson } from '../backup/web-download';
-import { errorText, Screen } from '@ui';
+import { ConfirmationModal, errorText, Screen } from '@ui';
 import { useAppTheme, useThemePreference } from '@theme';
 
 import {
@@ -45,6 +45,7 @@ export function BootCoordinatorGate() {
   const [state, setState] = useState<GateState>({ kind: 'hydrating' });
   const [rawError, setRawError] = useState<string | null>(null);
   const [clearConfirming, setClearConfirming] = useState(false);
+  const [clearBusy, setClearBusy] = useState(false);
   const destinationApplied = useRef(false);
 
   const hydrate = useCallback(() => {
@@ -60,8 +61,13 @@ export function BootCoordinatorGate() {
   const retry = hydrate;
 
   const clearLocalData = () => {
+    if (clearBusy) return;
     setRawError(null);
-    void bootCoordinator.clearAllData().catch((error: unknown) => setRawError(errorText(error)));
+    setClearBusy(true);
+    void bootCoordinator
+      .clearAllData()
+      .catch((error: unknown) => setRawError(errorText(error)))
+      .finally(() => setClearBusy(false));
   };
 
   useEffect(() => {
@@ -100,78 +106,74 @@ export function BootCoordinatorGate() {
 
   const category = errorText(state.error);
   return (
-    <Screen scrollable={false} testID="boot-error">
-      <Column alignment="center" spacing={14} style={{ width: '100%' }}>
-        <Text textStyle={{ color: colors.danger.foreground, fontSize: 24, fontWeight: '800' }}>
-          Tulona needs recovery
-        </Text>
-        <Column
-          spacing={8}
-          style={{
-            backgroundColor: colors.danger.background,
-            borderColor: colors.danger.foreground,
-            borderRadius: 14,
-            borderWidth: 1,
-            padding: 16,
-            width: '100%',
-          }}
-        >
-          <Text textStyle={{ color: colors.danger.foreground, fontSize: 15, fontWeight: '700' }}>
-            {`Startup ${stageLabel(state.error)} failed`}
+    <>
+      <Screen scrollable={false} testID="boot-error">
+        <Column alignment="center" spacing={14} style={{ width: '100%' }}>
+          <Text textStyle={{ color: colors.danger.foreground, fontSize: 24, fontWeight: '800' }}>
+            Tulona needs recovery
           </Text>
-          <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{category}</Text>
-          <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>
-            Local data was not deleted or replaced.
-          </Text>
-        </Column>
-        {rawError ? (
-          <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{rawError}</Text>
-        ) : null}
-        <Button label="Retry startup" onPress={retry} testID="boot-retry" />
-        <Button
-          label="Export raw local data"
-          onPress={() => {
-            setRawError(null);
-            void bootCoordinator
-              .exportRawData()
-              .then((content) => {
-                if (!downloadRawDataJson(content)) {
-                  throw new Error('Raw data download is only available on web');
-                }
-              })
-              .catch((error: unknown) => setRawError(errorText(error)));
-          }}
-          testID="boot-export-raw"
-          variant="outlined"
-        />
-        {clearConfirming ? (
-          <Column spacing={8} style={{ width: '100%' }}>
-            <Text
-              textStyle={{ color: colors.danger.foreground, fontSize: 14, textAlign: 'center' }}
-            >
-              Clear all local data and restart with an empty workspace?
+          <Column
+            spacing={8}
+            style={{
+              backgroundColor: colors.danger.background,
+              borderColor: colors.danger.foreground,
+              borderRadius: 14,
+              borderWidth: 1,
+              padding: 16,
+              width: '100%',
+            }}
+          >
+            <Text textStyle={{ color: colors.danger.foreground, fontSize: 15, fontWeight: '700' }}>
+              {`Startup ${stageLabel(state.error)} failed`}
             </Text>
-            <Button
-              label="Yes, clear local data"
-              onPress={clearLocalData}
-              testID="boot-confirm-clear-local-data"
-            />
-            <Button
-              label="Cancel"
-              onPress={() => setClearConfirming(false)}
-              testID="boot-cancel-clear-local-data"
-              variant="outlined"
-            />
+            <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{category}</Text>
+            <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>
+              Local data was not deleted or replaced.
+            </Text>
           </Column>
-        ) : (
+          {rawError ? (
+            <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{rawError}</Text>
+          ) : null}
+          <Button label="Retry startup" onPress={retry} testID="boot-retry" />
           <Button
+            label="Export raw local data"
+            onPress={() => {
+              setRawError(null);
+              void bootCoordinator
+                .exportRawData()
+                .then((content) => {
+                  if (!downloadRawDataJson(content)) {
+                    throw new Error('Raw data download is only available on web');
+                  }
+                })
+                .catch((error: unknown) => setRawError(errorText(error)));
+            }}
+            testID="boot-export-raw"
+            variant="outlined"
+          />
+          <Button
+            disabled={clearBusy}
             label="Clear local data"
             onPress={() => setClearConfirming(true)}
             testID="boot-clear-local-data"
             variant="outlined"
           />
-        )}
-      </Column>
-    </Screen>
+        </Column>
+      </Screen>
+      <ConfirmationModal
+        busy={clearBusy}
+        cancelLabel="Cancel"
+        cancelTestID="boot-cancel-clear-local-data"
+        confirmLabel="Yes, clear local data"
+        confirmTestID="boot-confirm-clear-local-data"
+        message="Clear all local data and restart with an empty workspace?"
+        onCancel={() => setClearConfirming(false)}
+        onConfirm={clearLocalData}
+        testID="boot-clear-local-data-confirmation"
+        title="Clear all local data?"
+        tone="danger"
+        visible={clearConfirming}
+      />
+    </>
   );
 }

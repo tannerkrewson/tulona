@@ -11,7 +11,14 @@ import {
   type GoalStatusDefinition,
 } from '@domain';
 import { useAppTheme } from '@theme';
-import { AccessiblePicker, AccessibleTextInput, AppButton, errorText, ReorderControls } from '@ui';
+import {
+  AccessiblePicker,
+  AccessibleTextInput,
+  AppButton,
+  ConfirmationModal,
+  errorText,
+  ReorderControls,
+} from '@ui';
 
 import { loadGoalsRuntime } from '../goals/goal-runtime';
 import type {
@@ -121,102 +128,80 @@ function StatusDefinitionRow({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
-    <Column
-      spacing={12}
-      style={{
-        backgroundColor: colors.surfaceMuted,
-        borderColor: colors.border,
-        borderRadius: 12,
-        borderWidth: 1,
-        padding: 14,
-        width: '100%',
-      }}
-      testID={`goal-status-${definition.id}`}
-    >
-      <AccessibleTextInput
-        autoCorrect={false}
-        label={`${definition.name} status name`}
-        onChangeText={setName}
-        placeholder="Status name"
-        testID={`goal-status-name-${definition.id}`}
-        defaultValue={name}
-        textStyle={{ color: colors.text, fontSize: 16 }}
-      />
-      <StatusColorPicker
-        disabled={busy}
-        onChange={setColor}
-        testID={`goal-status-color-${definition.id}`}
-        value={color}
-      />
-      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-        <View style={{ flex: 1 }}>
-          <AppButton
-            disabled={busy || name.trim().length === 0}
-            label="Save status"
-            onPress={() => void onSave(definition.id, { name, color })}
-            style={{ height: 44, width: '100%' }}
-            testID={`goal-status-save-${definition.id}`}
-          />
-        </View>
-        <AppButton
-          disabled={busy}
-          label="Delete"
-          onPress={() => setConfirmingDelete(true)}
-          style={{ height: 44 }}
-          testID={`goal-status-delete-${definition.id}`}
-          variant="outlined"
+    <>
+      <Column
+        spacing={12}
+        style={{
+          backgroundColor: colors.surfaceMuted,
+          borderColor: colors.border,
+          borderRadius: 12,
+          borderWidth: 1,
+          padding: 14,
+          width: '100%',
+        }}
+        testID={`goal-status-${definition.id}`}
+      >
+        <AccessibleTextInput
+          autoCorrect={false}
+          label={`${definition.name} status name`}
+          onChangeText={setName}
+          placeholder="Status name"
+          testID={`goal-status-name-${definition.id}`}
+          defaultValue={name}
+          textStyle={{ color: colors.text, fontSize: 16 }}
         />
-      </Row>
-      <ReorderControls
-        canMoveDown={!isLast}
-        canMoveUp={!isFirst}
-        disabled={busy}
-        onMoveDown={() => void onMoveDown()}
-        onMoveUp={() => void onMoveUp()}
-        testID={`goal-status-reorder-${definition.id}`}
-      />
-      {confirmingDelete ? (
-        <Column
-          spacing={8}
-          style={{
-            backgroundColor: colors.warning.background,
-            borderColor: colors.warning.foreground,
-            borderRadius: 10,
-            borderWidth: 1,
-            padding: 12,
-            width: '100%',
-          }}
-          testID={`goal-status-delete-confirmation-${definition.id}`}
-        >
-          <Text textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}>
-            Deleting a status is allowed only when no weekly history or automatic rule uses it.
-          </Text>
-          <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-            <View style={{ flex: 1 }}>
-              <AppButton
-                disabled={busy}
-                label="Confirm delete"
-                onPress={() => {
-                  void onDelete(definition.id).then((deleted) => {
-                    if (deleted) setConfirmingDelete(false);
-                  });
-                }}
-                style={{ height: 44, width: '100%' }}
-                testID={`goal-status-confirm-delete-${definition.id}`}
-              />
-            </View>
+        <StatusColorPicker
+          disabled={busy}
+          onChange={setColor}
+          testID={`goal-status-color-${definition.id}`}
+          value={color}
+        />
+        <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+          <View style={{ flex: 1 }}>
             <AppButton
-              disabled={busy}
-              label="Cancel"
-              onPress={() => setConfirmingDelete(false)}
-              style={{ height: 44 }}
-              testID={`goal-status-cancel-delete-${definition.id}`}
-              variant="outlined"
+              disabled={busy || name.trim().length === 0}
+              label="Save status"
+              onPress={() => void onSave(definition.id, { name, color })}
+              style={{ height: 44, width: '100%' }}
+              testID={`goal-status-save-${definition.id}`}
             />
-          </Row>
-        </Column>
-      ) : null}
-    </Column>
+          </View>
+          <AppButton
+            disabled={busy}
+            label="Delete"
+            onPress={() => setConfirmingDelete(true)}
+            style={{ height: 44 }}
+            testID={`goal-status-delete-${definition.id}`}
+            variant="outlined"
+          />
+        </Row>
+        <ReorderControls
+          canMoveDown={!isLast}
+          canMoveUp={!isFirst}
+          disabled={busy}
+          onMoveDown={() => void onMoveDown()}
+          onMoveUp={() => void onMoveUp()}
+          testID={`goal-status-reorder-${definition.id}`}
+        />
+      </Column>
+      <ConfirmationModal
+        busy={busy}
+        cancelLabel="Cancel"
+        cancelTestID={`goal-status-cancel-delete-${definition.id}`}
+        confirmLabel="Confirm delete"
+        confirmTestID={`goal-status-confirm-delete-${definition.id}`}
+        message="Deleting a status is allowed only when no weekly history or automatic rule uses it."
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={() => {
+          void onDelete(definition.id).then((deleted) => {
+            if (deleted) setConfirmingDelete(false);
+          });
+        }}
+        testID={`goal-status-delete-confirmation-${definition.id}`}
+        title={`Delete ${definition.name}?`}
+        visible={confirmingDelete}
+      />
+    </>
   );
 }
 

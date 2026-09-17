@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { formatDuration, timestampMs, type TimeTransition } from '@domain';
 import { useAppTheme } from '@theme';
-import { AppButton, errorText, Screen } from '@ui';
+import { AppButton, ConfirmationModal, errorText, Screen } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -286,194 +286,171 @@ function ActivitySessionContent({
     });
 
   return (
-    <Screen onBack={() => router.back()} title={activityName}>
-      <Column spacing={16} style={{ width: '100%' }} testID="activity-session-screen">
-        <Column
-          spacing={14}
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderRadius: 16,
-            borderWidth: 1,
-            padding: 16,
-            width: '100%',
-          }}
-          testID="activity-session-summary"
-        >
-          <Column spacing={4} style={{ width: '100%' }}>
-            <Text
-              numberOfLines={2}
-              textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}
-            >
-              {activityName}
-            </Text>
-            <Text
-              textStyle={{
-                color: isActive ? colors.active.foreground : colors.textMuted,
-                fontSize: 13,
-                fontWeight: '700',
-              }}
-            >
-              {isActive ? 'Active' : 'Recorded'}
-            </Text>
-          </Column>
-          <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-            <Column style={{ width: '48%' }}>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>Started</Text>
-              <Text textStyle={{ color: colors.text, fontSize: 15 }}>
-                {readableDateTime(timestampMs(transition.timestamp))}
-              </Text>
-            </Column>
-            <Column style={{ width: '48%' }}>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>Ended</Text>
-              <Text textStyle={{ color: colors.text, fontSize: 15 }}>
-                {readableDateTime(endMs)}
-              </Text>
-            </Column>
-          </Row>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-            {endMs === null
-              ? isActive
-                ? 'In progress'
-                : 'End not recorded'
-              : formatDuration(durationMs)}
-          </Text>
-        </Column>
-
-        <Column spacing={10} style={{ width: '100%' }} testID="activity-session-actions">
-          <Row alignment="center" spacing={10} style={{ width: '100%' }}>
-            <AppButton
-              disabled={busy}
-              label="Choose activity"
-              onPress={() =>
-                router.push(
-                  `/activity-session/activity-chooser?transitionId=${encodeURIComponent(transition.id)}`
-                )
-              }
-              style={{ height: 44, width: '48%' }}
-              testID="activity-session-choose-activity"
-              variant="outlined"
-            />
-            <AppButton
-              disabled={busy}
-              label="Delete session"
-              onPress={openDeleteConfirmation}
-              style={{ height: 44, width: '48%' }}
-              testID="activity-session-delete"
-              variant="outlined"
-            />
-          </Row>
-        </Column>
-
-        {!isActive ? (
-          <HistoricalSessionEditor
-            key={`${transition.id}-${transition.timestamp}-${following?.timestamp ?? 'open'}`}
-            busy={busy}
-            following={following}
-            onSaveEnd={saveHistoricalEnd}
-            onSaveStart={saveHistoricalStart}
-            transition={transition}
-          />
-        ) : null}
-
-        <Column
-          spacing={12}
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderRadius: 16,
-            borderWidth: 1,
-            padding: 16,
-            width: '100%',
-          }}
-          testID="activity-session-corrections"
-        >
-          <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-            Correct start time
-          </Text>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-            {contextLoading && !previous
-              ? 'Checking for a preceding transition...'
-              : previous
-                ? `Previous: ${previousName} · ${readableDateTime(timestampMs(previous.timestamp))}`
-                : 'No previous transition available'}
-          </Text>
-          <Row alignment="center" spacing={10} style={{ width: '100%' }}>
-            <AppButton
-              disabled={busy || !canSnapToPrevious}
-              label={
-                contextLoading && !previous
-                  ? 'Checking previous activity'
-                  : canSnapToPrevious
-                    ? 'Snap to previous end'
-                    : previous
-                      ? 'Already at previous end'
-                      : 'No previous end available'
-              }
-              onPress={snapToPrevious}
-              style={{ height: 44, width: '48%' }}
-              testID="activity-session-snap-previous"
-              variant="outlined"
-            />
-            <AppButton
-              disabled={busy || !isActive}
-              label={isActive ? 'Reset start to now' : 'Reset start to now (active only)'}
-              onPress={resetToNow}
-              style={{ height: 44, width: '48%' }}
-              testID="activity-session-reset-now"
-              variant="outlined"
-            />
-          </Row>
-        </Column>
-
-        {deleteConfirmationOpen ? (
+    <>
+      <Screen onBack={() => router.back()} title={activityName}>
+        <Column spacing={16} style={{ width: '100%' }} testID="activity-session-screen">
           <Column
-            spacing={10}
+            spacing={14}
             style={{
-              backgroundColor: colors.danger.background,
-              borderColor: colors.danger.foreground,
-              borderRadius: 14,
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderRadius: 16,
               borderWidth: 1,
-              padding: 14,
+              padding: 16,
               width: '100%',
             }}
-            testID="activity-session-delete-confirmation"
+            testID="activity-session-summary"
           >
-            <Text textStyle={{ color: colors.danger.foreground, fontSize: 15, fontWeight: '700' }}>
-              Delete this session?
+            <Column spacing={4} style={{ width: '100%' }}>
+              <Text
+                numberOfLines={2}
+                textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}
+              >
+                {activityName}
+              </Text>
+              <Text
+                textStyle={{
+                  color: isActive ? colors.active.foreground : colors.textMuted,
+                  fontSize: 13,
+                  fontWeight: '700',
+                }}
+              >
+                {isActive ? 'Active' : 'Recorded'}
+              </Text>
+            </Column>
+            <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+              <Column style={{ width: '48%' }}>
+                <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>Started</Text>
+                <Text textStyle={{ color: colors.text, fontSize: 15 }}>
+                  {readableDateTime(timestampMs(transition.timestamp))}
+                </Text>
+              </Column>
+              <Column style={{ width: '48%' }}>
+                <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>Ended</Text>
+                <Text textStyle={{ color: colors.text, fontSize: 15 }}>
+                  {readableDateTime(endMs)}
+                </Text>
+              </Column>
+            </Row>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+              {endMs === null
+                ? isActive
+                  ? 'In progress'
+                  : 'End not recorded'
+                : formatDuration(durationMs)}
             </Text>
-            <Text textStyle={{ color: colors.danger.foreground, fontSize: 14, lineHeight: 20 }}>
-              This removes the recorded session from history and cannot be undone.
-            </Text>
+          </Column>
+
+          <Column spacing={10} style={{ width: '100%' }} testID="activity-session-actions">
             <Row alignment="center" spacing={10} style={{ width: '100%' }}>
               <AppButton
                 disabled={busy}
-                label={busy ? 'Deleting...' : 'Delete session'}
-                onPress={confirmDeleteSession}
+                label="Choose activity"
+                onPress={() =>
+                  router.push(
+                    `/activity-session/activity-chooser?transitionId=${encodeURIComponent(transition.id)}`
+                  )
+                }
                 style={{ height: 44, width: '48%' }}
-                testID="activity-session-confirm-delete"
+                testID="activity-session-choose-activity"
+                variant="outlined"
               />
               <AppButton
                 disabled={busy}
-                label="Cancel"
-                onPress={() => setDeleteConfirmationOpen(false)}
+                label="Delete session"
+                onPress={openDeleteConfirmation}
                 style={{ height: 44, width: '48%' }}
-                testID="activity-session-cancel-delete"
+                testID="activity-session-delete"
                 variant="outlined"
               />
             </Row>
           </Column>
-        ) : null}
 
-        {actionError ? (
-          <Text
-            testID="activity-session-action-error"
-            textStyle={{ color: colors.danger.foreground, fontSize: 14 }}
+          {!isActive ? (
+            <HistoricalSessionEditor
+              key={`${transition.id}-${transition.timestamp}-${following?.timestamp ?? 'open'}`}
+              busy={busy}
+              following={following}
+              onSaveEnd={saveHistoricalEnd}
+              onSaveStart={saveHistoricalStart}
+              transition={transition}
+            />
+          ) : null}
+
+          <Column
+            spacing={12}
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderRadius: 16,
+              borderWidth: 1,
+              padding: 16,
+              width: '100%',
+            }}
+            testID="activity-session-corrections"
           >
-            {actionError}
-          </Text>
-        ) : null}
-      </Column>
-    </Screen>
+            <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
+              Correct start time
+            </Text>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+              {contextLoading && !previous
+                ? 'Checking for a preceding transition...'
+                : previous
+                  ? `Previous: ${previousName} · ${readableDateTime(timestampMs(previous.timestamp))}`
+                  : 'No previous transition available'}
+            </Text>
+            <Row alignment="center" spacing={10} style={{ width: '100%' }}>
+              <AppButton
+                disabled={busy || !canSnapToPrevious}
+                label={
+                  contextLoading && !previous
+                    ? 'Checking previous activity'
+                    : canSnapToPrevious
+                      ? 'Snap to previous end'
+                      : previous
+                        ? 'Already at previous end'
+                        : 'No previous end available'
+                }
+                onPress={snapToPrevious}
+                style={{ height: 44, width: '48%' }}
+                testID="activity-session-snap-previous"
+                variant="outlined"
+              />
+              <AppButton
+                disabled={busy || !isActive}
+                label={isActive ? 'Reset start to now' : 'Reset start to now (active only)'}
+                onPress={resetToNow}
+                style={{ height: 44, width: '48%' }}
+                testID="activity-session-reset-now"
+                variant="outlined"
+              />
+            </Row>
+          </Column>
+
+          {actionError ? (
+            <Text
+              testID="activity-session-action-error"
+              textStyle={{ color: colors.danger.foreground, fontSize: 14 }}
+            >
+              {actionError}
+            </Text>
+          ) : null}
+        </Column>
+      </Screen>
+      <ConfirmationModal
+        busy={busy}
+        cancelLabel="Cancel"
+        cancelTestID="activity-session-cancel-delete"
+        confirmLabel={busy ? 'Deleting...' : 'Delete session'}
+        confirmTestID="activity-session-confirm-delete"
+        message="This removes the recorded session from history and cannot be undone."
+        onCancel={() => setDeleteConfirmationOpen(false)}
+        onConfirm={confirmDeleteSession}
+        testID="activity-session-delete-confirmation"
+        title="Delete this session?"
+        tone="danger"
+        visible={deleteConfirmationOpen}
+      />
+    </>
   );
 }

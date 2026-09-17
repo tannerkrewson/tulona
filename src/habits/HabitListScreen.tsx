@@ -21,6 +21,7 @@ import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 import {
   EmptyState,
+  ConfirmationModal,
   errorText,
   getRowSurfaceStyle,
   ROW_SURFACE_CONTENT_GAP,
@@ -127,7 +128,6 @@ export default function HabitListScreen() {
 }
 
 function HabitListContent({ store }: { store: HabitStore }) {
-  const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const habits = store((state) => state.habits);
@@ -190,91 +190,56 @@ function HabitListContent({ store }: { store: HabitStore }) {
   );
 
   return (
-    <Screen scrollable={false} testID="habits-screen">
-      <View
-        onLayout={(event) => setContentWidth(event.nativeEvent.layout.width)}
-        style={{ flex: 1, gap: 14, minHeight: 0, width: '100%' }}
-      >
-        <HabitHeader
-          onAdd={() => router.push('/habit/new')}
-          title="Habits"
-          testID="habits-header"
-        />
-        <HabitErrorMessage
-          message={persistenceError ? errorText(persistenceError) : null}
-          onBack={() => router.replace('/(tabs)')}
-          onRetry={() => {
-            const action = lastAction.current;
-            runAction(action ?? (() => store.getState().refresh()));
-          }}
-        />
-        <HabitWeekStrip
-          onSelectDay={selectDay}
-          rolloverHour={logicalDayRolloverHour}
-          selectedDay={selectedDay}
-          today={today}
-        />
-        {pastMidnightWarningVisible ? (
-          <View
-            accessibilityLiveRegion="polite"
-            accessibilityRole="alert"
-            style={{ width: '100%' }}
-            testID="habit-past-midnight-warning"
-          >
-            <Column
-              spacing={6}
-              style={{
-                backgroundColor: colors.warning.background,
-                borderColor: colors.warning.foreground,
-                borderRadius: 12,
-                borderWidth: 1,
-                padding: 14,
-                width: '100%',
-              }}
-            >
-              <Text
-                textStyle={{ color: colors.warning.foreground, fontSize: 14, fontWeight: '700' }}
-              >
-                Past midnight reminder
-              </Text>
-              <Text textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}>
-                {`It’s after midnight. Your logical day rolls over at ${formatHabitRolloverHour(logicalDayRolloverHour)}. Check that you’re logging the intended day; entries saved now apply to ${formatHabitDay(selectedDay)}.`}
-              </Text>
-              <Pressable
-                accessibilityHint="Dismisses this reminder without changing habit data"
-                accessibilityLabel="Keep logging on this logical day"
-                accessibilityRole="button"
-                onPress={() => setDismissedPastMidnightDay(selectedDay)}
-                style={({ pressed }) => ({
-                  alignSelf: 'flex-start',
-                  borderRadius: 8,
-                  opacity: pressed ? 0.65 : 1,
-                  paddingHorizontal: 2,
-                  paddingVertical: 4,
-                })}
-                testID="habit-past-midnight-keep"
-              >
-                <NativeText
-                  selectable={false}
-                  style={{ color: colors.warning.foreground, fontSize: 14, fontWeight: '700' }}
-                >
-                  Keep logging here
-                </NativeText>
-              </Pressable>
-            </Column>
-          </View>
-        ) : null}
-        <HabitDayPager
-          contentWidth={contentWidth}
-          horizontalInsets={{ left: 20 + insets.left, right: 20 + insets.right }}
-          onSelectDay={selectDay}
-          renderDay={renderDay}
-          rolloverHour={logicalDayRolloverHour}
-          selectedDay={selectedDay}
-          today={today}
-        />
-      </View>
-    </Screen>
+    <>
+      <Screen scrollable={false} testID="habits-screen">
+        <View
+          onLayout={(event) => setContentWidth(event.nativeEvent.layout.width)}
+          style={{ flex: 1, gap: 14, minHeight: 0, width: '100%' }}
+        >
+          <HabitHeader
+            onAdd={() => router.push('/habit/new')}
+            title="Habits"
+            testID="habits-header"
+          />
+          <HabitErrorMessage
+            message={persistenceError ? errorText(persistenceError) : null}
+            onBack={() => router.replace('/(tabs)')}
+            onRetry={() => {
+              const action = lastAction.current;
+              runAction(action ?? (() => store.getState().refresh()));
+            }}
+          />
+          <HabitWeekStrip
+            onSelectDay={selectDay}
+            rolloverHour={logicalDayRolloverHour}
+            selectedDay={selectedDay}
+            today={today}
+          />
+          <HabitDayPager
+            contentWidth={contentWidth}
+            horizontalInsets={{ left: 20 + insets.left, right: 20 + insets.right }}
+            onSelectDay={selectDay}
+            renderDay={renderDay}
+            rolloverHour={logicalDayRolloverHour}
+            selectedDay={selectedDay}
+            today={today}
+          />
+        </View>
+      </Screen>
+      <ConfirmationModal
+        cancelAccessibilityHint="Dismisses this reminder without changing habit data"
+        cancelLabel="Dismiss"
+        cancelTestID="habit-past-midnight-dismiss"
+        confirmLabel="Keep logging here"
+        confirmTestID="habit-past-midnight-keep"
+        message={`It’s after midnight. Your logical day rolls over at ${formatHabitRolloverHour(logicalDayRolloverHour)}. Check that you’re logging the intended day; entries saved now apply to ${formatHabitDay(selectedDay)}.`}
+        onCancel={() => setDismissedPastMidnightDay(selectedDay)}
+        onConfirm={() => setDismissedPastMidnightDay(selectedDay)}
+        testID="habit-past-midnight-warning"
+        title="Past midnight reminder"
+        visible={pastMidnightWarningVisible}
+      />
+    </>
   );
 }
 
