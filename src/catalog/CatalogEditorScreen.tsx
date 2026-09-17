@@ -502,7 +502,13 @@ function FolderEditor({
         }}
       >
         <Row alignment="center" spacing={12}>
-          <AppIcon name={iconName || 'folder'} color={color || colors.primary} size={28} />
+          <AppIcon
+            color={color || colors.primary}
+            fill={color || colors.primary}
+            name={iconName || 'folder'}
+            size={28}
+            strokeWidth={0}
+          />
           <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
             {folder?.name ?? 'New folder'}
           </Text>

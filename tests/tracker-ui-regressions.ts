@@ -9,6 +9,11 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const root = path.resolve(process.cwd());
 const activeBar = fs.readFileSync(path.join(root, 'src/tracker/ActiveActivityBar.tsx'), 'utf8');
+const activityRow = fs.readFileSync(path.join(root, 'src/tracker/ActivityRow.tsx'), 'utf8');
+const folderEditor = fs.readFileSync(
+  path.join(root, 'src/catalog/CatalogEditorScreen.tsx'),
+  'utf8'
+);
 
 assert(
   activeBar.includes("return pathname === '/' || /^\\/folder\\/[^/]+$/.test(pathname);") &&
@@ -40,6 +45,15 @@ assert(
     activeBar.includes("testID={isActive ? 'active-activity-pause' : 'active-activity-play'}") &&
     activeBar.includes('Starts a new tracking session for this activity'),
   'the tracker bar must expose accessible active pause and idle play controls'
+);
+assert(
+  activityRow.includes('fontSize: TRACKER_ROW_FONT_SIZE') &&
+    activityRow.includes('size={solidIcon ? TRACKER_PLAYBACK_ICON_SIZE : 20}') &&
+    activeBar.includes('fill={isActive ? onAccent : accent}') &&
+    activeBar.includes('strokeWidth={0}') &&
+    folderEditor.includes('fill={color || colors.primary}') &&
+    folderEditor.includes('strokeWidth={0}'),
+  'tracker labels and playback controls must use the requested sizing and solid icon treatment'
 );
 assert(
   activeBar.includes("activeRoutine?.status === 'paused'") &&
