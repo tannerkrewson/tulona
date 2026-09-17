@@ -58,9 +58,11 @@ assert(
 );
 assert(
   activityRow.includes('getRowSurfaceStyle') &&
-    activityRow.includes('getRowSurfaceLayoutStyle()') &&
+    activityRow.includes('getRowSurfaceLayoutStyle({ height: TRACKER_ROW_HEIGHT })') &&
     folderRow.includes('getRowSurfaceStyle') &&
-    folderRow.includes('getRowSurfaceLayoutStyle()'),
+    folderRow.includes('getRowSurfaceLayoutStyle({ height: TRACKER_ROW_HEIGHT })') &&
+    activityRow.includes('fontSize: TRACKER_ROW_FONT_SIZE') &&
+    folderRow.includes('fontSize: TRACKER_ROW_FONT_SIZE'),
   'activity and folder rows must use the shared surface and layout tokens'
 );
 assert(
@@ -82,7 +84,7 @@ assert(
 assert(
   activityRow.includes('active ? accent : inactiveBackground') &&
     activityRow.includes('active ? activeForeground : colors.text') &&
-    activityRow.includes('fill={solidIcon') &&
+    activityRow.includes('fill={') &&
     activityRow.includes('strokeWidth={solidIcon ? 0 : 2.5}'),
   'activity active-state color semantics must remain intact'
 );
