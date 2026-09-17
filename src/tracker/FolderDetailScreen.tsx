@@ -10,6 +10,7 @@ import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
+import { ACTIVE_ACTIVITY_BAR_HEIGHT } from './ActiveActivityBar';
 import { ActivityRow } from './ActivityRow';
 import { CatalogHeader } from './CatalogHeader';
 import { CatalogIconButton } from './CatalogIconButton';
@@ -247,6 +248,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
               No activities in this folder yet. Use + to add one.
             </Text>
           ) : null}
+          <View style={{ height: ACTIVE_ACTIVITY_BAR_HEIGHT + 20, width: '100%' }} />
         </Column>
       </Column>
     </Screen>

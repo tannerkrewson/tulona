@@ -89,6 +89,7 @@ export interface GoalServiceApi {
   createGoal(input: CreateGoalInput): Promise<Goal>;
   updateGoal(id: string, input: UpdateGoalInput): Promise<Goal>;
   deleteGoal(id: string): Promise<void>;
+  reorderGoals(ids: readonly string[]): Promise<Goal[]>;
   readSettings(): Promise<GoalSettings>;
   updateSettings(patch: GoalSettingsPatch): Promise<GoalSettings>;
   createStatusDefinition(input: CreateGoalStatusDefinitionInput): Promise<GoalStatusDefinition>;
@@ -268,6 +269,21 @@ export class GoalService implements GoalServiceApi {
 
   deleteGoal(id: string): Promise<void> {
     return this.repository.deleteGoal(id);
+  }
+
+  async reorderGoals(ids: readonly string[]): Promise<Goal[]> {
+    const current = await this.repository.readGoals();
+    if (
+      ids.length !== current.length ||
+      new Set(ids).size !== ids.length ||
+      current.some((goal) => !ids.includes(goal.id))
+    ) {
+      validation('Goal reorder must include every goal exactly once');
+    }
+    const byId = new Map(current.map((goal) => [goal.id, goal]));
+    const reordered = ids.map((id) => byId.get(id) as Goal);
+    await this.repository.writeGoals(reordered);
+    return reordered;
   }
 
   readSettings(): Promise<GoalSettings> {

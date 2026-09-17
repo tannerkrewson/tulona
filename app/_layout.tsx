@@ -30,6 +30,8 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen name="history" />
+            <Stack.Screen name="goal-edit/[goalId]" />
+            <Stack.Screen name="goal-review/[goalId]" />
             <Stack.Screen name="activity/[activityId]" />
             <Stack.Screen name="activity-session/[transitionId]" />
             <Stack.Screen name="activity-session/activity-chooser" />
