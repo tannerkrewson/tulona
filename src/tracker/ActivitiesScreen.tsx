@@ -16,8 +16,7 @@ import { CatalogHeader } from './CatalogHeader';
 import { FolderRow } from './FolderRow';
 
 type RootCatalogEntry =
-  | { kind: 'folder'; folder: Folder }
-  | { kind: 'item'; item: Activity | RoutineDefinition };
+  { kind: 'folder'; folder: Folder } | { kind: 'item'; item: Activity | RoutineDefinition };
 
 function sortedRootEntries(catalog: CatalogCollection, showArchived: boolean): RootCatalogEntry[] {
   return [
@@ -30,7 +29,10 @@ function sortedRootEntries(catalog: CatalogCollection, showArchived: boolean): R
   ].sort((left, right) => {
     const leftEntity = left.kind === 'folder' ? left.folder : left.item;
     const rightEntity = right.kind === 'folder' ? right.folder : right.item;
-    return leftEntity.sortOrder - rightEntity.sortOrder || leftEntity.name.localeCompare(rightEntity.name);
+    return (
+      leftEntity.sortOrder - rightEntity.sortOrder ||
+      leftEntity.name.localeCompare(rightEntity.name)
+    );
   });
 }
 

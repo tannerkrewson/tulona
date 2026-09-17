@@ -58,7 +58,7 @@ export function FolderRow({
           accessibilityLabel={editMode ? `Edit ${folder.name}` : `${folder.name} folder`}
           color={editMode ? colors.textMuted : folderColor}
           fill={editMode ? 'none' : folderColor}
-          name={editMode ? 'pencil' : folder.iconName ?? 'folder'}
+          name={editMode ? 'pencil' : (folder.iconName ?? 'folder')}
           size={editMode ? 20 : 29}
           strokeWidth={editMode ? 2.5 : 0}
         />

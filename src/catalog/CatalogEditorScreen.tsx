@@ -67,10 +67,7 @@ export function CatalogEditorScreen({
   const title = kind === 'activity' ? 'Activity editor' : 'Folder editor';
   if (!resource) {
     return (
-      <Screen
-        onBack={() => router.back()}
-        title={title}
-      >
+      <Screen onBack={() => router.back()} title={title}>
         <Column
           spacing={12}
           style={{
@@ -324,10 +321,7 @@ function ActivityEditor({
   };
 
   return (
-    <Screen
-      onBack={onBack}
-      title={activity ? 'Edit activity' : 'New activity'}
-    >
+    <Screen onBack={onBack} title={activity ? 'Edit activity' : 'New activity'}>
       <Column
         spacing={18}
         style={{
@@ -495,10 +489,7 @@ function FolderEditor({
     });
 
   return (
-    <Screen
-      onBack={onBack}
-      title={folder ? 'Edit folder' : 'New folder'}
-    >
+    <Screen onBack={onBack} title={folder ? 'Edit folder' : 'New folder'}>
       <Column
         spacing={18}
         style={{

@@ -88,7 +88,7 @@ export function normalizeBackupSnapshot(snapshot: BackupDatasetSnapshot): Backup
       (left, right) => left.sortOrder - right.sortOrder || left.id.localeCompare(right.id)
     ),
     habitDayStates: sortStates(snapshot.habitDayStates),
-    goals: [...snapshot.goals].sort((left, right) => left.id.localeCompare(right.id)),
+    goals: [...snapshot.goals],
     goalSettings: {
       ...snapshot.goalSettings,
       statusDefinitions: [...snapshot.goalSettings.statusDefinitions].sort(

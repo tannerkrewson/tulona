@@ -1,7 +1,7 @@
 import { Column, Picker, Row, Text } from '@expo/ui';
-import { useIsFocused } from 'expo-router';
+import { useIsFocused, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import type {
   AppSettings,
@@ -35,12 +35,13 @@ import {
   Screen,
 } from '@ui';
 
-const NEW_GOAL_ID = 'new';
+import { CatalogEditActions } from '../tracker/CatalogEditActions';
+
 const OVERALL_STATUS_OPTIONS: readonly {
   value: GoalOverallStatusFilter;
   label: string;
 }[] = [
-  { value: 'in-progress', label: 'In progress' },
+  { value: 'in-progress', label: 'Active' },
   { value: 'future', label: 'Future' },
   { value: 'completed', label: 'Completed' },
   { value: 'gave-up', label: 'Gave up' },
@@ -71,7 +72,7 @@ interface WeekSnapshot {
   evaluations: Map<string, GoalEvaluation>;
 }
 
-interface GoalsPageData {
+export interface GoalsPageData {
   runtime: GoalsRuntime;
   appSettings: AppSettings;
   goalSettings: GoalSettings;
@@ -196,12 +197,11 @@ function formatRule(
     name +
     ': ' +
     (rule.comparison === 'at-least' ? 'at least ' : 'at most ') +
-    formatMinutes(Math.round(rule.targetMs / 60000)) +
-    ' this week'
+    formatMinutes(Math.round(rule.targetMs / 60000))
   );
 }
 
-function displayStatus(goal: Goal, snapshot: WeekSnapshot): DisplayStatus | null {
+export function displayStatus(goal: Goal, snapshot: WeekSnapshot): DisplayStatus | null {
   const manual = snapshot.statuses.get(goal.id);
   if (manual) return { statusId: manual.statusId, note: manual.note, source: 'manual' };
   const evaluation = snapshot.evaluations.get(goal.id);
@@ -211,7 +211,7 @@ function displayStatus(goal: Goal, snapshot: WeekSnapshot): DisplayStatus | null
   return null;
 }
 
-function statusDefinition(
+export function statusDefinition(
   settings: GoalSettings,
   statusId: string | null | undefined
 ): GoalStatusDefinition | null {
@@ -230,7 +230,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function StatusBadge({
+export function StatusBadge({
   definition,
   label,
 }: {
@@ -302,12 +302,8 @@ function StatusCircleHistory({
   snapshots: readonly WeekSnapshot[];
   settings: GoalSettings;
 }) {
-  const { colors } = useAppTheme();
   return (
     <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-      <View style={{ width: 74 }}>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>Past weeks</Text>
-      </View>
       <ScrollView
         contentContainerStyle={{ alignItems: 'center', gap: 6 }}
         horizontal
@@ -339,7 +335,11 @@ function GoalRow({
   settings,
   habits,
   catalog,
+  editMode,
+  disabled,
   onEdit,
+  onMoveDown,
+  onMoveUp,
   onReview,
 }: {
   goal: Goal;
@@ -348,7 +348,11 @@ function GoalRow({
   settings: GoalSettings;
   habits: readonly Habit[];
   catalog: CatalogCollection;
+  editMode: boolean;
+  disabled: boolean;
   onEdit: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   onReview: () => void;
 }) {
   const { colors } = useAppTheme();
@@ -356,19 +360,13 @@ function GoalRow({
   const definition = statusDefinition(settings, status?.statusId);
   const statusLabel =
     definition?.name ?? (goal.evaluationMode === 'manual' ? 'Not reviewed' : 'No result yet');
-  const manual = goal.evaluationMode === 'manual';
-  return (
+  const cardContent = (
     <Column
       spacing={12}
       style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 14,
-        borderWidth: 1,
         padding: 16,
         width: '100%',
       }}
-      testID={'goal-row-' + goal.id}
     >
       <Row alignment="center" spacing={10} style={{ width: '100%' }}>
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -378,13 +376,6 @@ function GoalRow({
           >
             {goal.title}
           </Text>
-          <View style={{ marginTop: 3 }}>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-              {(goal.overallStatus === 'in-progress' ? 'In progress' : goal.overallStatus) +
-                ' · ' +
-                (manual ? 'Manual review' : 'Automatic')}
-            </Text>
-          </View>
         </View>
         <StatusBadge definition={definition} label={statusLabel} />
       </Row>
@@ -415,33 +406,57 @@ function GoalRow({
           ))}
         </Column>
       ) : null}
-      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-        {manual && goal.overallStatus === 'in-progress' ? (
-          <View style={{ flex: 1 }}>
-            <AppButton
-              label={status ? 'Update review' : 'Review this week'}
-              onPress={onReview}
-              style={{ width: '100%' }}
-              testID={'goal-review-' + goal.id}
-              variant="outlined"
-            />
-          </View>
-        ) : null}
-        <View style={{ flex: 1 }}>
-          <AppButton
-            label="Edit goal"
-            onPress={onEdit}
-            style={{ width: '100%' }}
-            testID={'goal-edit-' + goal.id}
-            variant={manual && goal.overallStatus === 'in-progress' ? 'outlined' : 'filled'}
-          />
-        </View>
-      </Row>
     </Column>
+  );
+
+  const cardStyle = {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 14,
+    borderWidth: 1,
+    width: '100%',
+  } as const;
+
+  if (editMode) {
+    return (
+      <View style={{ ...cardStyle, flexDirection: 'row' }} testID={'goal-row-' + goal.id}>
+        <Pressable
+          accessibilityLabel={`Edit ${goal.title}`}
+          accessibilityRole="button"
+          onPress={onEdit}
+          style={({ pressed }) => ({
+            flex: 1,
+            minWidth: 0,
+            opacity: pressed ? 0.72 : 1,
+          })}
+        >
+          {cardContent}
+        </Pressable>
+        <CatalogEditActions
+          disabled={disabled}
+          inline
+          onDown={onMoveDown}
+          onUp={onMoveUp}
+          testID={`goal-actions-${goal.id}`}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      accessibilityLabel={goal.title}
+      accessibilityRole="button"
+      onPress={onReview}
+      style={({ pressed }) => ({ ...cardStyle, opacity: pressed ? 0.78 : 1 })}
+      testID={'goal-row-' + goal.id}
+    >
+      {cardContent}
+    </Pressable>
   );
 }
 
-function ReviewPanel({
+export function ReviewPanel({
   goals,
   currentWeek,
   currentSnapshot,
@@ -773,7 +788,7 @@ function RuleEditor({
   );
 }
 
-function GoalEditor({
+export function GoalEditor({
   goal,
   service,
   settings,
@@ -954,22 +969,22 @@ function GoalEditor({
           selectedValue={overallStatus}
           testID="goal-overall-status"
         >
-          <Picker.Item label="In progress" value="in-progress" />
+          <Picker.Item label="Active" value="in-progress" />
           <Picker.Item label="Future" value="future" />
           <Picker.Item label="Completed" value="completed" />
           <Picker.Item label="Gave up" value="gave-up" />
         </AccessiblePicker>
       </Field>
-      <Field label="Weekly status method">
+      <Field label="Status mode">
         <AccessiblePicker
           enabled={!saving}
-          label="Weekly status method"
+          label="Status mode"
           onValueChange={(value) => setEvaluationMode(String(value) as GoalEvaluationMode)}
           selectedValue={evaluationMode}
           testID="goal-evaluation-mode"
         >
-          <Picker.Item label="Manual review" value="manual" />
-          <Picker.Item label="Automatic checks" value="automatic" />
+          <Picker.Item label="Review" value="manual" />
+          <Picker.Item label="Rules" value="automatic" />
         </AccessiblePicker>
       </Field>
       {evaluationMode === 'automatic' ? (
@@ -1097,7 +1112,7 @@ function GoalEditor({
   );
 }
 
-async function loadGoalsPage(): Promise<GoalsPageData> {
+export async function loadGoalsPage(): Promise<GoalsPageData> {
   const runtime = await loadGoalsRuntime();
   const [appSettings, goalSettings, goalCollection, catalog, habits] = await Promise.all([
     runtime.settingsService.read(),
@@ -1164,13 +1179,14 @@ async function loadGoalsPage(): Promise<GoalsPageData> {
 
 export default function GoalsScreen() {
   const focused = useIsFocused();
+  const router = useRouter();
   const { colors } = useAppTheme();
   const [resource, setResource] = useState<GoalsPageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<GoalOverallStatusFilter>('in-progress');
-  const [editorId, setEditorId] = useState<string | null>(null);
-  const [reviewOpen, setReviewOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [reordering, setReordering] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1192,36 +1208,46 @@ export default function GoalsScreen() {
     () => resource?.goals.filter((goal) => filter === 'all' || goal.overallStatus === filter) ?? [],
     [filter, resource]
   );
-  const manualInProgressWithoutStatus = resource?.goals.filter(
-    (goal) =>
-      goal.overallStatus === 'in-progress' &&
-      goal.evaluationMode === 'manual' &&
-      !resource.currentSnapshot.statuses.has(goal.id)
-  );
-  const isReviewDay = resource ? new Date().getDay() === resource.goalSettings.reviewDay : false;
-  const selectedGoal =
-    resource && editorId && editorId !== NEW_GOAL_ID
-      ? (resource.goals.find((goal) => goal.id === editorId) ?? null)
-      : null;
 
-  const afterMutation = async () => {
-    setEditorId(null);
-    setReviewOpen(false);
-    await load();
+  const reorderGoal = async (goalId: string, direction: 'up' | 'down') => {
+    if (!resource || reordering) return;
+    const index = resource.goals.findIndex((goal) => goal.id === goalId);
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || target < 0 || target >= resource.goals.length) return;
+    const ids = resource.goals.map((goal) => goal.id);
+    const [moved] = ids.splice(index, 1);
+    ids.splice(target, 0, moved);
+    setReordering(true);
+    setLoadError(null);
+    try {
+      await resource.runtime.goalService.reorderGoals(ids);
+      await load();
+    } catch (reorderError) {
+      setLoadError(errorText(reorderError));
+    } finally {
+      setReordering(false);
+    }
   };
 
   const header = (
-    <IconButton
-      disabled={!resource}
-      icon="plus"
-      label="Create goal"
-      onPress={() => {
-        setReviewOpen(false);
-        setEditorId(NEW_GOAL_ID);
-      }}
-      testID="goal-create"
-      variant="primary"
-    />
+    <Row alignment="center" spacing={4}>
+      <IconButton
+        disabled={!resource || reordering}
+        icon={editMode ? 'check' : 'pencil'}
+        label={editMode ? 'Done editing goals' : 'Edit goals'}
+        onPress={() => setEditMode((open) => !open)}
+        testID="goal-edit-mode"
+        variant="plain"
+      />
+      <IconButton
+        disabled={!resource}
+        icon="plus"
+        label="Create goal"
+        onPress={() => router.push('/goal-edit/new' as Href)}
+        testID="goal-create"
+        variant="primary"
+      />
+    </Row>
   );
 
   return (
@@ -1238,110 +1264,25 @@ export default function GoalsScreen() {
         ) : null}
         {resource ? (
           <>
-            <Row alignment="center" spacing={10} style={{ width: '100%' }}>
-              <View style={{ flex: 1 }}>
-                <AccessiblePicker
-                  label="Goal status filter"
-                  onValueChange={(value) => setFilter(String(value) as GoalOverallStatusFilter)}
-                  selectedValue={filter}
-                  testID="goal-status-filter"
-                >
-                  {OVERALL_STATUS_OPTIONS.map((option) => (
-                    <Picker.Item key={option.value} label={option.label} value={option.value} />
-                  ))}
-                </AccessiblePicker>
-              </View>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-                {String(visibleGoals.length) + ' goal' + (visibleGoals.length === 1 ? '' : 's')}
-              </Text>
-            </Row>
-            <Column
-              spacing={4}
-              style={{
-                backgroundColor: colors.surfaceMuted,
-                borderRadius: 12,
-                padding: 14,
-                width: '100%',
-              }}
-              testID="goals-current-week"
-            >
-              <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
-                This week
-              </Text>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                {formatWeek(resource.currentWeek)}
-              </Text>
-            </Column>
-            {isReviewDay &&
-            manualInProgressWithoutStatus &&
-            manualInProgressWithoutStatus.length > 0 ? (
-              <Column
-                spacing={8}
-                style={{
-                  backgroundColor: colors.warning.background,
-                  borderColor: colors.warning.foreground,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  padding: 14,
-                  width: '100%',
-                }}
-                testID="goal-review-prompt"
+            <View style={{ width: '100%' }}>
+              <AccessiblePicker
+                label="Goal status filter"
+                onValueChange={(value) => setFilter(String(value) as GoalOverallStatusFilter)}
+                selectedValue={filter}
+                testID="goal-status-filter"
               >
-                <Text
-                  textStyle={{
-                    color: colors.warning.foreground,
-                    fontSize: 15,
-                    fontWeight: '700',
-                  }}
-                >
-                  Weekly review is due
-                </Text>
-                <Text
-                  textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}
-                >
-                  {'Choose a status and note for ' +
-                    manualInProgressWithoutStatus.length +
-                    ' manual goal' +
-                    (manualInProgressWithoutStatus.length === 1 ? '' : 's') +
-                    ' today.'}
-                </Text>
-                <AppButton
-                  label="Review goals"
-                  onPress={() => {
-                    setEditorId(null);
-                    setReviewOpen(true);
-                  }}
-                  testID="goal-review-prompt-open"
-                />
-              </Column>
-            ) : null}
-            {editorId ? (
-              <GoalEditor
-                catalog={resource.catalog}
-                goal={selectedGoal}
-                habits={resource.habits}
-                onCancel={() => setEditorId(null)}
-                onSaved={afterMutation}
-                service={resource.runtime.goalService}
-                settings={resource.goalSettings}
-              />
-            ) : null}
-            {reviewOpen ? (
-              <ReviewPanel
-                currentSnapshot={resource.currentSnapshot}
-                currentWeek={resource.currentWeek}
-                goals={resource.goals.filter((goal) => goal.overallStatus === 'in-progress')}
-                onCancel={() => setReviewOpen(false)}
-                onSaved={afterMutation}
-                service={resource.runtime.goalService}
-                settings={resource.goalSettings}
-              />
-            ) : null}
+                {OVERALL_STATUS_OPTIONS.map((option) => (
+                  <Picker.Item key={option.value} label={option.label} value={option.value} />
+                ))}
+              </AccessiblePicker>
+            </View>
             {visibleGoals.length === 0 ? (
               <EmptyState
                 actionLabel={filter === 'in-progress' ? 'Create your first goal' : undefined}
                 iconName="award"
-                onAction={filter === 'in-progress' ? () => setEditorId(NEW_GOAL_ID) : undefined}
+                onAction={
+                  filter === 'in-progress' ? () => router.push('/goal-edit/new' as Href) : undefined
+                }
                 testID="goals-empty"
                 title={filter === 'in-progress' ? 'No goals yet' : 'No matching goals'}
               />
@@ -1355,14 +1296,12 @@ export default function GoalsScreen() {
                     habits={resource.habits}
                     historicalWeeks={resource.historicalWeeks}
                     key={goal.id}
-                    onEdit={() => {
-                      setReviewOpen(false);
-                      setEditorId(goal.id);
-                    }}
-                    onReview={() => {
-                      setEditorId(null);
-                      setReviewOpen(true);
-                    }}
+                    editMode={editMode}
+                    disabled={reordering}
+                    onEdit={() => router.push(`/goal-edit/${goal.id}` as Href)}
+                    onMoveDown={() => void reorderGoal(goal.id, 'down')}
+                    onMoveUp={() => void reorderGoal(goal.id, 'up')}
+                    onReview={() => router.push(`/goal-review/${goal.id}` as Href)}
                     settings={resource.goalSettings}
                   />
                 ))}

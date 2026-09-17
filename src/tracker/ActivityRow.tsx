@@ -51,7 +51,13 @@ export function ActivityRow({
   const accent = isHexColor(configuredColor) ? configuredColor.trim() : colors.primary;
   const activeForeground = getDarkerColor(accent);
   const inactiveBackground = colorScheme === 'dark' ? colors.surfaceMuted : colors.surface;
-  const iconName = editMode ? 'pencil' : active ? 'pause' : item.kind === 'routine' ? 'repeat' : 'play';
+  const iconName = editMode
+    ? 'pencil'
+    : active
+      ? 'pause'
+      : item.kind === 'routine'
+        ? 'repeat'
+        : 'play';
   const solidIcon = iconName === 'play' || iconName === 'pause';
   const rowStyle = {
     ...getRowSurfaceStyle({
@@ -79,8 +85,18 @@ export function ActivityRow({
                   ? `${item.name} routine`
                   : `${item.name} play`
           }
-          color={editMode ? (active ? activeForeground : colors.textMuted) : active ? activeForeground : accent}
-          fill={solidIcon ? (editMode ? colors.textMuted : active ? activeForeground : accent) : 'none'}
+          color={
+            editMode
+              ? active
+                ? activeForeground
+                : colors.textMuted
+              : active
+                ? activeForeground
+                : accent
+          }
+          fill={
+            solidIcon ? (editMode ? colors.textMuted : active ? activeForeground : accent) : 'none'
+          }
           name={iconName}
           size={20}
           strokeWidth={solidIcon ? 0 : 2.5}
