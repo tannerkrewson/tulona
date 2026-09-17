@@ -72,7 +72,7 @@ assert(
   'catalog, folder, and chooser surfaces must all consume the shared row components'
 );
 assert(
-  folderRow.includes('backgroundColor: colors.surface') &&
+  folderRow.includes("colorScheme === 'dark' ? colors.surfaceMuted : colors.surface") &&
     folderRow.includes('variant="filled"') &&
     !folderRow.includes('variant="outlined"') &&
     !folderRow.includes('borderColor: colors.border') &&
@@ -80,8 +80,10 @@ assert(
   'folder rows must use the same filled, borderless surface treatment as activities'
 );
 assert(
-  activityRow.includes('active ? accent : colors.surface') &&
-    activityRow.includes('active ? onAccent : colors.text'),
+  activityRow.includes('active ? accent : inactiveBackground') &&
+    activityRow.includes('active ? activeForeground : colors.text') &&
+    activityRow.includes('fill={solidIcon') &&
+    activityRow.includes('strokeWidth={solidIcon ? 0 : 2.5}'),
   'activity active-state color semantics must remain intact'
 );
 assert(

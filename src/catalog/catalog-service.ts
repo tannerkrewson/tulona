@@ -26,6 +26,7 @@ import {
   moveDown,
   moveUp,
   normalizeCatalogOrders,
+  reorderCatalogRoot,
   reorderHabits,
   reorderRoutineSteps,
   type OrderDirection,
@@ -160,7 +161,6 @@ export interface CatalogServiceApi {
   ): Promise<RoutineStep>;
   deleteRoutineStep(routineId: UUID, stepId: UUID): Promise<RoutineStep>;
   removeRoutineStep(routineId: UUID, stepId: UUID): Promise<RoutineStep>;
-  reorderFolders(id: UUID, direction: OrderDirection): Promise<Folder[]>;
   reorderItem(id: UUID, direction: OrderDirection): Promise<CatalogCollection>;
   reorderRoutineStep(
     routineId: UUID,
@@ -339,14 +339,16 @@ function nextSiblingOrder(
   folderId: UUID | null,
   excludingId?: UUID
 ): number {
-  const siblings = [...catalog.activities, ...catalog.routines].filter(
-    (item) => item.folderId === folderId && item.id !== excludingId
-  );
-  return Math.max(-1, ...siblings.map((item) => item.sortOrder)) + 1;
-}
-
-function nextFolderOrder(catalog: CatalogCollection): number {
-  return Math.max(-1, ...catalog.folders.map((folder) => folder.sortOrder)) + 1;
+  const siblings =
+    folderId === null
+      ? [
+          ...catalog.folders,
+          ...catalog.activities.filter((item) => item.folderId === null),
+          ...catalog.routines.filter((item) => item.folderId === null),
+        ]
+      : [...catalog.activities, ...catalog.routines].filter((item) => item.folderId === folderId);
+  const remaining = siblings.filter((item) => item.id !== excludingId);
+  return Math.max(-1, ...remaining.map((item) => item.sortOrder)) + 1;
 }
 
 function snapshotSteps(
@@ -467,7 +469,7 @@ export class CatalogService implements CatalogServiceApi {
     const folder: Folder = {
       id,
       name: validateName(input.name),
-      sortOrder: nextFolderOrder(catalog),
+      sortOrder: nextSiblingOrder(catalog, null),
       color: validateColor(input.color),
       iconName: validateIcon(input.iconName),
       createdAt: now,
@@ -898,21 +900,20 @@ export class CatalogService implements CatalogServiceApi {
     return this.deleteRoutineStep(routineId, stepId);
   }
 
-  async reorderFolders(id: UUID, direction: OrderDirection): Promise<Folder[]> {
-    const catalog = await this.read();
-    if (!catalog.folders.some((folder) => folder.id === id))
-      throw new PersistenceError('validation', `Unknown folder "${id}"`);
-    const folders =
-      direction === 'up' ? moveUp(catalog.folders, id) : moveDown(catalog.folders, id);
-    const next = normalizeCatalogOrders({ ...catalog, folders });
-    await this.write(next);
-    return next.folders;
-  }
-
   async reorderItem(id: UUID, direction: OrderDirection): Promise<CatalogCollection> {
     const catalog = await this.read();
+    if (catalog.folders.some((folder) => folder.id === id)) {
+      const next = reorderCatalogRoot(catalog, id, direction);
+      await this.write(next);
+      return next;
+    }
     const item = trackableWithId(catalog, id);
     if (!item) throw new PersistenceError('validation', `Unknown catalog item "${id}"`);
+    if (item.folderId === null) {
+      const next = reorderCatalogRoot(catalog, id, direction);
+      await this.write(next);
+      return next;
+    }
     const siblings = [...catalog.activities, ...catalog.routines].filter(
       (candidate) => candidate.folderId === item.folderId
     );

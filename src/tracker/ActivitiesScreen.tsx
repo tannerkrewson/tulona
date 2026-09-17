@@ -1,6 +1,7 @@
 import { Column, Text } from '@expo/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 
 import type { Activity, CatalogCollection, Folder, RoutineDefinition } from '@domain';
 import { useAppTheme } from '@theme';
@@ -9,21 +10,28 @@ import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
+import { ACTIVE_ACTIVITY_BAR_HEIGHT } from './ActiveActivityBar';
 import { ActivityRow } from './ActivityRow';
-import { CatalogEditActions } from './CatalogEditActions';
 import { CatalogHeader } from './CatalogHeader';
 import { FolderRow } from './FolderRow';
 
-function sortedRootItems(catalog: CatalogCollection, showArchived: boolean) {
-  return [...catalog.activities, ...catalog.routines]
-    .filter((item) => item.folderId === null && (showArchived || item.archivedAt === null))
-    .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name));
-}
+type RootCatalogEntry =
+  | { kind: 'folder'; folder: Folder }
+  | { kind: 'item'; item: Activity | RoutineDefinition };
 
-function sortedFolders(catalog: CatalogCollection, showArchived: boolean): Folder[] {
-  return catalog.folders
-    .filter((folder) => showArchived || folder.archivedAt === null)
-    .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name));
+function sortedRootEntries(catalog: CatalogCollection, showArchived: boolean): RootCatalogEntry[] {
+  return [
+    ...catalog.folders
+      .filter((folder) => showArchived || folder.archivedAt === null)
+      .map((folder) => ({ kind: 'folder' as const, folder })),
+    ...[...catalog.activities, ...catalog.routines]
+      .filter((item) => item.folderId === null && (showArchived || item.archivedAt === null))
+      .map((item) => ({ kind: 'item' as const, item })),
+  ].sort((left, right) => {
+    const leftEntity = left.kind === 'folder' ? left.folder : left.item;
+    const rightEntity = right.kind === 'folder' ? right.folder : right.item;
+    return leftEntity.sortOrder - rightEntity.sortOrder || leftEntity.name.localeCompare(rightEntity.name);
+  });
 }
 
 function CatalogError({
@@ -152,8 +160,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
     );
   }
 
-  const folders = sortedFolders(catalog, settings.showArchived);
-  const rootItems = sortedRootItems(catalog, settings.showArchived);
+  const rootEntries = sortedRootEntries(catalog, settings.showArchived);
   const visibleError = actionError ?? (persistenceError ? errorText(persistenceError) : null);
 
   const runAction = async (action: () => Promise<void>) => {
@@ -169,13 +176,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
     }
   };
 
-  const reorderFolder = (folderId: string, direction: 'up' | 'down') =>
-    void runAction(async () => {
-      await runtime.catalogService.reorderFolders(folderId, direction);
-      await store.getState().hydrate();
-    });
-
-  const reorderItem = (itemId: string, direction: 'up' | 'down') =>
+  const reorderRootEntry = (itemId: string, direction: 'up' | 'down') =>
     void runAction(async () => {
       await runtime.catalogService.reorderItem(itemId, direction);
       await store.getState().hydrate();
@@ -259,27 +260,27 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
           />
         ) : null}
         <Column spacing={ROW_SURFACE_LIST_GAP} style={{ width: '100%' }}>
-          {folders.map((folder) => (
-            <Column key={folder.id} spacing={6} style={{ width: '100%' }}>
-              <FolderRow
-                disabled={busy || folder.archivedAt !== null}
-                folder={folder}
-                onPress={() =>
-                  router.push(editMode ? `/folder-edit/${folder.id}` : `/folder/${folder.id}`)
-                }
-                testID={`folder-${folder.id}`}
-              />
-              {editMode ? (
-                <CatalogEditActions
+          {rootEntries.map((entry) => {
+            if (entry.kind === 'folder') {
+              const { folder } = entry;
+              return (
+                <FolderRow
+                  actionsTestID={`folder-actions-${folder.id}`}
                   disabled={busy || folder.archivedAt !== null}
-                  onDown={() => reorderFolder(folder.id, 'down')}
-                  onUp={() => reorderFolder(folder.id, 'up')}
-                  testID={`folder-actions-${folder.id}`}
+                  editMode={editMode}
+                  folder={folder}
+                  key={folder.id}
+                  onMoveDown={() => reorderRootEntry(folder.id, 'down')}
+                  onMoveUp={() => reorderRootEntry(folder.id, 'up')}
+                  onPress={() =>
+                    router.push(editMode ? `/folder-edit/${folder.id}` : `/folder/${folder.id}`)
+                  }
+                  testID={`folder-${folder.id}`}
                 />
-              ) : null}
-            </Column>
-          ))}
-          {rootItems.map((item) => {
+              );
+            }
+
+            const { item } = entry;
             const resolved = resolveCatalogItem(catalog, item.id);
             const active = activeTransition?.activityId === item.id;
             return (
@@ -291,18 +292,19 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
                 disabled={busy || item.archivedAt !== null}
                 editMode={editMode}
                 item={item}
-                onMoveDown={() => reorderItem(item.id, 'down')}
-                onMoveUp={() => reorderItem(item.id, 'up')}
+                onMoveDown={() => reorderRootEntry(item.id, 'down')}
+                onMoveUp={() => reorderRootEntry(item.id, 'up')}
                 onPress={() => (editMode ? editItem(item) : activate(item))}
                 testID={`catalog-item-${item.id}`}
               />
             );
           })}
-          {folders.length === 0 && rootItems.length === 0 ? (
+          {rootEntries.length === 0 ? (
             <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>
               No activities or folders yet. Use + to add one.
             </Text>
           ) : null}
+          <View style={{ height: ACTIVE_ACTIVITY_BAR_HEIGHT + 20, width: '100%' }} />
         </Column>
       </Column>
     </Screen>

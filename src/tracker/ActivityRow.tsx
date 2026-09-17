@@ -2,7 +2,7 @@ import { Row, Text } from '@expo/ui';
 import { Pressable, View } from 'react-native';
 
 import type { TrackableItem } from '@domain';
-import { getAccessibleTextColor, useAppTheme } from '@theme';
+import { getDarkerColor, useAppTheme } from '@theme';
 import {
   AppButton,
   getRowSurfaceLayoutStyle,
@@ -46,13 +46,16 @@ export function ActivityRow({
   actionsTestID,
   testID,
 }: ActivityRowProps) {
-  const { colors } = useAppTheme();
+  const { colorScheme, colors } = useAppTheme();
   const configuredColor = item.color ?? color;
   const accent = isHexColor(configuredColor) ? configuredColor.trim() : colors.primary;
-  const onAccent = getAccessibleTextColor(accent);
+  const activeForeground = getDarkerColor(accent);
+  const inactiveBackground = colorScheme === 'dark' ? colors.surfaceMuted : colors.surface;
+  const iconName = editMode ? 'pencil' : active ? 'pause' : item.kind === 'routine' ? 'repeat' : 'play';
+  const solidIcon = iconName === 'play' || iconName === 'pause';
   const rowStyle = {
     ...getRowSurfaceStyle({
-      backgroundColor: active ? accent : colors.surface,
+      backgroundColor: active ? accent : inactiveBackground,
     }),
     ...getRowSurfaceLayoutStyle(),
   } as const;
@@ -61,11 +64,8 @@ export function ActivityRow({
       <View
         style={{
           alignItems: 'center',
-          backgroundColor: active ? onAccent : accent,
-          borderRadius: 10,
           height: ROW_SURFACE_ICON_SIZE,
           justifyContent: 'center',
-          opacity: active ? 0.9 : 1,
           width: ROW_SURFACE_ICON_SIZE,
         }}
       >
@@ -79,17 +79,17 @@ export function ActivityRow({
                   ? `${item.name} routine`
                   : `${item.name} play`
           }
-          color={editMode ? onAccent : active ? accent : onAccent}
-          name={
-            editMode ? 'pencil' : active ? 'pause' : item.kind === 'routine' ? 'repeat' : 'play'
-          }
+          color={editMode ? (active ? activeForeground : colors.textMuted) : active ? activeForeground : accent}
+          fill={solidIcon ? (editMode ? colors.textMuted : active ? activeForeground : accent) : 'none'}
+          name={iconName}
           size={20}
+          strokeWidth={solidIcon ? 0 : 2.5}
         />
       </View>
       <Text
         numberOfLines={1}
         textStyle={{
-          color: active ? onAccent : colors.text,
+          color: active ? activeForeground : colors.text,
           fontSize: 17,
           fontWeight: active ? '700' : '600',
         }}

@@ -1,9 +1,9 @@
 import {
-  normalizeFolderOrder,
   normalizeRoutineStepOrder,
   normalizeSortOrder,
   sortByOrder,
   type CatalogCollection,
+  type Folder,
   type Habit,
   type Ordered,
   type RoutineStep,
@@ -69,24 +69,78 @@ function normalizeTrackableGroups(
   return groups;
 }
 
-/** Normalizes every catalog sibling group and routine step collection. */
-export function normalizeCatalogOrders(catalog: CatalogCollection): CatalogCollection {
-  const folders = normalizeFolderOrder(sortByOrder(catalog.folders));
-  const groups = normalizeTrackableGroups([...catalog.activities, ...catalog.routines]);
-  const orderById = new Map<string, number>();
-  for (const group of groups.values()) {
-    for (const item of group) orderById.set(item.id, item.sortOrder);
-  }
+function rootCatalogEntities(catalog: CatalogCollection): (Folder | TrackableItem)[] {
+  return [
+    ...catalog.folders,
+    ...catalog.activities.filter((item) => item.folderId === null),
+    ...catalog.routines.filter((item) => item.folderId === null),
+  ];
+}
 
-  return {
-    folders,
+/** Moves a folder or root trackable item through the shared catalog order. */
+export function reorderCatalogRoot(
+  catalog: CatalogCollection,
+  id: string,
+  direction: OrderDirection
+): CatalogCollection {
+  const moved = moveOrderedItem(rootCatalogEntities(catalog), id, direction);
+  const orderById = new Map(moved.map((item) => [item.id, item.sortOrder]));
+  return normalizeCatalogOrders({
+    ...catalog,
+    folders: catalog.folders.map((folder) => ({
+      ...folder,
+      sortOrder: orderById.get(folder.id) ?? folder.sortOrder,
+    })),
     activities: catalog.activities.map((activity) => ({
       ...activity,
-      sortOrder: orderById.get(activity.id) ?? 0,
+      sortOrder:
+        activity.folderId === null
+          ? (orderById.get(activity.id) ?? activity.sortOrder)
+          : activity.sortOrder,
     })),
     routines: catalog.routines.map((routine) => ({
       ...routine,
-      sortOrder: orderById.get(routine.id) ?? 0,
+      sortOrder:
+        routine.folderId === null
+          ? (orderById.get(routine.id) ?? routine.sortOrder)
+          : routine.sortOrder,
+    })),
+  });
+}
+
+/** Normalizes the shared root order, every child group, and routine steps. */
+export function normalizeCatalogOrders(catalog: CatalogCollection): CatalogCollection {
+  const rootOrderById = new Map(
+    normalizeSortOrder(sortByOrder(rootCatalogEntities(catalog))).map((item) => [
+      item.id,
+      item.sortOrder,
+    ])
+  );
+  const childOrderById = new Map<string, number>();
+  for (const group of normalizeTrackableGroups(
+    [...catalog.activities, ...catalog.routines].filter((item) => item.folderId !== null)
+  ).values()) {
+    for (const item of group) childOrderById.set(item.id, item.sortOrder);
+  }
+
+  return {
+    folders: catalog.folders.map((folder) => ({
+      ...folder,
+      sortOrder: rootOrderById.get(folder.id) ?? 0,
+    })),
+    activities: catalog.activities.map((activity) => ({
+      ...activity,
+      sortOrder:
+        activity.folderId === null
+          ? (rootOrderById.get(activity.id) ?? 0)
+          : (childOrderById.get(activity.id) ?? 0),
+    })),
+    routines: catalog.routines.map((routine) => ({
+      ...routine,
+      sortOrder:
+        routine.folderId === null
+          ? (rootOrderById.get(routine.id) ?? 0)
+          : (childOrderById.get(routine.id) ?? 0),
       steps: normalizeRoutineStepOrder(sortByOrder(routine.steps)),
     })),
   };
