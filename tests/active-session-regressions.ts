@@ -33,8 +33,8 @@ assert(
   'activity session actions must not include redundant subtitle copy'
 );
 assert(
-  appButtonBlocks.length >= 6 && appButtonBlocks.every((block) => !block.includes("width: '100%'")),
-  'activity session actions must use compact buttons instead of full-width buttons'
+  appButtonBlocks.length >= 4 && appButtonBlocks.every((block) => !block.includes("width: '100%'")),
+  'activity session screen actions must use compact buttons instead of full-width buttons'
 );
 assert(
   !session.includes('AccessiblePicker') &&
@@ -68,6 +68,7 @@ assert(
 );
 assert(
   session.includes('activity-session-delete') &&
+    session.includes('<ConfirmationModal') &&
     session.includes('activity-session-delete-confirmation') &&
     session.includes('activity-session-confirm-delete') &&
     session.includes('activity-session-cancel-delete') &&
@@ -75,8 +76,23 @@ assert(
     session.includes('setDeleteConfirmationOpen(true)') &&
     session.includes('await store.getState().deleteTransition(transition.id, { confirm: true })') &&
     session.includes('setDeleteConfirmationOpen(false)') &&
+    session.includes('visible={deleteConfirmationOpen}') &&
     session.includes('router.back()'),
   'activity sessions must expose an explicit, confirmed delete action that returns after success'
+);
+const deleteModalStart = session.indexOf('<ConfirmationModal');
+const deleteScreenEnd = session.lastIndexOf('</Screen>');
+const deleteCall = session.indexOf(
+  'await store.getState().deleteTransition(transition.id, { confirm: true })'
+);
+const deleteClose = session.indexOf('setDeleteConfirmationOpen(false)', deleteCall);
+const deleteReturn = session.indexOf('router.back()', deleteClose);
+assert(
+  deleteModalStart > deleteScreenEnd &&
+    deleteCall >= 0 &&
+    deleteClose > deleteCall &&
+    deleteReturn > deleteClose,
+  'session deletion confirmation must be outside the scrollable screen and return only after deletion succeeds'
 );
 assert(
   trackerStore.includes('deleteTransition: (id, confirmation) =>') &&

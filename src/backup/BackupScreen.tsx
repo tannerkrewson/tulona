@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
-import { AppButton, errorText, Screen } from '@ui';
+import { AppButton, ConfirmationModal, errorText, Screen } from '@ui';
 import { bootCoordinator } from '../orchestration';
 
 import { BackupImportError, type BackupImportResult } from './backup-import';
@@ -332,118 +332,80 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
   };
 
   return (
-    <Screen onBack={() => router.back()} title="Backup">
-      <Column spacing={14} style={{ width: '100%' }}>
-        <Column
-          spacing={10}
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderRadius: 16,
-            borderWidth: 1,
-            padding: 16,
-            width: '100%',
-          }}
-          testID="backup-actions"
-        >
-          <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-            On-device backup
-          </Text>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-            JSON restores the complete dataset. CSV is a read-only analysis export of derived
-            intervals.
-          </Text>
-          <Column spacing={8} style={{ width: '100%' }}>
+    <>
+      <Screen onBack={() => router.back()} title="Backup">
+        <Column spacing={14} style={{ width: '100%' }}>
+          <Column
+            spacing={10}
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderRadius: 16,
+              borderWidth: 1,
+              padding: 16,
+              width: '100%',
+            }}
+            testID="backup-actions"
+          >
+            <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
+              On-device backup
+            </Text>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+              JSON restores the complete dataset. CSV is a read-only analysis export of derived
+              intervals.
+            </Text>
+            <Column spacing={8} style={{ width: '100%' }}>
+              <AppButton
+                disabled={busy}
+                label="Export JSON"
+                onPress={() => void exportJson()}
+                style={{ height: 50, width: '100%' }}
+                testID="export-json"
+              />
+              <AppButton
+                disabled={busy}
+                label="Export CSV"
+                onPress={() => void exportCsv()}
+                style={{ height: 50, width: '100%' }}
+                testID="export-csv"
+              />
+            </Column>
             <AppButton
               disabled={busy}
-              label="Export JSON"
-              onPress={() => void exportJson()}
+              label="Choose JSON backup"
+              onPress={() => void importFile()}
               style={{ height: 50, width: '100%' }}
-              testID="export-json"
-            />
-            <AppButton
-              disabled={busy}
-              label="Export CSV"
-              onPress={() => void exportCsv()}
-              style={{ height: 50, width: '100%' }}
-              testID="export-csv"
+              testID="import-json"
             />
           </Column>
-          <AppButton
-            disabled={busy}
-            label="Choose JSON backup"
-            onPress={() => void importFile()}
-            style={{ height: 50, width: '100%' }}
-            testID="import-json"
-          />
-        </Column>
-        <Column
-          spacing={10}
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderRadius: 16,
-            borderWidth: 1,
-            padding: 16,
-            width: '100%',
-          }}
-          testID="timemator-import-actions"
-        >
-          <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-            Import Timemator tracker data
-          </Text>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-            Add Timemator&apos;s semicolon-delimited export to your tracker. Existing activities are
-            matched by name; missing activities are created automatically.
-          </Text>
-          <AppButton
-            disabled={busy}
-            label="Choose Timemator CSV"
-            onPress={() => void inspectTimematorFile()}
-            style={{ height: 50, width: '100%' }}
-            testID="import-timemator-csv"
-          />
-          {timematorPreview ? <TimematorPreview preview={timematorPreview} /> : null}
-          {timematorPreview && timematorText ? (
-            timematorConfirming ? (
-              <Column
-                spacing={10}
-                style={{
-                  backgroundColor: colors.warning.background,
-                  borderColor: colors.warning.foreground,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  padding: 14,
-                  width: '100%',
-                }}
-                testID="timemator-import-confirmation"
-              >
-                <Text
-                  textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}
-                >
-                  Add this tracker history?
-                </Text>
-                <Text textStyle={{ color: colors.warning.foreground, fontSize: 14 }}>
-                  This adds the imported sessions to the current dataset and keeps your existing
-                  tracker data.
-                </Text>
-                <Column spacing={8} style={{ width: '100%' }}>
-                  <AppButton
-                    disabled={busy}
-                    label="Yes, import tracker data"
-                    onPress={() => void importTimemator()}
-                    style={{ height: 50, width: '100%' }}
-                    testID="confirm-timemator-import"
-                  />
-                  <AppButton
-                    label="Cancel"
-                    onPress={() => setTimematorConfirming(false)}
-                    style={{ height: 48, width: '100%' }}
-                    testID="cancel-timemator-import"
-                  />
-                </Column>
-              </Column>
-            ) : (
+          <Column
+            spacing={10}
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderRadius: 16,
+              borderWidth: 1,
+              padding: 16,
+              width: '100%',
+            }}
+            testID="timemator-import-actions"
+          >
+            <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
+              Import Timemator tracker data
+            </Text>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+              Add Timemator&apos;s semicolon-delimited export to your tracker. Existing activities
+              are matched by name; missing activities are created automatically.
+            </Text>
+            <AppButton
+              disabled={busy}
+              label="Choose Timemator CSV"
+              onPress={() => void inspectTimematorFile()}
+              style={{ height: 50, width: '100%' }}
+              testID="import-timemator-csv"
+            />
+            {timematorPreview ? <TimematorPreview preview={timematorPreview} /> : null}
+            {timematorPreview && timematorText ? (
               <AppButton
                 disabled={busy}
                 label="Review and import"
@@ -451,88 +413,50 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
                 style={{ height: 52, width: '100%' }}
                 testID="review-timemator-import"
               />
-            )
-          ) : null}
-          {timematorResult ? <TimematorImportSummary result={timematorResult} /> : null}
-        </Column>
-        {busy ? (
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }} testID="backup-progress">
-            Working...
-          </Text>
-        ) : null}
-        <ErrorPanel
-          message={error}
-          onBack={() => router.replace('/(tabs)')}
-          onRetry={() => {
-            const action = lastAction.current;
-            if (action) void action();
-          }}
-        />
-        {success ? (
-          <Column
-            spacing={6}
-            style={{
-              backgroundColor: colors.success.background,
-              borderColor: colors.success.foreground,
-              borderRadius: 14,
-              borderWidth: 1,
-              padding: 14,
-              width: '100%',
-            }}
-            testID="backup-success"
-          >
-            <Row alignment="center" spacing={8}>
-              <AppIcon
-                accessibilityLabel="Backup completed"
-                color={colors.success.foreground}
-                name="check-circle-2"
-                size={18}
-              />
-              <Text textStyle={{ color: colors.success.foreground, fontSize: 15 }}>{success}</Text>
-            </Row>
+            ) : null}
+            {timematorResult ? <TimematorImportSummary result={timematorResult} /> : null}
           </Column>
-        ) : null}
-        {importResult ? <Summary result={importResult} /> : null}
-        {importResult && importText ? (
-          confirming ? (
+          {busy ? (
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }} testID="backup-progress">
+              Working...
+            </Text>
+          ) : null}
+          <ErrorPanel
+            message={error}
+            onBack={() => router.replace('/(tabs)')}
+            onRetry={() => {
+              const action = lastAction.current;
+              if (action) void action();
+            }}
+          />
+          {success ? (
             <Column
-              spacing={10}
+              spacing={6}
               style={{
-                backgroundColor: colors.warning.background,
-                borderColor: colors.warning.foreground,
+                backgroundColor: colors.success.background,
+                borderColor: colors.success.foreground,
                 borderRadius: 14,
                 borderWidth: 1,
                 padding: 14,
                 width: '100%',
               }}
-              testID="backup-replace-confirmation"
+              testID="backup-success"
             >
-              <Text
-                textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}
-              >
-                Replace all current data?
-              </Text>
-              <Text textStyle={{ color: colors.warning.foreground, fontSize: 14 }}>
-                This switches this device to the selected backup after it is verified. Your current
-                dataset will be retained, but this action changes which data is active.
-              </Text>
-              <Column spacing={8} style={{ width: '100%' }}>
-                <AppButton
-                  disabled={busy}
-                  label="Yes, replace current data"
-                  onPress={() => void replace()}
-                  style={{ height: 50, width: '100%' }}
-                  testID="confirm-replace"
+              <Row alignment="center" spacing={8}>
+                <AppIcon
+                  accessibilityLabel="Backup completed"
+                  color={colors.success.foreground}
+                  name="check-circle-2"
+                  size={18}
                 />
-                <AppButton
-                  label="Cancel"
-                  onPress={() => setConfirming(false)}
-                  style={{ height: 48, width: '100%' }}
-                  testID="cancel-replace"
-                />
-              </Column>
+                <Text textStyle={{ color: colors.success.foreground, fontSize: 15 }}>
+                  {success}
+                </Text>
+              </Row>
             </Column>
-          ) : (
+          ) : null}
+          {importResult ? <Summary result={importResult} /> : null}
+          {importResult && importText ? (
             <AppButton
               disabled={busy}
               label="Replace current data"
@@ -540,24 +464,50 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
               style={{ height: 52, width: '100%' }}
               testID="replace-current-data"
             />
-          )
-        ) : null}
-        {success?.startsWith('Data replaced') ? (
-          <AppButton
-            label="Reload active dataset"
-            onPress={() => router.replace('/(tabs)')}
-            testID="reload-after-restore"
-          />
-        ) : null}
-        {success?.startsWith('Timemator tracker data') ? (
-          <AppButton
-            label="Reload tracker"
-            onPress={() => router.replace('/(tabs)')}
-            testID="reload-after-timemator-import"
-          />
-        ) : null}
-      </Column>
-    </Screen>
+          ) : null}
+          {success?.startsWith('Data replaced') ? (
+            <AppButton
+              label="Reload active dataset"
+              onPress={() => router.replace('/(tabs)')}
+              testID="reload-after-restore"
+            />
+          ) : null}
+          {success?.startsWith('Timemator tracker data') ? (
+            <AppButton
+              label="Reload tracker"
+              onPress={() => router.replace('/(tabs)')}
+              testID="reload-after-timemator-import"
+            />
+          ) : null}
+        </Column>
+      </Screen>
+      <ConfirmationModal
+        busy={busy}
+        cancelLabel="Cancel"
+        cancelTestID="cancel-timemator-import"
+        confirmLabel="Yes, import tracker data"
+        confirmTestID="confirm-timemator-import"
+        message="This adds the imported sessions to the current dataset and keeps your existing tracker data."
+        onCancel={() => setTimematorConfirming(false)}
+        onConfirm={() => void importTimemator()}
+        testID="timemator-import-confirmation"
+        title="Add this tracker history?"
+        visible={timematorConfirming && timematorPreview !== null && timematorText !== null}
+      />
+      <ConfirmationModal
+        busy={busy}
+        cancelLabel="Cancel"
+        cancelTestID="cancel-replace"
+        confirmLabel="Yes, replace current data"
+        confirmTestID="confirm-replace"
+        message="This switches this device to the selected backup after it is verified. Your current dataset will be retained, but this action changes which data is active."
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => void replace()}
+        testID="backup-replace-confirmation"
+        title="Replace all current data?"
+        visible={confirming && importResult !== null && importText !== null}
+      />
+    </>
   );
 }
 

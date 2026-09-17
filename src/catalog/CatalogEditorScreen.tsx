@@ -11,6 +11,7 @@ import {
   AccessibleTextInput,
   AppButton,
   ColorPicker,
+  ConfirmationModal,
   errorText,
   IconPicker,
   ReorderControls,
@@ -205,58 +206,6 @@ function FolderPicker({
   );
 }
 
-function ArchiveConfirmation({
-  resourceLabel,
-  busy,
-  onCancel,
-  onConfirm,
-}: {
-  resourceLabel: 'activity' | 'folder';
-  busy: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  const { colors } = useAppTheme();
-  return (
-    <Column
-      spacing={8}
-      style={{
-        backgroundColor: colors.warning.background,
-        borderColor: colors.warning.foreground,
-        borderRadius: 14,
-        borderWidth: 1,
-        padding: 14,
-        width: '100%',
-      }}
-      testID={`archive-${resourceLabel}-confirmation`}
-    >
-      <Text textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}>
-        {`Archive this ${resourceLabel}?`}
-      </Text>
-      <Text textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}>
-        It will be hidden from active catalog views but retained for history. You can restore it
-        later.
-      </Text>
-      <Column spacing={8} style={{ width: '100%' }}>
-        <AppButton
-          disabled={busy}
-          label={`Yes, archive ${resourceLabel}`}
-          onPress={onConfirm}
-          style={{ height: 48, width: '100%' }}
-          testID={`confirm-archive-${resourceLabel}`}
-        />
-        <AppButton
-          disabled={busy}
-          label={`Keep ${resourceLabel}`}
-          onPress={onCancel}
-          style={{ height: 48, width: '100%' }}
-          variant="outlined"
-        />
-      </Column>
-    </Column>
-  );
-}
-
 function ActivityEditor({
   activity,
   folders,
@@ -321,115 +270,126 @@ function ActivityEditor({
   };
 
   return (
-    <Screen onBack={onBack} title={activity ? 'Edit activity' : 'New activity'}>
-      <Column
-        spacing={18}
-        style={{
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
-          borderRadius: 18,
-          borderWidth: 1,
-          padding: 18,
-          width: '100%',
-        }}
-      >
-        <Row alignment="center" spacing={12}>
-          <AppIcon name="activity" color={color || colors.primary} size={28} />
-          <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
-            {activity?.name ?? 'New activity'}
-          </Text>
-        </Row>
-        <Field label="Name">
-          <AccessibleTextInput
-            defaultValue={name}
-            label="Activity name"
-            onChangeText={setName}
-            placeholder="Activity name"
-            returnKeyType="done"
-            placeholderTextColor={colors.textMuted}
-            testID="activity-name"
-            style={{
-              borderColor: colors.border,
-              borderRadius: 10,
-              borderWidth: 1,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              width: '100%',
-            }}
-            textStyle={{ color: colors.text, fontSize: 16 }}
-          />
-        </Field>
-        <Field label="Standalone color">
-          <ColorPicker
-            onChange={(next) => setColor(next ?? '')}
-            testID="activity-color"
-            value={color || null}
-          />
-        </Field>
-        <Field label="Placement">
-          <FolderPicker
-            folders={folders}
-            currentFolderId={activity?.folderId ?? null}
-            value={folderId}
-            onChange={setFolderId}
-          />
-        </Field>
-        <ActionError
-          message={error}
-          onBack={onBack}
-          onRetry={() => {
-            if (lastAction.current) void run(lastAction.current);
+    <>
+      <Screen onBack={onBack} title={activity ? 'Edit activity' : 'New activity'}>
+        <Column
+          spacing={18}
+          style={{
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderRadius: 18,
+            borderWidth: 1,
+            padding: 18,
+            width: '100%',
           }}
-        />
-        <AppButton
-          disabled={busy}
-          label={busy ? 'Saving...' : 'Save activity'}
-          onPress={save}
-          style={{ height: 52, width: '100%' }}
-          testID="save-activity"
-        />
-        {activity ? (
-          <>
-            <ReorderControls
-              canMoveUp
-              canMoveDown
-              disabled={busy || activity.archivedAt !== null}
-              onMoveUp={() => run(async () => void (await service.reorderItem(activity.id, 'up')))}
-              onMoveDown={() =>
-                run(async () => void (await service.reorderItem(activity.id, 'down')))
-              }
-              testID="activity-reorder"
-            />
-            {confirmingArchive ? (
-              <ArchiveConfirmation
-                busy={busy}
-                onCancel={() => setConfirmingArchive(false)}
-                onConfirm={() =>
-                  void run(async () => {
-                    await service.archiveActivity(activity.id);
-                    setConfirmingArchive(false);
-                  })
-                }
-                resourceLabel="activity"
-              />
-            ) : null}
-            <AppButton
-              disabled={busy}
-              label={activity.archivedAt === null ? 'Archive activity' : 'Restore activity'}
-              onPress={() => {
-                if (activity.archivedAt === null) setConfirmingArchive(true);
-                else
-                  void run(async () => {
-                    await service.restoreActivity(activity.id);
-                  });
+        >
+          <Row alignment="center" spacing={12}>
+            <AppIcon name="activity" color={color || colors.primary} size={28} />
+            <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
+              {activity?.name ?? 'New activity'}
+            </Text>
+          </Row>
+          <Field label="Name">
+            <AccessibleTextInput
+              defaultValue={name}
+              label="Activity name"
+              onChangeText={setName}
+              placeholder="Activity name"
+              returnKeyType="done"
+              placeholderTextColor={colors.textMuted}
+              testID="activity-name"
+              style={{
+                borderColor: colors.border,
+                borderRadius: 10,
+                borderWidth: 1,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                width: '100%',
               }}
-              style={{ height: 48, width: '100%' }}
-              variant="outlined"
+              textStyle={{ color: colors.text, fontSize: 16 }}
             />
-          </>
-        ) : null}
-      </Column>
-    </Screen>
+          </Field>
+          <Field label="Standalone color">
+            <ColorPicker
+              onChange={(next) => setColor(next ?? '')}
+              testID="activity-color"
+              value={color || null}
+            />
+          </Field>
+          <Field label="Placement">
+            <FolderPicker
+              folders={folders}
+              currentFolderId={activity?.folderId ?? null}
+              value={folderId}
+              onChange={setFolderId}
+            />
+          </Field>
+          <ActionError
+            message={error}
+            onBack={onBack}
+            onRetry={() => {
+              if (lastAction.current) void run(lastAction.current);
+            }}
+          />
+          <AppButton
+            disabled={busy}
+            label={busy ? 'Saving...' : 'Save activity'}
+            onPress={save}
+            style={{ height: 52, width: '100%' }}
+            testID="save-activity"
+          />
+          {activity ? (
+            <>
+              <ReorderControls
+                canMoveUp
+                canMoveDown
+                disabled={busy || activity.archivedAt !== null}
+                onMoveUp={() =>
+                  run(async () => void (await service.reorderItem(activity.id, 'up')))
+                }
+                onMoveDown={() =>
+                  run(async () => void (await service.reorderItem(activity.id, 'down')))
+                }
+                testID="activity-reorder"
+              />
+              <AppButton
+                disabled={busy}
+                label={activity.archivedAt === null ? 'Archive activity' : 'Restore activity'}
+                onPress={() => {
+                  if (activity.archivedAt === null) setConfirmingArchive(true);
+                  else
+                    void run(async () => {
+                      await service.restoreActivity(activity.id);
+                    });
+                }}
+                style={{ height: 48, width: '100%' }}
+                variant="outlined"
+              />
+            </>
+          ) : null}
+        </Column>
+      </Screen>
+      {activity ? (
+        <ConfirmationModal
+          busy={busy}
+          cancelLabel="Keep activity"
+          cancelTestID="cancel-archive-activity"
+          confirmLabel="Yes, archive activity"
+          confirmTestID="confirm-archive-activity"
+          message="It will be hidden from active catalog views but retained for history. You can restore it later."
+          onCancel={() => setConfirmingArchive(false)}
+          onConfirm={() =>
+            void run(async () => {
+              await service.archiveActivity(activity.id);
+              setConfirmingArchive(false);
+            })
+          }
+          testID="archive-activity-confirmation"
+          title="Archive this activity?"
+          visible={confirmingArchive}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -489,109 +449,118 @@ function FolderEditor({
     });
 
   return (
-    <Screen onBack={onBack} title={folder ? 'Edit folder' : 'New folder'}>
-      <Column
-        spacing={18}
-        style={{
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
-          borderRadius: 18,
-          borderWidth: 1,
-          padding: 18,
-          width: '100%',
-        }}
-      >
-        <Row alignment="center" spacing={12}>
-          <AppIcon name={iconName || 'folder'} color={color || colors.primary} size={28} />
-          <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
-            {folder?.name ?? 'New folder'}
-          </Text>
-        </Row>
-        <Field label="Name">
-          <AccessibleTextInput
-            defaultValue={name}
-            label="Folder name"
-            onChangeText={setName}
-            placeholder="Folder name"
-            returnKeyType="done"
-            placeholderTextColor={colors.textMuted}
-            testID="folder-name"
-            style={{
-              borderColor: colors.border,
-              borderRadius: 10,
-              borderWidth: 1,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              width: '100%',
-            }}
-            textStyle={{ color: colors.text, fontSize: 16 }}
-          />
-        </Field>
-        <Field label="Folder color">
-          <ColorPicker
-            onChange={(next) => setColor(next ?? '')}
-            testID="folder-color"
-            value={color || null}
-          />
-        </Field>
-        <Field label="Icon">
-          <IconPicker value={iconName || null} onChange={(next) => setIconName(next ?? '')} />
-        </Field>
-        <ActionError
-          message={error}
-          onBack={onBack}
-          onRetry={() => {
-            if (lastAction.current) void run(lastAction.current);
+    <>
+      <Screen onBack={onBack} title={folder ? 'Edit folder' : 'New folder'}>
+        <Column
+          spacing={18}
+          style={{
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderRadius: 18,
+            borderWidth: 1,
+            padding: 18,
+            width: '100%',
           }}
-        />
-        <AppButton
-          disabled={busy}
-          label={busy ? 'Saving...' : 'Save folder'}
-          onPress={save}
-          style={{ height: 52, width: '100%' }}
-          testID="save-folder"
-        />
-        {folder ? (
-          <>
-            <ReorderControls
-              canMoveUp
-              canMoveDown
-              disabled={busy || folder.archivedAt !== null}
-              onMoveUp={() => run(async () => void (await service.reorderItem(folder.id, 'up')))}
-              onMoveDown={() =>
-                run(async () => void (await service.reorderItem(folder.id, 'down')))
-              }
-              testID="folder-reorder"
-            />
-            {confirmingArchive ? (
-              <ArchiveConfirmation
-                busy={busy}
-                onCancel={() => setConfirmingArchive(false)}
-                onConfirm={() =>
-                  void run(async () => {
-                    await service.archiveFolder(folder.id);
-                    setConfirmingArchive(false);
-                  })
-                }
-                resourceLabel="folder"
-              />
-            ) : null}
-            <AppButton
-              disabled={busy}
-              label={folder.archivedAt === null ? 'Archive folder' : 'Restore folder'}
-              onPress={() => {
-                if (folder.archivedAt === null) setConfirmingArchive(true);
-                else
-                  void run(async () => {
-                    await service.restoreFolder(folder.id);
-                  });
+        >
+          <Row alignment="center" spacing={12}>
+            <AppIcon name={iconName || 'folder'} color={color || colors.primary} size={28} />
+            <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
+              {folder?.name ?? 'New folder'}
+            </Text>
+          </Row>
+          <Field label="Name">
+            <AccessibleTextInput
+              defaultValue={name}
+              label="Folder name"
+              onChangeText={setName}
+              placeholder="Folder name"
+              returnKeyType="done"
+              placeholderTextColor={colors.textMuted}
+              testID="folder-name"
+              style={{
+                borderColor: colors.border,
+                borderRadius: 10,
+                borderWidth: 1,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                width: '100%',
               }}
-              style={{ height: 48, width: '100%' }}
-              variant="outlined"
+              textStyle={{ color: colors.text, fontSize: 16 }}
             />
-          </>
-        ) : null}
-      </Column>
-    </Screen>
+          </Field>
+          <Field label="Folder color">
+            <ColorPicker
+              onChange={(next) => setColor(next ?? '')}
+              testID="folder-color"
+              value={color || null}
+            />
+          </Field>
+          <Field label="Icon">
+            <IconPicker value={iconName || null} onChange={(next) => setIconName(next ?? '')} />
+          </Field>
+          <ActionError
+            message={error}
+            onBack={onBack}
+            onRetry={() => {
+              if (lastAction.current) void run(lastAction.current);
+            }}
+          />
+          <AppButton
+            disabled={busy}
+            label={busy ? 'Saving...' : 'Save folder'}
+            onPress={save}
+            style={{ height: 52, width: '100%' }}
+            testID="save-folder"
+          />
+          {folder ? (
+            <>
+              <ReorderControls
+                canMoveUp
+                canMoveDown
+                disabled={busy || folder.archivedAt !== null}
+                onMoveUp={() => run(async () => void (await service.reorderItem(folder.id, 'up')))}
+                onMoveDown={() =>
+                  run(async () => void (await service.reorderItem(folder.id, 'down')))
+                }
+                testID="folder-reorder"
+              />
+              <AppButton
+                disabled={busy}
+                label={folder.archivedAt === null ? 'Archive folder' : 'Restore folder'}
+                onPress={() => {
+                  if (folder.archivedAt === null) setConfirmingArchive(true);
+                  else
+                    void run(async () => {
+                      await service.restoreFolder(folder.id);
+                    });
+                }}
+                style={{ height: 48, width: '100%' }}
+                variant="outlined"
+              />
+            </>
+          ) : null}
+        </Column>
+      </Screen>
+      {folder ? (
+        <ConfirmationModal
+          busy={busy}
+          cancelLabel="Keep folder"
+          cancelTestID="cancel-archive-folder"
+          confirmLabel="Yes, archive folder"
+          confirmTestID="confirm-archive-folder"
+          message="It will be hidden from active catalog views but retained for history. You can restore it later."
+          onCancel={() => setConfirmingArchive(false)}
+          onConfirm={() =>
+            void run(async () => {
+              await service.archiveFolder(folder.id);
+              setConfirmingArchive(false);
+            })
+          }
+          testID="archive-folder-confirmation"
+          title="Archive this folder?"
+          visible={confirmingArchive}
+        />
+      ) : null}
+    </>
   );
 }
