@@ -1,5 +1,6 @@
-import { Column, Row, Text } from '@expo/ui';
+import { Column, Row, Switch, Text } from '@expo/ui';
 import * as DocumentPicker from 'expo-document-picker';
+import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -17,6 +18,7 @@ import {
   type TimematorImportResult,
 } from './timemator-import';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
+import type { DropboxBackupService, DropboxBackupStatus } from './dropbox-backup';
 
 function Summary({ result }: { result: BackupImportResult }) {
   const { colors } = useAppTheme();
@@ -193,6 +195,138 @@ function importErrorMessage(actionError: unknown): string {
   return errorText(actionError);
 }
 
+function formatDropboxTimestamp(value: string | null): string {
+  if (!value) return 'Not backed up yet';
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return 'Not backed up yet';
+  return `Last backup · ${new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(timestamp)}`;
+}
+
+function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
+  const { colors } = useAppTheme();
+  const [status, setStatus] = useState<DropboxBackupStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    void service
+      .getStatus()
+      .then((nextStatus) => setStatus(nextStatus))
+      .catch((actionError: unknown) => setError(errorText(actionError)));
+  }, [service]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const run = async (action: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      refresh();
+    } catch (actionError) {
+      setError(errorText(actionError));
+      refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const connected = status?.connected ?? false;
+  const appKeyConfigured = status?.appKeyConfigured ?? false;
+
+  return (
+    <Column
+      spacing={10}
+      style={{
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
+        borderRadius: 16,
+        borderWidth: 1,
+        padding: 16,
+        width: '100%',
+      }}
+      testID="dropbox-backup-actions"
+    >
+      <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
+        Automatic Dropbox backup
+      </Text>
+      <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+        Keep one complete, current copy of this dataset in Dropbox. Local data is never changed by a
+        failed upload.
+      </Text>
+      {!appKeyConfigured ? (
+        <Text textStyle={{ color: colors.textMuted, fontSize: 13 }} testID="dropbox-app-key-help">
+          Dropbox is not configured for this build. Set EXPO_PUBLIC_DROPBOX_APP_KEY and register the
+          /dropbox-auth redirect URI in the Dropbox app.
+        </Text>
+      ) : null}
+      {connected ? (
+        <>
+          <Switch
+            disabled={busy}
+            label="Back up automatically after changes"
+            onValueChange={(value) => void run(() => service.setEnabled(value))}
+            testID="dropbox-auto-backup-enabled"
+            value={status?.enabled ?? false}
+          />
+          <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
+            {formatDropboxTimestamp(status?.lastBackupAt ?? null)}
+          </Text>
+          {status?.lastError ? (
+            <Text
+              textStyle={{ color: colors.danger.foreground, fontSize: 13 }}
+              testID="dropbox-last-error"
+            >
+              {`Last backup failed: ${status.lastError}`}
+            </Text>
+          ) : null}
+          <Row spacing={8} style={{ width: '100%' }}>
+            <AppButton
+              disabled={busy}
+              label="Back up now"
+              onPress={() => void run(() => service.backupNow())}
+              style={{ height: 48, width: '48%' }}
+              testID="dropbox-backup-now"
+            />
+            <AppButton
+              disabled={busy}
+              label="Disconnect"
+              onPress={() => void run(() => service.disconnect())}
+              style={{ height: 48, width: '48%' }}
+              testID="dropbox-disconnect"
+              variant="outlined"
+            />
+          </Row>
+        </>
+      ) : (
+        <AppButton
+          disabled={busy || !appKeyConfigured}
+          label="Connect Dropbox"
+          onPress={() =>
+            void run(async () => {
+              const { url } = await service.beginAuthorization();
+              await Linking.openURL(url);
+            })
+          }
+          style={{ height: 50, width: '100%' }}
+          testID="dropbox-connect"
+        />
+      )}
+      {error ? (
+        <Text textStyle={{ color: colors.danger.foreground, fontSize: 13 }} testID="dropbox-error">
+          {error}
+        </Text>
+      ) : null}
+    </Column>
+  );
+}
+
 function BackupContent({ runtime }: { runtime: BackupRuntime }) {
   const { colors } = useAppTheme();
   const router = useRouter();
@@ -335,6 +469,7 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
     <>
       <Screen onBack={() => router.back()} title="Backup">
         <Column spacing={14} style={{ width: '100%' }}>
+          <DropboxBackupPanel service={runtime.dropboxBackupService} />
           <Column
             spacing={10}
             style={{

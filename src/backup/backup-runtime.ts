@@ -3,10 +3,12 @@ import { PersistenceError } from '@data';
 import { bootCoordinator } from '../orchestration/boot-coordinator';
 import type { ReportingService } from '../reporting/reporting-service';
 import { BackupService } from './backup-service';
+import type { DropboxBackupService } from './dropbox-backup';
 import { TimematorImportService } from './timemator-import';
 
 export interface BackupRuntime {
   backupService: BackupService;
+  dropboxBackupService: DropboxBackupService;
   reportingService: ReportingService;
   timematorImportService: TimematorImportService;
 }
@@ -16,6 +18,7 @@ export async function loadBackupRuntime(): Promise<BackupRuntime> {
   if (!result.runtime) throw new PersistenceError('metadata', 'Create or activate a dataset first');
   return {
     backupService: result.runtime.services.backup,
+    dropboxBackupService: result.runtime.services.dropboxBackup,
     reportingService: result.runtime.services.reporting,
     timematorImportService: result.runtime.services.timematorImport,
   };

@@ -13,6 +13,8 @@ export interface AsyncStorageLike {
   multiRemove?(keys: readonly string[]): Promise<void>;
 }
 
+export type DatabaseWriteListener = (keys: readonly string[]) => void;
+
 export interface KeyValueDatabase {
   read(key: string): Promise<string | null>;
   write(key: string, value: string): Promise<void>;
@@ -23,6 +25,8 @@ export interface KeyValueDatabase {
   verify(key: string, expectedValue: string | null): Promise<void>;
   /** Used only by repository boundaries that need to enumerate a dataset. */
   keys?(): Promise<readonly string[]>;
+  /** Optional best-effort observer for integrations such as automatic backups. */
+  subscribeToWrites?(listener: DatabaseWriteListener): () => void;
 }
 
 function errorMessage(error: unknown): string {
@@ -31,7 +35,24 @@ function errorMessage(error: unknown): string {
 
 /** Explicit AsyncStorage access. Zustand persistence middleware is not used. */
 export class AsyncStorageDatabase implements KeyValueDatabase {
+  private readonly writeListeners = new Set<DatabaseWriteListener>();
+
   constructor(private readonly storage: AsyncStorageLike = AsyncStorage) {}
+
+  subscribeToWrites(listener: DatabaseWriteListener): () => void {
+    this.writeListeners.add(listener);
+    return () => this.writeListeners.delete(listener);
+  }
+
+  private notifyWrite(keys: readonly string[]): void {
+    for (const listener of this.writeListeners) {
+      try {
+        listener(keys);
+      } catch {
+        // Observers must never turn a successful local write into a failed write.
+      }
+    }
+  }
 
   async read(key: string): Promise<string | null> {
     try {
@@ -49,6 +70,7 @@ export class AsyncStorageDatabase implements KeyValueDatabase {
   async write(key: string, value: string): Promise<void> {
     try {
       await this.storage.setItem(key, value);
+      this.notifyWrite([key]);
     } catch (error) {
       throw new PersistenceError(
         'write',
@@ -62,6 +84,7 @@ export class AsyncStorageDatabase implements KeyValueDatabase {
   async remove(key: string): Promise<void> {
     try {
       await this.storage.removeItem(key);
+      this.notifyWrite([key]);
     } catch (error) {
       throw new PersistenceError(
         'remove',
@@ -96,9 +119,10 @@ export class AsyncStorageDatabase implements KeyValueDatabase {
     try {
       if (this.storage.multiSet) {
         await this.storage.multiSet(entries);
-        return;
+      } else {
+        await Promise.all(entries.map(([key, value]) => this.storage.setItem(key, value)));
       }
-      await Promise.all(entries.map(([key, value]) => this.storage.setItem(key, value)));
+      this.notifyWrite(entries.map(([key]) => key));
     } catch (error) {
       throw new PersistenceError(
         'multi-write',
@@ -113,9 +137,10 @@ export class AsyncStorageDatabase implements KeyValueDatabase {
     try {
       if (this.storage.multiRemove) {
         await this.storage.multiRemove(keys);
-        return;
+      } else {
+        await Promise.all(keys.map((key) => this.storage.removeItem(key)));
       }
-      await Promise.all(keys.map((key) => this.storage.removeItem(key)));
+      this.notifyWrite(keys);
     } catch (error) {
       throw new PersistenceError(
         'remove',

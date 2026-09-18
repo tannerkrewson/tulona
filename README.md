@@ -1,8 +1,8 @@
 # Tulona
 
 Tulona is an offline-first Expo application for time tracking, routines, and
-habits. This branch contains the foundation shell only. It deliberately has no
-backend, accounts, synchronization, cloud backup, or platform-specific UI.
+habits. Local storage remains the source of truth; optional Dropbox backup
+keeps a complete copy of the active dataset off-device.
 
 ## Foundation Baseline
 
@@ -51,6 +51,29 @@ icons, manifest data, and bundled audio. It has no arbitrary remote runtime
 cache. Workbox leaves new workers waiting, so an active routine is not
 replaced in the middle of a session; a later safe navigation activates the
 update.
+
+## Dropbox Automatic Backup
+
+Create a Dropbox app with the `files.content.write` scope and set its app key
+when building or starting Expo:
+
+```bash
+EXPO_PUBLIC_DROPBOX_APP_KEY=your-app-key npm run web
+```
+
+Register the callback route in the Dropbox app configuration. With Tulona's
+default `/tulona` base path, local web development uses
+`http://localhost:8081/tulona/dropbox-auth`; the default GitHub Pages
+deployment uses `https://<account>.github.io/tulona/dropbox-auth`. If
+`EXPO_BASE_URL` is changed, use that path in the callback instead. Native
+builds use the `tulona://dropbox-auth` scheme.
+
+Open Settings → Data → Backup & restore and connect Dropbox. Tulona uses the
+Dropbox SDK's PKCE flow, so no app secret is shipped to the client. Once
+connected, automatic backups are debounced after local writes and also run at
+startup. The latest complete JSON snapshot replaces
+`/Tulona/tulona-backup.json` inside the Dropbox app folder; remote files are never deleted and failed
+uploads do not change local data.
 
 ## Universal UI Convention
 

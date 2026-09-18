@@ -41,6 +41,7 @@ export default function RootLayout() {
             <Stack.Screen name="habit/[habitId]" />
             <Stack.Screen name="folder-edit/[folderId]" />
             <Stack.Screen name="backup" />
+            <Stack.Screen name="dropbox-auth" />
             <Stack.Screen name="settings/[category]" />
           </Stack>
           <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
