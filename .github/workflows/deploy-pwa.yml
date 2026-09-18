@@ -15,6 +15,7 @@ concurrency:
 
 env:
   EXPO_BASE_URL: /tulona
+  EXPO_PUBLIC_DROPBOX_APP_KEY: ${{ vars.EXPO_PUBLIC_DROPBOX_APP_KEY }}
 
 jobs:
   build:
