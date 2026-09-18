@@ -5,6 +5,7 @@ import type { TrackableItem } from '@domain';
 import { getDarkerColor, useAppTheme } from '@theme';
 import {
   AppButton,
+  getRowSurfaceBackground,
   getRowSurfaceLayoutStyle,
   getRowSurfaceStyle,
   ROW_SURFACE_CONTENT_GAP,
@@ -55,7 +56,11 @@ export function ActivityRow({
   const configuredColor = color ?? item.color;
   const accent = isHexColor(configuredColor) ? configuredColor.trim() : colors.primary;
   const activeForeground = getDarkerColor(accent);
-  const inactiveBackground = colorScheme === 'dark' ? colors.surfaceMuted : colors.surface;
+  const inactiveBackground = getRowSurfaceBackground({
+    colorScheme,
+    surface: colors.surface,
+    surfaceMuted: colors.surfaceMuted,
+  });
   const iconName = editMode
     ? 'pencil'
     : active
