@@ -1,4 +1,4 @@
-import { Column, Row, Text } from '@expo/ui';
+import { Column, Row, Spacer, Text } from '@expo/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -10,16 +10,12 @@ import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import { HistoricalSessionEditor } from './HistoricalSessionEditor';
+import { formatSessionDate, formatSessionTime } from './session-time';
 import type { TransitionContext } from './tracker-service';
 import { orderTransitions } from './tracker-engine';
 
-function readableDateTime(value: number | null): string {
-  return value === null
-    ? 'Now'
-    : new Date(value).toLocaleString([], {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      });
+function readableDateTime(value: number): string {
+  return `${formatSessionDate(value)} · ${formatSessionTime(value)}`;
 }
 
 function visibleAdjacentTransition(
@@ -226,6 +222,7 @@ function ActivitySessionContent({
       : visibleAdjacentTransition(transitions, transition, 'following');
   const endMs = following ? timestampMs(following.timestamp) : isActive ? nowMs : null;
   const durationMs = endMs === null ? 0 : Math.max(0, endMs - timestampMs(transition.timestamp));
+  const startMs = timestampMs(transition.timestamp);
   const previousName = previous?.activityId
     ? (previous.activitySnapshot?.name ??
       resolveCatalogItem(catalog, previous.activityId, colors.primary)?.item.name ??
@@ -267,8 +264,15 @@ function ActivitySessionContent({
 
   const saveHistoricalEnd = (nextTimestamp: number) =>
     runAction(async () => {
-      if (!following) return;
-      await store.getState().editTransition(following.id, { timestamp: nextTimestamp });
+      if (following) {
+        await store.getState().editTransition(following.id, { timestamp: nextTimestamp });
+      } else if (isActive) {
+        // An active session has no end boundary. A concrete To selection
+        // explicitly records an idle boundary; untouched Now stays open-ended.
+        await store.getState().insertTransition({ activityId: null, timestamp: nextTimestamp });
+      } else {
+        throw new Error('This session has no recorded end to edit.');
+      }
       loadTransitionContext();
     });
 
@@ -289,26 +293,10 @@ function ActivitySessionContent({
     <>
       <Screen onBack={() => router.back()} title={activityName}>
         <Column spacing={16} style={{ width: '100%' }} testID="activity-session-screen">
-          <Column
-            spacing={14}
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 16,
-              borderWidth: 1,
-              padding: 16,
-              width: '100%',
-            }}
-            testID="activity-session-summary"
-          >
-            <Column spacing={4} style={{ width: '100%' }}>
+          <Column spacing={14} style={{ width: '100%' }} testID="activity-session-summary">
+            <Row alignment="center" spacing={12} style={{ width: '100%' }}>
               <Text
-                numberOfLines={2}
-                textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}
-              >
-                {activityName}
-              </Text>
-              <Text
+                testID="activity-session-status"
                 textStyle={{
                   color: isActive ? colors.active.foreground : colors.textMuted,
                   fontSize: 13,
@@ -317,19 +305,35 @@ function ActivitySessionContent({
               >
                 {isActive ? 'Active' : 'Recorded'}
               </Text>
-            </Column>
-            <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+              <Spacer flexible />
+              <Text
+                numberOfLines={1}
+                testID="activity-session-duration"
+                textStyle={{ color: colors.text, fontSize: 24, fontWeight: '700' }}
+              >
+                {endMs === null ? '—' : formatDuration(durationMs)}
+              </Text>
+            </Row>
+            <Row alignment="start" spacing={16} style={{ width: '100%' }}>
               <Column style={{ width: '48%' }}>
-                <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>Started</Text>
-                <Text textStyle={{ color: colors.text, fontSize: 15 }}>
-                  {readableDateTime(timestampMs(transition.timestamp))}
+                <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>From</Text>
+                <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 15 }}>
+                  {formatSessionDate(startMs)}
+                </Text>
+                <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 15 }}>
+                  {formatSessionTime(startMs)}
                 </Text>
               </Column>
               <Column style={{ width: '48%' }}>
-                <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>Ended</Text>
-                <Text textStyle={{ color: colors.text, fontSize: 15 }}>
-                  {readableDateTime(endMs)}
+                <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>To</Text>
+                <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 15 }}>
+                  {isActive ? 'Now' : endMs === null ? 'No end recorded' : formatSessionDate(endMs)}
                 </Text>
+                {endMs !== null ? (
+                  <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 15 }}>
+                    {formatSessionTime(endMs)}
+                  </Text>
+                ) : null}
               </Column>
             </Row>
             <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
@@ -337,7 +341,7 @@ function ActivitySessionContent({
                 ? isActive
                   ? 'In progress'
                   : 'End not recorded'
-                : formatDuration(durationMs)}
+                : 'Recorded duration'}
             </Text>
           </Column>
 
@@ -366,33 +370,26 @@ function ActivitySessionContent({
             </Row>
           </Column>
 
-          {!isActive ? (
-            <HistoricalSessionEditor
-              key={`${transition.id}-${transition.timestamp}-${following?.timestamp ?? 'open'}`}
-              busy={busy}
-              following={following}
-              onSaveEnd={saveHistoricalEnd}
-              onSaveStart={saveHistoricalStart}
-              transition={transition}
-            />
-          ) : null}
+          <HistoricalSessionEditor
+            key={`${transition.id}-${transition.timestamp}-${following?.timestamp ?? 'open'}`}
+            busy={busy}
+            following={following}
+            isActive={isActive}
+            nowMs={nowMs}
+            onSaveEnd={saveHistoricalEnd}
+            onSaveStart={saveHistoricalStart}
+            previous={previous}
+            transition={transition}
+          />
 
-          <Column
-            spacing={12}
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 16,
-              borderWidth: 1,
-              padding: 16,
-              width: '100%',
-            }}
-            testID="activity-session-corrections"
-          >
+          <Column spacing={12} style={{ width: '100%' }} testID="activity-session-corrections">
             <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
               Correct start time
             </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+            <Text
+              numberOfLines={2}
+              textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}
+            >
               {contextLoading && !previous
                 ? 'Checking for a preceding transition...'
                 : previous
