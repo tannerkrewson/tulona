@@ -24,7 +24,7 @@ function itemAccessibilityLabel(item: RankedDurationItem): string {
 
 function ColorDots({ colors }: { colors: readonly string[] }) {
   const { colors: themeColors } = useAppTheme();
-  const visibleColors = colors.length > 0 ? colors : [themeColors.surfaceMuted];
+  const visibleColors = colors.length > 0 ? colors : [themeColors.primary];
   return (
     <View accessibilityElementsHidden style={styles.colorDots}>
       {visibleColors.map((color, index) => (

@@ -225,7 +225,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
         ) : null}
         <Column spacing={12} style={{ width: '100%' }}>
           {children.map((item) => {
-            const resolved = resolveCatalogItem(catalog, item.id);
+            const resolved = resolveCatalogItem(catalog, item.id, colors.primary);
             const active = activeTransition?.activityId === item.id;
             return (
               <ActivityRow

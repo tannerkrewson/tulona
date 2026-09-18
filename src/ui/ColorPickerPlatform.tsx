@@ -25,7 +25,7 @@ export function ColorPickerPlatform({ value, onChange, testID }: ColorPickerPlat
         const trimmed = next.trim();
         if (trimmed === '' || isHexColorValue(trimmed)) onChange(trimmed || null);
       }}
-      placeholder="#176B87"
+      placeholder={colors.primary}
       placeholderTextColor={colors.textMuted}
       returnKeyType="done"
       testID={testID}

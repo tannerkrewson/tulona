@@ -32,7 +32,9 @@ import {
   type OrderDirection,
 } from './ordering';
 
-export const DEFAULT_CATALOG_COLOR = '#176B87';
+import { themeColors } from '../theme/colors';
+
+const HEADLESS_BASE_COLOR = themeColors.light.primary;
 
 export interface CatalogStyleInput {
   name: string;
@@ -114,7 +116,7 @@ export interface DuplicateRoutineOptions {
 
 export interface CatalogServiceOptions {
   now?: () => IsoTimestamp;
-  defaultColor?: string;
+  baseColor?: string;
 }
 
 export interface ResolvedCatalogItem {
@@ -353,8 +355,7 @@ function nextSiblingOrder(
 
 function snapshotSteps(
   routine: RoutineDefinition,
-  catalog: CatalogCollection,
-  defaultColor: string
+  catalog: CatalogCollection
 ): RoutineSnapshot['steps'] {
   return sortByOrder(routine.steps).map((step, index) => {
     const normalized =
@@ -369,11 +370,11 @@ function snapshotSteps(
       name: normalized.name,
       durationMs: normalized.durationMs,
       sortOrder: index,
-      // Capture the rendered activity color for an active run while retaining
-      // raw standalone colors on catalog step records.
+      // Retain configured or folder-inherited colors for an active run. A
+      // missing color stays nullable so the active theme can supply its base.
       color:
         routine.trackingMode === 'steps' && activity
-          ? resolveDisplayColor(activity, catalog.folders, defaultColor)
+          ? resolveCatalogColor(activity, catalog.folders)
           : normalized.color,
       iconName: normalized.iconName,
       endBehavior: validateEndBehavior(normalized.endBehavior),
@@ -382,21 +383,29 @@ function snapshotSteps(
   });
 }
 
+/** Returns only the configured color, including folder inheritance. */
+export function resolveCatalogColor(
+  item: Pick<TrackableItem, 'folderId' | 'color'>,
+  folders: readonly Folder[]
+): string | null {
+  const folder =
+    item.folderId === null ? null : folders.find((candidate) => candidate.id === item.folderId);
+  return folder ? folder.color : item.color;
+}
+
 export function resolveDisplayColor(
   item: Pick<TrackableItem, 'folderId' | 'color'>,
   folders: readonly Folder[],
-  defaultColor = DEFAULT_CATALOG_COLOR
+  baseColor = HEADLESS_BASE_COLOR
 ): string {
-  const folder =
-    item.folderId === null ? null : folders.find((candidate) => candidate.id === item.folderId);
-  return folder ? (folder.color ?? defaultColor) : (item.color ?? defaultColor);
+  return resolveCatalogColor(item, folders) ?? baseColor;
 }
 
 /** Resolves active and archived records without following tracker history. */
 export function resolveCatalogItem(
   catalog: CatalogCollection,
   id: UUID,
-  defaultColor = DEFAULT_CATALOG_COLOR
+  baseColor = HEADLESS_BASE_COLOR
 ): ResolvedCatalogItem | null {
   const item = trackableWithId(catalog, id);
   if (!item) return null;
@@ -407,7 +416,7 @@ export function resolveCatalogItem(
   return {
     item,
     folder: folder ?? null,
-    displayColor: resolveDisplayColor(item, catalog.folders, defaultColor),
+    displayColor: resolveDisplayColor(item, catalog.folders, baseColor),
     isArchived: item.archivedAt !== null,
   };
 }
@@ -416,14 +425,14 @@ export const resolveHistoricalItem = resolveCatalogItem;
 
 export class CatalogService implements CatalogServiceApi {
   private readonly now: () => IsoTimestamp;
-  private readonly defaultColor: string;
+  private readonly baseColor: string;
 
   constructor(
     private readonly repository: CatalogRepositoryApi,
     options: CatalogServiceOptions = {}
   ) {
     this.now = options.now ?? (() => new Date().toISOString());
-    this.defaultColor = validateColor(options.defaultColor) ?? DEFAULT_CATALOG_COLOR;
+    this.baseColor = validateColor(options.baseColor) ?? HEADLESS_BASE_COLOR;
   }
 
   async read(): Promise<CatalogCollection> {
@@ -455,7 +464,7 @@ export class CatalogService implements CatalogServiceApi {
 
   async resolveItem(id: UUID): Promise<ResolvedCatalogItem | null> {
     assertId(id, 'Catalog item ID');
-    return resolveCatalogItem(await this.read(), id, this.defaultColor);
+    return resolveCatalogItem(await this.read(), id, this.baseColor);
   }
 
   async createFolder(input: CreateFolderInput): Promise<Folder> {
@@ -692,9 +701,9 @@ export class CatalogService implements CatalogServiceApi {
       id: routine.id,
       name: routine.name,
       trackingMode: routine.trackingMode,
-      color: resolveDisplayColor(routine, catalog.folders, this.defaultColor),
+      color: resolveCatalogColor(routine, catalog.folders),
       iconName: routine.iconName,
-      steps: snapshotSteps(routine, catalog, this.defaultColor),
+      steps: snapshotSteps(routine, catalog),
       capturedAt: timestamp,
     };
   }

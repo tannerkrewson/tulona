@@ -111,14 +111,15 @@ function validHexColor(color: string | null | undefined): string | null {
 function routineStepVisual(
   step: ActiveRoutine['routineSnapshot']['steps'][number],
   trackingMode: ActiveRoutine['routineSnapshot']['trackingMode'],
-  catalog: CatalogCollection | null
+  catalog: CatalogCollection | null,
+  baseColor: string
 ) {
   if (trackingMode !== 'steps' || !catalog || step.activityId === null) return step;
   const inherited = inheritRoutineStepMetadata(catalog, step);
-  const resolved = resolveCatalogItem(catalog, step.activityId);
+  const resolved = resolveCatalogItem(catalog, step.activityId, baseColor);
   return {
     ...inherited,
-    color: inherited.color ?? resolved?.displayColor ?? null,
+    color: resolved?.displayColor ?? inherited.color ?? null,
     iconName: inherited.iconName ?? resolved?.item.iconName ?? null,
   };
 }
@@ -126,15 +127,15 @@ function routineStepVisual(
 function routineStyle(
   active: ActiveRoutine,
   catalog: CatalogCollection | null,
-  fallbackColor: string
+  baseColor: string
 ): { accent: string; iconName: string } {
   const routine = catalog?.routines.find((candidate) => candidate.id === active.routineId);
-  const resolved = routine && catalog ? resolveCatalogItem(catalog, routine.id) : null;
+  const resolved = routine && catalog ? resolveCatalogItem(catalog, routine.id, baseColor) : null;
   const accent =
     validHexColor(active.routineSnapshot.color) ??
-    validHexColor(routine?.color) ??
     resolved?.displayColor ??
-    fallbackColor;
+    validHexColor(routine?.color) ??
+    baseColor;
   return {
     accent,
     iconName: active.routineSnapshot.iconName ?? routine?.iconName ?? 'repeat',
@@ -169,7 +170,7 @@ function RunnerError({
 
 export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const router = useRouter();
-  const { colorScheme } = useAppTheme();
+  const { colorScheme, colors } = useAppTheme();
   const BASE_RUNNER = runnerPalette(colorScheme);
   const { width } = useWindowDimensions();
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
@@ -384,27 +385,26 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const currentVisual = routineStepVisual(
     currentStep,
     active.routineSnapshot.trackingMode,
-    catalog
+    catalog,
+    colors.primary
   );
   const nextVisual = nextStep
-    ? routineStepVisual(nextStep, active.routineSnapshot.trackingMode, catalog)
+    ? routineStepVisual(nextStep, active.routineSnapshot.trackingMode, catalog, colors.primary)
     : null;
-  const routineVisual = routineStyle(active, catalog, BASE_RUNNER.accent);
+  const routineVisual = routineStyle(active, catalog, colors.primary);
   const RUNNER: RunnerPalette = {
     ...BASE_RUNNER,
     accent: isStepTracked
-      ? (validHexColor(currentVisual.color) ?? BASE_RUNNER.accent)
+      ? (validHexColor(currentVisual.color) ?? colors.primary)
       : routineVisual.accent,
     accentText: getAccessibleTextColor(
-      isStepTracked
-        ? (validHexColor(currentVisual.color) ?? BASE_RUNNER.accent)
-        : routineVisual.accent
+      isStepTracked ? (validHexColor(currentVisual.color) ?? colors.primary) : routineVisual.accent
     ),
   };
   const currentIcon = isStepTracked ? currentVisual.iconName || 'activity' : routineVisual.iconName;
   const nextIcon = isStepTracked ? nextVisual?.iconName || 'activity' : routineVisual.iconName;
   const nextIconColor = isStepTracked
-    ? (validHexColor(nextVisual?.color) ?? RUNNER.muted)
+    ? (validHexColor(nextVisual?.color) ?? colors.primary)
     : RUNNER.accent;
 
   return (
@@ -617,6 +617,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
 
       <RoutineStepsModal
         active={active}
+        baseColor={colors.primary}
         busy={busy}
         catalog={catalog}
         onClose={() => setRoutineMenuOpen(false)}
@@ -996,6 +997,7 @@ function SkipModal({
 
 function RoutineStepsModal({
   active,
+  baseColor,
   busy,
   catalog,
   onClose,
@@ -1005,6 +1007,7 @@ function RoutineStepsModal({
   visible,
 }: {
   active: ActiveRoutine;
+  baseColor: string;
   busy: boolean;
   catalog: CatalogCollection | null;
   onClose: () => void;
@@ -1018,7 +1021,12 @@ function RoutineStepsModal({
     <RunnerModal onClose={onClose} palette={palette} title="Steps" visible={visible}>
       <Column spacing={10} style={{ width: '100%' }}>
         {steps.map((step, index) => {
-          const visual = routineStepVisual(step, active.routineSnapshot.trackingMode, catalog);
+          const visual = routineStepVisual(
+            step,
+            active.routineSnapshot.trackingMode,
+            catalog,
+            baseColor
+          );
           const session = active.stepSessions.find((candidate) => candidate.stepId === step.id);
           const status = session?.status ?? 'pending';
           const icon =

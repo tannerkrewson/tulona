@@ -1,7 +1,7 @@
 import type { CatalogRepositoryApi } from '../src/data/catalog-repository';
 import {
   CatalogService,
-  DEFAULT_CATALOG_COLOR,
+  resolveCatalogColor,
   resolveDisplayColor,
 } from '../src/catalog/catalog-service';
 import { reorderHabits } from '../src/catalog/ordering';
@@ -97,7 +97,7 @@ function step(id: string, activityId: string, sortOrder: number): RoutineStep {
 
 async function run(): Promise<void> {
   const repository = new MemoryCatalogRepository();
-  const service = new CatalogService(repository, { now: () => timestamp });
+  const service = new CatalogService(repository, { baseColor: '#FFFFFF', now: () => timestamp });
   const folder = await service.createFolder({
     id: ids.folder,
     name: 'Focus',
@@ -154,6 +154,11 @@ async function run(): Promise<void> {
     name: 'Root routine',
     trackingMode: 'overall',
   });
+  const uncoloredRoutineSnapshot = await service.snapshotRoutine(ids.rootRoutine, timestamp);
+  assert(
+    uncoloredRoutineSnapshot.color === null,
+    'unconfigured routine snapshots must retain a nullable color'
+  );
   await rejects(
     () =>
       service.createRoutine({
@@ -176,6 +181,11 @@ async function run(): Promise<void> {
   assert(
     resolveDisplayColor(rootActivity, [folder]) === '#445566',
     'root items must use standalone color'
+  );
+  const secondRootResolution = await service.resolveItem(ids.secondRootActivity);
+  assert(
+    secondRootResolution?.displayColor === '#FFFFFF',
+    'unconfigured items must use the configured semantic base color'
   );
   await service.moveActivity(childActivity.id, null);
   assert(
@@ -372,7 +382,12 @@ async function run(): Promise<void> {
     reorderHabits(habits, habits[1].id, 'up')[0]?.sortOrder === 0,
     'habit ordering must be pure and normalized'
   );
-  assert(DEFAULT_CATALOG_COLOR === '#176B87', 'catalog must provide a usable display fallback');
+  const legacyColor = { folderId: null, color: '#176B87' } as const;
+  assert(
+    resolveCatalogColor(legacyColor, []) === legacyColor.color &&
+      resolveDisplayColor(legacyColor, [], '#FFFFFF') === legacyColor.color,
+    'legacy explicit colors must remain readable and unchanged'
+  );
 }
 
 run().catch((error: unknown) => {
