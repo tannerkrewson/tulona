@@ -155,7 +155,8 @@ export function ActivitySessionActivityChooserScreen({
   const visibleItems = items.filter((item) => item.folderId === folderId);
   const currentFolder = folderId === null ? null : folders.find((folder) => folder.id === folderId);
   const currentName = transition.activityId
-    ? (resolveCatalogItem(catalog, transition.activityId)?.item.name ?? 'Unavailable activity')
+    ? (resolveCatalogItem(catalog, transition.activityId, colors.primary)?.item.name ??
+      'Unavailable activity')
     : 'No activity';
 
   return (
@@ -197,7 +198,7 @@ export function ActivitySessionActivityChooserScreen({
           <ActivityRow
             key={item.id}
             active={transition.activityId === item.id}
-            color={resolveCatalogItem(catalog, item.id)?.displayColor}
+            color={resolveCatalogItem(catalog, item.id, colors.primary)?.displayColor}
             disabled={busy}
             item={displayItem(item)}
             onPress={() => void choose(item.id)}

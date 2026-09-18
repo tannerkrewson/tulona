@@ -34,6 +34,7 @@ function channelDistance(first: string, second: string): number {
 }
 
 assert(dark.background === '#000000', 'dark theme must use an OLED-black background');
+assert(dark.primary === '#FFFFFF', 'dark theme must use a light semantic base color');
 assert(light.primary === '#111111', 'light theme must use a monochrome primary color');
 assert(
   channelDistance(light.surface, light.background) >= 8,

@@ -63,7 +63,7 @@ export default function VictoryHistoryChart({
   const maximum = chartMaximum(data, series);
   const chartData = data.map((point) => ({ ...point })) as Record<string, unknown>[];
   const seriesKeys = series.map((item) => item.key);
-  const chartColors = series.map((item) => item.color ?? colors.surfaceMuted);
+  const chartColors = series.map((item) => item.color ?? colors.primary);
 
   return (
     <View accessibilityElementsHidden style={[styles.chart, { height }]}>

@@ -26,10 +26,11 @@ const ACTIVE_BAR_BOTTOM = TAB_BAR_HEIGHT;
 
 function activeItem(
   catalog: CatalogCollection | null,
-  transition: TimeTransition | null
+  transition: TimeTransition | null,
+  baseColor: string
 ): ReturnType<typeof resolveCatalogItem> {
   if (!catalog || !transition?.activityId) return null;
-  return resolveCatalogItem(catalog, transition.activityId);
+  return resolveCatalogItem(catalog, transition.activityId, baseColor);
 }
 
 function routineOwnsActivity(routine: ActiveRoutine, activityId: string): boolean {
@@ -118,13 +119,13 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
   const displayedTransition = isActive ? activeTransition : lastActivityTransition;
   if (!displayedTransition || displayedTransition.activityId === null) return null;
 
-  const resolved = activeItem(catalog, displayedTransition);
+  const resolved = activeItem(catalog, displayedTransition, colors.primary);
   const activeActivityId = displayedTransition.activityId;
   const name = resolved?.item.name ?? 'Current activity';
   const context = resolved?.folder?.name ?? null;
   const elapsedMs = isActive ? Math.max(0, nowMs - timestampMs(displayedTransition.timestamp)) : 0;
   const previousDurationMs = isActive ? 0 : activityDurationMs(transitions, displayedTransition);
-  const configuredColor = resolved?.item.color ?? resolved?.displayColor;
+  const configuredColor = resolved?.displayColor;
   const accent =
     configuredColor && /^#[0-9a-f]{6}$/i.test(configuredColor.trim())
       ? configuredColor.trim()

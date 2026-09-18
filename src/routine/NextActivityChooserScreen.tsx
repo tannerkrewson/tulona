@@ -157,7 +157,7 @@ export function NextActivityChooserScreen() {
           <ActivityRow
             key={item.id}
             active={false}
-            color={resolveCatalogItem(catalog, item.id)?.displayColor}
+            color={resolveCatalogItem(catalog, item.id, colors.primary)?.displayColor}
             disabled={busy}
             item={item}
             onPress={() => void choose(item.id)}

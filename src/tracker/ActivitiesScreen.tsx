@@ -283,7 +283,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
             }
 
             const { item } = entry;
-            const resolved = resolveCatalogItem(catalog, item.id);
+            const resolved = resolveCatalogItem(catalog, item.id, colors.primary);
             const active = activeTransition?.activityId === item.id;
             return (
               <ActivityRow

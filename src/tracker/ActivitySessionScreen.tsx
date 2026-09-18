@@ -210,7 +210,7 @@ function ActivitySessionContent({
     );
   }
 
-  const resolved = resolveCatalogItem(catalog, transition.activityId ?? '');
+  const resolved = resolveCatalogItem(catalog, transition.activityId ?? '', colors.primary);
   const activityName =
     transition.activitySnapshot?.name ??
     resolved?.item.name ??
@@ -228,7 +228,7 @@ function ActivitySessionContent({
   const durationMs = endMs === null ? 0 : Math.max(0, endMs - timestampMs(transition.timestamp));
   const previousName = previous?.activityId
     ? (previous.activitySnapshot?.name ??
-      resolveCatalogItem(catalog, previous.activityId)?.item.name ??
+      resolveCatalogItem(catalog, previous.activityId, colors.primary)?.item.name ??
       'previous activity')
     : 'previous state';
   const canSnapToPrevious =
