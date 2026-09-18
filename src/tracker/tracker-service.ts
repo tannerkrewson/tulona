@@ -848,16 +848,12 @@ export class TrackerService implements TrackerServiceApi {
   ): void {
     if (candidate.timestamp === current.timestamp) return;
     const valid = orderTransitions(transitions).filter(
-      (transition) =>
-        transition.id !== current.id &&
-        transition.status === 'recorded' &&
-        transitionTimeAtOrBefore(transition, now)
+      (transition) => transition.status === 'recorded' && transitionTimeAtOrBefore(transition, now)
     );
     const candidateMs = timestampMs(candidate.timestamp);
-    const previous = valid
-      .filter((transition) => timestampMs(transition.timestamp) < candidateMs)
-      .at(-1);
-    const next = valid.find((transition) => timestampMs(transition.timestamp) > candidateMs);
+    const currentIndex = valid.findIndex((transition) => transition.id === current.id);
+    const previous = currentIndex > 0 ? valid[currentIndex - 1] : undefined;
+    const next = currentIndex >= 0 ? valid[currentIndex + 1] : undefined;
     if (
       previous &&
       (candidateMs < timestampMs(previous.timestamp) ||

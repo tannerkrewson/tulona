@@ -1,27 +1,19 @@
 import { Column, Text } from '@expo/ui';
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import type { TimeTransition } from '@domain';
+import { timestampMs, type TimeTransition } from '@domain';
 import { useAppTheme } from '@theme';
-import { AccessibleTextInput, AppButton } from '@ui';
 
-function localDateTimeValue(timestamp: string): string {
-  const date = new Date(timestamp);
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours()
-  )}:${pad(date.getMinutes())}`;
-}
-
-function parseLocalDateTime(value: string): number | null {
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : null;
-}
+import { SessionDateTimePicker, type SessionDateTimePickerTarget } from './SessionDateTimePicker';
+import { formatSessionDate, formatSessionTime } from './session-time';
 
 export interface HistoricalSessionEditorProps {
   transition: TimeTransition;
+  previous: TimeTransition | null;
   following: TimeTransition | null;
+  isActive: boolean;
+  nowMs: number;
   busy: boolean;
   onSaveStart: (timestamp: number) => Promise<void>;
   onSaveEnd: (timestamp: number) => Promise<void>;
@@ -30,131 +22,197 @@ export interface HistoricalSessionEditorProps {
 /**
  * Historical sessions are derived from transition boundaries. Editing a
  * session's end therefore edits the following boundary, keeping the existing
- * tracker service as the single overlap validator and mutation path.
+ * tracker service as the single overlap validator and mutation path. An
+ * active session has no end transition: its To value remains Now until the
+ * user explicitly chooses a concrete end.
  */
 export function HistoricalSessionEditor({
   transition,
+  previous,
   following,
+  isActive,
+  nowMs,
   busy,
   onSaveStart,
   onSaveEnd,
 }: HistoricalSessionEditorProps) {
   const { colors } = useAppTheme();
-  const [startValue, setStartValue] = useState(() => localDateTimeValue(transition.timestamp));
-  const [endValue, setEndValue] = useState(() =>
-    following ? localDateTimeValue(following.timestamp) : ''
-  );
-  const [startError, setStartError] = useState<string | null>(null);
-  const [endError, setEndError] = useState<string | null>(null);
+  const [pickerTarget, setPickerTarget] = useState<SessionDateTimePickerTarget | null>(null);
+  const [pickerValueMs, setPickerValueMs] = useState<number | null>(null);
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  const pickerTargetRef = useRef<SessionDateTimePickerTarget | null>(null);
 
-  const saveStart = async () => {
-    const nextStart = parseLocalDateTime(startValue);
-    if (nextStart === null) {
-      setStartError('Enter a valid start date and time.');
-      return;
-    }
-    if (following) {
-      const end = new Date(following.timestamp).getTime();
-      if (nextStart >= end) {
-        setStartError('Start must remain before the session end.');
-        return;
-      }
-    }
-    setStartError(null);
-    await onSaveStart(nextStart);
+  const startMs = timestampMs(transition.timestamp);
+  const endMs = following ? timestampMs(following.timestamp) : null;
+  const canEditEnd = following !== null || isActive;
+  const pickerValue = pickerValueMs ?? startMs;
+  const pickerMinimumMs =
+    pickerTarget === 'start' ? (previous ? timestampMs(previous.timestamp) : undefined) : startMs;
+  const pickerMaximumMs = pickerTarget === 'start' ? (endMs ?? nowMs) : nowMs;
+  const toValue = following
+    ? formatSessionTime(timestampMs(following.timestamp))
+    : isActive
+      ? 'Now'
+      : 'No end recorded';
+  const toDateContext = following
+    ? formatSessionDate(timestampMs(following.timestamp))
+    : isActive
+      ? formatSessionDate(nowMs)
+      : 'open-ended';
+
+  const closePicker = () => {
+    pickerTargetRef.current = null;
+    setPickerTarget(null);
+    setPickerValueMs(null);
   };
 
-  const saveEnd = async () => {
-    if (!following) return;
-    const nextEnd = parseLocalDateTime(endValue);
-    const start = new Date(transition.timestamp).getTime();
-    if (nextEnd === null) {
-      setEndError('Enter a valid end date and time.');
-      return;
-    }
-    if (nextEnd <= start) {
-      setEndError('End must remain after the session start.');
-      return;
-    }
-    setEndError(null);
-    await onSaveEnd(nextEnd);
+  const openPicker = (target: SessionDateTimePickerTarget) => {
+    if (busy || (target === 'end' && !canEditEnd)) return;
+    const selectedValue = target === 'start' ? startMs : (endMs ?? (isActive ? nowMs : startMs));
+    pickerTargetRef.current = target;
+    setPickerError(null);
+    setPickerValueMs(selectedValue);
+    setPickerTarget(target);
   };
+
+  const handlePickerValueChange = (date: Date, target: SessionDateTimePickerTarget) => {
+    if (pickerTargetRef.current !== target) return;
+    const nextTimestamp = date.getTime();
+    closePicker();
+    if (!Number.isFinite(nextTimestamp)) {
+      setPickerError('The selected date and time is invalid.');
+      return;
+    }
+    void (target === 'start' ? onSaveStart(nextTimestamp) : onSaveEnd(nextTimestamp));
+  };
+
+  const fromAccessibilityLabel = `From, ${formatSessionDate(startMs)}, ${formatSessionTime(startMs)}`;
+  const toAccessibilityLabel = following
+    ? `To, ${formatSessionDate(timestampMs(following.timestamp))}, ${formatSessionTime(timestampMs(following.timestamp))}`
+    : isActive
+      ? `To, Now, ${formatSessionDate(nowMs)}`
+      : 'To, no recorded end';
+  const dateContext = `From ${formatSessionDate(startMs)} · To ${toDateContext}`;
 
   return (
-    <Column
-      spacing={12}
-      style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 16,
-        borderWidth: 1,
-        padding: 16,
-        width: '100%',
-      }}
-      testID="activity-session-edit-times"
-    >
-      <Column spacing={3} style={{ width: '100%' }}>
-        <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-          Edit session times
-        </Text>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-          Changes are checked against neighboring sessions.
-        </Text>
-      </Column>
-
-      <Column spacing={6} style={{ width: '100%' }} testID="activity-session-edit-start">
-        <AccessibleTextInput
-          label="Session start"
-          onChangeText={setStartValue}
-          testID="activity-session-start"
-          defaultValue={startValue}
-          textStyle={{ fontSize: 15 }}
-        />
-        <View style={{ alignItems: 'flex-end', width: '100%' }}>
-          <AppButton
-            disabled={busy}
-            label="Save start"
-            onPress={() => void saveStart()}
-            style={{ height: 44, width: 128 }}
-            testID="activity-session-save-start"
-            variant="outlined"
-          />
-        </View>
-        {startError ? (
-          <Text textStyle={{ color: colors.danger.foreground, fontSize: 13 }}>{startError}</Text>
-        ) : null}
-      </Column>
-
-      <Column spacing={6} style={{ width: '100%' }} testID="activity-session-edit-end">
-        {following ? (
-          <>
-            <AccessibleTextInput
-              label="Session end"
-              onChangeText={setEndValue}
-              testID="activity-session-end"
-              defaultValue={endValue}
-              textStyle={{ fontSize: 15 }}
-            />
-            <View style={{ alignItems: 'flex-end', width: '100%' }}>
-              <AppButton
-                disabled={busy}
-                label="Save end"
-                onPress={() => void saveEnd()}
-                style={{ height: 44, width: 128 }}
-                testID="activity-session-save-end"
-                variant="outlined"
-              />
-            </View>
-            {endError ? (
-              <Text textStyle={{ color: colors.danger.foreground, fontSize: 13 }}>{endError}</Text>
-            ) : null}
-          </>
-        ) : (
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-            This session has no recorded end yet.
+    <Column spacing={8} style={{ width: '100%' }} testID="activity-session-edit-times">
+      <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
+        Edit session times
+      </Text>
+      <View
+        style={[
+          styles.timeControl,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+        testID="activity-session-time-control"
+      >
+        <Pressable
+          accessibilityHint="Opens the native date and time picker for the session start"
+          accessibilityLabel={fromAccessibilityLabel}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
+          onPress={() => openPicker('start')}
+          style={({ pressed }) => [
+            styles.timeSection,
+            { opacity: busy ? 0.45 : pressed ? 0.72 : 1 },
+          ]}
+          testID="activity-session-from"
+        >
+          <Text textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>From</Text>
+          <Text
+            numberOfLines={1}
+            textStyle={{ color: colors.text, fontSize: 24, fontWeight: '700' }}
+          >
+            {formatSessionTime(startMs)}
           </Text>
-        )}
-      </Column>
+        </Pressable>
+        <View
+          style={[styles.timeDivider, { backgroundColor: colors.border }]}
+          testID="activity-session-time-divider"
+        />
+        <Pressable
+          accessibilityHint={
+            canEditEnd
+              ? 'Opens the native date and time picker for the session end'
+              : 'This session has no recorded end to edit'
+          }
+          accessibilityLabel={toAccessibilityLabel}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy || !canEditEnd }}
+          disabled={busy || !canEditEnd}
+          onPress={() => openPicker('end')}
+          style={({ pressed }) => [
+            styles.timeSection,
+            { opacity: busy || !canEditEnd ? 0.45 : pressed ? 0.72 : 1 },
+          ]}
+          testID="activity-session-to"
+        >
+          <Text textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>To</Text>
+          <Text
+            numberOfLines={1}
+            textStyle={{ color: colors.text, fontSize: 24, fontWeight: '700' }}
+          >
+            {toValue}
+          </Text>
+        </Pressable>
+      </View>
+      <Text
+        numberOfLines={2}
+        testID="activity-session-time-context"
+        textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}
+      >
+        {dateContext}
+      </Text>
+      <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+        Changes are checked against neighboring sessions.
+      </Text>
+      {pickerError ? (
+        <Text
+          testID="activity-session-picker-error"
+          textStyle={{ color: colors.danger.foreground, fontSize: 13 }}
+        >
+          {pickerError}
+        </Text>
+      ) : null}
+      <SessionDateTimePicker
+        maximumDate={pickerTarget ? new Date(pickerMaximumMs) : undefined}
+        minimumDate={
+          pickerTarget && pickerMinimumMs !== undefined ? new Date(pickerMinimumMs) : undefined
+        }
+        onDismiss={closePicker}
+        onError={(message) => {
+          setPickerError(message);
+          closePicker();
+        }}
+        onValueChange={handlePickerValueChange}
+        target={pickerTarget}
+        value={new Date(pickerValue)}
+      />
     </Column>
   );
 }
+
+const styles = StyleSheet.create({
+  timeControl: {
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    minHeight: 88,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  timeSection: {
+    alignItems: 'flex-start',
+    flex: 1,
+    justifyContent: 'center',
+    minWidth: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  timeDivider: {
+    alignSelf: 'stretch',
+    marginVertical: 16,
+    width: 1,
+  },
+});
