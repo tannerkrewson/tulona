@@ -2,7 +2,7 @@ import { Column, Text } from '@expo/ui';
 import { useState } from 'react';
 
 import { useAppTheme } from '@theme';
-import { AppButton, errorText } from '@ui';
+import { AppButton, ConfirmationModal, errorText } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { bootCoordinator } from '../orchestration/boot-coordinator';
 
@@ -70,31 +70,11 @@ export function PrototypeDataReset({ onCleared }: { onCleared: () => void }) {
   };
 
   return (
-    <Column spacing={10} testID="prototype-data-reset">
-      {error ? (
-        <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{error}</Text>
-      ) : null}
-      {confirming ? (
-        <Column spacing={8}>
-          <Text textStyle={{ color: colors.danger.foreground, fontSize: 14, lineHeight: 20 }}>
-            This removes every dataset, routine, activity, habit, setting, and history record from
-            this device.
-          </Text>
-          <AppButton
-            disabled={busy}
-            label={busy ? 'Clearing...' : 'Yes, clear all local data'}
-            onPress={() => void clearData()}
-            testID="confirm-clear-local-data"
-          />
-          <AppButton
-            disabled={busy}
-            label="Cancel"
-            onPress={() => setConfirming(false)}
-            variant="outlined"
-            testID="cancel-clear-local-data"
-          />
-        </Column>
-      ) : (
+    <>
+      <Column spacing={10} testID="prototype-data-reset">
+        {error ? (
+          <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{error}</Text>
+        ) : null}
         <AppButton
           disabled={busy}
           label="Clear all local data"
@@ -102,7 +82,21 @@ export function PrototypeDataReset({ onCleared }: { onCleared: () => void }) {
           variant="outlined"
           testID="clear-local-data"
         />
-      )}
-    </Column>
+      </Column>
+      <ConfirmationModal
+        busy={busy}
+        cancelLabel="Cancel"
+        cancelTestID="cancel-clear-local-data"
+        confirmLabel={busy ? 'Clearing...' : 'Yes, clear all local data'}
+        confirmTestID="confirm-clear-local-data"
+        message="This removes every dataset, routine, activity, habit, setting, and history record from this device."
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => void clearData()}
+        testID="clear-local-data-confirmation"
+        title="Clear all local data?"
+        tone="danger"
+        visible={confirming}
+      />
+    </>
   );
 }

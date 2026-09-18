@@ -11,7 +11,7 @@ import {
 } from '@domain';
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
-import { AppButton, errorText, Screen } from '@ui';
+import { ConfirmationModal, errorText, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
@@ -144,7 +144,7 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
   const unit = habit.schedule.kind === 'weekly-count' ? 'week' : 'day';
   const archived = habit.archivedAt !== null;
 
-  const changeArchiveState = async () => {
+  const changeArchiveState = async (): Promise<boolean> => {
     const action = async () => {
       if (archived) await store.getState().restoreHabit(habit.id);
       else await store.getState().archiveHabit(habit.id);
@@ -152,139 +152,152 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
     lastAction.current = action;
     try {
       await action();
+      return true;
     } catch {
       // The store retains the persistence error for the visible banner.
+      return false;
     }
   };
 
   return (
-    <Screen testID="habit-detail-screen">
-      <Column spacing={16} style={{ width: '100%' }}>
-        <HabitHeader
-          editActions={[
-            {
-              label: 'Edit habit',
-              onPress: () => router.push(`/habit/${habit.id}?edit=1`),
-              testID: 'edit-habit-menu',
-            },
-            {
-              disabled: busy,
-              label: archived ? 'Restore habit' : 'Archive habit',
-              onPress: () => {
-                if (archived) void changeArchiveState();
-                else setConfirmingArchive(true);
+    <>
+      <Screen testID="habit-detail-screen">
+        <Column spacing={16} style={{ width: '100%' }}>
+          <HabitHeader
+            editActions={[
+              {
+                label: 'Edit habit',
+                onPress: () => router.push(`/habit/${habit.id}?edit=1`),
+                testID: 'edit-habit-menu',
               },
-              testID: archived ? 'restore-habit' : 'archive-habit',
-            },
-          ]}
-          editOpen={editMenuOpen}
-          onBack={() => router.back()}
-          onToggleEdit={() => setEditMenuOpen((open) => !open)}
-          title={habit.name}
-          testID="habit-header"
-        />
-        <HabitErrorMessage
-          message={persistenceError ? errorText(persistenceError) : null}
-          onBack={() => router.back()}
-          onRetry={() => {
-            const action = lastAction.current;
-            void (action ? action() : store.getState().refresh()).catch(() => undefined);
-          }}
-        />
-        {archived ? (
+              {
+                disabled: busy,
+                label: archived ? 'Restore habit' : 'Archive habit',
+                onPress: () => {
+                  if (archived) void changeArchiveState();
+                  else setConfirmingArchive(true);
+                },
+                testID: archived ? 'restore-habit' : 'archive-habit',
+              },
+            ]}
+            editOpen={editMenuOpen}
+            onBack={() => router.back()}
+            onToggleEdit={() => setEditMenuOpen((open) => !open)}
+            title={habit.name}
+            testID="habit-header"
+          />
+          <HabitErrorMessage
+            message={persistenceError ? errorText(persistenceError) : null}
+            onBack={() => router.back()}
+            onRetry={() => {
+              const action = lastAction.current;
+              void (action ? action() : store.getState().refresh()).catch(() => undefined);
+            }}
+          />
+          {archived ? (
+            <Column
+              spacing={4}
+              style={{
+                backgroundColor: colors.warning.background,
+                borderColor: colors.warning.foreground,
+                borderRadius: 12,
+                borderWidth: 1,
+                padding: 14,
+                width: '100%',
+              }}
+            >
+              <Text
+                textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}
+              >
+                Archived habit
+              </Text>
+              <Text textStyle={{ color: colors.warning.foreground, fontSize: 14 }}>
+                It is hidden from the active list until restored.
+              </Text>
+            </Column>
+          ) : null}
           <Column
-            spacing={4}
+            spacing={12}
             style={{
-              backgroundColor: colors.warning.background,
-              borderColor: colors.warning.foreground,
-              borderRadius: 12,
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderRadius: 18,
               borderWidth: 1,
-              padding: 14,
+              padding: 18,
               width: '100%',
             }}
           >
-            <Text textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}>
-              Archived habit
-            </Text>
-            <Text textStyle={{ color: colors.warning.foreground, fontSize: 14 }}>
-              It is hidden from the active list until restored.
-            </Text>
-          </Column>
-        ) : null}
-        <Column
-          spacing={12}
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderRadius: 18,
-            borderWidth: 1,
-            padding: 18,
-            width: '100%',
-          }}
-        >
-          <Column spacing={4}>
-            <Text
-              numberOfLines={2}
-              textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}
-            >
-              {habit.name}
-            </Text>
-          </Column>
-          <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-            <AppIcon
-              color={
-                currentState?.manual === true || currentState?.automatic === true
-                  ? colors.success.foreground
-                  : colors.textMuted
-              }
-              name={
-                currentState?.manual === true || currentState?.automatic === true
-                  ? 'check-circle-2'
-                  : 'circle'
-              }
-              size={19}
-            />
-            <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
-              {`Today: ${habitCompletionLabel(currentState)}`}
-            </Text>
-          </Row>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-            {`Signals: ${habitSignalSummary(currentState)}`}
-          </Text>
-          {habit.trigger ? (
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-              {triggerName(habit, catalog) ?? 'Configured trigger source is unavailable.'}
-            </Text>
-          ) : (
+            <Column spacing={4}>
+              <Text
+                numberOfLines={2}
+                textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}
+              >
+                {habit.name}
+              </Text>
+            </Column>
+            <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+              <AppIcon
+                color={
+                  currentState?.manual === true || currentState?.automatic === true
+                    ? colors.success.foreground
+                    : colors.textMuted
+                }
+                name={
+                  currentState?.manual === true || currentState?.automatic === true
+                    ? 'check-circle-2'
+                    : 'circle'
+                }
+                size={19}
+              />
+              <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
+                {`Today: ${habitCompletionLabel(currentState)}`}
+              </Text>
+            </Row>
             <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              No automatic trigger configured.
+              {`Signals: ${habitSignalSummary(currentState)}`}
             </Text>
-          )}
-        </Column>
+            {habit.trigger ? (
+              <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+                {triggerName(habit, catalog) ?? 'Configured trigger source is unavailable.'}
+              </Text>
+            ) : (
+              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+                No automatic trigger configured.
+              </Text>
+            )}
+          </Column>
 
-        <Row alignment="center" spacing={10} style={{ width: '100%' }}>
-          <StatCard label={`Current streak (${unit}s)`} value={String(streak.current)} />
-          <StatCard label={`Longest streak (${unit}s)`} value={String(streak.longest)} />
-        </Row>
+          <Row alignment="center" spacing={10} style={{ width: '100%' }}>
+            <StatCard label={`Current streak (${unit}s)`} value={String(streak.current)} />
+            <StatCard label={`Longest streak (${unit}s)`} value={String(streak.longest)} />
+          </Row>
 
-        <HistoryGrid
-          habit={habit}
-          logicalDayRolloverHour={logicalDayRolloverHour}
-          states={habitStates}
-          today={today}
-        />
-
-        {!archived && confirmingArchive ? (
-          <ArchiveHabitConfirmation
-            busy={busy}
-            onCancel={() => setConfirmingArchive(false)}
-            onConfirm={() => {
-              void changeArchiveState().then(() => setConfirmingArchive(false));
-            }}
+          <HistoryGrid
+            habit={habit}
+            logicalDayRolloverHour={logicalDayRolloverHour}
+            states={habitStates}
+            today={today}
           />
-        ) : null}
-      </Column>
-    </Screen>
+        </Column>
+      </Screen>
+      <ConfirmationModal
+        busy={busy}
+        cancelLabel="Keep habit"
+        cancelTestID="cancel-archive-habit"
+        confirmLabel="Yes, archive habit"
+        confirmTestID="confirm-archive-habit"
+        message="It will be hidden from the active list while its history is retained. You can restore it later."
+        onCancel={() => setConfirmingArchive(false)}
+        onConfirm={() => {
+          void changeArchiveState().then((changed) => {
+            if (changed) setConfirmingArchive(false);
+          });
+        }}
+        testID="archive-habit-confirmation"
+        title="Archive this habit?"
+        visible={!archived && confirmingArchive}
+      />
+    </>
   );
 }
 
@@ -304,56 +317,6 @@ function StatCard({ label, value }: { label: string; value: string }) {
     >
       <Text textStyle={{ color: colors.primary, fontSize: 26, fontWeight: '700' }}>{value}</Text>
       <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>{label}</Text>
-    </Column>
-  );
-}
-
-function ArchiveHabitConfirmation({
-  busy,
-  onCancel,
-  onConfirm,
-}: {
-  busy: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  const { colors } = useAppTheme();
-  return (
-    <Column
-      spacing={8}
-      style={{
-        backgroundColor: colors.warning.background,
-        borderColor: colors.warning.foreground,
-        borderRadius: 14,
-        borderWidth: 1,
-        padding: 14,
-        width: '100%',
-      }}
-      testID="archive-habit-confirmation"
-    >
-      <Text textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}>
-        Archive this habit?
-      </Text>
-      <Text textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}>
-        It will be hidden from the active list while its history is retained. You can restore it
-        later.
-      </Text>
-      <Column spacing={8} style={{ width: '100%' }}>
-        <AppButton
-          disabled={busy}
-          label="Yes, archive habit"
-          onPress={onConfirm}
-          style={{ height: 48, width: '100%' }}
-          testID="confirm-archive-habit"
-        />
-        <AppButton
-          disabled={busy}
-          label="Keep habit"
-          onPress={onCancel}
-          style={{ height: 48, width: '100%' }}
-          variant="outlined"
-        />
-      </Column>
     </Column>
   );
 }

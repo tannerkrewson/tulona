@@ -21,6 +21,7 @@ import {
   AccessibleTextInput,
   AppButton,
   ColorPicker,
+  ConfirmationModal,
   DurationPicker,
   errorText,
   IconPicker,
@@ -569,55 +570,6 @@ function StepRow({
   );
 }
 
-function DeleteStepConfirmation({
-  busy,
-  onCancel,
-  onConfirm,
-}: {
-  busy: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  const { colors } = useAppTheme();
-  return (
-    <Column
-      spacing={8}
-      style={{
-        backgroundColor: colors.warning.background,
-        borderColor: colors.warning.foreground,
-        borderRadius: 14,
-        borderWidth: 1,
-        padding: 14,
-        width: '100%',
-      }}
-      testID="delete-step-confirmation"
-    >
-      <Text textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}>
-        Delete this step?
-      </Text>
-      <Text textStyle={{ color: colors.warning.foreground, fontSize: 14, lineHeight: 20 }}>
-        This removes the step from the routine. Confirm only if you want to discard its settings.
-      </Text>
-      <Column spacing={8} style={{ width: '100%' }}>
-        <AppButton
-          disabled={busy}
-          label="Yes, delete step"
-          onPress={onConfirm}
-          style={{ height: 48, width: '100%' }}
-          testID="confirm-delete-step"
-        />
-        <AppButton
-          disabled={busy}
-          label="Keep step"
-          onPress={onCancel}
-          style={{ height: 48, width: '100%' }}
-          variant="outlined"
-        />
-      </Column>
-    </Column>
-  );
-}
-
 export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEditorScreenProps) {
   const router = useRouter();
   const { colors } = useAppTheme();
@@ -859,269 +811,280 @@ function RoutineEditorForm({
           ? inheritRoutineStepMetadata(catalog, editableStep)
           : editableStep;
       });
+  const deletingStep = deleteStepId ? steps.find((step) => step.id === deleteStepId) : undefined;
 
   return (
-    <Screen onBack={onBack} title={routine ? 'Edit routine' : 'New routine'}>
-      <Column
-        spacing={18}
-        style={{
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
-          borderRadius: 18,
-          borderWidth: 1,
-          padding: 18,
-          width: '100%',
-        }}
-      >
-        <Row alignment="center" spacing={12}>
-          <AppIcon name={iconName || 'repeat'} color={previewColor} size={30} />
-          <Column spacing={3} style={{ width: '100%' }}>
-            <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
-              {name || 'Untitled routine'}
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              {`${steps.length} ${steps.length === 1 ? 'step' : 'steps'}`}
-            </Text>
-          </Column>
-        </Row>
-        <Field label="Routine name">
-          <Input
-            label="Routine name"
-            value={name}
-            onChangeText={setName}
-            placeholder="Routine name"
-            testID="routine-name"
-          />
-        </Field>
-        <Field label="Track time by">
-          <AccessiblePicker
-            enabled={!routine && newSteps.length === 0 && draft === null}
-            label="Track time by"
-            selectedValue={trackingMode}
-            onValueChange={(value) => setTrackingMode(value as RoutineTrackingMode)}
-            testID="routine-tracking-mode"
-          >
-            <Picker.Item label="Choose a tracking mode" value="" />
-            <Picker.Item label="Entire routine" value="overall" />
-            <Picker.Item label="Each step" value="steps" />
-          </AccessiblePicker>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-            {trackingMode === 'steps'
-              ? 'Switch to each step activity as the routine progresses.'
-              : trackingMode === 'overall'
-                ? 'Keep one continuous activity for the entire routine.'
-                : 'Choose one mode before adding steps.'}
-          </Text>
-        </Field>
-        <Field label="Standalone color">
-          <ColorPicker
-            onChange={(next) => setColor(next ?? '')}
-            testID="routine-color"
-            value={color || null}
-          />
-        </Field>
-        <Field label="Routine icon">
-          <IconPicker
-            value={iconName || null}
-            onChange={(next) => setIconName(next ?? '')}
-            testID="routine-icon-picker"
-          />
-        </Field>
-        <Field label="Root or folder placement">
-          <FolderPicker
-            folders={catalog.folders}
-            currentFolderId={routine?.folderId ?? null}
-            value={folderId}
-            onChange={setFolderId}
-          />
-        </Field>
-        <ErrorMessage
-          message={error}
-          onClose={() => setError(null)}
-          onRetry={() => {
-            if (lastAction.current) void lastAction.current();
+    <>
+      <Screen onBack={onBack} title={routine ? 'Edit routine' : 'New routine'}>
+        <Column
+          spacing={18}
+          style={{
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderRadius: 18,
+            borderWidth: 1,
+            padding: 18,
+            width: '100%',
           }}
-        />
-        <AppButton
-          disabled={busy || (!routine && !trackingMode)}
-          label={busy ? 'Saving...' : routine ? 'Save routine' : 'Create routine'}
-          onPress={() => void saveRoutine()}
-          style={{ height: 52, width: '100%' }}
-          testID="save-routine"
-        />
-      </Column>
-
-      <Column spacing={12} style={{ width: '100%' }}>
-        <Column spacing={10} style={{ width: '100%' }}>
-          <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>Steps</Text>
-          <AppButton
-            disabled={busy || draft !== null || !trackingMode}
-            label="Add step"
-            onPress={startAdd}
-            style={{ height: 50, width: '100%' }}
-            testID="add-routine-step"
-          />
-          {!trackingMode ? (
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              Choose a tracking mode to start building steps.
+        >
+          <Row alignment="center" spacing={12}>
+            <AppIcon name={iconName || 'repeat'} color={previewColor} size={30} />
+            <Column spacing={3} style={{ width: '100%' }}>
+              <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
+                {name || 'Untitled routine'}
+              </Text>
+              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+                {`${steps.length} ${steps.length === 1 ? 'step' : 'steps'}`}
+              </Text>
+            </Column>
+          </Row>
+          <Field label="Routine name">
+            <Input
+              label="Routine name"
+              value={name}
+              onChangeText={setName}
+              placeholder="Routine name"
+              testID="routine-name"
+            />
+          </Field>
+          <Field label="Track time by">
+            <AccessiblePicker
+              enabled={!routine && newSteps.length === 0 && draft === null}
+              label="Track time by"
+              selectedValue={trackingMode}
+              onValueChange={(value) => setTrackingMode(value as RoutineTrackingMode)}
+              testID="routine-tracking-mode"
+            >
+              <Picker.Item label="Choose a tracking mode" value="" />
+              <Picker.Item label="Entire routine" value="overall" />
+              <Picker.Item label="Each step" value="steps" />
+            </AccessiblePicker>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+              {trackingMode === 'steps'
+                ? 'Switch to each step activity as the routine progresses.'
+                : trackingMode === 'overall'
+                  ? 'Keep one continuous activity for the entire routine.'
+                  : 'Choose one mode before adding steps.'}
             </Text>
-          ) : null}
-        </Column>
-        {draft && !editingStepId ? (
-          <StepForm
-            draft={draft}
-            activities={activities}
-            folders={catalog.folders}
-            trackingMode={trackingMode as RoutineTrackingMode}
-            onChange={setDraft}
-            onSave={() => void saveStep()}
-            onCancel={() => setDraft(null)}
+          </Field>
+          <Field label="Standalone color">
+            <ColorPicker
+              onChange={(next) => setColor(next ?? '')}
+              testID="routine-color"
+              value={color || null}
+            />
+          </Field>
+          <Field label="Routine icon">
+            <IconPicker
+              value={iconName || null}
+              onChange={(next) => setIconName(next ?? '')}
+              testID="routine-icon-picker"
+            />
+          </Field>
+          <Field label="Root or folder placement">
+            <FolderPicker
+              folders={catalog.folders}
+              currentFolderId={routine?.folderId ?? null}
+              value={folderId}
+              onChange={setFolderId}
+            />
+          </Field>
+          <ErrorMessage
+            message={error}
             onClose={() => setError(null)}
-            busy={busy}
-            error={error}
             onRetry={() => {
-              const action = lastAction.current;
-              if (action) void run(action);
+              if (lastAction.current) void lastAction.current();
             }}
           />
-        ) : null}
-        {steps.map((step, index) => (
-          <Column key={step.id} spacing={8} style={{ width: '100%' }}>
-            {editingStepId === step.id && draft ? (
-              <StepForm
-                draft={draft}
-                activities={activities}
-                folders={catalog.folders}
-                trackingMode={trackingMode as RoutineTrackingMode}
-                onChange={setDraft}
-                onSave={() => void saveStep()}
-                onCancel={() => {
-                  setDraft(null);
-                  setEditingStepId(null);
-                }}
-                onClose={() => setError(null)}
-                busy={busy}
-                error={error}
-                onRetry={() => {
-                  const action = lastAction.current;
-                  if (action) void run(action);
-                }}
-              />
-            ) : (
-              <StepRow
-                step={step}
-                activities={activities}
-                folders={catalog.folders}
-                trackingMode={trackingMode as RoutineTrackingMode}
-                index={index}
-                count={steps.length}
-                busy={busy}
-                onEdit={() => {
-                  setError(null);
-                  setEditingStepId(step.id);
-                  setDraft(draftFromStep(step));
-                }}
-                onDuplicate={() =>
-                  routine
-                    ? void run(async () => {
-                        await service.duplicateRoutineStep(routine.id, step.id);
-                      })
-                    : setNewSteps((current) => [
-                        ...current,
-                        {
-                          ...draftFromStep(step),
-                          id: createId(),
-                          title: `${step.name ?? ''} copy`,
-                        },
-                      ])
-                }
-                onDelete={() => setDeleteStepId(step.id)}
-                onMove={(direction) =>
-                  routine
-                    ? void run(async () => {
-                        await service.reorderRoutineStep(routine.id, step.id, direction);
-                      })
-                    : setNewSteps((current) => {
-                        const from = index;
-                        const to = direction === 'up' ? from - 1 : from + 1;
-                        if (to < 0 || to >= current.length) return current;
-                        const next = [...current];
-                        const [moved] = next.splice(from, 1);
-                        if (moved) next.splice(to, 0, moved);
-                        return next;
-                      })
-                }
-              />
-            )}
-            {deleteStepId === step.id ? (
-              <DeleteStepConfirmation
-                busy={busy}
-                onCancel={() => setDeleteStepId(null)}
-                onConfirm={() => {
-                  if (routine) {
-                    void run(async () => {
-                      await service.deleteRoutineStep(routine.id, step.id);
-                      setDeleteStepId(null);
-                    });
-                  } else {
-                    setNewSteps((current) =>
-                      current.filter((candidate) => candidate.id !== step.id)
-                    );
-                    setDeleteStepId(null);
-                  }
-                }}
-              />
+          <AppButton
+            disabled={busy || (!routine && !trackingMode)}
+            label={busy ? 'Saving...' : routine ? 'Save routine' : 'Create routine'}
+            onPress={() => void saveRoutine()}
+            style={{ height: 52, width: '100%' }}
+            testID="save-routine"
+          />
+        </Column>
+
+        <Column spacing={12} style={{ width: '100%' }}>
+          <Column spacing={10} style={{ width: '100%' }}>
+            <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>Steps</Text>
+            <AppButton
+              disabled={busy || draft !== null || !trackingMode}
+              label="Add step"
+              onPress={startAdd}
+              style={{ height: 50, width: '100%' }}
+              testID="add-routine-step"
+            />
+            {!trackingMode ? (
+              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+                Choose a tracking mode to start building steps.
+              </Text>
             ) : null}
           </Column>
-        ))}
-        {steps.length === 0 ? (
-          <Column
-            spacing={6}
-            style={{
-              backgroundColor: colors.surfaceMuted,
-              borderColor: colors.border,
-              borderRadius: 14,
-              borderWidth: 1,
-              padding: 16,
-              width: '100%',
-            }}
-          >
-            <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
-              No steps yet
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              Add at least one step before starting this routine.
-            </Text>
+          {draft && !editingStepId ? (
+            <StepForm
+              draft={draft}
+              activities={activities}
+              folders={catalog.folders}
+              trackingMode={trackingMode as RoutineTrackingMode}
+              onChange={setDraft}
+              onSave={() => void saveStep()}
+              onCancel={() => setDraft(null)}
+              onClose={() => setError(null)}
+              busy={busy}
+              error={error}
+              onRetry={() => {
+                const action = lastAction.current;
+                if (action) void run(action);
+              }}
+            />
+          ) : null}
+          {steps.map((step, index) => (
+            <Column key={step.id} spacing={8} style={{ width: '100%' }}>
+              {editingStepId === step.id && draft ? (
+                <StepForm
+                  draft={draft}
+                  activities={activities}
+                  folders={catalog.folders}
+                  trackingMode={trackingMode as RoutineTrackingMode}
+                  onChange={setDraft}
+                  onSave={() => void saveStep()}
+                  onCancel={() => {
+                    setDraft(null);
+                    setEditingStepId(null);
+                  }}
+                  onClose={() => setError(null)}
+                  busy={busy}
+                  error={error}
+                  onRetry={() => {
+                    const action = lastAction.current;
+                    if (action) void run(action);
+                  }}
+                />
+              ) : (
+                <StepRow
+                  step={step}
+                  activities={activities}
+                  folders={catalog.folders}
+                  trackingMode={trackingMode as RoutineTrackingMode}
+                  index={index}
+                  count={steps.length}
+                  busy={busy}
+                  onEdit={() => {
+                    setError(null);
+                    setEditingStepId(step.id);
+                    setDraft(draftFromStep(step));
+                  }}
+                  onDuplicate={() =>
+                    routine
+                      ? void run(async () => {
+                          await service.duplicateRoutineStep(routine.id, step.id);
+                        })
+                      : setNewSteps((current) => [
+                          ...current,
+                          {
+                            ...draftFromStep(step),
+                            id: createId(),
+                            title: `${step.name ?? ''} copy`,
+                          },
+                        ])
+                  }
+                  onDelete={() => setDeleteStepId(step.id)}
+                  onMove={(direction) =>
+                    routine
+                      ? void run(async () => {
+                          await service.reorderRoutineStep(routine.id, step.id, direction);
+                        })
+                      : setNewSteps((current) => {
+                          const from = index;
+                          const to = direction === 'up' ? from - 1 : from + 1;
+                          if (to < 0 || to >= current.length) return current;
+                          const next = [...current];
+                          const [moved] = next.splice(from, 1);
+                          if (moved) next.splice(to, 0, moved);
+                          return next;
+                        })
+                  }
+                />
+              )}
+            </Column>
+          ))}
+          {steps.length === 0 ? (
+            <Column
+              spacing={6}
+              style={{
+                backgroundColor: colors.surfaceMuted,
+                borderColor: colors.border,
+                borderRadius: 14,
+                borderWidth: 1,
+                padding: 16,
+                width: '100%',
+              }}
+            >
+              <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
+                No steps yet
+              </Text>
+              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+                Add at least one step before starting this routine.
+              </Text>
+            </Column>
+          ) : null}
+        </Column>
+        {routine ? (
+          <Column spacing={10} style={{ width: '100%' }}>
+            <AppButton
+              disabled={busy || routine.steps.length === 0}
+              label="Run routine"
+              onPress={() => void startRoutine()}
+              style={{ height: 54, width: '100%' }}
+              testID="run-routine"
+            />
+            <AppButton
+              disabled={busy || routine.archivedAt !== null}
+              label="Move routine up"
+              onPress={() =>
+                void run(async () => void (await service.reorderItem(routine.id, 'up')))
+              }
+              style={{ height: 48, width: '100%' }}
+              variant="outlined"
+            />
+            <AppButton
+              disabled={busy || routine.archivedAt !== null}
+              label="Move routine down"
+              onPress={() =>
+                void run(async () => void (await service.reorderItem(routine.id, 'down')))
+              }
+              style={{ height: 48, width: '100%' }}
+              variant="outlined"
+            />
           </Column>
         ) : null}
-      </Column>
-      {routine ? (
-        <Column spacing={10} style={{ width: '100%' }}>
-          <AppButton
-            disabled={busy || routine.steps.length === 0}
-            label="Run routine"
-            onPress={() => void startRoutine()}
-            style={{ height: 54, width: '100%' }}
-            testID="run-routine"
-          />
-          <AppButton
-            disabled={busy || routine.archivedAt !== null}
-            label="Move routine up"
-            onPress={() => void run(async () => void (await service.reorderItem(routine.id, 'up')))}
-            style={{ height: 48, width: '100%' }}
-            variant="outlined"
-          />
-          <AppButton
-            disabled={busy || routine.archivedAt !== null}
-            label="Move routine down"
-            onPress={() =>
-              void run(async () => void (await service.reorderItem(routine.id, 'down')))
-            }
-            style={{ height: 48, width: '100%' }}
-            variant="outlined"
-          />
-        </Column>
-      ) : null}
-    </Screen>
+      </Screen>
+      <ConfirmationModal
+        busy={busy}
+        cancelLabel="Keep step"
+        cancelTestID="cancel-delete-step"
+        confirmLabel="Yes, delete step"
+        confirmTestID="confirm-delete-step"
+        message="This removes the step from the routine. Confirm only if you want to discard its settings."
+        onCancel={() => setDeleteStepId(null)}
+        onConfirm={() => {
+          const stepId = deleteStepId;
+          if (!stepId) return;
+          if (routine) {
+            void run(async () => {
+              await service.deleteRoutineStep(routine.id, stepId);
+              setDeleteStepId(null);
+            });
+          } else {
+            setNewSteps((current) => current.filter((candidate) => candidate.id !== stepId));
+            setDeleteStepId(null);
+          }
+        }}
+        testID="delete-step-confirmation"
+        title="Delete this step?"
+        visible={deletingStep !== undefined}
+      />
+    </>
   );
 }

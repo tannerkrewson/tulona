@@ -419,6 +419,12 @@ async function run(): Promise<void> {
     'historical delete must require confirmation'
   );
   await historyService.deleteTransition(edited.id, { confirm: true });
+  assert(
+    !(await historyRepository.readMonth('2026-07')).transitions.some(
+      (candidate) => candidate.id === edited.id
+    ),
+    'confirmed historical delete must remove the selected session from durable history'
+  );
   const mergeCandidate = await historyService.insertTransition({
     id: ids.edited,
     activityId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
