@@ -13,6 +13,19 @@ export const ROW_SURFACE_SHADOW: ViewStyle = {
   elevation: 3,
 };
 
+/** Returns the neutral row fill used by inactive tracker rows in each theme. */
+export function getRowSurfaceBackground({
+  colorScheme,
+  surface,
+  surfaceMuted,
+}: {
+  colorScheme: 'light' | 'dark';
+  surface: string;
+  surfaceMuted: string;
+}): string {
+  return colorScheme === 'dark' ? surfaceMuted : surface;
+}
+
 /** Shared borderless, elevated surface for compact rows and collection cards. */
 export function getRowSurfaceStyle({ backgroundColor }: { backgroundColor: string }): ViewStyle {
   return {

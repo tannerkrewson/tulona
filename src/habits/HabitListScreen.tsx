@@ -23,6 +23,7 @@ import {
   EmptyState,
   ConfirmationModal,
   errorText,
+  getRowSurfaceBackground,
   getRowSurfaceStyle,
   ROW_SURFACE_CONTENT_GAP,
   ROW_SURFACE_ICON_SIZE,
@@ -148,6 +149,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
   const [contentWidth, setContentWidth] = useState(0);
   const [metricMode, setMetricMode] = useState<HabitMetricMode>('streak');
   const [selectedCategory, setSelectedCategory] = useState<HabitCategory>(DEFAULT_HABIT_CATEGORY);
+  const [editMode, setEditMode] = useState(false);
   const [dismissedPastMidnightDay, setDismissedPastMidnightDay] = useState<LogicalDayKey | null>(
     null
   );
@@ -185,6 +187,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
     <HabitDayList
       activeHabits={habitsByCategory.active}
       day={day}
+      editMode={editMode}
       logicalDayRolloverHour={logicalDayRolloverHour}
       onDetails={(habitId) => router.push(`/habit/${habitId}`)}
       onOutcome={(habitId, outcome) =>
@@ -207,6 +210,11 @@ function HabitListContent({ store }: { store: HabitStore }) {
         >
           <HabitHeader
             onAdd={() => router.push('/habit/new')}
+            editLabel="Edit habits"
+            editOpen={editMode}
+            editOpenLabel="Done editing habits"
+            editTestID="habit-edit-mode"
+            onToggleEdit={() => setEditMode((open) => !open)}
             title="Habits"
             testID="habits-header"
           />
@@ -245,6 +253,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
             <HabitCategoryList
               category={selectedCategory}
               habits={visibleHabits}
+              editMode={editMode}
               onDetails={(habitId) => router.push(`/habit/${habitId}`)}
               rolloverHour={logicalDayRolloverHour}
             />
@@ -328,11 +337,13 @@ function HabitCategorySwitcher({
 function HabitCategoryList({
   category,
   habits,
+  editMode,
   onDetails,
   rolloverHour,
 }: {
   category: Exclude<HabitCategory, 'active'>;
   habits: readonly Habit[];
+  editMode: boolean;
   onDetails: (habitId: string) => void;
   rolloverHour: number;
 }) {
@@ -358,6 +369,7 @@ function HabitCategoryList({
             {habits.map((habit) => (
               <HabitCategoryListItem
                 category={category}
+                editMode={editMode}
                 habit={habit}
                 key={habit.id}
                 onDetails={() => onDetails(habit.id)}
@@ -373,30 +385,41 @@ function HabitCategoryList({
 
 function HabitCategoryListItem({
   category,
+  editMode,
   habit,
   onDetails,
   rolloverHour,
 }: {
   category: Exclude<HabitCategory, 'active'>;
+  editMode: boolean;
   habit: Habit;
   onDetails: () => void;
   rolloverHour: number;
 }) {
-  const { colors } = useAppTheme();
+  const { colorScheme, colors } = useAppTheme();
   const future = category === 'future';
   const subtitle = future
     ? `Starts ${formatHabitDay(habitStartDay(habit, { rolloverHour }))}`
     : 'Archived habit · Open details to restore';
   const accent = habit.color ?? colors.primary;
+  const rowSurface = getRowSurfaceBackground({
+    colorScheme,
+    surface: colors.surface,
+    surfaceMuted: colors.surfaceMuted,
+  });
 
   return (
     <Pressable
-      accessibilityHint="Opens habit details, where it can be edited or restored"
-      accessibilityLabel={`${habit.name}. ${subtitle}`}
+      accessibilityHint={
+        editMode
+          ? 'Opens the habit editor'
+          : 'Opens habit details, where it can be edited or restored'
+      }
+      accessibilityLabel={`${habit.name}. ${subtitle}${editMode ? '. Edit habit' : ''}`}
       accessibilityRole="button"
       onPress={onDetails}
       style={({ pressed }) => [
-        getRowSurfaceStyle({ backgroundColor: colors.surface }),
+        getRowSurfaceStyle({ backgroundColor: rowSurface }),
         styles.categoryListItem,
         pressed ? styles.categoryPressed : null,
       ]}
@@ -683,7 +706,7 @@ function HabitWeekStrip({
   rolloverHour: number;
   onSelectDay: (day: LogicalDayKey) => void;
 }) {
-  const { colors } = useAppTheme();
+  const { colorScheme, colors } = useAppTheme();
   const { width: viewportWidth } = useWindowDimensions();
   const [pageWidth, setPageWidth] = useState(0);
   const [dragX] = useState(() => new Animated.Value(0));
@@ -691,6 +714,11 @@ function HabitWeekStrip({
   const useNativeDriver = Platform.OS !== 'web';
   const gestureStyle = webGestureStyle('pan-y');
   const effectiveWidth = pageWidth > 0 ? pageWidth : Math.max(viewportWidth - 40, 280);
+  const rowSurface = getRowSurfaceBackground({
+    colorScheme,
+    surface: colors.surface,
+    surfaceMuted: colors.surfaceMuted,
+  });
 
   const prevAnchor = shiftHabitWeek(selectedDay, -1, rolloverHour);
   const nextAnchor = shiftHabitWeek(selectedDay, 1, rolloverHour);
@@ -781,7 +809,7 @@ function HabitWeekStrip({
     <View
       onLayout={(event) => setPageWidth(event.nativeEvent.layout.width)}
       style={{
-        backgroundColor: colors.surface,
+        backgroundColor: rowSurface,
         borderRadius: ROW_SURFACE_RADIUS,
         overflow: 'hidden',
         width: '100%',
@@ -891,6 +919,7 @@ function WeekDaysRow({
 function HabitDayList({
   activeHabits,
   day,
+  editMode,
   logicalDayRolloverHour,
   onDetails,
   onOutcome,
@@ -902,6 +931,7 @@ function HabitDayList({
 }: {
   activeHabits: Habit[];
   day: LogicalDayKey;
+  editMode: boolean;
   logicalDayRolloverHour: number;
   onDetails: (habitId: string) => void;
   onOutcome: (habitId: string, outcome: HabitDayOutcome | null) => void;
@@ -920,6 +950,7 @@ function HabitDayList({
           <Column spacing={8} style={{ width: '100%' }}>
             {activeHabits.map((habit) => (
               <HabitListItem
+                editMode={editMode}
                 habit={habit}
                 key={habit.id}
                 saving={saving}
@@ -951,6 +982,7 @@ interface HabitMenuAnchor {
 }
 
 function HabitListItem({
+  editMode,
   habit,
   state,
   states,
@@ -963,6 +995,7 @@ function HabitListItem({
   onToggleMetricDisplay,
   metricMode,
 }: {
+  editMode: boolean;
   habit: Habit;
   state: HabitDayState | undefined;
   states: HabitDayState[];
@@ -975,7 +1008,7 @@ function HabitListItem({
   onToggleMetricDisplay: () => void;
   metricMode: HabitMetricMode;
 }) {
-  const { colors } = useAppTheme();
+  const { colorScheme, colors } = useAppTheme();
   const [menuAnchor, setMenuAnchor] = useState<HabitMenuAnchor | null>(null);
   const longPressed = useRef(false);
   const rowRef = useRef<View>(null);
@@ -990,11 +1023,23 @@ function HabitListItem({
   const totalDays = habitCompletionCount(states);
   const metricValue = metricMode === 'total-days' ? totalDays : streak.current;
   const metricLabel = metricMode === 'total-days' ? 'Total Days' : 'Current Streak';
-  const statusIcon =
-    outcome === 'failed' ? 'x' : outcome === 'skipped' ? 'skip-forward' : complete ? 'check' : null;
+  const statusIcon = editMode
+    ? 'pencil'
+    : outcome === 'failed'
+      ? 'x'
+      : outcome === 'skipped'
+        ? 'skip-forward'
+        : complete
+          ? 'check'
+          : null;
   const statusBackground = accent;
-  const statusColor = getAccessibleTextColor(statusBackground);
+  const statusColor = editMode ? colors.textMuted : getAccessibleTextColor(statusBackground);
   const statusLabel = habitOutcomeLabel(outcome) ?? habitCompletionLabel(state ?? null);
+  const rowSurface = getRowSurfaceBackground({
+    colorScheme,
+    surface: colors.surface,
+    surfaceMuted: colors.surfaceMuted,
+  });
   const menuOpen = menuAnchor !== null;
   const noSelectStyle =
     Platform.OS === 'web'
@@ -1013,20 +1058,38 @@ function HabitListItem({
       testID={`habit-card-${habit.id}`}
     >
       <Pressable
-        accessibilityHint="Cycles this habit through not done, done, failed, and skipped. Long press for more actions."
-        accessibilityLabel={`${habit.name}. ${statusLabel}. ${metricValue} ${metricLabel.toLowerCase()}. Signals: ${habitSignalSummary(state ?? null)}.`}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: complete, disabled: saving }}
+        accessibilityHint={
+          editMode
+            ? 'Opens the habit editor'
+            : 'Cycles this habit through not done, done, failed, and skipped. Long press for more actions.'
+        }
+        accessibilityLabel={
+          editMode
+            ? `Edit ${habit.name}`
+            : `${habit.name}. ${statusLabel}. ${metricValue} ${metricLabel.toLowerCase()}. Signals: ${habitSignalSummary(state ?? null)}.`
+        }
+        accessibilityRole={editMode ? 'button' : 'checkbox'}
+        accessibilityState={
+          editMode ? { disabled: saving } : { checked: complete, disabled: saving }
+        }
         accessibilityValue={{ text: statusLabel }}
         delayLongPress={500}
         disabled={saving}
-        onLongPress={() => {
-          longPressed.current = true;
-          rowRef.current?.measureInWindow((x, y, width, height) => {
-            setMenuAnchor({ height, width, x, y });
-          });
-        }}
+        onLongPress={
+          editMode
+            ? undefined
+            : () => {
+                longPressed.current = true;
+                rowRef.current?.measureInWindow((x, y, width, height) => {
+                  setMenuAnchor({ height, width, x, y });
+                });
+              }
+        }
         onPress={() => {
+          if (editMode) {
+            onDetails();
+            return;
+          }
           if (longPressed.current) {
             longPressed.current = false;
             return;
@@ -1036,7 +1099,7 @@ function HabitListItem({
         style={({ pressed }) => ({
           alignItems: 'center',
           ...getRowSurfaceStyle({
-            backgroundColor: colors.surface,
+            backgroundColor: rowSurface,
           }),
           flexDirection: 'row',
           minHeight: HABIT_ROW_MIN_HEIGHT,
@@ -1060,19 +1123,24 @@ function HabitListItem({
           style={{ height: HABIT_ROW_MIN_HEIGHT, width: '100%' }}
         >
           <Pressable
-            accessibilityHint="Cycles this habit through not done, done, failed, and skipped"
-            accessibilityLabel={`${habit.name}, ${statusLabel}`}
+            accessibilityHint={
+              editMode
+                ? 'Opens the habit editor'
+                : 'Cycles this habit through not done, done, failed, and skipped'
+            }
+            accessibilityLabel={editMode ? `Edit ${habit.name}` : `${habit.name}, ${statusLabel}`}
             accessibilityValue={{ text: statusLabel }}
             accessibilityRole="button"
             accessibilityState={{ disabled: saving }}
             disabled={saving}
             onPress={(event) => {
               event.stopPropagation();
-              onCycle();
+              if (editMode) onDetails();
+              else onCycle();
             }}
             style={({ pressed }) => ({
               alignItems: 'center',
-              backgroundColor: statusBackground,
+              backgroundColor: editMode ? colors.surfaceMuted : statusBackground,
               borderRadius: 8,
               height: ROW_SURFACE_ICON_SIZE,
               justifyContent: 'center',
@@ -1116,12 +1184,12 @@ function HabitListItem({
             accessibilityHint="Toggles all visible habits between current streak and total days"
             accessibilityLabel={`${metricLabel}: ${metricValue}`}
             accessibilityRole="button"
-            accessibilityState={{ disabled: saving }}
+            accessibilityState={{ disabled: saving || editMode }}
             accessibilityValue={{ text: String(metricValue) }}
-            disabled={saving}
+            disabled={saving || editMode}
             onPress={(event) => {
               event.stopPropagation();
-              onToggleMetricDisplay();
+              if (!editMode) onToggleMetricDisplay();
             }}
             style={{
               alignItems: 'flex-end',

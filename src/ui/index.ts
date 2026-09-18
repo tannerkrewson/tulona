@@ -18,6 +18,7 @@ export { IconButton, type IconButtonProps, type IconButtonVariant } from './Icon
 export { IconPicker, searchIconCatalog, type IconPickerProps } from './IconPicker';
 export { ReorderControls, type ReorderControlsProps } from './ReorderControls';
 export {
+  getRowSurfaceBackground,
   getRowSurfaceLayoutStyle,
   getRowSurfaceStyle,
   ROW_SURFACE_BORDER_WIDTH,
