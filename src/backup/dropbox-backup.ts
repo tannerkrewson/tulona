@@ -11,7 +11,7 @@ import {
   type DropboxBackupRecord,
 } from './dropbox-backup-storage';
 
-export const DROPBOX_BACKUP_PATH = '/Tulona/tulona-backup.json';
+export const DROPBOX_BACKUP_PATH = '/tulona-backup.json';
 export const DROPBOX_BACKUP_SCOPES = ['files.content.write'] as const;
 export const DROPBOX_AUTH_PENDING_MAX_AGE_MS = 10 * 60 * 1000;
 export const DROPBOX_BACKUP_DEFAULT_DEBOUNCE_MS = 1500;
