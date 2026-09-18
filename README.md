@@ -72,7 +72,7 @@ Open Settings → Data → Backup & restore and connect Dropbox. Tulona uses the
 Dropbox SDK's PKCE flow, so no app secret is shipped to the client. Once
 connected, automatic backups are debounced after local writes and also run at
 startup. The latest complete JSON snapshot replaces
-`/Tulona/tulona-backup.json` inside the Dropbox app folder; remote files are never deleted and failed
+`/tulona-backup.json` at the root of the Dropbox app folder; remote files are never deleted and failed
 uploads do not change local data.
 
 ## Universal UI Convention
