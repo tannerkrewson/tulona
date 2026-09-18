@@ -415,6 +415,14 @@ async function run(): Promise<void> {
     'historical edit must reassign a transition'
   );
   await rejects(
+    () => historyService.editTransition(edited.id, { timestamp: '2026-07-19T10:00:00.000Z' }),
+    'historical edits must not move a transition before its preceding neighbor'
+  );
+  await rejects(
+    () => historyService.editTransition(edited.id, { timestamp: '2026-08-01T10:00:00.000Z' }),
+    'historical edits must not move a transition after its following neighbor'
+  );
+  await rejects(
     () => historyService.deleteTransition(edited.id),
     'historical delete must require confirmation'
   );
@@ -448,6 +456,30 @@ async function run(): Promise<void> {
       historyRepository.operationKinds.includes('tracker-transition-delete') &&
       historyRepository.operationKinds.includes('tracker-transition-merge'),
     'historical edit, delete, and merge must use repository writes'
+  );
+
+  const activeBoundaryRepository = new MemoryTrackerRepository();
+  const activeBoundaryId = '77777777-7777-4777-8777-777777777777';
+  const activeEndId = '88888888-8888-4888-8888-888888888888';
+  await activeBoundaryRepository.upsertTransitions([
+    transition(
+      activeBoundaryId,
+      '2026-08-03T10:00:00.000Z',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    ),
+  ]);
+  const activeBoundaryService = createTrackerService(activeBoundaryRepository, { now: () => now });
+  await activeBoundaryService.insertTransition({
+    id: activeEndId,
+    activityId: null,
+    timestamp: '2026-08-03T11:00:00.000Z',
+  });
+  const activeBoundaryContext = await activeBoundaryService.getTransitionContext(activeBoundaryId);
+  assert(
+    activeBoundaryContext.following?.id === activeEndId &&
+      activeBoundaryContext.following.activityId === null &&
+      (await activeBoundaryService.getActiveTransition())?.activityId === null,
+    'editing an active session To value must record an idle boundary and close the open end'
   );
 
   let storeNowMs = nowMs;
