@@ -5,28 +5,10 @@ import { Pressable, View } from 'react-native';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 
-import { AppButton } from './AppButton';
 import { ColorPickerPlatform } from './ColorPickerPlatform';
+import { getColorOptions, type ColorOption } from './color-palette';
 
-export interface ColorOption {
-  readonly value: string;
-  readonly label: string;
-}
-
-export const defaultColorOptions: readonly ColorOption[] = [
-  { value: '#176B87', label: 'Teal' },
-  { value: '#0F766E', label: 'Emerald' },
-  { value: '#0891B2', label: 'Cyan' },
-  { value: '#2563EB', label: 'Blue' },
-  { value: '#7C3AED', label: 'Violet' },
-  { value: '#DB2777', label: 'Pink' },
-  { value: '#DC2626', label: 'Red' },
-  { value: '#EA580C', label: 'Orange' },
-  { value: '#CA8A04', label: 'Amber' },
-  { value: '#65A30D', label: 'Lime' },
-  { value: '#475569', label: 'Slate' },
-  { value: '#6B7280', label: 'Gray' },
-];
+export { COLOR_PALETTE, getColorOptions, type ColorOption } from './color-palette';
 
 export interface ColorPickerProps {
   value: string | null;
@@ -58,9 +40,9 @@ export function ColorPicker({
   const { colors } = useAppTheme();
   const configuredOptions =
     options ?? colorValues?.map((color) => ({ value: color, label: color }));
-  const availableOptions = (configuredOptions ?? defaultColorOptions).filter((option) =>
-    isHexColor(option.value)
-  );
+  const availableOptions = getColorOptions(colors.primary, configuredOptions)
+    .filter((option) => allowClear || !option.isSemanticBase)
+    .filter((option) => isHexColor(option.value));
   const selectedValue = value?.toLowerCase();
   const customSelected =
     selectedValue != null &&
@@ -75,48 +57,18 @@ export function ColorPicker({
   return (
     <Column spacing={10} style={{ width: '100%' }} testID={testID}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, width: '100%' }}>
-        {allowClear ? (
-          <AppButton
-            disabled={value == null}
-            label="Default"
-            onPress={() => selectColor(null)}
-            style={{ height: 44, paddingHorizontal: 14 }}
-            testID={testID ? `${testID}-clear` : undefined}
-            variant={value == null ? 'filled' : 'outlined'}
-          />
-        ) : null}
-        <Pressable
-          accessibilityHint={
-            customPickerOpen ? 'Hides the custom color picker' : 'Opens the custom color picker'
-          }
-          accessibilityLabel={customSelected ? 'Custom color, selected' : 'Custom color'}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: customPickerOpen, selected: customSelected }}
-          onPress={() => setCustomPickerOpen((current) => !current)}
-          style={{
-            alignItems: 'center',
-            borderColor: customSelected ? colors.focus : colors.border,
-            borderRadius: 22,
-            borderWidth: 2,
-            height: 44,
-            justifyContent: 'center',
-            width: 44,
-          }}
-          testID={`${rootTestID}-custom-toggle`}
-        >
-          <View style={{ alignItems: 'center', height: 28, justifyContent: 'center', width: 28 }}>
-            <Text textStyle={{ fontSize: 24, lineHeight: 24 }}>🌈</Text>
-          </View>
-        </Pressable>
         {availableOptions.map((option) => {
-          const selected = selectedValue === option.value.toLowerCase();
+          const selected =
+            option.isSemanticBase && value == null
+              ? true
+              : selectedValue === option.value.toLowerCase();
           return (
             <Pressable
               key={option.value}
               accessibilityLabel={`${option.label}${selected ? ', selected' : ''}`}
               accessibilityRole="radio"
               accessibilityState={{ selected }}
-              onPress={() => selectColor(option.value)}
+              onPress={() => selectColor(option.isSemanticBase ? null : option.value)}
               style={{
                 alignItems: 'center',
                 borderColor: selected ? colors.focus : 'transparent',
@@ -151,6 +103,29 @@ export function ColorPicker({
             </Pressable>
           );
         })}
+        <Pressable
+          accessibilityHint={
+            customPickerOpen ? 'Hides the custom color picker' : 'Opens the custom color picker'
+          }
+          accessibilityLabel={customSelected ? 'Custom color, selected' : 'Custom color'}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: customPickerOpen, selected: customSelected }}
+          onPress={() => setCustomPickerOpen((current) => !current)}
+          style={{
+            alignItems: 'center',
+            borderColor: customSelected ? colors.focus : colors.border,
+            borderRadius: 22,
+            borderWidth: 2,
+            height: 44,
+            justifyContent: 'center',
+            width: 44,
+          }}
+          testID={`${rootTestID}-custom-toggle`}
+        >
+          <View style={{ alignItems: 'center', height: 28, justifyContent: 'center', width: 28 }}>
+            <Text textStyle={{ fontSize: 24, lineHeight: 24 }}>🌈</Text>
+          </View>
+        </Pressable>
       </View>
       {selectedValue && !availableOptions.some((o) => o.value.toLowerCase() === selectedValue) ? (
         <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>{`Custom color ${value}`}</Text>

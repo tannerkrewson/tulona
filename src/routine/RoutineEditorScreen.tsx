@@ -30,6 +30,7 @@ import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import {
   inheritRoutineStepMetadata,
+  resolveDisplayColor,
   type CatalogService,
   type CreateRoutineStepInput,
 } from '../catalog/catalog-service';
@@ -270,6 +271,7 @@ function FolderPicker({
 function StepForm({
   draft,
   activities,
+  folders,
   trackingMode,
   onChange,
   onSave,
@@ -281,6 +283,7 @@ function StepForm({
 }: {
   draft: StepDraft;
   activities: readonly Activity[];
+  folders: readonly Folder[];
   trackingMode: RoutineTrackingMode;
   onChange: (draft: StepDraft) => void;
   onSave: () => void;
@@ -295,6 +298,9 @@ function StepForm({
     (activity) => activity.archivedAt === null || activity.id === draft.activityId
   );
   const selectedActivity = activities.find((activity) => activity.id === draft.activityId) ?? null;
+  const selectedActivityColor = selectedActivity
+    ? resolveDisplayColor(selectedActivity, folders, colors.primary)
+    : colors.primary;
   const update = (changes: Partial<StepDraft>) => onChange({ ...draft, ...changes });
   return (
     <Column
@@ -347,7 +353,7 @@ function StepForm({
             >
               <AppIcon
                 name={selectedActivity.iconName || 'activity'}
-                color={selectedActivity.color || colors.primary}
+                color={selectedActivityColor}
                 size={24}
               />
               <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>
@@ -437,6 +443,9 @@ function StepForm({
 
 function StepRow({
   step,
+  activities,
+  folders,
+  trackingMode,
   index,
   count,
   onEdit,
@@ -446,6 +455,9 @@ function StepRow({
   busy,
 }: {
   step: EditableStep;
+  activities: readonly Activity[];
+  folders: readonly Folder[];
+  trackingMode: RoutineTrackingMode;
   index: number;
   count: number;
   onEdit: () => void;
@@ -457,6 +469,13 @@ function StepRow({
   const { colors } = useAppTheme();
   const duration = durationParts(step.durationMs);
   const durationText = `${duration.hours}h ${duration.minutes}m ${duration.seconds}s`;
+  const selectedActivity =
+    trackingMode === 'steps' && step.activityId !== null
+      ? activities.find((activity) => activity.id === step.activityId)
+      : null;
+  const stepColor = selectedActivity
+    ? resolveDisplayColor(selectedActivity, folders, colors.primary)
+    : (step.color ?? colors.primary);
   return (
     <Column
       spacing={10}
@@ -474,7 +493,7 @@ function StepRow({
         <AppIcon
           accessibilityLabel={`Icon for step ${index + 1}`}
           name={step.iconName || 'timer'}
-          color={step.color ?? colors.primary}
+          color={stepColor}
           size={25}
         />
         <Column spacing={3}>
@@ -702,6 +721,11 @@ function RoutineEditorForm({
   const [error, setError] = useState<string | null>(null);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
   const activities = catalog.activities;
+  const selectedFolder =
+    folderId === ROOT_VALUE ? null : catalog.folders.find((folder) => folder.id === folderId);
+  const previewColor = selectedFolder
+    ? (selectedFolder.color ?? colors.primary)
+    : color || colors.primary;
 
   const run = async (action: () => Promise<void>) => {
     lastAction.current = action;
@@ -850,7 +874,7 @@ function RoutineEditorForm({
         }}
       >
         <Row alignment="center" spacing={12}>
-          <AppIcon name={iconName || 'repeat'} color={color || colors.primary} size={30} />
+          <AppIcon name={iconName || 'repeat'} color={previewColor} size={30} />
           <Column spacing={3} style={{ width: '100%' }}>
             <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
               {name || 'Untitled routine'}
@@ -947,6 +971,7 @@ function RoutineEditorForm({
           <StepForm
             draft={draft}
             activities={activities}
+            folders={catalog.folders}
             trackingMode={trackingMode as RoutineTrackingMode}
             onChange={setDraft}
             onSave={() => void saveStep()}
@@ -966,6 +991,7 @@ function RoutineEditorForm({
               <StepForm
                 draft={draft}
                 activities={activities}
+                folders={catalog.folders}
                 trackingMode={trackingMode as RoutineTrackingMode}
                 onChange={setDraft}
                 onSave={() => void saveStep()}
@@ -984,6 +1010,9 @@ function RoutineEditorForm({
             ) : (
               <StepRow
                 step={step}
+                activities={activities}
+                folders={catalog.folders}
+                trackingMode={trackingMode as RoutineTrackingMode}
                 index={index}
                 count={steps.length}
                 busy={busy}

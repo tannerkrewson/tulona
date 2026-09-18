@@ -37,7 +37,7 @@ const isHexColor = (value: string | null | undefined): value is string =>
 
 /**
  * The single canonical catalog row. An active row is filled with the
- * activity's own color; inactive rows use the theme surface.
+ * resolved catalog color; inactive rows use the theme surface.
  */
 export function ActivityRow({
   item,
@@ -52,7 +52,7 @@ export function ActivityRow({
   testID,
 }: ActivityRowProps) {
   const { colorScheme, colors } = useAppTheme();
-  const configuredColor = item.color ?? color;
+  const configuredColor = color ?? item.color;
   const accent = isHexColor(configuredColor) ? configuredColor.trim() : colors.primary;
   const activeForeground = getDarkerColor(accent);
   const inactiveBackground = colorScheme === 'dark' ? colors.surfaceMuted : colors.surface;

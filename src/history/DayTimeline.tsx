@@ -71,7 +71,7 @@ function presentationFor(
 ): Omit<SessionPresentation, 'entry'> {
   if (session.activitySnapshot)
     return snapshotPresentation(session.activitySnapshot, fallbackColor);
-  const resolved = resolveCatalogItem(catalog, session.activityId);
+  const resolved = resolveCatalogItem(catalog, session.activityId, fallbackColor);
   if (!resolved) {
     return {
       name: 'Archived activity',
@@ -82,7 +82,7 @@ function presentationFor(
   }
   return {
     name: resolved.item.name,
-    color: safeActivityColor(resolved.item.color, resolved.displayColor || fallbackColor),
+    color: safeActivityColor(resolved.displayColor, fallbackColor),
     iconName: resolved.item.iconName ?? 'activity',
     folderName: resolved.folder?.name ?? null,
   };

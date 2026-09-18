@@ -218,6 +218,7 @@ async function reportingChecks(): Promise<void> {
     settings: { read: async () => settings },
   };
   const service = createReportingService(dependencies, {
+    baseColor: '#FFFFFF',
     now: () => localTimestamp(30, 5),
   });
   const report = await service.day('2026-08-30');
@@ -230,6 +231,10 @@ async function reportingChecks(): Promise<void> {
   );
   assert(report.activities[0]?.name === 'Deep, "work"', 'archived activity name must resolve');
   assert(report.activities[0]?.displayColor === '#112233', 'archived folder color must resolve');
+  assert(
+    report.activities.some((item) => item.name === 'Root work' && item.displayColor === '#FFFFFF'),
+    'unconfigured report items must use the semantic base color'
+  );
   assert(
     report.folders[0]?.durationMs === 60 * 60 * 1000,
     'folder total must include child time once'

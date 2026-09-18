@@ -281,6 +281,11 @@ function ActivityEditor({
   const lastAction = useRef<(() => Promise<void>) | null>(null);
   const [confirmingArchive, setConfirmingArchive] = useState(false);
   const originalFolderId = activity?.folderId ?? null;
+  const selectedFolder =
+    folderId === ROOT_VALUE ? null : folders.find((folder) => folder.id === folderId);
+  const previewColor = selectedFolder
+    ? (selectedFolder.color ?? colors.primary)
+    : color || colors.primary;
 
   const run = async (action: () => Promise<void>) => {
     lastAction.current = action;
@@ -334,7 +339,7 @@ function ActivityEditor({
         }}
       >
         <Row alignment="center" spacing={12}>
-          <AppIcon name="activity" color={color || colors.primary} size={28} />
+          <AppIcon name="activity" color={previewColor} size={28} />
           <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
             {activity?.name ?? 'New activity'}
           </Text>

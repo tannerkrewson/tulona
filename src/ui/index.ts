@@ -4,7 +4,8 @@ export { AppButton } from './AppButton';
 export { AppScreen, type AppScreenProps } from './AppScreen';
 export {
   ColorPicker,
-  defaultColorOptions,
+  COLOR_PALETTE,
+  getColorOptions,
   isHexColor,
   type ColorOption,
   type ColorPickerProps,

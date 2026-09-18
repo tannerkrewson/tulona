@@ -49,7 +49,7 @@ export function ActivityCompositionBar({
             accessibilityElementsHidden
             key={segment.key}
             style={{
-              backgroundColor: segment.color ?? colors.surfaceMuted,
+              backgroundColor: segment.color ?? colors.primary,
               flex: effectiveTotal > 0 ? segment.durationMs / effectiveTotal : 0,
               minWidth: 2,
             }}
