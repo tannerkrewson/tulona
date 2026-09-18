@@ -10,6 +10,7 @@ function assert(condition: unknown, message: string): asserts condition {
 const root = path.resolve(process.cwd());
 const activeBar = fs.readFileSync(path.join(root, 'src/tracker/ActiveActivityBar.tsx'), 'utf8');
 const activityRow = fs.readFileSync(path.join(root, 'src/tracker/ActivityRow.tsx'), 'utf8');
+const catalogHeader = fs.readFileSync(path.join(root, 'src/tracker/CatalogHeader.tsx'), 'utf8');
 const folderEditor = fs.readFileSync(
   path.join(root, 'src/catalog/CatalogEditorScreen.tsx'),
   'utf8'
@@ -54,6 +55,18 @@ assert(
     folderEditor.includes('fill={color || colors.primary}') &&
     folderEditor.includes('strokeWidth={0}'),
   'tracker labels and playback controls must use the requested sizing and solid icon treatment'
+);
+assert(
+  activityRow.includes('getRowSurfaceBackground') &&
+    activityRow.includes('inactiveBackground') &&
+    activityRow.includes('backgroundColor: active ? accent : inactiveBackground'),
+  'tracker rows must expose the shared neutral surface used by habit and goal rows'
+);
+assert(
+  catalogHeader.includes("icon={editMode ? 'check' : 'pencil'}") &&
+    catalogHeader.includes("label={editMode ? 'Done' : 'Edit'}") &&
+    catalogHeader.includes('testID="catalog-edit"'),
+  'tracker edit controls must retain the shared pencil/check behavior used by goal editing'
 );
 assert(
   activeBar.includes("activeRoutine?.status === 'paused'") &&
