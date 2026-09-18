@@ -17,7 +17,10 @@ export interface HabitHeaderProps {
   onAdd?: () => void;
   onToggleEdit?: () => void;
   editOpen?: boolean;
+  editLabel?: string;
+  editOpenLabel?: string;
   editActions?: readonly HabitHeaderAction[];
+  editTestID?: string;
   testID?: string;
 }
 
@@ -28,7 +31,10 @@ export function HabitHeader({
   onAdd,
   onToggleEdit,
   editOpen = false,
+  editLabel = 'Edit habit',
+  editOpenLabel = 'Close habit edit actions',
   editActions = [],
+  editTestID = 'edit-habit',
   testID,
 }: HabitHeaderProps) {
   const { colors } = useAppTheme();
@@ -58,16 +64,17 @@ export function HabitHeader({
         <Spacer flexible />
         {onToggleEdit ? (
           <IconButton
-            accessibilityHint="Opens habit edit actions"
+            accessibilityHint={editOpen ? 'Closes habit edit actions' : 'Opens habit edit actions'}
             expanded={editOpen}
-            icon="pencil"
-            label="Edit habit"
+            icon={editOpen ? 'check' : 'pencil'}
+            label={editOpen ? editOpenLabel : editLabel}
             onPress={onToggleEdit}
-            testID="edit-habit"
-            variant="plain"
-            iconSize={21}
+            testID={editTestID}
+            variant="muted"
+            iconSize={editOpen ? 23 : 21}
           />
-        ) : onAdd ? (
+        ) : null}
+        {onAdd ? (
           <IconButton
             accessibilityHint="Opens a new habit"
             icon="plus"
@@ -78,7 +85,7 @@ export function HabitHeader({
           />
         ) : null}
       </Row>
-      {editOpen ? (
+      {editOpen && editActions.length > 0 ? (
         <Pressable
           accessibilityLabel="Dismiss habit edit menu"
           accessibilityRole="button"

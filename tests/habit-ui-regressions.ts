@@ -1,4 +1,4 @@
-import { ROW_SURFACE_RADIUS } from '../src/ui/row-surface';
+import { getRowSurfaceBackground, ROW_SURFACE_RADIUS } from '../src/ui/row-surface';
 import { DEFAULT_HABIT_CATEGORY, HABIT_CATEGORY_OPTIONS } from '../src/habits';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -14,6 +14,7 @@ const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const appScreen = read('src/ui/AppScreen.tsx');
 const habitList = read('src/habits/HabitListScreen.tsx');
+const habitHeader = read('src/habits/HabitHeader.tsx');
 const habitStore = read('src/habits/habit-store.ts');
 const habitItemStart = habitList.indexOf('function HabitListItem(');
 const habitItemEnd = habitList.indexOf('function HabitAction(', habitItemStart);
@@ -67,13 +68,30 @@ assert(
 );
 assert(
   habitItem.includes('getRowSurfaceStyle') &&
-    habitItem.includes('backgroundColor: colors.surface') &&
+    habitItem.includes('getRowSurfaceBackground') &&
+    habitItem.includes('backgroundColor: rowSurface') &&
     !habitItem.includes('borderColor:') &&
     !habitItem.includes('borderWidth:') &&
     !habitItem.includes('colors.success.background') &&
     !habitItem.includes('colors.warning.background') &&
     !habitItem.includes('colors.danger.background'),
   'habit cards must use the shared borderless surface without state background colors'
+);
+assert(
+  getRowSurfaceBackground({ colorScheme: 'light', surface: '#surface', surfaceMuted: '#muted' }) ===
+    '#surface' &&
+    getRowSurfaceBackground({
+      colorScheme: 'dark',
+      surface: '#surface',
+      surfaceMuted: '#muted',
+    }) === '#muted' &&
+    habitList.includes('editTestID="habit-edit-mode"') &&
+    habitList.includes('editLabel="Edit habits"') &&
+    habitList.includes('editOpenLabel="Done editing habits"') &&
+    habitList.includes('onDetails()') &&
+    habitHeader.includes("icon={editOpen ? 'check' : 'pencil'}") &&
+    habitHeader.includes('editOpen && editActions.length > 0'),
+  'habit editing must have an accessible top-right pencil and preserve detail edit menus'
 );
 assert(
   habitItem.includes('flexShrink: 0') &&
@@ -87,6 +105,8 @@ assert(
 assert(
   weekPager.includes('borderRadius: ROW_SURFACE_RADIUS') &&
     weekPager.includes("overflow: 'hidden'") &&
+    weekPager.includes('getRowSurfaceBackground') &&
+    weekPager.includes('backgroundColor: rowSurface') &&
     ROW_SURFACE_RADIUS === 14,
   'the week scroller must clip with the same corner radius as habit rows'
 );

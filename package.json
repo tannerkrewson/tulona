@@ -20,6 +20,7 @@
     "test:history-session": "tsx tests/history-session-editing.ts",
     "test:goals": "tsx tests/goals.ts",
     "test:goals-ui": "tsx tests/goals-ui-regressions.ts",
+    "test:goal-review-navigation": "tsx tests/goal-review-navigation.ts",
     "test:reporting-backup": "tsx tests/reporting-backup.ts",
     "test:timemator-import": "tsx tests/timemator-import.ts",
     "test:goal-settings": "tsx tests/goal-settings.ts",
