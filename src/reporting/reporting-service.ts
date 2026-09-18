@@ -22,9 +22,11 @@ import {
 } from '../catalog/catalog-service';
 import type { TrackerQuery, TrackerRange } from '../tracker/tracker-engine';
 import type { TrackerServiceApi } from '../tracker/tracker-service';
+import { themeColors } from '../theme/colors';
 
 const UNFILED_ID = '__unfiled__';
 const UNTRACKED_COLOR = '#64748B';
+const HEADLESS_BASE_COLOR = themeColors.light.primary;
 
 export interface ReportItem {
   id: UUID | null;
@@ -87,6 +89,7 @@ export interface ReportingServiceOptions {
   now?: () => number;
   rolloverHour?: number;
   weekStartsOn?: number;
+  baseColor?: string;
 }
 
 export interface ReportingServiceApi {
@@ -114,7 +117,12 @@ function settingsWithDefaults(
   };
 }
 
-function resolvedItem(catalog: CatalogCollection, id: UUID | null, durationMs = 0): ReportItem {
+function resolvedItem(
+  catalog: CatalogCollection,
+  id: UUID | null,
+  durationMs = 0,
+  baseColor = HEADLESS_BASE_COLOR
+): ReportItem {
   if (id === null) {
     return {
       id: null,
@@ -127,7 +135,7 @@ function resolvedItem(catalog: CatalogCollection, id: UUID | null, durationMs = 
       isArchived: false,
     };
   }
-  const result: ResolvedCatalogItem | null = resolveCatalogItem(catalog, id);
+  const result: ResolvedCatalogItem | null = resolveCatalogItem(catalog, id, baseColor);
   if (!result) {
     return {
       id,
@@ -185,11 +193,17 @@ function buildReport(
   logicalDay: LogicalDayKey,
   range: TrackerRange,
   query: TrackerQuery,
-  catalog: CatalogCollection
+  catalog: CatalogCollection,
+  baseColor: string
 ): DailyReport {
   const itemTotals = new Map<string, ReportItem>();
   const timeline = query.intervals.map((interval) => {
-    const item = resolvedItem(catalog, interval.activityId, interval.endMs - interval.startMs);
+    const item = resolvedItem(
+      catalog,
+      interval.activityId,
+      interval.endMs - interval.startMs,
+      baseColor
+    );
     addItem(itemTotals, item);
     return {
       ...item,
@@ -211,15 +225,16 @@ function buildReport(
     routines: items.filter((item) => item.kind === 'routine'),
     folders: aggregateFolderTotals(items),
     timeline,
-    currentActiveItem: resolvedActiveItem(catalog, query.activeTransition),
+    currentActiveItem: resolvedActiveItem(catalog, query.activeTransition, baseColor),
   };
 }
 
 function resolvedActiveItem(
   catalog: CatalogCollection,
-  transition: TimeTransition | null
+  transition: TimeTransition | null,
+  baseColor: string
 ): ReportItem | null {
-  return transition ? resolvedItem(catalog, transition.activityId) : null;
+  return transition ? resolvedItem(catalog, transition.activityId, 0, baseColor) : null;
 }
 
 function mergeReportItems(reports: readonly DailyReport[]): ReportItem[] {
@@ -247,12 +262,14 @@ function mergeFolders(reports: readonly DailyReport[]): ReportFolder[] {
 
 export class ReportingService implements ReportingServiceApi {
   private readonly now: () => number;
+  private readonly baseColor: string;
 
   constructor(
     private readonly dependencies: ReportingDependencies,
     private readonly options: ReportingServiceOptions = {}
   ) {
     this.now = options.now ?? (() => Date.now());
+    this.baseColor = options.baseColor ?? HEADLESS_BASE_COLOR;
   }
 
   async today(nowMs = this.now()): Promise<DailyReport> {
@@ -276,7 +293,7 @@ export class ReportingService implements ReportingServiceApi {
       this.dependencies.tracker.query(bounds, nowMs),
       this.dependencies.catalog.read(),
     ]);
-    return buildReport(bounds.key, bounds, query, catalog);
+    return buildReport(bounds.key, bounds, query, catalog, this.baseColor);
   }
 
   async getDay(logicalDay: LogicalDayKey, nowMs?: number): Promise<DailyReport> {
@@ -326,7 +343,12 @@ export class ReportingService implements ReportingServiceApi {
       this.dependencies.catalog.read(),
     ]);
     return query.intervals.map((interval: TimeInterval) => ({
-      ...resolvedItem(catalog, interval.activityId, interval.endMs - interval.startMs),
+      ...resolvedItem(
+        catalog,
+        interval.activityId,
+        interval.endMs - interval.startMs,
+        this.baseColor
+      ),
       startMs: interval.startMs,
       endMs: interval.endMs,
       transitionId: interval.transitionId,

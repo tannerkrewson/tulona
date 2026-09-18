@@ -25,6 +25,7 @@
     "test:goal-settings": "tsx tests/goal-settings.ts",
     "test:goal-settings-ui": "tsx tests/goal-settings-ui-regressions.ts",
     "test:goal-evaluation": "tsx tests/goal-evaluation.ts",
+    "test:color-palette": "tsx tests/color-palette.ts",
     "test:history-analytics": "tsx tests/history-analytics.ts",
     "test:habits": "tsx tests/habits.ts",
     "test:habit-ui": "tsx tests/habit-ui-regressions.ts",
