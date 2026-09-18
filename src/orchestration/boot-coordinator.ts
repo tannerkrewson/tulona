@@ -31,6 +31,7 @@ import {
 
 import { createCatalogService, type CatalogService } from '../catalog/catalog-service';
 import { BackupService } from '../backup/backup-service';
+import { DropboxBackupService } from '../backup/dropbox-backup';
 import { createHabitReconciliationService, type HabitReconciliationService } from '../habits';
 import { createHabitService, type HabitService } from '../habits/habit-service';
 import { createHabitStore, type HabitStore } from '../habits/habit-store';
@@ -76,7 +77,7 @@ export function destinationAfterBoot(
   if (pathname === '/(tabs)') return null;
   if (
     pathname !== '/' &&
-    /^(?:\/history|\/goals|\/backup|\/habits|\/settings|\/routine-chooser|\/folder\/[^/]+|\/activity\/[^/]+|\/activity-session\/[^/]+|\/routine\/[^/]+|\/routine-edit\/[^/]+|\/folder-edit\/[^/]+|\/habit\/[^/]+)$/.test(
+    /^(?:\/history|\/goals|\/backup|\/habits|\/settings|\/dropbox-auth|\/routine-chooser|\/folder\/[^/]+|\/activity\/[^/]+|\/activity-session\/[^/]+|\/routine\/[^/]+|\/routine-edit\/[^/]+|\/folder-edit\/[^/]+|\/habit\/[^/]+)$/.test(
       pathname
     )
   ) {
@@ -120,6 +121,7 @@ export interface BootServices {
   reconciliation: HabitReconciliationService;
   reporting: ReportingService;
   backup: BackupService;
+  dropboxBackup: DropboxBackupService;
   timematorImport: TimematorImportService;
   routineAlarm: RoutineAlarmService;
 }
@@ -181,6 +183,7 @@ export class BootCoordinator {
   private hydratedResult: BootHydrationResult | null = null;
   private readonly resetListeners = new Set<() => void>();
   private readonly now: () => number;
+  private stopAutomaticBackups: (() => void) | null = null;
 
   constructor(
     private readonly database: KeyValueDatabase,
@@ -208,6 +211,8 @@ export class BootCoordinator {
   reset(): void {
     if (this.inFlight)
       throw new Error('Cannot reset the boot coordinator while hydration is running');
+    this.stopAutomaticBackups?.();
+    this.stopAutomaticBackups = null;
     this.hydratedResult = null;
     for (const listener of this.resetListeners) listener();
   }
@@ -428,6 +433,7 @@ export class BootCoordinator {
       this.database,
       reporting
     );
+    const dropboxBackup = new DropboxBackupService(backup, this.database);
     const routineAlarm = createRoutineAlarmService();
     routineAlarm.setSettings(settings.alarmSettings);
     const logicalDay = logicalDayKey(this.now(), {
@@ -457,6 +463,7 @@ export class BootCoordinator {
       reconciliation,
       reporting,
       backup,
+      dropboxBackup,
       timematorImport,
       routineAlarm,
     };
@@ -507,6 +514,7 @@ export class BootCoordinator {
     } catch (error) {
       throw bootError('tracker', error);
     }
+    this.stopAutomaticBackups = dropboxBackup.startAutomaticBackups();
     const destination: BootDestination =
       activeRoutine?.status === 'awaiting-next-activity'
         ? { kind: 'chooser' }

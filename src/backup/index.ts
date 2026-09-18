@@ -7,5 +7,7 @@ export * from './dataset-replacement';
 export * from './web-download';
 export * from './backup-runtime';
 export * from './timemator-import';
+export * from './dropbox-backup';
+export * from './dropbox-backup-storage';
 
 export type BackupLayer = 'backup';
