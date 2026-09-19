@@ -60,6 +60,12 @@ activity, its activity/folder color, and a live elapsed timer. The timer is
 rendered by WidgetKit, so it continues updating while the app is not in the
 foreground.
 
+Native iOS and Android builds use Expo Router's platform-native tabs, while
+the web/PWA keeps the styled JavaScript tab bar. On iOS 26 and later, the
+system tab bar supplies the native Liquid Glass appearance and the activity
+control uses the native bottom accessory. Tracker folders live in a nested
+native Stack, so the standard left-edge swipe returns to Tracker.
+
 Run `npm run ios` on macOS to generate and launch the native project locally.
 The native project is generated from Expo configuration and is intentionally
 not committed; `expo prebuild` recreates it whenever native configuration

@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate iOS project and widget
+    name: Validate iOS navigation and widget
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -76,6 +76,9 @@ jobs:
           test -f ios/ExpoWidgetsTarget/ActiveActivityWidget.swift
           grep -Fq 'ExpoWidgetsTarget' ios/Tulona.xcodeproj/project.pbxproj
           grep -Fq '.systemSmall' ios/ExpoWidgetsTarget/ActiveActivityWidget.swift
+          grep -Fq 'expo-router/unstable-native-tabs' src/navigation/AppTabs.native.tsx
+          grep -Fq 'name="(tracker)"' src/navigation/AppTabs.native.tsx
+          grep -Fq 'gestureEnabled: true' 'app/(tabs)/(tracker)/_layout.tsx'
 
   build:
     name: Build unsigned IPA
