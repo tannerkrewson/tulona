@@ -66,22 +66,18 @@ not committed; `expo prebuild` recreates it whenever native configuration
 changes.
 
 The [`Build iOS IPA`](.github/workflows/build-ios.yml) workflow validates the
-native project and widget on pull requests, then uses EAS Build on pushes to
-`main` and manual runs. A successful run uploads a signed IPA as a GitHub
-Actions artifact and verifies that the widget extension is inside the archive.
+native project and widget on pull requests, then uses a macOS GitHub runner and
+Xcode on pushes to `main` and manual runs. It deliberately disables code
+signing, packages the device build as an IPA, and verifies that the widget
+extension is inside the archive. It needs no Expo account, EAS project, Apple
+Developer account, or repository secrets.
 
-Before the first build, configure these repository settings:
-
-- Add an Expo access token as the `EXPO_TOKEN` Actions secret.
-- Add the EAS project UUID as the `EXPO_EAS_PROJECT_ID` Actions variable. The
-  variable is read by `app.config.js` because this project uses dynamic Expo
-  configuration.
-- Configure iOS distribution credentials for the EAS project. EAS can manage
-  them remotely, or they can be supplied through the normal EAS credentials
-  flow.
-
-For a local production build, set `EXPO_EAS_PROJECT_ID` in the environment and
-run `eas build --platform ios --profile production`.
+The resulting IPA is unsigned. It is useful as a build artifact for inspecting
+or handing off the archive, but iOS will not install or run it on a physical
+device until it is signed with an Apple certificate and provisioning profile.
+For a local unsigned archive on macOS, generate the project with
+`npx expo prebuild --platform ios`, run `pod install --project-directory=ios`,
+then use the same `xcodebuild` signing flags from the workflow.
 
 ## Dropbox Automatic Backup
 
