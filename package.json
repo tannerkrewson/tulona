@@ -67,6 +67,7 @@
     "expo-document-picker": "~57.0.1",
     "expo-linking": "~57.0.8",
     "expo-router": "~57.0.17",
+    "expo-widgets": "~57.0.20",
     "frimousse": "^0.3.0",
     "idb": "^8.0.3",
     "lucide-react-native": "1.37.0",
