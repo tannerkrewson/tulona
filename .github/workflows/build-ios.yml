@@ -41,8 +41,6 @@ jobs:
         run: npm run test:widget
 
       - name: Validate Expo configuration
-        env:
-          EXPO_EAS_PROJECT_ID: ${{ vars.EXPO_EAS_PROJECT_ID }}
         run: |
           npx expo config --json > expo-config.json
           node <<'NODE'
@@ -60,8 +58,6 @@ jobs:
           NODE
 
       - name: Generate native iOS project
-        env:
-          EXPO_EAS_PROJECT_ID: ${{ vars.EXPO_EAS_PROJECT_ID }}
         run: |
           npx expo prebuild --platform ios --no-install
           test -f ios/Tulona.xcodeproj/project.pbxproj
@@ -70,10 +66,10 @@ jobs:
           grep -Fq '.systemSmall' ios/ExpoWidgetsTarget/ActiveActivityWidget.swift
 
   build:
-    name: Build and package IPA
+    name: Build unsigned IPA
     if: github.event_name != 'pull_request'
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -84,69 +80,53 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Check EAS project settings
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          EXPO_EAS_PROJECT_ID: ${{ vars.EXPO_EAS_PROJECT_ID }}
-        run: |
-          if [ -z "$EXPO_TOKEN" ]; then
-            echo "::error::Add the EXPO_TOKEN repository secret before running the iOS build."
-            exit 1
-          fi
-          if [ -z "$EXPO_EAS_PROJECT_ID" ]; then
-            echo "::error::Add the EXPO_EAS_PROJECT_ID repository variable before running the iOS build."
-            exit 1
-          fi
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Install EAS CLI
-        uses: expo/expo-github-action@v9
-        with:
-          eas-version: latest
-          packager: npm
-          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Generate native iOS project
+        run: npx expo prebuild --platform ios --no-install
 
-      - name: Build iOS app with EAS
-        env:
-          EXPO_EAS_PROJECT_ID: ${{ vars.EXPO_EAS_PROJECT_ID }}
-        run: eas build --platform ios --profile production --non-interactive --wait --json > build-result.json
+      - name: Install CocoaPods dependencies
+        run: pod install --project-directory=ios
 
-      - name: Download and validate IPA
-        env:
-          EXPO_EAS_PROJECT_ID: ${{ vars.EXPO_EAS_PROJECT_ID }}
+      - name: Build unsigned iOS archive
         run: |
-          BUILD_ID=$(node <<'NODE'
-          const fs = require('node:fs');
-          const result = JSON.parse(fs.readFileSync('build-result.json', 'utf8'));
-          const build = Array.isArray(result) ? result[0] : result;
-          if (!build?.id) {
-            throw new Error('EAS did not return a build ID');
-          }
-          process.stdout.write(build.id);
-          NODE
+          xcodebuild \
+            -workspace ios/Tulona.xcworkspace \
+            -scheme Tulona \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Tulona.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            DEVELOPMENT_TEAM= \
+            archive
+
+      - name: Package and validate unsigned IPA
+        run: |
+          APP_PATH="$RUNNER_TEMP/Tulona.xcarchive/Products/Applications/Tulona.app"
+          WIDGET_PATH="$APP_PATH/PlugIns/ExpoWidgetsTarget.appex"
+          test -d "$APP_PATH"
+          test -d "$WIDGET_PATH"
+          test ! -d "$APP_PATH/_CodeSignature"
+          test ! -d "$WIDGET_PATH/_CodeSignature"
+          rm -rf artifacts
+          mkdir -p artifacts/Payload
+          cp -R "$APP_PATH" artifacts/Payload/Tulona.app
+          (
+            cd artifacts
+            zip -qry "Tulona-${GITHUB_SHA}-unsigned.ipa" Payload
           )
-          eas build:download --build-id "$BUILD_ID" --json > download-result.json
-          IPA_SOURCE=$(node <<'NODE'
-          const fs = require('node:fs');
-          const result = JSON.parse(fs.readFileSync('download-result.json', 'utf8'));
-          if (!result.path) {
-            throw new Error('EAS did not return an IPA path');
-          }
-          process.stdout.write(result.path);
-          NODE
-          )
-          mkdir -p artifacts
-          cp "$IPA_SOURCE" "artifacts/Tulona-${GITHUB_SHA}.ipa"
-          unzip -t "artifacts/Tulona-${GITHUB_SHA}.ipa" >/dev/null
-          unzip -l "artifacts/Tulona-${GITHUB_SHA}.ipa" > ipa-contents.txt
+          unzip -t "artifacts/Tulona-${GITHUB_SHA}-unsigned.ipa" >/dev/null
+          unzip -l "artifacts/Tulona-${GITHUB_SHA}-unsigned.ipa" > ipa-contents.txt
           grep -Fq 'ExpoWidgetsTarget.appex/Info.plist' ipa-contents.txt
 
-      - name: Upload IPA artifact
+      - name: Upload unsigned IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Tulona-iOS-${{ github.sha }}
-          path: artifacts/Tulona-${{ github.sha }}.ipa
+          name: Tulona-iOS-unsigned-${{ github.sha }}
+          path: artifacts/Tulona-${{ github.sha }}-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
