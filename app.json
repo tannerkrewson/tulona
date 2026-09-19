@@ -6,8 +6,40 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "tulona",
+    "icon": "./public/icons/icon-512.png",
     "primaryColor": "#111111",
-    "plugins": ["expo-router", "expo-audio", "expo-document-picker", "expo-asset"],
+    "ios": {
+      "bundleIdentifier": "com.tannerkrewson.tulona",
+      "buildNumber": "1",
+      "deploymentTarget": "16.4",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-audio",
+      "expo-document-picker",
+      "expo-asset",
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "com.tannerkrewson.tulona.widgets",
+          "groupIdentifier": "group.com.tannerkrewson.tulona",
+          "widgets": [
+            {
+              "name": "ActiveActivityWidget",
+              "displayName": "Active activity",
+              "description": "See the activity you are tracking and its live duration.",
+              "ios": {
+                "supportedFamilies": ["systemSmall"]
+              }
+            }
+          ]
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true,
       "baseUrl": "/tulona"
