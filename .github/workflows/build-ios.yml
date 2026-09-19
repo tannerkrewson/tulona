@@ -40,6 +40,18 @@ jobs:
       - name: Test widget state mapping
         run: npm run test:widget
 
+      - name: Validate iOS JavaScript bundle
+        run: |
+          bundle_dir="$(mktemp -d)"
+          npx expo export:embed \
+            --entry-file node_modules/expo-router/entry.js \
+            --platform ios \
+            --dev false \
+            --bundle-output "$bundle_dir/main.jsbundle" \
+            --assets-dest "$bundle_dir/assets" \
+            --minify false
+          test -s "$bundle_dir/main.jsbundle"
+
       - name: Validate Expo configuration
         run: |
           npx expo config --json > expo-config.json

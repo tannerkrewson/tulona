@@ -1,12 +1,10 @@
-import { WithSkiaWeb } from '@shopify/react-native-skia/lib/module/web';
 import { Text } from '@expo/ui';
 import { useAppTheme } from '@theme';
-import { lazy, Suspense } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { basePathAsset } from '../../pwa/basePath';
 import { AnalyticsEmptyState } from './AnalyticsEmptyState';
 import { ChartContainer } from './ChartContainer';
+import { HistoryChartCanvas } from './HistoryChartCanvas';
 import {
   formatAnalyticsDuration,
   type HistoryChartData,
@@ -22,66 +20,6 @@ export interface HistoryChartProps extends HistoryChartData {
   showDatumLabels?: boolean;
   onDatumPress?: (point: HistoryChartPoint) => void;
   testID?: string;
-}
-
-const LazyNativeChart = lazy(() => import('./VictoryHistoryChart'));
-
-function ChartFallback({ height, testID }: { height: number; testID?: string }) {
-  const { colors } = useAppTheme();
-  return (
-    <View
-      accessibilityLabel="Loading chart"
-      style={[styles.fallback, { backgroundColor: colors.surfaceMuted, height }]}
-      testID={testID ? `${testID}-loading` : undefined}
-    >
-      <ActivityIndicator color={colors.textMuted} size="small" />
-    </View>
-  );
-}
-
-function ChartCanvas({
-  data,
-  series,
-  variant,
-  height,
-  testID,
-}: {
-  data: HistoryChartProps['data'];
-  series: HistoryChartProps['series'];
-  variant: HistoryChartVariant;
-  height: number;
-  testID?: string;
-}) {
-  const props = { data, series, variant, height };
-  const fallback = <ChartFallback height={height} testID={testID} />;
-
-  if (Platform.OS === 'web') {
-    // Expo's static renderer runs in Node, where CanvasKit cannot initialize.
-    // The browser loads it on demand after the page has mounted.
-    if (typeof window === 'undefined') return fallback;
-    return (
-      <WithSkiaWeb
-        fallback={fallback}
-        getComponent={() => import('./VictoryHistoryChart')}
-        componentProps={props}
-        opts={{
-          locateFile: () =>
-            new URL(
-              process.env.NODE_ENV === 'production'
-                ? basePathAsset('canvaskit.wasm')
-                : '/canvaskit.wasm',
-              window.location.origin
-            ).toString(),
-        }}
-      />
-    );
-  }
-
-  return (
-    <Suspense fallback={fallback}>
-      <LazyNativeChart {...props} />
-    </Suspense>
-  );
 }
 
 function chartLabel(
@@ -146,8 +84,8 @@ function DatumLabels({
 }
 
 /**
- * Lazy, native-compatible Victory wrapper. On web WithSkiaWeb loads CanvasKit
- * only when this chart is rendered, keeping the default Day view lightweight.
+ * Platform-specific chart rendering keeps browser-only CanvasKit code out of
+ * the native iOS bundle while preserving the same chart API on every target.
  */
 export function HistoryChart({
   data,
@@ -175,7 +113,7 @@ export function HistoryChart({
       ) : (
         <View style={styles.content}>
           <View accessible accessibilityLabel={accessibilityLabel} style={styles.canvasWrap}>
-            <ChartCanvas
+            <HistoryChartCanvas
               data={data}
               height={height}
               series={series}
@@ -201,11 +139,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   canvasWrap: {
-    width: '100%',
-  },
-  fallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
     width: '100%',
   },
   datumList: {
