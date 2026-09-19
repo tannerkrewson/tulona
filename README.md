@@ -52,6 +52,37 @@ cache. Workbox leaves new workers waiting, so an active routine is not
 replaced in the middle of a session; a later safe navigation activates the
 update.
 
+## Native iOS and home-screen widget
+
+Tulona is also configured as a native iOS app with bundle identifier
+`com.tannerkrewson.tulona`. The small home-screen widget shows the current
+activity, its activity/folder color, and a live elapsed timer. The timer is
+rendered by WidgetKit, so it continues updating while the app is not in the
+foreground.
+
+Run `npm run ios` on macOS to generate and launch the native project locally.
+The native project is generated from Expo configuration and is intentionally
+not committed; `expo prebuild` recreates it whenever native configuration
+changes.
+
+The [`Build iOS IPA`](.github/workflows/build-ios.yml) workflow validates the
+native project and widget on pull requests, then uses EAS Build on pushes to
+`main` and manual runs. A successful run uploads a signed IPA as a GitHub
+Actions artifact and verifies that the widget extension is inside the archive.
+
+Before the first build, configure these repository settings:
+
+- Add an Expo access token as the `EXPO_TOKEN` Actions secret.
+- Add the EAS project UUID as the `EXPO_EAS_PROJECT_ID` Actions variable. The
+  variable is read by `app.config.js` because this project uses dynamic Expo
+  configuration.
+- Configure iOS distribution credentials for the EAS project. EAS can manage
+  them remotely, or they can be supplied through the normal EAS credentials
+  flow.
+
+For a local production build, set `EXPO_EAS_PROJECT_ID` in the environment and
+run `eas build --platform ios --profile production`.
+
 ## Dropbox Automatic Backup
 
 Create a Dropbox app with the `files.content.write` scope and set its app key
