@@ -12,7 +12,9 @@ function assert(condition: unknown, message: string): asserts condition {
 const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const html = read('app/+html.tsx');
-const tabs = read('app/(tabs)/_layout.tsx');
+const tabs = read('src/navigation/AppTabs.tsx');
+const nativeTabs = read('src/navigation/AppTabs.native.tsx');
+const trackerStack = read('app/(tabs)/(tracker)/_layout.tsx');
 const activeBar = read('src/tracker/ActiveActivityBar.tsx');
 const activities = read('src/tracker/ActivitiesScreen.tsx');
 const activityRow = read('src/tracker/ActivityRow.tsx');
@@ -20,7 +22,7 @@ const catalogEditActions = read('src/tracker/CatalogEditActions.tsx');
 const folderDetail = read('src/tracker/FolderDetailScreen.tsx');
 const systemColorScheme = read('src/theme/systemColorScheme.ts');
 const rootLayout = read('app/_layout.tsx');
-const folderRoute = 'app/(tabs)/folder/[folderId].tsx';
+const folderRoute = 'app/(tabs)/(tracker)/folder/[folderId].tsx';
 
 const safariUA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1';
@@ -157,12 +159,16 @@ assert(
   'folder back must return to the tracker context and child reorders must refresh the catalog'
 );
 assert(
-  tabs.includes('name="folder/[folderId]"') &&
-    tabs.includes('href: null') &&
+  tabs.includes('name="(tracker)"') &&
+    nativeTabs.includes('<NativeTabs') &&
+    nativeTabs.includes('name="(tracker)"') &&
+    trackerStack.includes('name="folder/[folderId]"') &&
+    trackerStack.includes('gestureEnabled: true') &&
+    trackerStack.includes("animation: 'slide_from_right'") &&
     fs.existsSync(path.join(root, folderRoute)) &&
-    !fs.existsSync(path.join(root, 'app/folder/[folderId].tsx')) &&
+    !fs.existsSync(path.join(root, 'app/(tabs)/folder/[folderId].tsx')) &&
     !rootLayout.includes('name="folder/[folderId]"'),
-  'folders must remain inside the four-tab navigator without adding a fifth tab'
+  'folders must stay in the tracker tab stack with native edge-back support'
 );
 assert(
   systemColorScheme.includes("window.addEventListener('pageshow', sync)") &&

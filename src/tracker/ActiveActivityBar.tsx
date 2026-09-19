@@ -24,6 +24,13 @@ const TAB_BAR_HEIGHT = 64;
 export const ACTIVE_ACTIVITY_BAR_HEIGHT = 64;
 const ACTIVE_BAR_BOTTOM = TAB_BAR_HEIGHT;
 
+export type ActiveActivityBarPlacement = 'overlay' | 'accessory';
+
+/** iOS 26+ can host the activity control inside the system tab bar accessory. */
+export function supportsNativeBottomAccessory(): boolean {
+  return Platform.OS === 'ios' && Number(Platform.Version) >= 26;
+}
+
 function activeItem(
   catalog: CatalogCollection | null,
   transition: TimeTransition | null,
@@ -60,7 +67,11 @@ function activityDurationMs(
 }
 
 /** Loads once at the shell boundary so the player survives catalog navigation. */
-export function ActiveActivityBar() {
+export function ActiveActivityBar({
+  placement = 'overlay',
+}: {
+  placement?: ActiveActivityBarPlacement;
+}) {
   const pathname = usePathname();
   const catalogVisible = isCatalogPath(pathname);
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
@@ -86,14 +97,22 @@ export function ActiveActivityBar() {
     };
   }, [catalogVisible]);
 
+  if (placement === 'overlay' && supportsNativeBottomAccessory()) return null;
   if (!catalogVisible || !runtime || error) return null;
-  return <ActiveActivityBarContent runtime={runtime} />;
+  return <ActiveActivityBarContent placement={placement} runtime={runtime} />;
 }
 
-function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
+function ActiveActivityBarContent({
+  placement,
+  runtime,
+}: {
+  placement: ActiveActivityBarPlacement;
+  runtime: RoutineRuntime;
+}) {
   const { colors } = useAppTheme();
   const router = useRouter();
   const isWeb = Platform.OS === 'web';
+  const isAccessory = placement === 'accessory';
   const webSurface = 'var(--tulona-surface)';
   const webBorder = 'var(--tulona-border)';
   const store = runtime.trackerStore;
@@ -193,18 +212,26 @@ function ActiveActivityBarContent({ runtime }: { runtime: RoutineRuntime }) {
   };
 
   return (
-    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, styles.overlay]}>
+    <View
+      pointerEvents="box-none"
+      style={isAccessory ? styles.accessory : [StyleSheet.absoluteFill, styles.overlay]}
+    >
       <View
         style={[
           styles.bar,
+          isAccessory ? styles.accessoryBar : styles.overlayBar,
           {
             backgroundColor: isWeb ? webSurface : colors.surface,
             borderColor: isWeb ? webBorder : colors.border,
             // The web tab bar's CSS height includes the cold-start-safe
             // home-indicator inset, so the bar can meet it exactly.
-            bottom: (isWeb
-              ? `calc(${ACTIVE_BAR_BOTTOM}px + var(--tulona-safe-area-bottom))`
-              : ACTIVE_BAR_BOTTOM) as unknown as number,
+            ...(isAccessory
+              ? {}
+              : {
+                  bottom: (isWeb
+                    ? `calc(${ACTIVE_BAR_BOTTOM}px + var(--tulona-safe-area-bottom))`
+                    : ACTIVE_BAR_BOTTOM) as unknown as number,
+                }),
             height: ACTIVE_ACTIVITY_BAR_HEIGHT,
           },
         ]}
@@ -279,8 +306,14 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     flexDirection: 'row',
     overflow: 'hidden',
-    position: 'absolute',
     width: '100%',
+  },
+  overlayBar: {
+    position: 'absolute',
+  },
+  accessoryBar: {
+    flexShrink: 0,
+    position: 'relative',
   },
   info: {
     flex: 1,
@@ -300,6 +333,9 @@ const styles = StyleSheet.create({
   },
   overlay: {
     alignItems: 'stretch',
+  },
+  accessory: {
+    alignSelf: 'stretch',
   },
   pauseButton: {
     alignItems: 'center',

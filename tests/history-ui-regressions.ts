@@ -9,7 +9,7 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
-const tabs = read('app/(tabs)/_layout.tsx');
+const tabs = read('src/navigation/AppTabs.tsx');
 const rootLayout = read('app/_layout.tsx');
 const historyRoute = read('app/history.tsx');
 const goalsRoute = read('app/(tabs)/goals.tsx');

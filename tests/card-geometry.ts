@@ -96,7 +96,9 @@ assert(
 );
 assert(
   habitItem.includes('getRowSurfaceStyle') &&
-    habitItem.includes('backgroundColor: colors.surface') &&
+    habitItem.includes('getRowSurfaceBackground') &&
+    habitItem.includes('surface: colors.surface') &&
+    habitItem.includes('surfaceMuted: colors.surfaceMuted') &&
     !habitItem.includes('borderColor:') &&
     !habitItem.includes('borderWidth:') &&
     !habitItem.includes('colors.success.background') &&
