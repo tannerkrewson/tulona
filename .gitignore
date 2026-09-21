@@ -17,6 +17,9 @@ yarn-error.log*
 # Local Timemator exports
 /Timemator Export *.csv
 
+# Local TickTick habit exports (never commit personal habit history)
+/Habits_*.xlsx
+
 # Beads / Dolt files (added by bd init)
 .dolt/
 *.db

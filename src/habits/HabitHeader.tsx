@@ -15,6 +15,7 @@ export interface HabitHeaderProps {
   title: string;
   onBack?: () => void;
   onAdd?: () => void;
+  onImport?: () => void;
   onToggleEdit?: () => void;
   editOpen?: boolean;
   editLabel?: string;
@@ -29,6 +30,7 @@ export function HabitHeader({
   title,
   onBack,
   onAdd,
+  onImport,
   onToggleEdit,
   editOpen = false,
   editLabel = 'Edit habit',
@@ -72,6 +74,16 @@ export function HabitHeader({
             testID={editTestID}
             variant="muted"
             iconSize={editOpen ? 23 : 21}
+          />
+        ) : null}
+        {onImport ? (
+          <IconButton
+            accessibilityHint="Opens the TickTick habit import"
+            icon="upload"
+            label="Import TickTick habits"
+            onPress={onImport}
+            testID="import-ticktick-habits"
+            variant="muted"
           />
         ) : null}
         {onAdd ? (

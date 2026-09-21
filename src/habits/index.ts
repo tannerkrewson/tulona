@@ -1,4 +1,5 @@
 export * from './habit-service';
+export * from './ticktick-import';
 export * from './habit-format';
 export * from './date-navigation';
 export * from './categories';
