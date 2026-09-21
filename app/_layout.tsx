@@ -40,6 +40,7 @@ export default function RootLayout() {
             <Stack.Screen name="routine-edit/[routineId]" />
             <Stack.Screen name="routine-chooser" />
             <Stack.Screen name="habit/[habitId]" />
+            <Stack.Screen name="habit-import" />
             <Stack.Screen name="folder-edit/[folderId]" />
             <Stack.Screen name="backup" />
             <Stack.Screen name="dropbox-auth" />

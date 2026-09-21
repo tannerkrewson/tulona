@@ -1,6 +1,7 @@
 import {
   createId,
   dateForLogicalDay,
+  habitDayStateSchema,
   habitSchema,
   isUuid,
   normalizeHabitOrder,
@@ -9,6 +10,7 @@ import {
   type Habit,
   type HabitDayOutcome,
   type HabitDayState,
+  type HabitMonthCollection,
   type HabitSchedule,
   type HabitTrigger,
   type IsoTimestamp,
@@ -36,6 +38,30 @@ export interface CreateHabitInput extends HabitStyleInput {
   sortOrder?: number;
 }
 
+export interface HabitImportStateInput {
+  logicalDay: LogicalDayKey;
+  manual: boolean | null;
+  automatic: boolean | null;
+  outcome?: HabitDayOutcome | null;
+}
+
+export interface HabitImportInput {
+  name: string;
+  schedule: HabitSchedule;
+  archived?: boolean;
+  states?: readonly HabitImportStateInput[];
+}
+
+export interface HabitImportOptions {
+  duplicatePolicy?: 'skip' | 'import';
+}
+
+export interface HabitImportResult {
+  imported: Habit[];
+  skippedNames: string[];
+  importedStateCount: number;
+}
+
 export interface UpdateHabitInput {
   name?: string;
   color?: string | null;
@@ -61,6 +87,10 @@ export interface HabitServiceApi {
   get(id: UUID): Promise<Habit>;
   create(input: CreateHabitInput): Promise<Habit>;
   createHabit(input: CreateHabitInput): Promise<Habit>;
+  importHabits(
+    inputs: readonly HabitImportInput[],
+    options?: HabitImportOptions
+  ): Promise<HabitImportResult>;
   update(id: UUID, input: UpdateHabitInput): Promise<Habit>;
   updateHabit(id: UUID, input: UpdateHabitInput): Promise<Habit>;
   archive(id: UUID): Promise<Habit>;
@@ -237,6 +267,105 @@ export class HabitService implements HabitServiceApi {
 
   async createHabit(input: CreateHabitInput): Promise<Habit> {
     return this.create(input);
+  }
+
+  async importHabits(
+    inputs: readonly HabitImportInput[],
+    options: HabitImportOptions = {}
+  ): Promise<HabitImportResult> {
+    const existing = await this.read();
+    const duplicatePolicy = options.duplicatePolicy ?? 'skip';
+    const existingNames = new Set(existing.map((habit) => habit.name.trim().toLocaleLowerCase()));
+    const importedNames = new Set<string>();
+    const timestamp = this.timestamp();
+    const imported: Habit[] = [];
+    const importedStates: HabitDayState[] = [];
+    const skippedNames: string[] = [];
+
+    for (const input of inputs) {
+      const name = validateName(input.name);
+      const normalizedName = name.toLocaleLowerCase();
+      if (
+        duplicatePolicy === 'skip' &&
+        (existingNames.has(normalizedName) || importedNames.has(normalizedName))
+      ) {
+        skippedNames.push(name);
+        continue;
+      }
+      const id = createId();
+      const habit: Habit = {
+        id,
+        name,
+        sortOrder: existing.length + imported.length,
+        schedule: validateSchedule(input.schedule),
+        trigger: null,
+        color: null,
+        iconName: null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        archivedAt: input.archived ? timestamp : null,
+      };
+      habitSchema.parse(habit);
+      imported.push(habit);
+      importedNames.add(normalizedName);
+      for (const stateInput of input.states ?? []) {
+        assertLogicalDay(stateInput.logicalDay);
+        const state: HabitDayState = {
+          habitId: id,
+          logicalDay: stateInput.logicalDay,
+          manual: stateInput.manual,
+          automatic: stateInput.automatic,
+          outcome: stateInput.outcome ?? null,
+          updatedAt: timestamp,
+        };
+        habitDayStateSchema.parse(state);
+        importedStates.push(state);
+      }
+    }
+
+    if (imported.length === 0) {
+      return { imported: [], skippedNames, importedStateCount: 0 };
+    }
+
+    const nextHabits = normalizeHabitOrder(sortByOrder([...existing, ...imported]));
+    const months = new Map<MonthKey, HabitMonthCollection>();
+    for (const state of importedStates) {
+      const month = state.logicalDay.slice(0, 7) as MonthKey;
+      if (!months.has(month)) months.set(month, await this.repository.readMonth(month));
+      const collection = months.get(month) as HabitMonthCollection;
+      const key = `${state.habitId}:${state.logicalDay}`;
+      const index = collection.states.findIndex(
+        (candidate) => `${candidate.habitId}:${candidate.logicalDay}` === key
+      );
+      if (index < 0) collection.states.push(state);
+      else collection.states[index] = state;
+    }
+
+    const previousMonths = new Map<MonthKey, HabitMonthCollection>();
+    for (const month of months.keys()) {
+      previousMonths.set(month, await this.repository.readMonth(month));
+    }
+    try {
+      await this.write(nextHabits);
+      for (const collection of months.values()) await this.repository.writeMonth(collection);
+    } catch (error) {
+      try {
+        await this.write(existing);
+        for (const collection of previousMonths.values()) {
+          await this.repository.writeMonth(collection);
+        }
+      } catch {
+        // The original write error is more actionable; the repository still
+        // contains schema-valid records even if recovery itself fails.
+      }
+      throw error;
+    }
+    const importedIds = new Set(imported.map((habit) => habit.id));
+    return {
+      imported: nextHabits.filter((habit) => importedIds.has(habit.id)),
+      skippedNames,
+      importedStateCount: importedStates.length,
+    };
   }
 
   async update(id: UUID, input: UpdateHabitInput): Promise<Habit> {

@@ -1,5 +1,5 @@
 import { Column, Row, ScrollView, Text } from '@expo/ui';
-import { useIsFocused, useRouter } from 'expo-router';
+import { useIsFocused, useRouter, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -99,6 +99,7 @@ export default function HabitListScreen() {
         <Column spacing={20} style={{ width: '100%' }}>
           <HabitHeader
             onAdd={() => router.push('/habit/new')}
+            onImport={() => router.push('/habit-import' as Href)}
             title="Habits"
             testID="habits-header"
           />
@@ -210,6 +211,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
         >
           <HabitHeader
             onAdd={() => router.push('/habit/new')}
+            onImport={() => router.push('/habit-import' as Href)}
             editLabel="Edit habits"
             editOpen={editMode}
             editOpenLabel="Done editing habits"
