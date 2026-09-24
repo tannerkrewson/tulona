@@ -1,7 +1,7 @@
 import { Column, Row, Switch, Text } from '@expo/ui';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Linking from 'expo-linking';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AppIcon } from '@icons';
@@ -511,6 +511,32 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
               onPress={() => void importFile()}
               style={{ height: 50, width: '100%' }}
               testID="import-json"
+            />
+          </Column>
+          <Column
+            spacing={10}
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderRadius: 16,
+              borderWidth: 1,
+              padding: 16,
+              width: '100%',
+            }}
+            testID="ticktick-import-actions"
+          >
+            <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
+              Import TickTick habits
+            </Text>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+              Choose which habits and history to add. Your existing Tulona data stays in place.
+            </Text>
+            <AppButton
+              disabled={busy}
+              label="Choose TickTick export"
+              onPress={() => router.push('/habit-import' as Href)}
+              style={{ height: 50, width: '100%' }}
+              testID="import-ticktick-habits"
             />
           </Column>
           <Column

@@ -20,6 +20,7 @@ import type { Habit, HabitDayOutcome, HabitDayState, LogicalDayKey } from '@doma
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 import {
+  AppButton,
   EmptyState,
   ConfirmationModal,
   errorText,
@@ -34,6 +35,7 @@ import {
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
+import { findLatestIncompleteHabitDay } from './habit-review';
 import {
   DEFAULT_HABIT_CATEGORY,
   groupHabitsByCategory,
@@ -99,7 +101,6 @@ export default function HabitListScreen() {
         <Column spacing={20} style={{ width: '100%' }}>
           <HabitHeader
             onAdd={() => router.push('/habit/new')}
-            onImport={() => router.push('/habit-import' as Href)}
             title="Habits"
             testID="habits-header"
           />
@@ -137,6 +138,7 @@ export default function HabitListScreen() {
 }
 
 function HabitListContent({ store }: { store: HabitStore }) {
+  const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const habits = store((state) => state.habits);
@@ -158,6 +160,10 @@ function HabitListContent({ store }: { store: HabitStore }) {
   const habitsByCategory = useMemo(
     () => groupHabitsByCategory(habits, today, { rolloverHour: logicalDayRolloverHour }),
     [habits, logicalDayRolloverHour, today]
+  );
+  const reviewGap = useMemo(
+    () => findLatestIncompleteHabitDay(habits, states, today, logicalDayRolloverHour),
+    [habits, logicalDayRolloverHour, states, today]
   );
   const visibleHabits = habitsByCategory[selectedCategory];
   const pastMidnightWarningVisible =
@@ -211,7 +217,6 @@ function HabitListContent({ store }: { store: HabitStore }) {
         >
           <HabitHeader
             onAdd={() => router.push('/habit/new')}
-            onImport={() => router.push('/habit-import' as Href)}
             editLabel="Edit habits"
             editOpen={editMode}
             editOpenLabel="Done editing habits"
@@ -235,6 +240,39 @@ function HabitListContent({ store }: { store: HabitStore }) {
           />
           {selectedCategory === 'active' ? (
             <>
+              {habitsByCategory.active.length > 0 ? (
+                <AppButton
+                  label={`Start mindful review · ${habitsByCategory.active.length} habits`}
+                  onPress={() => router.push('/habit-review' as Href)}
+                  style={{ height: 58, width: '100%' }}
+                  testID="start-habit-review"
+                />
+              ) : null}
+              {reviewGap ? (
+                <Column
+                  spacing={8}
+                  style={{
+                    backgroundColor: colors.active.background,
+                    borderColor: colors.border,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    padding: 12,
+                    width: '100%',
+                  }}
+                  testID="incomplete-habit-day-reminder"
+                >
+                  <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
+                    {`${reviewGap.count} ${reviewGap.count === 1 ? 'habit needs' : 'habits need'} a status for ${formatHabitDay(reviewGap.day)}.`}
+                  </Text>
+                  <AppButton
+                    label="Review this day"
+                    onPress={() => router.push(`/habit-review?day=${reviewGap.day}` as Href)}
+                    style={{ height: 46, width: '100%' }}
+                    testID="review-incomplete-habit-day"
+                    variant="outlined"
+                  />
+                </Column>
+              ) : null}
               <HabitWeekStrip
                 onSelectDay={selectDay}
                 rolloverHour={logicalDayRolloverHour}
