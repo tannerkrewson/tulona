@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate iOS navigation and widget
+    name: Validate iOS navigation without widget extension
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -36,9 +36,6 @@ jobs:
 
       - name: Lint
         run: npm run lint
-
-      - name: Test widget state mapping
-        run: npm run test:widget
 
       - name: Validate iOS JavaScript bundle
         run: |
@@ -64,18 +61,18 @@ jobs:
           if (config.ios?.bundleIdentifier !== 'com.tannerkrewson.tulona') {
             throw new Error('Unexpected iOS bundle identifier');
           }
-          if (widgetPlugin?.[1]?.widgets?.[0]?.ios?.supportedFamilies?.includes('systemSmall') !== true) {
-            throw new Error('The ActiveActivityWidget systemSmall family is not configured');
+          if (widgetPlugin) {
+            throw new Error('The diagnostic iOS build must not include the expo-widgets plugin');
           }
           NODE
 
       - name: Generate native iOS project
         run: |
-          npx expo prebuild --platform ios --no-install
+          npx expo prebuild --platform ios --no-install --clean
           test -f ios/Tulona.xcodeproj/project.pbxproj
-          test -f ios/ExpoWidgetsTarget/ActiveActivityWidget.swift
-          grep -Fq 'ExpoWidgetsTarget' ios/Tulona.xcodeproj/project.pbxproj
-          grep -Fq '.systemSmall' ios/ExpoWidgetsTarget/ActiveActivityWidget.swift
+          test ! -e ios/ExpoWidgetsTarget
+          ! grep -Fq 'ExpoWidgetsTarget' ios/Tulona.xcodeproj/project.pbxproj
+          ! grep -Fq 'ActiveActivityWidgetBridge' app/_layout.tsx
           grep -Fq 'expo-router/unstable-native-tabs' src/navigation/AppTabs.native.tsx
           grep -Fq 'name="(tracker)"' src/navigation/AppTabs.native.tsx
           grep -Fq 'gestureEnabled: true' 'app/(tabs)/(tracker)/_layout.tsx'
@@ -98,8 +95,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate native iOS project
-        run: npx expo prebuild --platform ios --no-install
+      - name: Generate native iOS project without widget extension
+        run: npx expo prebuild --platform ios --no-install --clean
 
       - name: Install CocoaPods dependencies
         run: pod install --project-directory=ios
@@ -122,26 +119,24 @@ jobs:
       - name: Package and validate unsigned IPA
         run: |
           APP_PATH="$RUNNER_TEMP/Tulona.xcarchive/Products/Applications/Tulona.app"
-          WIDGET_PATH="$APP_PATH/PlugIns/ExpoWidgetsTarget.appex"
           test -d "$APP_PATH"
-          test -d "$WIDGET_PATH"
           test ! -d "$APP_PATH/_CodeSignature"
-          test ! -d "$WIDGET_PATH/_CodeSignature"
+          test ! -e "$APP_PATH/PlugIns/ExpoWidgetsTarget.appex"
           rm -rf artifacts
           mkdir -p artifacts/Payload
           cp -R "$APP_PATH" artifacts/Payload/Tulona.app
           (
             cd artifacts
-            zip -qry "Tulona-${GITHUB_SHA}-unsigned.ipa" Payload
+            zip -qry "Tulona-${GITHUB_SHA}-unsigned-no-widget.ipa" Payload
           )
-          unzip -t "artifacts/Tulona-${GITHUB_SHA}-unsigned.ipa" >/dev/null
-          unzip -l "artifacts/Tulona-${GITHUB_SHA}-unsigned.ipa" > ipa-contents.txt
-          grep -Fq 'ExpoWidgetsTarget.appex/Info.plist' ipa-contents.txt
+          unzip -t "artifacts/Tulona-${GITHUB_SHA}-unsigned-no-widget.ipa" >/dev/null
+          unzip -l "artifacts/Tulona-${GITHUB_SHA}-unsigned-no-widget.ipa" > ipa-contents.txt
+          ! grep -Fq '.appex/' ipa-contents.txt
 
-      - name: Upload unsigned IPA artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload unsigned IPA directly
+        uses: actions/upload-artifact@v7
         with:
-          name: Tulona-iOS-unsigned-${{ github.sha }}
-          path: artifacts/Tulona-${{ github.sha }}-unsigned.ipa
+          path: artifacts/Tulona-${{ github.sha }}-unsigned-no-widget.ipa
+          archive: false
           if-no-files-found: error
           retention-days: 14

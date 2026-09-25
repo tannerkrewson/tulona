@@ -21,24 +21,7 @@
       "expo-router",
       "expo-audio",
       "expo-document-picker",
-      "expo-asset",
-      [
-        "expo-widgets",
-        {
-          "bundleIdentifier": "com.tannerkrewson.tulona.widgets",
-          "groupIdentifier": "group.com.tannerkrewson.tulona",
-          "widgets": [
-            {
-              "name": "ActiveActivityWidget",
-              "displayName": "Active activity",
-              "description": "See the activity you are tracking and its live duration.",
-              "ios": {
-                "supportedFamilies": ["systemSmall"]
-              }
-            }
-          ]
-        }
-      ]
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
