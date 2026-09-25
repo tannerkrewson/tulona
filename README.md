@@ -52,13 +52,13 @@ cache. Workbox leaves new workers waiting, so an active routine is not
 replaced in the middle of a session; a later safe navigation activates the
 update.
 
-## Native iOS and home-screen widget
+## Native iOS diagnostic build
 
 Tulona is also configured as a native iOS app with bundle identifier
-`com.tannerkrewson.tulona`. The small home-screen widget shows the current
-activity, its activity/folder color, and a live elapsed timer. The timer is
-rendered by WidgetKit, so it continues updating while the app is not in the
-foreground.
+`com.tannerkrewson.tulona`. The home-screen widget integration is temporarily
+disabled in the iOS build while diagnosing installation through Feather. The
+diagnostic app therefore does not include a WidgetKit extension or app-group
+entitlement.
 
 Native iOS and Android builds use Expo Router's platform-native tabs, while
 the web/PWA keeps the styled JavaScript tab bar. On iOS 26 and later, the
@@ -72,11 +72,12 @@ not committed; `expo prebuild` recreates it whenever native configuration
 changes.
 
 The [`Build iOS IPA`](.github/workflows/build-ios.yml) workflow validates the
-native project and widget on pull requests, then uses a macOS GitHub runner and
-Xcode on pushes to `main` and manual runs. It deliberately disables code
-signing, packages the device build as an IPA, and verifies that the widget
-extension is inside the archive. It needs no Expo account, EAS project, Apple
-Developer account, or repository secrets.
+native project on pull requests, then uses a macOS GitHub runner and Xcode on
+pushes to `main` and manual runs. It deliberately disables code signing,
+packages the device build as an IPA, and verifies that no app extension is
+included. It uploads the `.ipa` directly, without an additional artifact ZIP.
+It needs no Expo account, EAS project, Apple Developer account, or repository
+secrets.
 
 The resulting IPA is unsigned. It is useful as a build artifact for inspecting
 or handing off the archive, but iOS will not install or run it on a physical

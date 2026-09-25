@@ -6,7 +6,6 @@ import { StyleSheet, View } from 'react-native';
 import { registerServiceWorker } from '@/src/pwa/registerServiceWorker';
 import { BootCoordinatorGate } from '@/src/orchestration';
 import { ActiveActivityBar } from '@/src/tracker';
-import { ActiveActivityWidgetBridge } from '@/src/widgets/ActiveActivityWidgetBridge';
 import { ThemeProvider } from '@theme';
 
 export default function RootLayout() {
@@ -49,7 +48,6 @@ export default function RootLayout() {
           </Stack>
           <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
             <BootCoordinatorGate />
-            <ActiveActivityWidgetBridge />
             <ActiveActivityBar />
           </View>
         </View>
