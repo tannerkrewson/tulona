@@ -2,6 +2,7 @@ import { Column, Picker, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 
 import type {
   Activity,
@@ -55,13 +56,22 @@ interface StepDraft {
   hours: string;
   minutes: string;
   seconds: string;
+  enabled: boolean;
   endBehavior: RoutineStepEndBehavior;
   notes: string;
 }
 
 type EditableStep = Pick<
   RoutineStep,
-  'id' | 'activityId' | 'name' | 'durationMs' | 'color' | 'iconName' | 'endBehavior' | 'notes'
+  | 'id'
+  | 'activityId'
+  | 'name'
+  | 'durationMs'
+  | 'color'
+  | 'iconName'
+  | 'enabled'
+  | 'endBehavior'
+  | 'notes'
 >;
 
 export interface RoutineEditorScreenProps {
@@ -85,6 +95,7 @@ function draftFromStep(step: EditableStep): StepDraft {
     title: step.name ?? '',
     iconName: step.iconName ?? '',
     ...durationParts(step.durationMs),
+    enabled: step.enabled !== false,
     endBehavior:
       step.endBehavior === 'autoAdvance'
         ? 'auto-advance'
@@ -102,6 +113,7 @@ function emptyDraft(activities: readonly Activity[], trackingMode: RoutineTracki
     hours: '0',
     minutes: '5',
     seconds: '0',
+    enabled: true,
     endBehavior: DEFAULT_STEP_BEHAVIOR,
     notes: '',
   };
@@ -138,6 +150,7 @@ function inputFromDraft(
   const input: CreateRoutineStepInput = {
     ...(draft.id ? { id: draft.id } : {}),
     activityId: trackingMode === 'steps' ? (draft.activityId as UUID) : null,
+    enabled: draft.enabled,
     durationMs: durationFromDraft(draft),
     endBehavior: draft.endBehavior,
     notes: draft.notes.trim() || null,
@@ -342,14 +355,7 @@ function StepForm({
             <Row
               alignment="center"
               spacing={10}
-              style={{
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: 10,
-                borderWidth: 1,
-                padding: 10,
-                width: '100%',
-              }}
+              style={{ paddingHorizontal: 4, width: '100%' }}
               testID="step-activity-preview"
             >
               <AppIcon
@@ -453,6 +459,7 @@ function StepRow({
   onDuplicate,
   onDelete,
   onMove,
+  onToggle,
   busy,
 }: {
   step: EditableStep;
@@ -465,6 +472,7 @@ function StepRow({
   onDuplicate: () => void;
   onDelete: () => void;
   onMove: (direction: 'up' | 'down') => void;
+  onToggle: () => void;
   busy: boolean;
 }) {
   const { colors } = useAppTheme();
@@ -481,11 +489,8 @@ function StepRow({
     <Column
       spacing={10}
       style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 14,
-        borderWidth: 1,
-        padding: 14,
+        paddingHorizontal: 4,
+        paddingVertical: 14,
         width: '100%',
       }}
       testID={`routine-step-${step.id}`}
@@ -497,14 +502,24 @@ function StepRow({
           color={stepColor}
           size={25}
         />
-        <Column spacing={3}>
-          <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-            {`${index + 1}. ${step.name || 'Untitled step'}`}
-          </Text>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-            {`${durationText} · ${step.endBehavior === 'auto-advance' || step.endBehavior === 'autoAdvance' ? 'Auto-advance' : 'Overtime'}`}
-          </Text>
-        </Column>
+        <View style={{ flex: 1 }}>
+          <Column spacing={3}>
+            <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
+              {`${index + 1}. ${step.name || 'Untitled step'}`}
+            </Text>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+              {`${step.enabled === false ? 'Excluded · ' : ''}${durationText} · ${step.endBehavior === 'auto-advance' || step.endBehavior === 'autoAdvance' ? 'Auto-advance' : 'Overtime'}`}
+            </Text>
+          </Column>
+        </View>
+        <AppButton
+          disabled={busy}
+          label={step.enabled === false ? 'Enable' : 'Disable'}
+          onPress={onToggle}
+          style={{ height: 40, width: 86, paddingHorizontal: 10 }}
+          variant="outlined"
+          testID={`toggle-routine-step-${step.id}`}
+        />
       </Row>
       {step.notes ? (
         <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
@@ -566,6 +581,9 @@ function StepRow({
           testID={`delete-step-${step.id}`}
         />
       </Row>
+      {index < count - 1 ? (
+        <View style={{ backgroundColor: colors.border, height: 1, width: '100%' }} />
+      ) : null}
     </Column>
   );
 }
@@ -804,6 +822,7 @@ function RoutineEditorForm({
           })(),
           color: null,
           iconName: step.iconName || null,
+          enabled: step.enabled,
           endBehavior: step.endBehavior,
           notes: step.notes || null,
         };
@@ -834,7 +853,7 @@ function RoutineEditorForm({
                 {name || 'Untitled routine'}
               </Text>
               <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                {`${steps.length} ${steps.length === 1 ? 'step' : 'steps'}`}
+                {`${steps.filter((step) => step.enabled !== false).length} included · ${steps.length} total`}
               </Text>
             </Column>
           </Row>
@@ -939,76 +958,90 @@ function RoutineEditorForm({
               }}
             />
           ) : null}
-          {steps.map((step, index) => (
-            <Column key={step.id} spacing={8} style={{ width: '100%' }}>
-              {editingStepId === step.id && draft ? (
-                <StepForm
-                  draft={draft}
-                  activities={activities}
-                  folders={catalog.folders}
-                  trackingMode={trackingMode as RoutineTrackingMode}
-                  onChange={setDraft}
-                  onSave={() => void saveStep()}
-                  onCancel={() => {
-                    setDraft(null);
-                    setEditingStepId(null);
-                  }}
-                  onClose={() => setError(null)}
-                  busy={busy}
-                  error={error}
-                  onRetry={() => {
-                    const action = lastAction.current;
-                    if (action) void run(action);
-                  }}
-                />
-              ) : (
-                <StepRow
-                  step={step}
-                  activities={activities}
-                  folders={catalog.folders}
-                  trackingMode={trackingMode as RoutineTrackingMode}
-                  index={index}
-                  count={steps.length}
-                  busy={busy}
-                  onEdit={() => {
-                    setError(null);
-                    setEditingStepId(step.id);
-                    setDraft(draftFromStep(step));
-                  }}
-                  onDuplicate={() =>
-                    routine
-                      ? void run(async () => {
-                          await service.duplicateRoutineStep(routine.id, step.id);
-                        })
-                      : setNewSteps((current) => [
-                          ...current,
-                          {
-                            ...draftFromStep(step),
-                            id: createId(),
-                            title: `${step.name ?? ''} copy`,
-                          },
-                        ])
+          {steps.map((step, index) =>
+            editingStepId === step.id && draft ? (
+              <StepForm
+                key={step.id}
+                draft={draft}
+                activities={activities}
+                folders={catalog.folders}
+                trackingMode={trackingMode as RoutineTrackingMode}
+                onChange={setDraft}
+                onSave={() => void saveStep()}
+                onCancel={() => {
+                  setDraft(null);
+                  setEditingStepId(null);
+                }}
+                onClose={() => setError(null)}
+                busy={busy}
+                error={error}
+                onRetry={() => {
+                  const action = lastAction.current;
+                  if (action) void run(action);
+                }}
+              />
+            ) : (
+              <StepRow
+                key={step.id}
+                step={step}
+                activities={activities}
+                folders={catalog.folders}
+                trackingMode={trackingMode as RoutineTrackingMode}
+                index={index}
+                count={steps.length}
+                busy={busy}
+                onEdit={() => {
+                  setError(null);
+                  setEditingStepId(step.id);
+                  setDraft(draftFromStep(step));
+                }}
+                onDuplicate={() =>
+                  routine
+                    ? void run(async () => {
+                        await service.duplicateRoutineStep(routine.id, step.id);
+                      })
+                    : setNewSteps((current) => [
+                        ...current,
+                        {
+                          ...draftFromStep(step),
+                          id: createId(),
+                          title: `${step.name ?? ''} copy`,
+                        },
+                      ])
+                }
+                onToggle={() => {
+                  const enabled = step.enabled === false;
+                  if (routine) {
+                    void run(async () => {
+                      await service.updateRoutineStep(routine.id, step.id, { enabled });
+                    });
+                  } else {
+                    setNewSteps((current) =>
+                      current.map((candidate) =>
+                        candidate.id === step.id ? { ...candidate, enabled } : candidate
+                      )
+                    );
                   }
-                  onDelete={() => setDeleteStepId(step.id)}
-                  onMove={(direction) =>
-                    routine
-                      ? void run(async () => {
-                          await service.reorderRoutineStep(routine.id, step.id, direction);
-                        })
-                      : setNewSteps((current) => {
-                          const from = index;
-                          const to = direction === 'up' ? from - 1 : from + 1;
-                          if (to < 0 || to >= current.length) return current;
-                          const next = [...current];
-                          const [moved] = next.splice(from, 1);
-                          if (moved) next.splice(to, 0, moved);
-                          return next;
-                        })
-                  }
-                />
-              )}
-            </Column>
-          ))}
+                }}
+                onDelete={() => setDeleteStepId(step.id)}
+                onMove={(direction) =>
+                  routine
+                    ? void run(async () => {
+                        await service.reorderRoutineStep(routine.id, step.id, direction);
+                      })
+                    : setNewSteps((current) => {
+                        const from = index;
+                        const to = direction === 'up' ? from - 1 : from + 1;
+                        if (to < 0 || to >= current.length) return current;
+                        const next = [...current];
+                        const [moved] = next.splice(from, 1);
+                        if (moved) next.splice(to, 0, moved);
+                        return next;
+                      })
+                }
+              />
+            )
+          )}
           {steps.length === 0 ? (
             <Column
               spacing={6}
@@ -1033,7 +1066,7 @@ function RoutineEditorForm({
         {routine ? (
           <Column spacing={10} style={{ width: '100%' }}>
             <AppButton
-              disabled={busy || routine.steps.length === 0}
+              disabled={busy || !routine.steps.some((step) => step.enabled !== false)}
               label="Run routine"
               onPress={() => void startRoutine()}
               style={{ height: 54, width: '100%' }}

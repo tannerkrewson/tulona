@@ -226,6 +226,7 @@ const routineStepShape = {
   sortOrder: z.number().int().nonnegative(),
   color: z.string().nullable(),
   iconName: z.string().nullable(),
+  enabled: z.boolean().default(true),
   endBehavior: z.enum(['overtime', 'auto-advance', 'autoAdvance']).default('overtime'),
   notes: z.string().nullable().default(null),
   ...timestamps,
@@ -305,6 +306,7 @@ export const routineStepSnapshotSchema = z
     sortOrder: z.number().int().nonnegative(),
     color: z.string().nullable(),
     iconName: z.string().nullable(),
+    enabled: z.boolean().default(true),
     endBehavior: z.enum(['overtime', 'auto-advance', 'autoAdvance']).default('overtime'),
     notes: z.string().nullable().default(null),
   })
@@ -345,7 +347,7 @@ export const routineStepSessionSchema = z
     startedAt: isoTimestamp.nullable(),
     completedAt: isoTimestamp.nullable(),
     addedTimeMs: z.number().int().nonnegative(),
-    outcome: z.enum(['done', 'skipped', 'autoAdvanced']).optional(),
+    outcome: z.enum(['done', 'skipped', 'autoAdvanced', 'disabled']).optional(),
     plannedDurationMs: z.number().int().positive().optional(),
   })
   .passthrough();

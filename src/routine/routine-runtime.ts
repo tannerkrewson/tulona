@@ -8,11 +8,13 @@ import type { RoutineAlarmService } from './routine-alarm';
 import type { TrackerService } from '../tracker/tracker-service';
 import type { TrackerStore } from '../tracker/tracker-store';
 import type { AppSettings } from '@domain';
+import type { GoalService } from '../goals/goal-service';
 
 export interface RoutineRuntime {
   catalogService: CatalogService;
   routineService: RoutineService;
   trackerService: TrackerService;
+  goalService: GoalService;
   settingsService: SettingsService;
   settings: AppSettings;
   routineAlarmService: RoutineAlarmService;
@@ -27,6 +29,7 @@ export async function loadRoutineRuntime(): Promise<RoutineRuntime> {
     catalogService: result.runtime.services.catalog,
     routineService: result.runtime.services.routine,
     trackerService: result.runtime.services.tracker,
+    goalService: result.runtime.services.goals,
     settingsService: result.runtime.services.settings,
     settings: result.runtime.settings,
     routineAlarmService: result.runtime.services.routineAlarm,

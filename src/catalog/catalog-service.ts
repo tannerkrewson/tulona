@@ -79,6 +79,7 @@ export interface CreateRoutineInput extends CatalogStyleInput {
 export interface CreateRoutineStepInput {
   id?: UUID;
   activityId?: UUID | null;
+  enabled?: boolean;
   name?: string | null;
   durationMs: number;
   endBehavior?: RoutineStepEndBehavior;
@@ -89,6 +90,7 @@ export interface CreateRoutineStepInput {
 
 export interface UpdateRoutineStepInput {
   activityId?: UUID | null;
+  enabled?: boolean;
   name?: string | null;
   durationMs?: number;
   endBehavior?: RoutineStepEndBehavior;
@@ -377,6 +379,7 @@ function snapshotSteps(
           ? resolveCatalogColor(activity, catalog.folders)
           : normalized.color,
       iconName: normalized.iconName,
+      enabled: normalized.enabled !== false,
       endBehavior: validateEndBehavior(normalized.endBehavior),
       notes: validateStepNotes(normalized.notes),
     };
@@ -674,6 +677,7 @@ export class CatalogService implements CatalogServiceApi {
           ...step,
           id: createId(),
           activityId: source.trackingMode === 'overall' ? null : step.activityId,
+          enabled: step.enabled !== false,
           endBehavior: validateEndBehavior(step.endBehavior),
           notes: validateStepNotes(step.notes),
           createdAt: now,
@@ -738,6 +742,7 @@ export class CatalogService implements CatalogServiceApi {
       sortOrder: routine.steps.length,
       color: routine.trackingMode === 'steps' ? null : validateColor(input.color),
       iconName: routine.trackingMode === 'steps' ? null : validateIcon(input.iconName),
+      enabled: input.enabled ?? true,
       endBehavior: validateEndBehavior(input.endBehavior),
       notes: validateStepNotes(input.notes),
       createdAt: now,
@@ -809,6 +814,7 @@ export class CatalogService implements CatalogServiceApi {
           : input.iconName === undefined
             ? current.iconName
             : validateIcon(input.iconName),
+      enabled: input.enabled ?? current.enabled ?? true,
       endBehavior:
         input.endBehavior === undefined
           ? validateEndBehavior(current.endBehavior)
@@ -865,6 +871,7 @@ export class CatalogService implements CatalogServiceApi {
             ? source.name
             : validateStepNotes(options.name),
       sortOrder: sourceIndex + 1,
+      enabled: source.enabled !== false,
       endBehavior: validateEndBehavior(source.endBehavior),
       notes: validateStepNotes(source.notes),
       createdAt: now,

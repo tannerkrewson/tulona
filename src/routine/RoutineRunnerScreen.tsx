@@ -14,7 +14,7 @@ import {
 } from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { errorText, IconButton, Screen } from '@ui';
+import { AppButton, errorText, IconButton, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { inheritRoutineStepMetadata, resolveCatalogItem } from '../catalog/catalog-service';
@@ -205,8 +205,9 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
         return false;
       }
       if (next.status === 'awaiting-next-activity') {
-        router.replace('/routine-chooser');
-        return false;
+        setActive(next);
+        setLoadError(null);
+        return true;
       }
       if (next.status !== 'running' && next.status !== 'paused') {
         setLoadError(`This routine is ${next.status}.`);
@@ -303,14 +304,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
         }
       }
       const result = await action(runtime);
-      if (result) {
-        if (result.status === 'awaiting-next-activity') {
-          lastAction.current = finalizeCompletion;
-          await finalizeCompletion(runtime);
-        } else {
-          setActive(result);
-        }
-      }
+      if (result) setActive(result);
       onComplete?.(result);
     } catch (error) {
       setActionError(errorText(error));
@@ -349,6 +343,73 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     );
   }
 
+  if (active.status === 'awaiting-next-activity') {
+    return (
+      <Screen
+        backgroundColor={BASE_RUNNER.background}
+        onBack={goBack}
+        scrollable
+        title="Routine complete"
+      >
+        <Column alignment="center" spacing={16} style={{ width: '100%' }}>
+          <AppIcon name="check-circle-2" color={BASE_RUNNER.accent} size={42} />
+          <Text textStyle={{ color: BASE_RUNNER.text, fontSize: 25, fontWeight: '800' }}>
+            {`${active.routineSnapshot.name} is complete`}
+          </Text>
+          <Text textStyle={{ color: BASE_RUNNER.muted, fontSize: 15, lineHeight: 22 }}>
+            Review the steps if you want to bring one back into this run, or continue to choose what
+            to track next.
+          </Text>
+          {actionError ? (
+            <RunnerError message={actionError} palette={BASE_RUNNER} title="Routine action failed">
+              <RecoveryActions onClose={goBack} onRetry={retry} testID="routine-action-recovery" />
+            </RunnerError>
+          ) : null}
+          <AppButton
+            disabled={busy}
+            label="Choose next activity"
+            onPress={() => void runAction(finalizeCompletion)}
+            style={{ height: 52, width: '100%' }}
+            testID="routine-completion-continue"
+          />
+          <AppButton
+            disabled={busy}
+            label="Review steps"
+            onPress={() => setRoutineMenuOpen(true)}
+            style={{ height: 48, width: '100%' }}
+            variant="outlined"
+            testID="routine-completion-review-steps"
+          />
+        </Column>
+        <RoutineStepsModal
+          active={active}
+          baseColor={colors.primary}
+          busy={busy}
+          catalog={catalog}
+          onClose={() => setRoutineMenuOpen(false)}
+          palette={BASE_RUNNER}
+          onJump={(stepId) =>
+            void runAction(
+              (nextRuntime) => nextRuntime.routineService.jumpToStep(stepId),
+              () => setRoutineMenuOpen(false)
+            )
+          }
+          onMove={(stepId, direction) =>
+            void runAction((nextRuntime) =>
+              nextRuntime.routineService.reorderStep(stepId, direction)
+            )
+          }
+          onToggle={(stepId, enabled) =>
+            void runAction((nextRuntime) =>
+              nextRuntime.routineService.setStepEnabled(stepId, enabled)
+            )
+          }
+          visible={routineMenuOpen}
+        />
+      </Screen>
+    );
+  }
+
   const timing = routineTiming(active, nowMs);
   const steps = orderedSteps(active);
   const currentStep = steps[active.currentStepIndex];
@@ -373,7 +434,15 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     : timing.remainingMs === null
       ? '—'
       : formatCountdownMs(timing.remainingMs);
-  const nextStep = steps[active.currentStepIndex + 1];
+  const runnableSteps = steps.filter((step) => step.enabled !== false);
+  const runnableStepIndex = runnableSteps.findIndex((step) => step.id === currentStep.id);
+  const nextStep = steps
+    .slice(active.currentStepIndex + 1)
+    .find(
+      (step) =>
+        step.enabled !== false &&
+        active.stepSessions.find((session) => session.stepId === step.id)?.status === 'pending'
+    );
   const circleSize = Math.min(Math.max(width - 56, 268), 352);
   const totalCurrentMs = currentStep.durationMs + (currentSession?.addedTimeMs ?? 0);
   const progress =
@@ -482,7 +551,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             {!isPaused ? (
               <>
                 <Pressable
-                  accessibilityLabel={`Open routine steps, step ${active.currentStepIndex + 1} of ${steps.length}`}
+                  accessibilityLabel={`Open routine steps, step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
                   accessibilityRole="button"
                   onPress={() => setRoutineMenuOpen(true)}
                   style={({ pressed }) => [
@@ -497,7 +566,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
                 >
                   <AppIcon name="list-checks" color={RUNNER.accent} size={17} />
                   <Text textStyle={{ color: RUNNER.muted, fontSize: 12, fontWeight: '700' }}>
-                    {`Step ${active.currentStepIndex + 1} of ${steps.length}`}
+                    {`Step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
                   </Text>
                   <AppIcon name="chevron-down" color={RUNNER.muted} size={16} />
                 </Pressable>
@@ -630,6 +699,11 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
         }
         onMove={(stepId, direction) =>
           void runAction((nextRuntime) => nextRuntime.routineService.reorderStep(stepId, direction))
+        }
+        onToggle={(stepId, enabled) =>
+          void runAction((nextRuntime) =>
+            nextRuntime.routineService.setStepEnabled(stepId, enabled)
+          )
         }
         visible={routineMenuOpen}
       />
@@ -1003,6 +1077,7 @@ function RoutineStepsModal({
   onClose,
   onJump,
   onMove,
+  onToggle,
   palette,
   visible,
 }: {
@@ -1013,13 +1088,23 @@ function RoutineStepsModal({
   onClose: () => void;
   onJump: (stepId: string) => void;
   onMove: (stepId: string, direction: 'up' | 'down') => void;
+  onToggle: (stepId: string, enabled: boolean) => void;
   palette: RunnerPalette;
   visible: boolean;
 }) {
   const steps = orderedSteps(active);
   return (
     <RunnerModal onClose={onClose} palette={palette} title="Steps" visible={visible}>
-      <Column spacing={10} style={{ width: '100%' }}>
+      <Column
+        spacing={0}
+        style={{
+          backgroundColor: palette.surface,
+          borderColor: palette.border,
+          borderRadius: 13,
+          borderWidth: 1,
+          width: '100%',
+        }}
+      >
         {steps.map((step, index) => {
           const visual = routineStepVisual(
             step,
@@ -1029,6 +1114,9 @@ function RoutineStepsModal({
           );
           const session = active.stepSessions.find((candidate) => candidate.stepId === step.id);
           const status = session?.status ?? 'pending';
+          const enabled = step.enabled !== false;
+          const runnableNumber =
+            steps.slice(0, index).filter((candidate) => candidate.enabled !== false).length + 1;
           const icon =
             status === 'completed'
               ? 'check-circle-2'
@@ -1038,76 +1126,90 @@ function RoutineStepsModal({
                   ? 'circle-dot'
                   : 'circle';
           return (
-            <Row
-              key={step.id}
-              alignment="center"
-              spacing={8}
-              style={{
-                backgroundColor: palette.surface,
-                borderColor: palette.border,
-                borderRadius: 13,
-                borderWidth: 1,
-                paddingHorizontal: 10,
-                width: '100%',
-              }}
-            >
-              <Pressable
-                accessibilityLabel={`Open ${visual.name || 'step'}`}
-                accessibilityRole="button"
-                disabled={busy}
-                onPress={() => onJump(step.id)}
-                style={({ pressed }) => [styles.stepTouchable, { opacity: pressed ? 0.7 : 1 }]}
-                testID={`routine-jump-step-${step.id}`}
+            <Column key={step.id} spacing={0} style={{ width: '100%' }}>
+              <Row
+                alignment="center"
+                spacing={8}
+                style={{ paddingHorizontal: 12, paddingVertical: 8, width: '100%' }}
               >
-                <AppIcon
-                  color={
-                    status === 'active'
-                      ? (validHexColor(visual.color) ?? palette.accent)
-                      : statusColor(status, palette)
-                  }
-                  name={status === 'active' ? visual.iconName || 'activity' : icon}
-                  size={21}
-                />
-                <View style={styles.stepText}>
-                  <Column spacing={2}>
-                    <Text textStyle={{ color: palette.text, fontSize: 15, fontWeight: '700' }}>
-                      {`${index + 1}. ${visual.name || 'Untitled step'}`}
-                    </Text>
-                    <Text textStyle={{ color: palette.muted, fontSize: 13 }}>
-                      {`${stepStatusLabel(status)} · ${compactDuration(
-                        step.durationMs + (session?.addedTimeMs ?? 0)
-                      )}`}
-                    </Text>
-                  </Column>
-                </View>
-              </Pressable>
-              <Pressable
-                accessibilityLabel={`Move ${visual.name || 'step'} up`}
-                accessibilityRole="button"
-                disabled={busy || index === 0}
-                onPress={() => onMove(step.id, 'up')}
-                style={({ pressed }) => [
-                  styles.reorderIcon,
-                  { opacity: busy || index === 0 ? 0.25 : pressed ? 0.7 : 1 },
-                ]}
-                testID={`routine-reorder-up-${step.id}`}
-              >
-                <AppIcon color={palette.text} name="chevron-up" size={18} />
-              </Pressable>
-              <Pressable
-                accessibilityLabel={`Move ${visual.name || 'step'} down`}
-                accessibilityRole="button"
-                disabled={busy || index === steps.length - 1}
-                onPress={() => onMove(step.id, 'down')}
-                style={({ pressed }) => [
-                  styles.reorderIcon,
-                  { opacity: busy || index === steps.length - 1 ? 0.25 : pressed ? 0.7 : 1 },
-                ]}
-                testID={`routine-reorder-down-${step.id}`}
-              >
-                <AppIcon color={palette.text} name="chevron-down" size={18} />
-              </Pressable>
-            </Row>
+                <Pressable
+                  accessibilityLabel={`Open ${visual.name || 'step'}`}
+                  accessibilityRole="button"
+                  disabled={busy || !enabled}
+                  onPress={() => onJump(step.id)}
+                  style={({ pressed }) => [styles.stepTouchable, { opacity: pressed ? 0.7 : 1 }]}
+                  testID={`routine-jump-step-${step.id}`}
+                >
+                  <AppIcon
+                    color={
+                      status === 'active'
+                        ? (validHexColor(visual.color) ?? palette.accent)
+                        : statusColor(status, palette)
+                    }
+                    name={status === 'active' ? visual.iconName || 'activity' : icon}
+                    size={21}
+                  />
+                  <View style={styles.stepText}>
+                    <Column spacing={2}>
+                      <Text textStyle={{ color: palette.text, fontSize: 15, fontWeight: '700' }}>
+                        {`${enabled ? `${runnableNumber}. ` : ''}${visual.name || 'Untitled step'}`}
+                      </Text>
+                      <Text textStyle={{ color: palette.muted, fontSize: 13 }}>
+                        {`${enabled ? stepStatusLabel(status) : 'Excluded'} · ${compactDuration(
+                          step.durationMs + (session?.addedTimeMs ?? 0)
+                        )}`}
+                      </Text>
+                    </Column>
+                  </View>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel={`${enabled ? 'Disable' : 'Enable'} ${visual.name || 'step'}`}
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => onToggle(step.id, !enabled)}
+                  style={({ pressed }) => [
+                    styles.reorderIcon,
+                    { opacity: busy ? 0.35 : pressed ? 0.7 : 1 },
+                  ]}
+                  testID={`routine-toggle-step-${step.id}`}
+                >
+                  <AppIcon
+                    color={enabled ? palette.accent : palette.muted}
+                    name={enabled ? 'check' : 'x'}
+                    size={18}
+                  />
+                </Pressable>
+                <Pressable
+                  accessibilityLabel={`Move ${visual.name || 'step'} up`}
+                  accessibilityRole="button"
+                  disabled={busy || index === 0}
+                  onPress={() => onMove(step.id, 'up')}
+                  style={({ pressed }) => [
+                    styles.reorderIcon,
+                    { opacity: busy || index === 0 ? 0.25 : pressed ? 0.7 : 1 },
+                  ]}
+                  testID={`routine-reorder-up-${step.id}`}
+                >
+                  <AppIcon color={palette.text} name="chevron-up" size={18} />
+                </Pressable>
+                <Pressable
+                  accessibilityLabel={`Move ${visual.name || 'step'} down`}
+                  accessibilityRole="button"
+                  disabled={busy || index === steps.length - 1}
+                  onPress={() => onMove(step.id, 'down')}
+                  style={({ pressed }) => [
+                    styles.reorderIcon,
+                    { opacity: busy || index === steps.length - 1 ? 0.25 : pressed ? 0.7 : 1 },
+                  ]}
+                  testID={`routine-reorder-down-${step.id}`}
+                >
+                  <AppIcon color={palette.text} name="chevron-down" size={18} />
+                </Pressable>
+              </Row>
+              {index < steps.length - 1 ? (
+                <View style={{ backgroundColor: palette.border, height: 1, width: '100%' }} />
+              ) : null}
+            </Column>
           );
         })}
       </Column>
