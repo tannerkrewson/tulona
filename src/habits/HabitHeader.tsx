@@ -1,4 +1,5 @@
 import { Column, Row, Spacer, Text } from '@expo/ui';
+import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { useAppTheme } from '@theme';
@@ -20,6 +21,7 @@ export interface HabitHeaderProps {
   editLabel?: string;
   editOpenLabel?: string;
   editActions?: readonly HabitHeaderAction[];
+  filterMenu?: ReactNode;
   editTestID?: string;
   testID?: string;
 }
@@ -34,6 +36,7 @@ export function HabitHeader({
   editLabel = 'Edit habit',
   editOpenLabel = 'Close habit edit actions',
   editActions = [],
+  filterMenu,
   editTestID = 'edit-habit',
   testID,
 }: HabitHeaderProps) {
@@ -62,6 +65,7 @@ export function HabitHeader({
           </Text>
         </View>
         <Spacer flexible />
+        {filterMenu}
         {onToggleEdit ? (
           <IconButton
             accessibilityHint={editOpen ? 'Closes habit edit actions' : 'Opens habit edit actions'}

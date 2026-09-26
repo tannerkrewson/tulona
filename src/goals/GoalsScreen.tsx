@@ -37,6 +37,7 @@ import {
   getRowSurfaceStyle,
   IconButton,
   PageFilterMenu,
+  PageFilterMenuSelection,
   Screen,
 } from '@ui';
 
@@ -833,20 +834,20 @@ function RuleEditor({
               />
             </Field>
             {rule.comparison === 'at-most' ? (
-              <Field label="Optional baseline in minutes">
+              <Field label="Your usual time right now (optional, minutes)">
                 <Column spacing={6} style={{ width: '100%' }}>
                   <AccessibleTextInput
                     defaultValue={rule.baselineMinutes}
                     editable={!disabled}
                     keyboardType="numeric"
-                    label="Optional baseline in minutes"
+                    label="Your usual time right now (optional, minutes)"
                     onChangeText={(baselineMinutes) => onChange({ ...rule, baselineMinutes })}
                     placeholder="For example, 300"
                     testID={'goal-rule-baseline-minutes-' + index}
                     textStyle={{ color: colors.text, fontSize: 16 }}
                   />
                   <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
-                    {`This is the earlier time spent per ${rule.frequency === 'daily' ? 'day' : 'week'}. If you reduce below it but stay above your target, the result is Partial.`}
+                    {`Enter your usual time for this activity per ${rule.frequency === 'daily' ? 'day' : 'week'} right now. A reduction from this baseline that stays above the target counts as Partial; meeting or going below the target counts as Good.`}
                   </Text>
                 </Column>
               </Field>
@@ -866,6 +867,7 @@ export function GoalEditor({
   catalog,
   onCancel,
   onSaved,
+  onDeleted,
 }: {
   goal: Goal | null;
   service: GoalService;
@@ -874,6 +876,7 @@ export function GoalEditor({
   catalog: CatalogCollection;
   onCancel: () => void;
   onSaved: () => Promise<void>;
+  onDeleted: () => Promise<void>;
 }) {
   const { colors } = useAppTheme();
   const currentWeek = service.week(new Date());
@@ -992,7 +995,7 @@ export function GoalEditor({
           overallStatus,
           evaluationMode,
           startWeek: startWeekDate,
-          backfillStatusId,
+          backfillStatusId: evaluationMode === 'manual' ? backfillStatusId : '',
           rules: nextRules,
           sourceLinks,
         });
@@ -1007,7 +1010,7 @@ export function GoalEditor({
     if (!goal) return;
     const action = async () => {
       await service.deleteGoal(goal.id);
-      await onSaved();
+      await onDeleted();
     };
     setLastAction('delete');
     void runAction(action);
@@ -1053,7 +1056,11 @@ export function GoalEditor({
             <AccessiblePicker
               enabled={!saving}
               label="Status mode"
-              onValueChange={(value) => setEvaluationMode(String(value) as GoalEvaluationMode)}
+              onValueChange={(value) => {
+                const nextMode = String(value) as GoalEvaluationMode;
+                setEvaluationMode(nextMode);
+                if (nextMode === 'automatic') setBackfillStatusId('');
+              }}
               selectedValue={evaluationMode}
               testID="goal-evaluation-mode"
             >
@@ -1096,28 +1103,32 @@ export function GoalEditor({
                 Weeks before this date are outside the goal. You can start in any past week or in
                 the current week.
               </Text>
-              <Field label="Optional starting statuses">
-                <AccessiblePicker
-                  enabled={!saving}
-                  label="Optional starting statuses"
-                  onValueChange={(value) => setBackfillStatusId(String(value))}
-                  selectedValue={backfillStatusId}
-                  testID="goal-start-week-backfill-status"
-                >
-                  <Picker.Item label="Leave all weeks empty" value="" />
-                  {orderedStatusDefinitions(settings).map((definition) => (
-                    <Picker.Item
-                      key={definition.id}
-                      label={'Fill each week with “' + definition.name + '”'}
-                      value={definition.id}
-                    />
-                  ))}
-                </AccessiblePicker>
-              </Field>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
-                When chosen, this status is added to every week from the start week through this
-                week. You can change individual weeks later.
-              </Text>
+              {evaluationMode === 'manual' ? (
+                <>
+                  <Field label="Optional starting statuses">
+                    <AccessiblePicker
+                      enabled={!saving}
+                      label="Optional starting statuses"
+                      onValueChange={(value) => setBackfillStatusId(String(value))}
+                      selectedValue={backfillStatusId}
+                      testID="goal-start-week-backfill-status"
+                    >
+                      <Picker.Item label="Leave all weeks empty" value="" />
+                      {orderedStatusDefinitions(settings).map((definition) => (
+                        <Picker.Item
+                          key={definition.id}
+                          label={'Fill each week with “' + definition.name + '”'}
+                          value={definition.id}
+                        />
+                      ))}
+                    </AccessiblePicker>
+                  </Field>
+                  <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
+                    When chosen, this status is added to every week from the start week through this
+                    week. You can change individual weeks later.
+                  </Text>
+                </>
+              ) : null}
             </Column>
           )}
           {evaluationMode === 'automatic' ? (
@@ -1380,6 +1391,13 @@ export default function GoalsScreen() {
         onPress={() => setEditMode((open) => !open)}
         testID="goal-edit-mode"
       />
+      <PageFilterMenu
+        accessibilityLabel="Choose goal view"
+        onChange={setFilter}
+        options={OVERALL_STATUS_OPTIONS}
+        testID="goal-view-menu"
+        value={filter}
+      />
       <IconButton
         disabled={!resource}
         icon="plus"
@@ -1406,15 +1424,11 @@ export default function GoalsScreen() {
         {resource ? (
           <>
             <Column spacing={3} style={{ width: '100%' }} testID="goal-current-week-range">
-              <Text textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '700' }}>
-                CURRENT GOAL WEEK
-              </Text>
               <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>
                 {formatWeek(resource.currentWeek)}
               </Text>
             </Column>
-            <PageFilterMenu
-              accessibilityLabel="Choose goal view"
+            <PageFilterMenuSelection
               defaultValue="in-progress"
               onChange={setFilter}
               options={OVERALL_STATUS_OPTIONS}

@@ -75,6 +75,9 @@ export function GoalEditorScreen({ goalId }: GoalEditorScreenProps) {
       goal={goal ?? null}
       habits={resource.habits}
       onCancel={() => router.back()}
+      onDeleted={async () => {
+        router.replace('/(tabs)/goals' as Href);
+      }}
       onSaved={async () => {
         router.back();
       }}

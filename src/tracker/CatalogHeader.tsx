@@ -1,4 +1,5 @@
 import { Column, Row, Spacer, Text } from '@expo/ui';
+import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { useAppTheme } from '@theme';
@@ -22,6 +23,7 @@ export interface CatalogHeaderProps {
   createActions: readonly CatalogCreateAction[];
   onToggleCreate: () => void;
   onToggleEdit: () => void;
+  filterMenu?: ReactNode;
 }
 
 /** Shared catalog navigation with a popover creation menu. */
@@ -35,6 +37,7 @@ export function CatalogHeader({
   createActions,
   onToggleCreate,
   onToggleEdit,
+  filterMenu,
 }: CatalogHeaderProps) {
   const { colors } = useAppTheme();
 
@@ -77,6 +80,7 @@ export function CatalogHeader({
             {title}
           </Text>
           <Spacer flexible />
+          {filterMenu}
           {onHistory ? (
             <CatalogIconButton
               icon="clock"

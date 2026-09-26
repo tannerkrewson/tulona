@@ -31,6 +31,7 @@ import {
   ROW_SURFACE_PADDING_HORIZONTAL,
   ROW_SURFACE_RADIUS,
   PageFilterMenu,
+  PageFilterMenuSelection,
   Screen,
 } from '@ui';
 
@@ -152,6 +153,11 @@ function HabitListContent({ store }: { store: HabitStore }) {
   const [contentWidth, setContentWidth] = useState(0);
   const [metricMode, setMetricMode] = useState<HabitMetricMode>('streak');
   const [selectedCategory, setSelectedCategory] = useState<HabitCategory>(DEFAULT_HABIT_CATEGORY);
+  const habitViewOptions = [
+    { value: 'active', label: 'Active habits', icon: 'heart' },
+    { value: 'future', label: 'Future habits', icon: 'calendar-days' },
+    { value: 'archived', label: 'Archived habits', icon: 'archive' },
+  ] as const;
   const [editMode, setEditMode] = useState(false);
   const [dismissedPastMidnightDay, setDismissedPastMidnightDay] = useState<LogicalDayKey | null>(
     null
@@ -221,6 +227,15 @@ function HabitListContent({ store }: { store: HabitStore }) {
             editOpen={editMode}
             editOpenLabel="Done editing habits"
             editTestID="habit-edit-mode"
+            filterMenu={
+              <PageFilterMenu
+                accessibilityLabel="Choose habit view"
+                onChange={setSelectedCategory}
+                options={habitViewOptions}
+                testID="habit-view-menu"
+                value={selectedCategory}
+              />
+            }
             onToggleEdit={() => setEditMode((open) => !open)}
             title="Habits"
             testID="habits-header"
@@ -233,15 +248,10 @@ function HabitListContent({ store }: { store: HabitStore }) {
               runAction(action ?? (() => store.getState().refresh()));
             }}
           />
-          <PageFilterMenu
-            accessibilityLabel="Choose habit view"
+          <PageFilterMenuSelection
             defaultValue={DEFAULT_HABIT_CATEGORY}
             onChange={setSelectedCategory}
-            options={[
-              { value: 'active', label: 'Active habits', icon: 'heart' },
-              { value: 'future', label: 'Future habits', icon: 'calendar-days' },
-              { value: 'archived', label: 'Archived habits', icon: 'archive' },
-            ]}
+            options={habitViewOptions}
             testID="habit-view-menu"
             value={selectedCategory}
           />

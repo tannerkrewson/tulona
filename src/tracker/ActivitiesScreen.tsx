@@ -5,7 +5,13 @@ import { View } from 'react-native';
 
 import type { Activity, CatalogCollection, Folder, RoutineDefinition } from '@domain';
 import { useAppTheme } from '@theme';
-import { errorText, PageFilterMenu, ROW_SURFACE_LIST_GAP, Screen } from '@ui';
+import {
+  errorText,
+  PageFilterMenu,
+  PageFilterMenuSelection,
+  ROW_SURFACE_LIST_GAP,
+  Screen,
+} from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
@@ -299,6 +305,23 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
           ]}
           createOpen={createOpen}
           editMode={editMode}
+          filterMenu={
+            <PageFilterMenu
+              accessibilityLabel="Choose tracker view"
+              onChange={setCatalogView}
+              options={TRACKER_VIEW_OPTIONS}
+              testID="tracker-view-menu"
+              toggles={[
+                {
+                  label: 'Include archived items',
+                  value: showArchived,
+                  onChange: (value) => void changeArchivedVisibility(value),
+                  testID: 'tracker-show-archived',
+                },
+              ]}
+              value={catalogView}
+            />
+          }
           onToggleCreate={() => setCreateOpen((open) => !open)}
           onToggleEdit={() => {
             setEditMode((open) => !open);
@@ -307,20 +330,11 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
           onHistory={() => router.push('/history')}
           title="Tracker"
         />
-        <PageFilterMenu
-          accessibilityLabel="Choose tracker view"
+        <PageFilterMenuSelection
           defaultValue="all"
           onChange={setCatalogView}
           options={TRACKER_VIEW_OPTIONS}
           testID="tracker-view-menu"
-          toggles={[
-            {
-              label: 'Include archived items',
-              value: showArchived,
-              onChange: (value) => void changeArchivedVisibility(value),
-              testID: 'tracker-show-archived',
-            },
-          ]}
           value={catalogView}
         />
         {visibleError ? (
