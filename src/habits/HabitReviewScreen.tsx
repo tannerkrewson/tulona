@@ -8,11 +8,7 @@ import { AppButton, errorText, Screen } from '@ui';
 
 import { formatHabitDay } from './date-navigation';
 import { habitCompletionLabel } from './habit-format';
-import {
-  habitDayHasStatus,
-  habitsActiveOnDay,
-  habitsNeedingReview,
-} from './habit-review';
+import { habitDayHasStatus, habitsActiveOnDay, habitsNeedingReview } from './habit-review';
 import { loadHabitStore } from './habit-runtime';
 import type { HabitStore } from './habit-store';
 
@@ -131,7 +127,12 @@ function HabitReviewContent({
     const snapshot = store.getState();
     const candidates =
       day < snapshot.today
-        ? habitsNeedingReview(snapshot.habits, snapshot.states, day, snapshot.logicalDayRolloverHour)
+        ? habitsNeedingReview(
+            snapshot.habits,
+            snapshot.states,
+            day,
+            snapshot.logicalDayRolloverHour
+          )
         : habitsActiveOnDay(snapshot.habits, day, snapshot.logicalDayRolloverHour);
     return shuffle(candidates);
   }, [day, store]);

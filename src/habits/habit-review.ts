@@ -35,8 +35,7 @@ export function habitsActiveOnDay(
 /** A positive signal or explicit outcome means the day already has a status. */
 export function habitDayHasStatus(state: HabitDayState | undefined): boolean {
   return Boolean(
-    state &&
-      (state.outcome != null || state.manual === true || state.automatic === true)
+    state && (state.outcome != null || state.manual === true || state.automatic === true)
   );
 }
 

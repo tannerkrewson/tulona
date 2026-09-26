@@ -750,7 +750,11 @@ export default function BackupScreen({
             {loadError ?? 'Loading data tools...'}
           </Text>
           {loadError ? (
-            <ErrorPanel message={loadError} onBack={() => router.replace('/(tabs)')} onRetry={load} />
+            <ErrorPanel
+              message={loadError}
+              onBack={() => router.replace('/(tabs)')}
+              onRetry={load}
+            />
           ) : null}
           {footer}
         </Column>

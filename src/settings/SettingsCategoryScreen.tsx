@@ -30,10 +30,7 @@ type CategoryContentProps = {
   store: SettingsStore;
 };
 
-function CategoryControls({
-  category,
-  store,
-}: Pick<CategoryContentProps, 'category' | 'store'>) {
+function CategoryControls({ category, store }: Pick<CategoryContentProps, 'category' | 'store'>) {
   const settings = store((state) => state.settings);
   const saving = store((state) => state.saving);
   const { colors } = useAppTheme();

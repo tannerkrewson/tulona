@@ -17,12 +17,7 @@
         "ITSAppUsesNonExemptEncryption": false
       }
     },
-    "plugins": [
-      "expo-router",
-      "expo-audio",
-      "expo-document-picker",
-      "expo-asset"
-    ],
+    "plugins": ["expo-router", "expo-audio", "expo-document-picker", "expo-asset"],
     "experiments": {
       "typedRoutes": true
     },
