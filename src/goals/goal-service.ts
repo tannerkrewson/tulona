@@ -8,6 +8,7 @@ import {
   goalWeekIdentity,
   MAX_GOAL_HISTORICAL_CIRCLE_COUNT,
   MIN_GOAL_HISTORICAL_CIRCLE_COUNT,
+  shiftLogicalDay,
   type Goal,
   type GoalCollection,
   type GoalEvaluationMode,
@@ -30,6 +31,9 @@ import { PersistenceError } from '../data/errors';
 export interface CreateGoalInput {
   id?: string;
   title: string;
+  startWeek?: Date | number | string;
+  /** When supplied, writes this status for each week from startWeek through the current week. */
+  backfillStatusId?: string | null;
   sourceLinks?: readonly GoalSourceLink[];
   overallStatus?: GoalOverallStatus;
   evaluationMode?: GoalEvaluationMode;
@@ -46,6 +50,9 @@ export interface UpdateGoalInput {
 
 export type GoalRuleStatusIdsInput = Partial<GoalRuleStatusIds>;
 export type GoalEvaluationRuleInput =
+  | (Omit<Extract<GoalEvaluationRule, { kind: 'weekly-status' }>, 'statusIds'> & {
+      statusIds?: GoalRuleStatusIdsInput;
+    })
   | (Omit<Extract<GoalEvaluationRule, { kind: 'habit' }>, 'statusIds'> & {
       statusIds?: GoalRuleStatusIdsInput;
     })
@@ -168,16 +175,16 @@ function normalizedRules(
   if (value === undefined) return [];
   const defaults = defaultRuleStatusIds(settings);
   return value.map((rule, index) => {
-    const candidate = {
-      ...rule,
-      statusIds: { ...defaults, ...rule.statusIds },
-    };
+    const candidate = { ...rule, statusIds: { ...defaults, ...rule.statusIds } };
     const parsed = goalEvaluationRuleSchema.safeParse(candidate);
     if (!parsed.success) {
       validation(`Goal rule ${index + 1} failed validation: ${parsed.error.message}`);
     }
     for (const [outcome, statusId] of Object.entries(parsed.data.statusIds)) {
-      if (!settings.statusDefinitions.some((definition) => definition.id === statusId)) {
+      if (
+        parsed.data.kind !== 'weekly-status' &&
+        !settings.statusDefinitions.some((definition) => definition.id === statusId)
+      ) {
         validation(
           `Goal rule ${index + 1} maps ${outcome} to unknown goal status definition "${statusId}"`
         );
@@ -233,9 +240,22 @@ export class GoalService implements GoalServiceApi {
     const id = input.id ?? createId();
     const settings = await this.repository.readSettings();
     const now = this.now();
+    const currentWeek = this.week(now);
+    const startWeek = this.week(input.startWeek ?? now);
+    if (startWeek.weekStart > currentWeek.weekStart) {
+      validation('A goal cannot start in a future week');
+    }
+    const backfillStatusId = input.backfillStatusId?.trim() || undefined;
+    if (
+      backfillStatusId &&
+      !settings.statusDefinitions.some((definition) => definition.id === backfillStatusId)
+    ) {
+      validation(`Unknown backfill status definition "${backfillStatusId}"`);
+    }
     const goal = parseGoal({
       id,
       title: requiredText(input.title, 'Goal title'),
+      startWeek: startWeek.weekStart,
       sourceLinks: normalizedSourceLinks(input.sourceLinks),
       overallStatus: input.overallStatus ?? 'in-progress',
       evaluationMode: input.evaluationMode ?? 'manual',
@@ -244,6 +264,22 @@ export class GoalService implements GoalServiceApi {
       updatedAt: now,
     });
     await this.repository.createGoal(goal);
+    if (backfillStatusId) {
+      const rolloverHour = resolveOption(this.options.rolloverHour, 0);
+      for (
+        let weekStart = startWeek.weekStart;
+        weekStart <= currentWeek.weekStart;
+        weekStart = shiftLogicalDay(weekStart, 7, { rolloverHour })
+      ) {
+        await this.repository.upsertWeeklyStatus({
+          goalId: goal.id,
+          weekStart,
+          statusId: backfillStatusId,
+          note: null,
+          updatedAt: now,
+        });
+      }
+    }
     return goal;
   }
 
@@ -363,7 +399,11 @@ export class GoalService implements GoalServiceApi {
     const goals = await this.repository.readGoals();
     if (
       goals.some((goal) =>
-        goal.rules.some((rule) => Object.values(rule.statusIds).some((statusId) => statusId === id))
+        goal.rules.some(
+          (rule) =>
+            rule.kind !== 'weekly-status' &&
+            Object.values(rule.statusIds).some((statusId) => statusId === id)
+        )
       )
     ) {
       conflict(`Goal status definition "${id}" is used by an automatic goal rule`);

@@ -347,9 +347,11 @@ function validateSemantics(backup: LifeTrackerBackup): string[] {
       if (rule.kind === 'activity-duration' && !activityIds.has(rule.activityId)) {
         errors.push(`Goal "${goal.id}" references unknown activity "${rule.activityId}"`);
       }
-      for (const statusId of Object.values(rule.statusIds)) {
-        if (!goalStatusIds.has(statusId)) {
-          errors.push(`Goal "${goal.id}" maps a rule outcome to unknown status "${statusId}"`);
+      if (rule.kind !== 'weekly-status') {
+        for (const statusId of Object.values(rule.statusIds)) {
+          if (!goalStatusIds.has(statusId)) {
+            errors.push(`Goal "${goal.id}" maps a rule outcome to unknown status "${statusId}"`);
+          }
         }
       }
     }
