@@ -8,6 +8,7 @@ import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
 import { AppButton, ConfirmationModal, errorText, Screen } from '@ui';
 import { bootCoordinator } from '../orchestration';
+import { goBackInAppStack } from '../navigation/app-back';
 
 import { BackupImportError, type BackupImportResult } from './backup-import';
 import { downloadBackupJson, downloadIntervalsCsv } from './web-download';
@@ -607,7 +608,7 @@ function BackupContent({
           ) : null}
           <ErrorPanel
             message={error}
-            onBack={() => router.replace('/(tabs)')}
+            onBack={onBack}
             onRetry={() => {
               const action = lastAction.current;
               if (action) void action();
@@ -707,6 +708,7 @@ export default function BackupScreen({
 }) {
   const { colors } = useAppTheme();
   const router = useRouter();
+  const backAction = onBack ?? (() => goBackInAppStack(router, '/(tabs)/settings'));
   const [runtime, setRuntime] = useState<BackupRuntime | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -739,7 +741,7 @@ export default function BackupScreen({
 
   if (!runtime) {
     return (
-      <Screen onBack={onBack ?? (() => router.back())} title={title}>
+      <Screen onBack={backAction} title={title}>
         <Column spacing={16} style={{ width: '100%' }}>
           <Text
             textStyle={{
@@ -749,24 +751,11 @@ export default function BackupScreen({
           >
             {loadError ?? 'Loading data tools...'}
           </Text>
-          {loadError ? (
-            <ErrorPanel
-              message={loadError}
-              onBack={() => router.replace('/(tabs)')}
-              onRetry={load}
-            />
-          ) : null}
+          {loadError ? <ErrorPanel message={loadError} onBack={backAction} onRetry={load} /> : null}
           {footer}
         </Column>
       </Screen>
     );
   }
-  return (
-    <BackupContent
-      footer={footer}
-      onBack={onBack ?? (() => router.back())}
-      runtime={runtime}
-      title={title}
-    />
-  );
+  return <BackupContent footer={footer} onBack={backAction} runtime={runtime} title={title} />;
 }

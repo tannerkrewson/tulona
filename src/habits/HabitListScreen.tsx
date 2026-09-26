@@ -75,16 +75,11 @@ export default function HabitListScreen() {
   useEffect(() => {
     if (!focused) return;
     let cancelled = false;
-    const load = store
-      ? store
-          .getState()
-          .refresh()
-          .then(() => store)
-      : loadHabitStore();
+    const load = loadHabitStore();
     void load
       .then((nextStore) => {
         if (!cancelled) {
-          if (!store) setStore(() => nextStore);
+          setStore(() => nextStore);
           setLoadError(null);
         }
       })
@@ -94,7 +89,7 @@ export default function HabitListScreen() {
     return () => {
       cancelled = true;
     };
-  }, [focused, store]);
+  }, [focused]);
 
   if (!store) {
     return (
@@ -219,7 +214,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
       <Screen scrollable={false} testID="habits-screen">
         <View
           onLayout={(event) => setContentWidth(event.nativeEvent.layout.width)}
-          style={{ flex: 1, gap: 14, minHeight: 0, width: '100%' }}
+          style={{ flex: 1, gap: 14, minHeight: 0, position: 'relative', width: '100%' }}
         >
           <HabitHeader
             onAdd={() => router.push('/habit/new')}
@@ -255,66 +250,95 @@ function HabitListContent({ store }: { store: HabitStore }) {
             testID="habit-view-menu"
             value={selectedCategory}
           />
-          {selectedCategory === 'active' ? (
-            <>
-              {habitsByCategory.active.length > 0 ? (
-                <AppButton
-                  label={`Start mindful review · ${habitsByCategory.active.length} habits`}
-                  onPress={() => router.push('/habit-review' as Href)}
-                  style={{ height: 58, width: '100%' }}
-                  testID="start-habit-review"
+          <View style={{ flex: 1, minHeight: 0, paddingBottom: 68, width: '100%' }}>
+            {selectedCategory === 'active' ? (
+              <>
+                {reviewGap ? (
+                  <Column
+                    spacing={8}
+                    style={{
+                      backgroundColor: colors.active.background,
+                      borderColor: colors.border,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      padding: 12,
+                      width: '100%',
+                    }}
+                    testID="incomplete-habit-day-reminder"
+                  >
+                    <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
+                      {`${reviewGap.count} ${reviewGap.count === 1 ? 'habit needs' : 'habits need'} a status for ${formatHabitDay(reviewGap.day)}.`}
+                    </Text>
+                    <AppButton
+                      label="Review this day"
+                      onPress={() => router.push(`/habit-review?day=${reviewGap.day}` as Href)}
+                      style={{ height: 46, width: '100%' }}
+                      testID="review-incomplete-habit-day"
+                      variant="outlined"
+                    />
+                  </Column>
+                ) : null}
+                <HabitWeekStrip
+                  onSelectDay={selectDay}
+                  rolloverHour={logicalDayRolloverHour}
+                  selectedDay={selectedDay}
+                  today={today}
                 />
-              ) : null}
-              {reviewGap ? (
-                <Column
-                  spacing={8}
-                  style={{
-                    backgroundColor: colors.active.background,
-                    borderColor: colors.border,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    padding: 12,
-                    width: '100%',
-                  }}
-                  testID="incomplete-habit-day-reminder"
-                >
-                  <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
-                    {`${reviewGap.count} ${reviewGap.count === 1 ? 'habit needs' : 'habits need'} a status for ${formatHabitDay(reviewGap.day)}.`}
-                  </Text>
-                  <AppButton
-                    label="Review this day"
-                    onPress={() => router.push(`/habit-review?day=${reviewGap.day}` as Href)}
-                    style={{ height: 46, width: '100%' }}
-                    testID="review-incomplete-habit-day"
-                    variant="outlined"
-                  />
-                </Column>
-              ) : null}
-              <HabitWeekStrip
-                onSelectDay={selectDay}
+                <HabitDayPager
+                  contentWidth={contentWidth}
+                  horizontalInsets={{ left: 20 + insets.left, right: 20 + insets.right }}
+                  onSelectDay={selectDay}
+                  renderDay={renderDay}
+                  rolloverHour={logicalDayRolloverHour}
+                  selectedDay={selectedDay}
+                  today={today}
+                />
+              </>
+            ) : (
+              <HabitCategoryList
+                category={selectedCategory}
+                habits={visibleHabits}
+                editMode={editMode}
+                onDetails={(habitId) => router.push(`/habit/${habitId}`)}
                 rolloverHour={logicalDayRolloverHour}
-                selectedDay={selectedDay}
-                today={today}
               />
-              <HabitDayPager
-                contentWidth={contentWidth}
-                horizontalInsets={{ left: 20 + insets.left, right: 20 + insets.right }}
-                onSelectDay={selectDay}
-                renderDay={renderDay}
-                rolloverHour={logicalDayRolloverHour}
-                selectedDay={selectedDay}
-                today={today}
-              />
-            </>
-          ) : (
-            <HabitCategoryList
-              category={selectedCategory}
-              habits={visibleHabits}
-              editMode={editMode}
-              onDetails={(habitId) => router.push(`/habit/${habitId}`)}
-              rolloverHour={logicalDayRolloverHour}
-            />
-          )}
+            )}
+          </View>
+          <Pressable
+            accessibilityHint={
+              habitsByCategory.active.length === 0
+                ? 'Add an active habit to start a mindful review'
+                : 'Review today’s active habits one at a time'
+            }
+            accessibilityLabel="Start mindful review"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: habitsByCategory.active.length === 0 }}
+            disabled={habitsByCategory.active.length === 0}
+            onPress={() => router.push('/habit-review' as Href)}
+            style={({ pressed }) => ({
+              alignItems: 'center',
+              backgroundColor: colors.surfaceMuted,
+              borderColor: colors.border,
+              borderRadius: 16,
+              borderWidth: 1,
+              bottom: 0,
+              flexDirection: 'row',
+              gap: 10,
+              height: 58,
+              justifyContent: 'center',
+              left: 0,
+              opacity: habitsByCategory.active.length === 0 ? 0.42 : pressed ? 0.78 : 1,
+              position: 'absolute',
+              right: 0,
+              width: '100%',
+            })}
+            testID="start-habit-review"
+          >
+            <AppIcon color={colors.primary} name="sparkles" size={20} />
+            <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
+              Start mindful review
+            </Text>
+          </Pressable>
         </View>
       </Screen>
       <ConfirmationModal
@@ -1003,6 +1027,11 @@ function HabitListItem({
   const [menuAnchor, setMenuAnchor] = useState<HabitMenuAnchor | null>(null);
   const longPressed = useRef(false);
   const rowRef = useRef<View>(null);
+  const [rowPressProgress] = useState(() => new Animated.Value(0));
+  const rowPressOpacity = rowPressProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0.78],
+  });
   const complete = habitCompleted(state ?? null);
   const outcome = state?.outcome ?? null;
   const accent = habit.color ?? colors.primary;
@@ -1048,166 +1077,182 @@ function HabitListItem({
       style={[{ position: 'relative', width: '100%', zIndex: menuOpen ? 2 : 1 }, noSelectStyle]}
       testID={`habit-card-${habit.id}`}
     >
-      <Pressable
-        accessibilityHint={
-          editMode
-            ? 'Opens the habit editor'
-            : 'Cycles this habit through not done, done, failed, and skipped. Long press for more actions.'
-        }
-        accessibilityLabel={
-          editMode
-            ? `Edit ${habit.name}`
-            : `${habit.name}. ${statusLabel}. ${metricValue} ${metricLabel.toLowerCase()}. Signals: ${habitSignalSummary(state ?? null)}.`
-        }
-        accessibilityRole={editMode ? 'button' : 'checkbox'}
-        accessibilityState={
-          editMode ? { disabled: saving } : { checked: complete, disabled: saving }
-        }
-        accessibilityValue={{ text: statusLabel }}
-        delayLongPress={500}
-        disabled={saving}
-        onLongPress={
-          editMode
-            ? undefined
-            : () => {
-                longPressed.current = true;
-                rowRef.current?.measureInWindow((x, y, width, height) => {
-                  setMenuAnchor({ height, width, x, y });
-                });
-              }
-        }
-        onPress={() => {
-          if (editMode) {
-            onDetails();
-            return;
+      <Animated.View style={{ opacity: saving ? 0.55 : rowPressOpacity, width: '100%' }}>
+        <Pressable
+          accessibilityHint={
+            editMode
+              ? 'Opens the habit editor'
+              : 'Cycles this habit through not done, done, failed, and skipped. Long press for more actions.'
           }
-          if (longPressed.current) {
-            longPressed.current = false;
-            return;
+          accessibilityLabel={
+            editMode
+              ? `Edit ${habit.name}`
+              : `${habit.name}. ${statusLabel}. ${metricValue} ${metricLabel.toLowerCase()}. Signals: ${habitSignalSummary(state ?? null)}.`
           }
-          onCycle();
-        }}
-        style={({ pressed }) => ({
-          alignItems: 'center',
-          ...getRowSurfaceStyle({
-            backgroundColor: rowSurface,
-          }),
-          flexDirection: 'row',
-          minHeight: HABIT_ROW_MIN_HEIGHT,
-          opacity: saving ? 0.55 : pressed ? 0.72 : 1,
-          paddingHorizontal: ROW_SURFACE_PADDING_HORIZONTAL,
-          paddingVertical: 0,
-          userSelect: 'none',
-          width: '100%',
-          ...(Platform.OS === 'web'
-            ? ({
-                WebkitUserSelect: 'none',
-                WebkitTouchCallout: 'none',
-              } as unknown as ViewStyle)
-            : null),
-        })}
-        testID={`toggle-habit-${habit.id}`}
-      >
-        <Row
-          alignment="center"
-          spacing={ROW_SURFACE_CONTENT_GAP}
-          style={{ height: HABIT_ROW_MIN_HEIGHT, width: '100%' }}
-        >
-          <Pressable
-            accessibilityHint={
-              editMode
-                ? 'Opens the habit editor'
-                : 'Cycles this habit through not done, done, failed, and skipped'
+          accessibilityRole={editMode ? 'button' : 'checkbox'}
+          accessibilityState={
+            editMode ? { disabled: saving } : { checked: complete, disabled: saving }
+          }
+          accessibilityValue={{ text: statusLabel }}
+          delayLongPress={500}
+          disabled={saving}
+          onPressIn={() => {
+            Animated.timing(rowPressProgress, {
+              duration: 100,
+              toValue: 1,
+              useNativeDriver: true,
+            }).start();
+          }}
+          onPressOut={() => {
+            Animated.timing(rowPressProgress, {
+              duration: 140,
+              toValue: 0,
+              useNativeDriver: true,
+            }).start();
+          }}
+          onLongPress={
+            editMode
+              ? undefined
+              : () => {
+                  longPressed.current = true;
+                  rowRef.current?.measureInWindow((x, y, width, height) => {
+                    setMenuAnchor({ height, width, x, y });
+                  });
+                }
+          }
+          onPress={() => {
+            if (editMode) {
+              onDetails();
+              return;
             }
-            accessibilityLabel={editMode ? `Edit ${habit.name}` : `${habit.name}, ${statusLabel}`}
-            accessibilityValue={{ text: statusLabel }}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: saving }}
-            disabled={saving}
-            onPress={(event) => {
-              event.stopPropagation();
-              if (editMode) onDetails();
-              else onCycle();
-            }}
-            style={({ pressed }) => ({
-              alignItems: 'center',
-              backgroundColor: editMode ? colors.surfaceMuted : statusBackground,
-              borderRadius: 8,
-              height: ROW_SURFACE_ICON_SIZE,
-              justifyContent: 'center',
-              opacity: saving ? 0.55 : pressed ? 0.72 : 1,
-              width: ROW_SURFACE_ICON_SIZE,
-            })}
-            testID={`status-habit-${habit.id}`}
+            if (longPressed.current) {
+              longPressed.current = false;
+              return;
+            }
+            onCycle();
+          }}
+          style={{
+            alignItems: 'center',
+            ...getRowSurfaceStyle({
+              backgroundColor: rowSurface,
+            }),
+            flexDirection: 'row',
+            minHeight: HABIT_ROW_MIN_HEIGHT,
+            opacity: 1,
+            paddingHorizontal: ROW_SURFACE_PADDING_HORIZONTAL,
+            paddingVertical: 0,
+            userSelect: 'none',
+            width: '100%',
+            ...(Platform.OS === 'web'
+              ? ({
+                  WebkitUserSelect: 'none',
+                  WebkitTouchCallout: 'none',
+                } as unknown as ViewStyle)
+              : null),
+          }}
+          testID={`toggle-habit-${habit.id}`}
+        >
+          <Row
+            alignment="center"
+            spacing={ROW_SURFACE_CONTENT_GAP}
+            style={{ height: HABIT_ROW_MIN_HEIGHT, width: '100%' }}
           >
-            {statusIcon ? (
-              <AppIcon
-                accessibilityLabel={statusLabel}
-                color={statusColor}
-                name={statusIcon}
-                size={20}
-                strokeWidth={2.5}
-              />
-            ) : null}
-          </Pressable>
-          <View
-            style={{
-              flex: 1,
-              height: HABIT_ROW_TEXT_BLOCK_HEIGHT,
-              justifyContent: 'center',
-              minWidth: 0,
-            }}
-          >
-            <Text
-              numberOfLines={1}
-              textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
+            <Pressable
+              accessibilityHint={
+                editMode
+                  ? 'Opens the habit editor'
+                  : 'Cycles this habit through not done, done, failed, and skipped'
+              }
+              accessibilityLabel={editMode ? `Edit ${habit.name}` : `${habit.name}, ${statusLabel}`}
+              accessibilityValue={{ text: statusLabel }}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: saving }}
+              disabled={saving}
+              onPress={(event) => {
+                event.stopPropagation();
+                if (editMode) onDetails();
+                else onCycle();
+              }}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                backgroundColor: editMode ? colors.surfaceMuted : statusBackground,
+                borderRadius: 8,
+                height: ROW_SURFACE_ICON_SIZE,
+                justifyContent: 'center',
+                opacity: saving ? 0.55 : pressed ? 0.72 : 1,
+                width: ROW_SURFACE_ICON_SIZE,
+              })}
+              testID={`status-habit-${habit.id}`}
             >
-              {habit.name}
-            </Text>
-            <Text
-              numberOfLines={1}
-              textStyle={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
+              {statusIcon ? (
+                <AppIcon
+                  accessibilityLabel={statusLabel}
+                  color={statusColor}
+                  name={statusIcon}
+                  size={20}
+                  strokeWidth={2.5}
+                />
+              ) : null}
+            </Pressable>
+            <View
+              style={{
+                flex: 1,
+                height: HABIT_ROW_TEXT_BLOCK_HEIGHT,
+                justifyContent: 'center',
+                minWidth: 0,
+              }}
             >
-              {statusLabel}
-            </Text>
-          </View>
-          <Pressable
-            accessibilityHint="Toggles all visible habits between current streak and total days"
-            accessibilityLabel={`${metricLabel}: ${metricValue}`}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: saving || editMode }}
-            accessibilityValue={{ text: String(metricValue) }}
-            disabled={saving || editMode}
-            onPress={(event) => {
-              event.stopPropagation();
-              if (!editMode) onToggleMetricDisplay();
-            }}
-            style={{
-              alignItems: 'flex-end',
-              alignSelf: 'stretch',
-              flexShrink: 0,
-              justifyContent: 'center',
-              marginLeft: 'auto',
-              minWidth: HABIT_ROW_STREAK_WIDTH,
-              width: HABIT_ROW_STREAK_WIDTH,
-            }}
-            testID={`toggle-habit-metric-${habit.id}`}
-          >
-            <Text
-              numberOfLines={1}
-              textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
+              <Text
+                numberOfLines={1}
+                textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
+              >
+                {habit.name}
+              </Text>
+              <Text
+                numberOfLines={1}
+                textStyle={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
+              >
+                {statusLabel}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityHint="Toggles all visible habits between current streak and total days"
+              accessibilityLabel={`${metricLabel}: ${metricValue}`}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: saving || editMode }}
+              accessibilityValue={{ text: String(metricValue) }}
+              disabled={saving || editMode}
+              onPress={(event) => {
+                event.stopPropagation();
+                if (!editMode) onToggleMetricDisplay();
+              }}
+              style={{
+                alignItems: 'flex-end',
+                alignSelf: 'stretch',
+                flexShrink: 0,
+                justifyContent: 'center',
+                marginLeft: 'auto',
+                minWidth: HABIT_ROW_STREAK_WIDTH,
+                width: HABIT_ROW_STREAK_WIDTH,
+              }}
+              testID={`toggle-habit-metric-${habit.id}`}
             >
-              {String(metricValue)}
-            </Text>
-            <Text
-              numberOfLines={1}
-              textStyle={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
-            >
-              {metricLabel}
-            </Text>
-          </Pressable>
-        </Row>
-      </Pressable>
+              <Text
+                numberOfLines={1}
+                textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
+              >
+                {String(metricValue)}
+              </Text>
+              <Text
+                numberOfLines={1}
+                textStyle={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
+              >
+                {metricLabel}
+              </Text>
+            </Pressable>
+          </Row>
+        </Pressable>
+      </Animated.View>
       {menuAnchor ? (
         <HabitActionMenu
           anchor={menuAnchor}

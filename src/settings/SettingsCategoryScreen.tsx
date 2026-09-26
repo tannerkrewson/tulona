@@ -6,6 +6,7 @@ import type { AppSettings } from '@domain';
 import { useAppTheme, useThemePreference } from '@theme';
 import { AccessiblePicker, AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
+import { goBackInAppStack } from '../navigation/app-back';
 import BackupScreen from '../backup/BackupScreen';
 
 import { getSettingsCategory, type SettingsCategory } from './settings-categories';
@@ -26,6 +27,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 type CategoryContentProps = {
   category: SettingsCategory;
+  goBack: () => void;
   router: ReturnType<typeof useRouter>;
   store: SettingsStore;
 };
@@ -188,26 +190,26 @@ function CategoryControls({ category, store }: Pick<CategoryContentProps, 'categ
   }
 }
 
-function SettingsCategoryContent({ category, router, store }: CategoryContentProps) {
+function SettingsCategoryContent({ category, goBack, router, store }: CategoryContentProps) {
   if (category.id === 'data') {
     return (
       <BackupScreen
         footer={
           <Column spacing={16} style={{ width: '100%' }}>
-            <SettingsActionError onBack={() => router.back()} store={store} />
+            <SettingsActionError onBack={goBack} store={store} />
             <PrototypeDataReset onCleared={() => router.replace('/(tabs)')} />
           </Column>
         }
-        onBack={() => router.back()}
+        onBack={goBack}
         title="Data"
       />
     );
   }
 
   return (
-    <Screen onBack={() => router.back()} title={category.title}>
+    <Screen onBack={goBack} title={category.title}>
       <Column spacing={16} style={{ width: '100%' }}>
-        <SettingsActionError onBack={() => router.back()} store={store} />
+        <SettingsActionError onBack={goBack} store={store} />
         <CategoryControls category={category} store={store} />
       </Column>
     </Screen>
@@ -216,12 +218,21 @@ function SettingsCategoryContent({ category, router, store }: CategoryContentPro
 
 export default function SettingsCategoryScreen({
   categoryId,
+  returnFromDropbox,
 }: {
   categoryId: string | string[] | undefined;
+  returnFromDropbox?: string | string[];
 }) {
   const { colors } = useAppTheme();
   const focused = useIsFocused();
   const router = useRouter();
+  const isDropboxReturn = Array.isArray(returnFromDropbox)
+    ? returnFromDropbox[0]
+    : returnFromDropbox;
+  const goBack = () =>
+    isDropboxReturn === '1'
+      ? router.replace('/(tabs)/settings')
+      : goBackInAppStack(router, '/(tabs)/settings');
   const category = getSettingsCategory(categoryId);
   const [store, setStore] = useState<SettingsStore | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -239,7 +250,7 @@ export default function SettingsCategoryScreen({
 
   if (!category) {
     return (
-      <Screen onBack={() => router.back()} title="Settings">
+      <Screen onBack={goBack} title="Settings">
         <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>
           Settings category not found.
         </Text>
@@ -249,7 +260,7 @@ export default function SettingsCategoryScreen({
 
   if (!store) {
     return (
-      <Screen onBack={() => router.back()} title={category.title}>
+      <Screen onBack={goBack} title={category.title}>
         <Column spacing={12} style={{ width: '100%' }}>
           <Text textStyle={{ color: loadError ? colors.text : colors.textMuted, fontSize: 15 }}>
             {loadError ?? 'Loading settings...'}
@@ -257,7 +268,7 @@ export default function SettingsCategoryScreen({
           {loadError ? (
             <RecoveryActions
               onRetry={load}
-              onClose={() => router.back()}
+              onClose={goBack}
               retryTestID="settings-retry"
               testID="settings-load-recovery"
             />
@@ -270,5 +281,7 @@ export default function SettingsCategoryScreen({
     );
   }
 
-  return <SettingsCategoryContent category={category} router={router} store={store} />;
+  return (
+    <SettingsCategoryContent category={category} goBack={goBack} router={router} store={store} />
+  );
 }

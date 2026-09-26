@@ -19,6 +19,7 @@ import {
 
 export interface HabitReconciliationOptions extends HabitScheduleOptions {
   now?: HabitDateInput;
+  getNow?: () => HabitDateInput;
 }
 
 export interface HabitReconciliationResult {
@@ -126,21 +127,26 @@ export class HabitReconciliationService {
     this.options = { ...this.options, ...settings };
   }
 
+  private currentTime(): HabitDateInput {
+    return this.options.getNow?.() ?? this.options.now ?? Date.now();
+  }
+
   async reconcile(
     logicalDays: readonly LogicalDayKey[],
-    habitIds?: readonly UUID[]
+    habitIds?: readonly UUID[],
+    now: HabitDateInput = this.currentTime()
   ): Promise<HabitReconciliationResult> {
     const uniqueDays = [...new Set(logicalDays)];
     const habits = (await this.repository.readHabits()).filter(
       (habit) => habit.archivedAt === null && habit.trigger !== null
     );
     const selected = habitIds ? habits.filter((habit) => habitIds.includes(habit.id)) : habits;
-    const updatedAt = asTimestamp(this.options.now);
+    const updatedAt = asTimestamp(now);
     let updated = 0;
     for (const habit of selected) {
       for (const logicalDay of uniqueDays) {
         const complete = await this.evaluator.isComplete(habit, logicalDay, {
-          now: this.options.now,
+          now,
           rolloverHour: this.options.rolloverHour,
         });
         await this.repository.updateSignals(
@@ -158,16 +164,18 @@ export class HabitReconciliationService {
   async reconcileRange(
     start: LogicalDayKey,
     end: LogicalDayKey,
-    habitIds?: readonly UUID[]
+    habitIds?: readonly UUID[],
+    now: HabitDateInput = this.currentTime()
   ): Promise<HabitReconciliationResult> {
-    return this.reconcile(dayRange(start, end, this.options.rolloverHour ?? 0), habitIds);
+    return this.reconcile(dayRange(start, end, this.options.rolloverHour ?? 0), habitIds, now);
   }
 
   readonly reconcileTrackerEdit = async (
     mutation: TrackerMutation
   ): Promise<HabitReconciliationResult> => {
     const rolloverHour = this.options.rolloverHour ?? 0;
-    const end = logicalDayKey(this.options.now ?? Date.now(), { rolloverHour });
+    const now = this.currentTime();
+    const end = logicalDayKey(now, { rolloverHour });
     const start = mutationStart(mutation, rolloverHour);
     if (start > end) return { updated: 0, habitIds: [], logicalDays: [] };
     const habits = (await this.repository.readHabits()).filter(
@@ -175,7 +183,7 @@ export class HabitReconciliationService {
     );
     const catalogValue = this.catalog ? await this.catalog.read() : null;
     const ids = linkedHabitIds(habits, mutation, catalogValue);
-    return this.reconcileRange(start, end, ids);
+    return this.reconcileRange(start, end, ids, now);
   };
 }
 
@@ -186,7 +194,6 @@ export function createHabitReconciliationService(
   options?: HabitReconciliationOptions
 ): HabitReconciliationService {
   const evaluatorOptions: HabitTriggerEvaluatorOptions = {
-    now: options?.now,
     rolloverHour: options?.rolloverHour,
   };
   return new HabitReconciliationService(

@@ -13,6 +13,7 @@ import type {
   UUID,
 } from '@domain';
 import { useAppTheme } from '@theme';
+import { goBackInAppStack } from '../navigation/app-back';
 import {
   AccessiblePicker,
   AccessibleTextInput,
@@ -312,10 +313,13 @@ export function HabitEditorScreen({ id }: HabitEditorScreenProps) {
 
   if (!resource) {
     return (
-      <Screen onBack={() => router.back()} title={id === NEW_ID ? 'New habit' : 'Edit habit'}>
+      <Screen
+        onBack={() => goBackInAppStack(router, '/(tabs)/habits')}
+        title={id === NEW_ID ? 'New habit' : 'Edit habit'}
+      >
         <HabitErrorMessage
           message={loadError}
-          onBack={() => router.back()}
+          onBack={() => goBackInAppStack(router, '/(tabs)/habits')}
           onRetry={() => {
             setLoadError(null);
             setVersion((current) => current + 1);
@@ -337,8 +341,8 @@ export function HabitEditorScreen({ id }: HabitEditorScreenProps) {
     <HabitEditorForm
       habit={resource.habit}
       store={resource.store}
-      onBack={() => router.back()}
-      onCancel={() => router.back()}
+      onBack={() => goBackInAppStack(router, '/(tabs)/habits')}
+      onCancel={() => goBackInAppStack(router, '/(tabs)/habits')}
       onSaved={(habit) => router.replace(`/habit/${habit.id}`)}
     />
   );

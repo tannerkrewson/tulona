@@ -6,6 +6,7 @@ import { Pressable, View } from 'react-native';
 
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
+import { goBackInAppStack } from '../navigation/app-back';
 import { AccessiblePicker, AppButton, errorText, Screen } from '@ui';
 
 import { bootCoordinator } from '../orchestration';
@@ -504,7 +505,7 @@ export default function HabitImportScreen() {
   if (!runtime) {
     return (
       <Screen
-        onBack={() => router.back()}
+        onBack={() => goBackInAppStack(router, '/settings/data')}
         title="Import TickTick habits"
         testID="habit-import-screen"
       >
@@ -519,7 +520,7 @@ export default function HabitImportScreen() {
 
   return (
     <Screen
-      onBack={() => router.back()}
+      onBack={() => goBackInAppStack(router, '/settings/data')}
       title="Import TickTick habits"
       testID="habit-import-screen"
     >

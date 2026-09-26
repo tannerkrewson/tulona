@@ -80,7 +80,6 @@ export function CatalogHeader({
             {title}
           </Text>
           <Spacer flexible />
-          {filterMenu}
           {onHistory ? (
             <CatalogIconButton
               icon="clock"
@@ -89,6 +88,7 @@ export function CatalogHeader({
               testID="tracker-history"
             />
           ) : null}
+          {filterMenu}
           <CatalogIconButton
             icon={editMode ? 'check' : 'pencil'}
             label={editMode ? 'Done' : 'Edit'}

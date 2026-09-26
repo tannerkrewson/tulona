@@ -18,6 +18,7 @@ import {
   Screen,
 } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
+import { goBackInAppStack } from '../navigation/app-back';
 
 import type { CatalogService } from './catalog-service';
 import { loadRoutineRuntime } from '../routine/routine-runtime';
@@ -68,7 +69,7 @@ export function CatalogEditorScreen({
   const title = kind === 'activity' ? 'Activity editor' : 'Folder editor';
   if (!resource) {
     return (
-      <Screen onBack={() => router.back()} title={title}>
+      <Screen onBack={() => goBackInAppStack(router, '/(tabs)')} title={title}>
         <Column
           spacing={12}
           style={{
@@ -90,7 +91,7 @@ export function CatalogEditorScreen({
           </Text>
           {loadError ? (
             <RecoveryActions
-              onClose={() => router.back()}
+              onClose={() => goBackInAppStack(router, '/(tabs)')}
               onRetry={() => {
                 setLoadError(null);
                 setVersion((current) => current + 1);
@@ -115,7 +116,7 @@ export function CatalogEditorScreen({
         folders={resource.catalog.folders}
         initialFolderId={initialFolderId}
         service={resource.service}
-        onBack={() => router.back()}
+        onBack={() => goBackInAppStack(router, '/(tabs)')}
         onChanged={refresh}
       />
     );
@@ -125,7 +126,7 @@ export function CatalogEditorScreen({
       key={`${id}-${version}`}
       folder={resource.catalog.folders.find((candidate) => candidate.id === id) ?? null}
       service={resource.service}
-      onBack={() => router.back()}
+      onBack={() => goBackInAppStack(router, '/(tabs)')}
       onChanged={refresh}
     />
   );

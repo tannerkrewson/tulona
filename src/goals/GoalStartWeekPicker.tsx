@@ -3,6 +3,7 @@ import DateTimePickerComponent from '@expo/ui/community/datetime-picker';
 import { useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 
+import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
 import { AppButton } from '@ui';
 
@@ -41,17 +42,34 @@ export function GoalStartWeekPicker({
           </Text>
         </View>
         {Platform.OS !== 'web' ? (
-          <AppButton
+          <Pressable
+            accessibilityLabel={`Change starting week, currently ${valueLabel}`}
+            accessibilityRole="button"
             onPress={() => {
               setDraft(value);
               setOpen(true);
             }}
-            style={{ height: 44, paddingHorizontal: 8, width: 84 }}
+            style={({ pressed }) => ({
+              alignItems: 'center',
+              backgroundColor: colors.surfaceMuted,
+              borderColor: colors.border,
+              borderRadius: 10,
+              borderWidth: 1,
+              flexDirection: 'row',
+              gap: 7,
+              flexShrink: 0,
+              height: 42,
+              justifyContent: 'center',
+              minWidth: 108,
+              opacity: pressed ? 0.78 : 1,
+              paddingHorizontal: 10,
+              width: 108,
+            })}
             testID="goal-start-week-change"
-            variant="outlined"
           >
+            <AppIcon color={colors.textMuted} name="calendar-days" size={16} />
             <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>Change</Text>
-          </AppButton>
+          </Pressable>
         ) : null}
       </Row>
       {Platform.OS === 'android' && open ? (

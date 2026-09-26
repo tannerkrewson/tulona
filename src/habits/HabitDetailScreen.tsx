@@ -11,6 +11,7 @@ import {
 } from '@domain';
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
+import { goBackInAppStack } from '../navigation/app-back';
 import { ConfirmationModal, errorText, Screen } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
@@ -84,10 +85,14 @@ export function HabitDetailScreen({ id }: HabitDetailScreenProps) {
     return (
       <Screen testID="habit-detail-screen">
         <Column spacing={16} style={{ width: '100%' }}>
-          <HabitHeader onBack={() => router.back()} title="Habit details" testID="habit-header" />
+          <HabitHeader
+            onBack={() => goBackInAppStack(router, '/(tabs)/habits')}
+            title="Habit details"
+            testID="habit-header"
+          />
           <HabitErrorMessage
             message={loadError}
-            onBack={() => router.back()}
+            onBack={() => goBackInAppStack(router, '/(tabs)/habits')}
             onRetry={() => {
               setLoadError(null);
               setVersion((current) => current + 1);
@@ -128,8 +133,15 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
     return (
       <Screen testID="habit-detail-screen">
         <Column spacing={16} style={{ width: '100%' }}>
-          <HabitHeader onBack={() => router.back()} title="Habit details" testID="habit-header" />
-          <HabitErrorMessage message="Habit not found" onBack={() => router.back()} />
+          <HabitHeader
+            onBack={() => goBackInAppStack(router, '/(tabs)/habits')}
+            title="Habit details"
+            testID="habit-header"
+          />
+          <HabitErrorMessage
+            message="Habit not found"
+            onBack={() => goBackInAppStack(router, '/(tabs)/habits')}
+          />
         </Column>
       </Screen>
     );
@@ -182,14 +194,14 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
               },
             ]}
             editOpen={editMenuOpen}
-            onBack={() => router.back()}
+            onBack={() => goBackInAppStack(router, '/(tabs)/habits')}
             onToggleEdit={() => setEditMenuOpen((open) => !open)}
             title={habit.name}
             testID="habit-header"
           />
           <HabitErrorMessage
             message={persistenceError ? errorText(persistenceError) : null}
-            onBack={() => router.back()}
+            onBack={() => goBackInAppStack(router, '/(tabs)/habits')}
             onRetry={() => {
               const action = lastAction.current;
               void (action ? action() : store.getState().refresh()).catch(() => undefined);

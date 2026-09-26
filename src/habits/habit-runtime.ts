@@ -33,5 +33,10 @@ export async function loadHabitRuntime(): Promise<HabitRuntime> {
 export async function loadHabitStore(): Promise<HabitStore> {
   const result = await bootCoordinator.hydrate();
   if (!result.runtime) throw new PersistenceError('metadata', 'Create or activate a dataset first');
-  return result.runtime.stores.habits;
+  const store = result.runtime.stores.habits;
+  await store.getState().refresh();
+  const today = store.getState().today;
+  await result.runtime.services.reconciliation.reconcileRange(today, today);
+  await store.getState().refresh();
+  return store;
 }

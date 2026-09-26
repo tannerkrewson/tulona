@@ -43,7 +43,16 @@ export function HabitHeader({
   const { colors } = useAppTheme();
 
   return (
-    <View style={{ position: 'relative', width: '100%', zIndex: 10 }} testID={testID}>
+    <View
+      style={{
+        elevation: 1000,
+        overflow: 'visible',
+        position: 'relative',
+        width: '100%',
+        zIndex: 1000,
+      }}
+      testID={testID}
+    >
       <Row alignment="center" spacing={4} style={{ width: '100%' }}>
         {onBack ? (
           <IconButton

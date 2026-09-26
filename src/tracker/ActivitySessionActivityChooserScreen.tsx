@@ -9,6 +9,7 @@ import { AppButton, errorText, ROW_SURFACE_LIST_GAP, Screen } from '@ui';
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
+import { goBackInAppStack } from '../navigation/app-back';
 import { ActivityRow } from './ActivityRow';
 import { FolderRow } from './FolderRow';
 
@@ -71,8 +72,7 @@ export function ActivitySessionActivityChooserScreen({
   const lastChoice = useRef<UUID | null | undefined>(undefined);
 
   const returnToSession = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace(`/activity-session/${encodeURIComponent(transitionId)}`);
+    goBackInAppStack(router, `/activity-session/${encodeURIComponent(transitionId)}`);
   }, [router, transitionId]);
 
   useEffect(() => {

@@ -8,6 +8,7 @@ import { AppButton, ConfirmationModal, errorText, Screen } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
+import { goBackInAppStack } from '../navigation/app-back';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import { HistoricalSessionEditor } from './HistoricalSessionEditor';
 import { formatSessionDate, formatSessionTime } from './session-time';
@@ -98,11 +99,11 @@ export function ActivitySessionScreen({ transitionId }: ActivitySessionScreenPro
 
   if (!runtime) {
     return (
-      <Screen onBack={() => router.back()} title="Session">
+      <Screen onBack={() => goBackInAppStack(router, '/(tabs)')} title="Session">
         {loadError ? (
           <SessionError
             message={loadError}
-            onClose={() => router.back()}
+            onClose={() => goBackInAppStack(router, '/(tabs)')}
             onRetry={() => {
               setLoadError(null);
               setRuntime(null);
@@ -181,14 +182,14 @@ function ActivitySessionContent({
 
   if (!catalog || !transition) {
     return (
-      <Screen onBack={() => router.back()} title="Session">
+      <Screen onBack={() => goBackInAppStack(router, '/(tabs)')} title="Session">
         <SessionError
           message={
             persistenceError
               ? errorText(persistenceError)
               : (contextError ?? 'This activity session is no longer available.')
           }
-          onClose={() => router.back()}
+          onClose={() => goBackInAppStack(router, '/(tabs)')}
           onRetry={() => {
             void store.getState().hydrate();
             loadTransitionContext();
@@ -277,12 +278,12 @@ function ActivitySessionContent({
     void runAction(async () => {
       await store.getState().deleteTransition(transition.id, { confirm: true });
       setDeleteConfirmationOpen(false);
-      router.back();
+      goBackInAppStack(router, '/(tabs)');
     });
 
   return (
     <>
-      <Screen onBack={() => router.back()} title={activityName}>
+      <Screen onBack={() => goBackInAppStack(router, '/(tabs)')} title={activityName}>
         <Column spacing={16} style={{ width: '100%' }} testID="activity-session-screen">
           <Column spacing={14} style={{ width: '100%' }} testID="activity-session-summary">
             <Row alignment="center" spacing={12} style={{ width: '100%' }}>

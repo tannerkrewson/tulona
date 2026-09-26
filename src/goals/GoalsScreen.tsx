@@ -1384,19 +1384,19 @@ export default function GoalsScreen() {
 
   const header = (
     <Row alignment="center" spacing={4}>
-      <CatalogIconButton
-        disabled={!resource || reordering}
-        icon={editMode ? 'check' : 'pencil'}
-        label={editMode ? 'Done' : 'Edit'}
-        onPress={() => setEditMode((open) => !open)}
-        testID="goal-edit-mode"
-      />
       <PageFilterMenu
         accessibilityLabel="Choose goal view"
         onChange={setFilter}
         options={OVERALL_STATUS_OPTIONS}
         testID="goal-view-menu"
         value={filter}
+      />
+      <CatalogIconButton
+        disabled={!resource || reordering}
+        icon={editMode ? 'check' : 'pencil'}
+        label={editMode ? 'Done' : 'Edit'}
+        onPress={() => setEditMode((open) => !open)}
+        testID="goal-edit-mode"
       />
       <IconButton
         disabled={!resource}

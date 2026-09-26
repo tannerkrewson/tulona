@@ -5,6 +5,7 @@ import { View } from 'react-native';
 
 import { useAppTheme } from '@theme';
 import { errorText, AppButton, IconButton, Screen } from '@ui';
+import { goBackInAppStack } from '../navigation/app-back';
 
 import { formatGoalWeek, goalReviewWeekIndex, moveGoalReviewWeek } from './goal-review-navigation';
 import {
@@ -22,6 +23,7 @@ export interface GoalReviewScreenProps {
 
 export function GoalReviewScreen({ goalId }: GoalReviewScreenProps) {
   const router = useRouter();
+  const goBack = () => goBackInAppStack(router, '/(tabs)/goals' as Href);
   const { colors } = useAppTheme();
   const [resource, setResource] = useState<GoalsPageData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export function GoalReviewScreen({ goalId }: GoalReviewScreenProps) {
 
   if (!resource) {
     return (
-      <Screen onBack={() => router.back()} title="Review">
+      <Screen onBack={goBack} title="Review">
         <Column spacing={12} style={{ width: '100%' }} testID="goal-review-loading">
           <Text
             textStyle={{
@@ -83,7 +85,7 @@ export function GoalReviewScreen({ goalId }: GoalReviewScreenProps) {
   const goal = resource.goals.find((candidate) => candidate.id === goalId);
   if (!goal) {
     return (
-      <Screen onBack={() => router.back()} title="Review">
+      <Screen onBack={goBack} title="Review">
         <Text
           textStyle={{ color: colors.danger.foreground, fontSize: 15 }}
           testID="goal-review-not-found"
@@ -137,7 +139,7 @@ export function GoalReviewScreen({ goalId }: GoalReviewScreenProps) {
 
   if (goal.evaluationMode === 'manual') {
     return (
-      <Screen headerRight={editButton} onBack={() => router.back()} title={goal.title}>
+      <Screen headerRight={editButton} onBack={goBack} title={goal.title}>
         <Column spacing={16} style={{ width: '100%' }}>
           {weekNavigator}
           <ReviewPanel
@@ -145,9 +147,9 @@ export function GoalReviewScreen({ goalId }: GoalReviewScreenProps) {
             currentWeek={selectedWeek}
             goals={[goal]}
             key={selectedWeek.weekStart}
-            onCancel={() => router.back()}
+            onCancel={goBack}
             onSaved={async () => {
-              router.back();
+              goBack();
             }}
             service={resource.runtime.goalService}
             settings={resource.goalSettings}
@@ -160,7 +162,7 @@ export function GoalReviewScreen({ goalId }: GoalReviewScreenProps) {
   const status = displayStatus(goal, selectedSnapshot);
   const definition = statusDefinition(resource.goalSettings, status?.statusId);
   return (
-    <Screen headerRight={editButton} onBack={() => router.back()} title={goal.title}>
+    <Screen headerRight={editButton} onBack={goBack} title={goal.title}>
       <Column spacing={16} style={{ width: '100%' }}>
         {weekNavigator}
         <Column spacing={14} style={{ width: '100%' }} testID="goal-automatic-review">
@@ -174,9 +176,9 @@ export function GoalReviewScreen({ goalId }: GoalReviewScreenProps) {
           currentWeek={selectedWeek}
           goals={[goal]}
           key={selectedWeek.weekStart}
-          onCancel={() => router.back()}
+          onCancel={goBack}
           onSaved={async () => {
-            router.back();
+            goBack();
           }}
           service={resource.runtime.goalService}
           settings={resource.goalSettings}

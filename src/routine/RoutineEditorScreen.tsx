@@ -30,6 +30,7 @@ import {
   Screen,
 } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
+import { goBackInAppStack } from '../navigation/app-back';
 
 import {
   inheritRoutineStepMetadata,
@@ -627,11 +628,14 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
 
   if (!resource) {
     return (
-      <Screen onBack={() => router.back()} title={id === NEW_ID ? 'New routine' : 'Routine editor'}>
+      <Screen
+        onBack={() => goBackInAppStack(router, '/(tabs)')}
+        title={id === NEW_ID ? 'New routine' : 'Routine editor'}
+      >
         {loadError ? (
           <ErrorMessage
             message={loadError}
-            onClose={() => router.back()}
+            onClose={() => goBackInAppStack(router, '/(tabs)')}
             onRetry={() => {
               setLoadError(null);
               setVersion((current) => current + 1);
@@ -708,7 +712,7 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
       <RoutineEditorForm
         key={`${id}-${version}`}
         initialFolderId={initialFolderId}
-        onBack={() => router.back()}
+        onBack={() => goBackInAppStack(router, '/(tabs)')}
         resource={resource}
         onSaved={() => router.replace('/(tabs)')}
         onRun={runRoutine}

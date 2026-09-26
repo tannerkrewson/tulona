@@ -1,4 +1,4 @@
-import { Column, Text } from '@expo/ui';
+import { Column, Row, Text } from '@expo/ui';
 import type { ChangeEvent } from 'react';
 import { View } from 'react-native';
 
@@ -26,13 +26,16 @@ export function GoalStartWeekPicker({
   const maximumValue = localDateValue(maximumDate);
   return (
     <Column spacing={8} style={{ width: '100%' }}>
-      <Text
-        textStyle={{ color: colors.text, fontSize: 16, fontWeight: '600' }}
-        testID="goal-start-week-range"
-      >
-        {valueLabel}
-      </Text>
-      <View style={{ width: '100%' }}>
+      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            numberOfLines={1}
+            textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}
+            testID="goal-start-week-range"
+          >
+            {valueLabel}
+          </Text>
+        </View>
         <input
           aria-label="Starting week"
           data-testid="goal-start-week-date"
@@ -43,21 +46,29 @@ export function GoalStartWeekPicker({
           }}
           style={{
             backgroundColor: colors.surface,
+            boxSizing: 'border-box',
             borderColor: colors.border,
             borderRadius: 10,
             borderStyle: 'solid',
             borderWidth: 1,
             color: colors.text,
-            font: 'inherit',
-            height: 48,
-            paddingLeft: 12,
-            paddingRight: 12,
-            width: '100%',
+            flexBasis: 144,
+            flexGrow: 0,
+            flexShrink: 0,
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            fontSize: 14,
+            fontWeight: 600,
+            height: 42,
+            maxWidth: '48%',
+            minWidth: 0,
+            paddingLeft: 10,
+            paddingRight: 8,
+            width: 144,
           }}
           type="date"
           value={localDateValue(value)}
         />
-      </View>
+      </Row>
     </Column>
   );
 }

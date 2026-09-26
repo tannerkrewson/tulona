@@ -1,21 +1,25 @@
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 */
 import { Column, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pressable, View } from 'react-native';
 
 import { logicalDayKey, type HabitDayOutcome, type LogicalDayKey } from '@domain';
-import { useAppTheme } from '@theme';
+import { AppIcon } from '@icons';
+import { getAccessibleTextColor, useAppTheme } from '@theme';
 import { AppButton, errorText, Screen } from '@ui';
 
+import { goBackInAppStack } from '../navigation/app-back';
 import { formatHabitDay } from './date-navigation';
 import { habitCompletionLabel } from './habit-format';
 import { habitDayHasStatus, habitsActiveOnDay, habitsNeedingReview } from './habit-review';
 import { loadHabitStore } from './habit-runtime';
 import type { HabitStore } from './habit-store';
 
-const OUTCOMES: readonly { value: HabitDayOutcome; label: string }[] = [
-  { value: 'done', label: 'Done' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'skipped', label: 'Skipped' },
+const OUTCOMES: readonly { value: HabitDayOutcome; label: string; icon: string }[] = [
+  { value: 'done', label: 'Done', icon: 'check' },
+  { value: 'failed', label: 'Failed', icon: 'x' },
+  { value: 'skipped', label: 'Skipped', icon: 'skip-forward' },
 ];
 
 function shuffle<T>(values: readonly T[]): T[] {
@@ -66,14 +70,15 @@ function ReviewLoading({
 
 export default function HabitReviewScreen({ day: dayParam }: { day?: string | string[] }) {
   const router = useRouter();
+  const goBack = useCallback(() => goBackInAppStack(router, '/(tabs)/habits'), [router]);
   const [store, setStore] = useState<HabitStore | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     void loadHabitStore()
-      .then(async (nextStore) => {
-        await nextStore.getState().refresh();
+      .then((nextStore) => {
         setStore(() => nextStore);
+        setLoadError(null);
       })
       .catch((error: unknown) => setLoadError(errorText(error)));
   }, []);
@@ -83,16 +88,9 @@ export default function HabitReviewScreen({ day: dayParam }: { day?: string | st
   if (!store) {
     return (
       <ReviewLoading
-        onBack={() => router.back()}
+        onBack={goBack}
         message={loadError ?? 'Loading your habits...'}
-        onRetry={
-          loadError
-            ? () => {
-                setLoadError(null);
-                load();
-              }
-            : undefined
-        }
+        onRetry={loadError ? load : undefined}
       />
     );
   }
@@ -100,6 +98,7 @@ export default function HabitReviewScreen({ day: dayParam }: { day?: string | st
   return (
     <HabitReviewContent
       dayParam={dayParam}
+      goBack={goBack}
       key={Array.isArray(dayParam) ? dayParam[0] : (dayParam ?? 'today')}
       store={store}
     />
@@ -108,13 +107,14 @@ export default function HabitReviewScreen({ day: dayParam }: { day?: string | st
 
 function HabitReviewContent({
   dayParam,
+  goBack,
   store,
 }: {
   dayParam?: string | string[];
+  goBack: () => void;
   store: HabitStore;
 }) {
   const { colors } = useAppTheme();
-  const router = useRouter();
   const states = store((state) => state.states);
   const today = store((state) => state.today);
   const rolloverHour = store((state) => state.logicalDayRolloverHour);
@@ -136,18 +136,19 @@ function HabitReviewContent({
         : habitsActiveOnDay(snapshot.habits, day, snapshot.logicalDayRolloverHour);
     return shuffle(candidates);
   }, [day, store]);
-  const habit = queue?.[index];
+  const habit = queue[index];
   const currentState = habit
     ? states.find((state) => state.habitId === habit.id && state.logicalDay === day)
     : undefined;
+  const accent = habit?.color ?? colors.primary;
 
   const saveAndContinue = async () => {
-    if (!habit || !queue || outcome === null || saving) return;
+    if (!habit || outcome === null || saving) return;
     setActionError(null);
     try {
       await store.getState().setOutcome(habit.id, day, outcome);
       if (index + 1 === queue.length) {
-        router.back();
+        goBack();
         return;
       }
       setIndex((current) => current + 1);
@@ -158,94 +159,189 @@ function HabitReviewContent({
   };
 
   return (
-    <Screen onBack={() => router.back()} title="Habit review" testID="habit-review-screen">
-      <Column spacing={14} style={{ width: '100%' }}>
+    <Screen onBack={goBack} scrollable={false} title="Habit review" testID="habit-review-screen">
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'space-between',
+          minHeight: 0,
+          paddingBottom: 18,
+          paddingTop: 8,
+          width: '100%',
+        }}
+        testID="habit-review-stage"
+      >
         {habit ? (
-          <Column
-            spacing={16}
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 16,
-              borderWidth: 1,
-              padding: 18,
-              width: '100%',
-            }}
-            testID="habit-review-card"
-          >
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>
-              {`${formatHabitDay(day)} · Habit ${index + 1} of ${queue.length}`}
-            </Text>
-            <Text textStyle={{ color: colors.text, fontSize: 26, fontWeight: '700' }}>
-              {habit.name}
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 15, lineHeight: 21 }}>
-              Take a moment to recall this day, then choose the status that fits.
-            </Text>
-            {habitDayHasStatus(currentState) ? (
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                {`Currently marked: ${habitCompletionLabel(currentState ?? null)}. You can change it here.`}
+          <View style={{ flexGrow: 1, minHeight: 0, width: '100%' }}>
+            <Row alignment="center" spacing={10} style={{ width: '100%' }}>
+              <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>
+                {formatHabitDay(day)}
               </Text>
-            ) : null}
-            <Column spacing={8} style={{ width: '100%' }}>
-              <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
+              <View style={{ flex: 1 }} />
+              <Text
+                textStyle={{ color: colors.text, fontSize: 14, fontWeight: '700' }}
+                testID="habit-review-progress-label"
+              >
+                {`${index + 1} of ${queue.length}`}
+              </Text>
+            </Row>
+            <View style={{ flexDirection: 'row', gap: 4, marginTop: 12, width: '100%' }}>
+              {queue.map((candidate, position) => (
+                <View
+                  key={candidate.id}
+                  style={{
+                    backgroundColor: position <= index ? accent : colors.border,
+                    borderRadius: 2,
+                    flex: 1,
+                    height: 4,
+                  }}
+                />
+              ))}
+            </View>
+
+            <View style={{ marginTop: 30, width: '100%' }}>
+              <Text textStyle={{ color: colors.textMuted, fontSize: 17, fontWeight: '600' }}>
                 How did it go?
               </Text>
-              <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-                {OUTCOMES.map((option) => (
-                  <AppButton
-                    disabled={saving}
-                    key={option.value}
-                    label={option.label}
-                    onPress={() => {
-                      setOutcome(option.value);
-                      setActionError(null);
-                    }}
-                    style={{ height: 52, paddingHorizontal: 4, width: '30%' }}
-                    testID={`habit-review-outcome-${option.value}`}
-                    variant={outcome === option.value ? 'filled' : 'outlined'}
+              <View style={{ marginTop: 10, width: '100%' }}>
+                <Row alignment="center" spacing={12} style={{ width: '100%' }}>
+                  <View
+                    style={{ backgroundColor: accent, borderRadius: 3, height: 42, width: 6 }}
+                    testID="habit-review-accent"
                   />
-                ))}
-              </Row>
-            </Column>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text
+                      numberOfLines={2}
+                      textStyle={{
+                        color: colors.text,
+                        fontSize: 29,
+                        fontWeight: '700',
+                        lineHeight: 35,
+                      }}
+                      testID="habit-review-name"
+                    >
+                      {habit.name}
+                    </Text>
+                  </View>
+                </Row>
+              </View>
+              {habitDayHasStatus(currentState) ? (
+                <View style={{ marginTop: 8 }}>
+                  <Text
+                    textStyle={{ color: colors.textMuted, fontSize: 14 }}
+                    testID="habit-review-current-status"
+                  >
+                    {`Saved as ${habitCompletionLabel(currentState ?? null)} · choose a new status to change it`}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={{ marginTop: 28, width: '100%' }}>
+              <Column spacing={8} style={{ width: '100%' }}>
+                {OUTCOMES.map((option) => {
+                  const selected = outcome === option.value;
+                  return (
+                    <Pressable
+                      accessibilityLabel={option.label}
+                      accessibilityRole="radio"
+                      accessibilityState={{ disabled: saving, selected }}
+                      disabled={saving}
+                      key={option.value}
+                      onPress={() => {
+                        setOutcome(option.value);
+                        setActionError(null);
+                      }}
+                      style={({ pressed }) => ({
+                        alignItems: 'center',
+                        backgroundColor: selected ? colors.surfaceMuted : 'transparent',
+                        borderColor: selected ? accent : colors.border,
+                        borderRadius: 14,
+                        borderWidth: selected ? 2 : 1,
+                        flexDirection: 'row',
+                        gap: 12,
+                        minHeight: 58,
+                        opacity: saving ? 0.5 : pressed ? 0.82 : 1,
+                        paddingHorizontal: 14,
+                        width: '100%',
+                      })}
+                      testID={`habit-review-outcome-${option.value}`}
+                    >
+                      <View
+                        style={{
+                          alignItems: 'center',
+                          backgroundColor: accent,
+                          borderRadius: 8,
+                          height: 36,
+                          justifyContent: 'center',
+                          width: 36,
+                        }}
+                      >
+                        <AppIcon
+                          color={getAccessibleTextColor(accent)}
+                          name={option.icon}
+                          size={20}
+                          strokeWidth={2.5}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          textStyle={{
+                            color: colors.text,
+                            fontSize: 17,
+                            fontWeight: selected ? '700' : '600',
+                          }}
+                        >
+                          {option.label}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </Column>
+            </View>
+          </View>
+        ) : (
+          <View style={{ flex: 1, justifyContent: 'center', width: '100%' }}>
+            <AppIcon color={colors.success.foreground} name="check-circle-2" size={34} />
+            <View style={{ marginTop: 16 }}>
+              <Text
+                textStyle={{ color: colors.text, fontSize: 26, fontWeight: '700', lineHeight: 32 }}
+                testID="habit-review-complete"
+              >
+                {day < today ? 'This day is all caught up.' : 'That’s every habit for today.'}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        <View style={{ width: '100%' }}>
+          {actionError ? (
+            <View style={{ marginBottom: 10 }}>
+              <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>
+                {actionError}
+              </Text>
+            </View>
+          ) : null}
+          {habit ? (
             <AppButton
               disabled={saving || outcome === null}
               label={index + 1 === queue.length ? 'Finish review' : 'Next habit'}
               onPress={() => void saveAndContinue()}
-              style={{ height: 56, width: '100%' }}
+              style={{ height: 54, width: '100%' }}
               testID="habit-review-next"
             />
-            {actionError ? (
-              <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>
-                {actionError}
-              </Text>
-            ) : null}
-          </Column>
-        ) : (
-          <Column
-            spacing={12}
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 16,
-              borderWidth: 1,
-              padding: 18,
-              width: '100%',
-            }}
-            testID="habit-review-complete"
-          >
-            <Text textStyle={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>
-              {day < today ? 'You’re all caught up for this day.' : 'No habits to review today.'}
-            </Text>
+          ) : (
             <AppButton
-              label="Close review"
-              onPress={() => router.back()}
-              style={{ height: 52, width: '100%' }}
+              label="Back to habits"
+              onPress={goBack}
+              style={{ height: 54, width: '100%' }}
               testID="close-habit-review"
+              variant="outlined"
             />
-          </Column>
-        )}
-      </Column>
+          )}
+        </View>
+      </View>
     </Screen>
   );
 }

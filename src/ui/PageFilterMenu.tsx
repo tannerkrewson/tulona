@@ -51,7 +51,14 @@ export function PageFilterMenu<T extends string = string>({
 
   return (
     <View
-      style={{ alignItems: 'flex-end', position: 'relative', width: 54, zIndex: open ? 30 : 0 }}
+      style={{
+        alignItems: 'flex-end',
+        elevation: open ? 1000 : 0,
+        overflow: 'visible',
+        position: 'relative',
+        width: 54,
+        zIndex: open ? 1000 : 0,
+      }}
     >
       {open ? (
         <Pressable
@@ -86,7 +93,8 @@ export function PageFilterMenu<T extends string = string>({
             right: 0,
             top: 48,
             width: 248,
-            zIndex: 2,
+            elevation: 1001,
+            zIndex: 1001,
           }}
         >
           <View
@@ -95,6 +103,7 @@ export function PageFilterMenu<T extends string = string>({
               borderColor: colors.border,
               borderRadius: 14,
               borderWidth: 1,
+              elevation: 1001,
               overflow: 'hidden',
               width: '100%',
             }}

@@ -16,6 +16,7 @@ import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 import { AppButton, errorText, IconButton, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
+import { goBackInAppStack } from '../navigation/app-back';
 
 import { inheritRoutineStepMetadata, resolveCatalogItem } from '../catalog/catalog-service';
 import { routineTiming } from './routine-engine';
@@ -189,10 +190,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     ((nextRuntime: RoutineRuntime) => Promise<ActiveRoutine | void>) | null
   >(null);
 
-  const goBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)');
-  }, [router]);
+  const goBack = useCallback(() => goBackInAppStack(router, '/(tabs)'), [router]);
 
   const routeRecovered = useCallback(
     (next: ActiveRoutine | null): boolean => {

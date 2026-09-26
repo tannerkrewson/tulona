@@ -406,7 +406,7 @@ export class BootCoordinator {
       trackerService,
       catalogService,
       {
-        now: this.now(),
+        getNow: this.now,
         rolloverHour: settings.logicalDayRolloverHour,
         weekStartsOn: settings.weekStartsOn,
       }

@@ -29,6 +29,7 @@ import { useAppTheme } from '@theme';
 import { AppButton, AppScreen, EmptyState, errorText, getRowSurfaceStyle, IconButton } from '@ui';
 
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
+import { goBackInAppStack } from '../navigation/app-back';
 import DayTimeline from './DayTimeline';
 import { HistoryDateJumpSheet } from './HistoryDateJumpSheet';
 import MonthView from './MonthView';
@@ -358,8 +359,7 @@ export default function HistoryScreen({
   const [dateJumpVisible, setDateJumpVisible] = useState(false);
 
   const goBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)');
+    goBackInAppStack(router, '/(tabs)');
   }, [router]);
 
   const load = useCallback(() => {

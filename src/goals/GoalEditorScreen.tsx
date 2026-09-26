@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { useAppTheme } from '@theme';
 import { errorText, AppButton, Screen } from '@ui';
+import { goBackInAppStack } from '../navigation/app-back';
 
 import { GoalEditor, loadGoalsPage, type GoalsPageData } from './GoalsScreen';
 
@@ -13,6 +14,7 @@ export interface GoalEditorScreenProps {
 
 export function GoalEditorScreen({ goalId }: GoalEditorScreenProps) {
   const router = useRouter();
+  const goBack = () => goBackInAppStack(router, '/(tabs)/goals' as Href);
   const { colors } = useAppTheme();
   const [resource, setResource] = useState<GoalsPageData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -33,7 +35,7 @@ export function GoalEditorScreen({ goalId }: GoalEditorScreenProps) {
 
   if (!resource) {
     return (
-      <Screen onBack={() => router.back()} title={goalId === 'new' ? 'New goal' : 'Edit goal'}>
+      <Screen onBack={goBack} title={goalId === 'new' ? 'New goal' : 'Edit goal'}>
         <Column spacing={12} style={{ width: '100%' }} testID="goal-editor-loading">
           <Text
             textStyle={{
@@ -58,7 +60,7 @@ export function GoalEditorScreen({ goalId }: GoalEditorScreenProps) {
     goalId === 'new' ? null : resource.goals.find((candidate) => candidate.id === goalId);
   if (goalId !== 'new' && !goal) {
     return (
-      <Screen onBack={() => router.back()} title="Edit goal">
+      <Screen onBack={goBack} title="Edit goal">
         <Text
           textStyle={{ color: colors.danger.foreground, fontSize: 15 }}
           testID="goal-editor-not-found"
@@ -74,12 +76,12 @@ export function GoalEditorScreen({ goalId }: GoalEditorScreenProps) {
       catalog={resource.catalog}
       goal={goal ?? null}
       habits={resource.habits}
-      onCancel={() => router.back()}
+      onCancel={goBack}
       onDeleted={async () => {
         router.replace('/(tabs)/goals' as Href);
       }}
       onSaved={async () => {
-        router.back();
+        goBack();
       }}
       service={resource.runtime.goalService}
       settings={resource.goalSettings}
