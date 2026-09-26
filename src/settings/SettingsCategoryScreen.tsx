@@ -6,6 +6,7 @@ import type { AppSettings } from '@domain';
 import { useAppTheme, useThemePreference } from '@theme';
 import { AccessiblePicker, AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
+import BackupScreen from '../backup/BackupScreen';
 
 import { getSettingsCategory, type SettingsCategory } from './settings-categories';
 import GoalsSettingsPanel from './GoalsSettingsPanel';
@@ -29,7 +30,10 @@ type CategoryContentProps = {
   store: SettingsStore;
 };
 
-function CategoryControls({ category, router, store }: CategoryContentProps) {
+function CategoryControls({
+  category,
+  store,
+}: Pick<CategoryContentProps, 'category' | 'store'>) {
   const settings = store((state) => state.settings);
   const saving = store((state) => state.saving);
   const { colors } = useAppTheme();
@@ -180,53 +184,34 @@ function CategoryControls({ category, router, store }: CategoryContentProps) {
           </Field>
         </Column>
       );
-    case 'catalog':
-      return (
-        <Switch
-          disabled={saving}
-          label="Show archived activities and routines"
-          onValueChange={(value) => run(() => store.getState().setShowArchived(value))}
-          testID="settings-show-archived"
-          value={settings.showArchived}
-        />
-      );
     case 'goals':
       return <GoalsSettingsPanel />;
-    case 'data':
-      return (
-        <Column spacing={16} style={{ width: '100%' }}>
-          <AppButton
-            disabled={saving}
-            label="Backup & restore"
-            onPress={() => router.push('/backup')}
-            style={{ height: 52, width: '100%' }}
-            testID="open-backup"
-          />
-          <PrototypeDataReset onCleared={() => router.replace('/(tabs)')} />
-        </Column>
-      );
+    default:
+      return null;
   }
 }
 
 function SettingsCategoryContent({ category, router, store }: CategoryContentProps) {
-  const { colors } = useAppTheme();
+  if (category.id === 'data') {
+    return (
+      <BackupScreen
+        footer={
+          <Column spacing={16} style={{ width: '100%' }}>
+            <SettingsActionError onBack={() => router.back()} store={store} />
+            <PrototypeDataReset onCleared={() => router.replace('/(tabs)')} />
+          </Column>
+        }
+        onBack={() => router.back()}
+        title="Data"
+      />
+    );
+  }
+
   return (
     <Screen onBack={() => router.back()} title={category.title}>
       <Column spacing={16} style={{ width: '100%' }}>
         <SettingsActionError onBack={() => router.back()} store={store} />
-        <Column
-          spacing={16}
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderRadius: 14,
-            borderWidth: 1,
-            padding: 16,
-            width: '100%',
-          }}
-        >
-          <CategoryControls category={category} router={router} store={store} />
-        </Column>
+        <CategoryControls category={category} store={store} />
       </Column>
     </Screen>
   );

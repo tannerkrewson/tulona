@@ -2,7 +2,7 @@ import { Column, Row, Switch, Text } from '@expo/ui';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Linking from 'expo-linking';
 import { useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
@@ -120,18 +120,7 @@ function formatPreviewTimestamp(value: string): string {
 function TimematorPreview({ preview }: { preview: TimematorCsvPreview }) {
   const { colors } = useAppTheme();
   return (
-    <Column
-      spacing={5}
-      style={{
-        backgroundColor: colors.active.background,
-        borderColor: colors.border,
-        borderRadius: 12,
-        borderWidth: 1,
-        padding: 12,
-        width: '100%',
-      }}
-      testID="timemator-import-preview"
-    >
+    <Column spacing={5} style={{ width: '100%' }} testID="timemator-import-preview">
       <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>
         Timemator export ready
       </Text>
@@ -152,18 +141,7 @@ function TimematorImportSummary({ result }: { result: TimematorImportResult }) {
   const { colors } = useAppTheme();
   const { summary } = result;
   return (
-    <Column
-      spacing={5}
-      style={{
-        backgroundColor: colors.success.background,
-        borderColor: colors.success.foreground,
-        borderRadius: 12,
-        borderWidth: 1,
-        padding: 12,
-        width: '100%',
-      }}
-      testID="timemator-import-summary"
-    >
+    <Column spacing={5} style={{ width: '100%' }} testID="timemator-import-summary">
       <Text textStyle={{ color: colors.success.foreground, fontSize: 15, fontWeight: '700' }}>
         Timemator data imported
       </Text>
@@ -362,7 +340,17 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
   );
 }
 
-function BackupContent({ runtime }: { runtime: BackupRuntime }) {
+function BackupContent({
+  runtime,
+  onBack,
+  title,
+  footer,
+}: {
+  runtime: BackupRuntime;
+  onBack: () => void;
+  title: string;
+  footer?: ReactNode;
+}) {
   const { colors } = useAppTheme();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -502,7 +490,7 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
 
   return (
     <>
-      <Screen onBack={() => router.back()} title="Backup">
+      <Screen onBack={onBack} title={title}>
         <Column spacing={14} style={{ width: '100%' }}>
           <DropboxBackupPanel service={runtime.dropboxBackupService} />
           <Column
@@ -675,6 +663,7 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
               testID="reload-after-timemator-import"
             />
           ) : null}
+          {footer}
         </Column>
       </Screen>
       <ConfirmationModal
@@ -707,7 +696,15 @@ function BackupContent({ runtime }: { runtime: BackupRuntime }) {
   );
 }
 
-export default function BackupScreen() {
+export default function BackupScreen({
+  title = 'Backup',
+  onBack,
+  footer,
+}: {
+  title?: string;
+  onBack?: () => void;
+  footer?: ReactNode;
+}) {
   const { colors } = useAppTheme();
   const router = useRouter();
   const [runtime, setRuntime] = useState<BackupRuntime | null>(null);
@@ -742,20 +739,30 @@ export default function BackupScreen() {
 
   if (!runtime) {
     return (
-      <Screen onBack={() => router.back()} title="Backup">
-        <Text
-          textStyle={{
-            color: loadError ? colors.danger.foreground : colors.textMuted,
-            fontSize: 15,
-          }}
-        >
-          {loadError ?? 'Loading backup tools...'}
-        </Text>
-        {loadError ? (
-          <ErrorPanel message={loadError} onBack={() => router.replace('/(tabs)')} onRetry={load} />
-        ) : null}
+      <Screen onBack={onBack ?? (() => router.back())} title={title}>
+        <Column spacing={16} style={{ width: '100%' }}>
+          <Text
+            textStyle={{
+              color: loadError ? colors.danger.foreground : colors.textMuted,
+              fontSize: 15,
+            }}
+          >
+            {loadError ?? 'Loading data tools...'}
+          </Text>
+          {loadError ? (
+            <ErrorPanel message={loadError} onBack={() => router.replace('/(tabs)')} onRetry={load} />
+          ) : null}
+          {footer}
+        </Column>
       </Screen>
     );
   }
-  return <BackupContent runtime={runtime} />;
+  return (
+    <BackupContent
+      footer={footer}
+      onBack={onBack ?? (() => router.back())}
+      runtime={runtime}
+      title={title}
+    />
+  );
 }

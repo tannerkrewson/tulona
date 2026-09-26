@@ -1,5 +1,5 @@
 import { Column, Text } from '@expo/ui';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 
 import { errorText, AppButton, Screen } from '@ui';
@@ -37,7 +37,7 @@ export default function DropboxAuthRoute() {
       })
       .then(() => {
         if (cancelled) return;
-        router.replace('/backup');
+        router.replace('/settings/data' as Href);
       })
       .catch((actionError: unknown) => {
         if (cancelled) return;
@@ -50,7 +50,7 @@ export default function DropboxAuthRoute() {
   }, [params.code, params.error, params.error_description, params.state, router]);
 
   return (
-    <Screen onBack={() => router.replace('/backup')} title="Dropbox">
+    <Screen onBack={() => router.replace('/settings/data' as Href)} title="Dropbox">
       <Column spacing={14} style={{ width: '100%' }}>
         <Text
           textStyle={{ color: error ? colors.danger.foreground : colors.textMuted, fontSize: 16 }}
@@ -59,8 +59,8 @@ export default function DropboxAuthRoute() {
         </Text>
         {error ? (
           <AppButton
-            label="Return to backup"
-            onPress={() => router.replace('/backup')}
+            label="Return to Data"
+            onPress={() => router.replace('/settings/data' as Href)}
             style={{ width: '100%' }}
             testID="dropbox-auth-return"
           />
