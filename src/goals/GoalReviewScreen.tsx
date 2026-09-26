@@ -104,7 +104,11 @@ export function GoalReviewScreen({ goalId }: GoalReviewScreenProps) {
     />
   );
 
-  const reviewSnapshots = [...resource.historicalWeeks, resource.currentSnapshot];
+  const startWeek = goal.startWeek ?? resource.runtime.goalService.week(goal.createdAt).weekStart;
+  const reviewSnapshots = [
+    ...(resource.reviewWeeks ?? resource.historicalWeeks),
+    resource.currentSnapshot,
+  ].filter((snapshot) => snapshot.week.weekStart >= startWeek);
   const selectedIndex = goalReviewWeekIndex(
     reviewSnapshots.map((snapshot) => snapshot.week),
     selectedWeekStart
@@ -163,17 +167,20 @@ export function GoalReviewScreen({ goalId }: GoalReviewScreenProps) {
           <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>
             {currentWeekSelected ? 'Current result' : 'Previous week result'}
           </Text>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-            {formatGoalWeek(selectedWeek)}
-          </Text>
           <StatusBadge definition={definition} label={definition?.name ?? 'No result yet'} />
-          <AppButton
-            label="Edit goal"
-            onPress={() => router.push(`/goal-edit/${goal.id}` as Href)}
-            testID="goal-automatic-review-edit"
-            variant="outlined"
-          />
         </Column>
+        <ReviewPanel
+          currentSnapshot={selectedSnapshot}
+          currentWeek={selectedWeek}
+          goals={[goal]}
+          key={selectedWeek.weekStart}
+          onCancel={() => router.back()}
+          onSaved={async () => {
+            router.back();
+          }}
+          service={resource.runtime.goalService}
+          settings={resource.goalSettings}
+        />
       </Column>
     </Screen>
   );
@@ -236,7 +243,7 @@ function GoalReviewWeekNavigator({
             </Text>
             <Text
               numberOfLines={1}
-              textStyle={{ color: colors.textMuted, fontSize: 14 }}
+              textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}
               testID="goal-review-selected-week-range"
             >
               {formatGoalWeek(selectedSnapshot.week)}

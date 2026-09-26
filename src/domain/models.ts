@@ -30,6 +30,7 @@ export type GoalEvaluationMode = 'manual' | 'automatic';
 export type GoalRuleOutcome = 'good' | 'partial' | 'no-progress';
 export type GoalHabitRuleMeasurement = 'completed-days' | 'no-skipped' | 'every-day';
 export type GoalActivityDurationComparison = 'at-least' | 'at-most';
+export type GoalTargetFrequency = 'daily' | 'weekly';
 
 export interface Timestamps {
   createdAt: IsoTimestamp;
@@ -335,18 +336,30 @@ export interface GoalActivityDurationEvaluationRule {
   kind: 'activity-duration';
   activityId: UUID;
   comparison: GoalActivityDurationComparison;
-  /** Weekly duration target in milliseconds. */
+  /** Legacy rules omit this field and continue to mean a weekly target. */
+  frequency?: GoalTargetFrequency;
+  /** Per-day or per-week duration target in milliseconds, according to frequency. */
   targetMs: number;
-  /** Optional baseline used to identify partial reduction for at-most rules. */
+  /** Optional matching-period baseline used to identify partial reduction for at-most rules. */
   baselineMs?: number;
   statusIds: GoalRuleStatusIds;
 }
 
-export type GoalEvaluationRule = GoalHabitEvaluationRule | GoalActivityDurationEvaluationRule;
+/** A source-free weekly check whose result is chosen in the goal's weekly review. */
+export interface GoalWeeklyStatusEvaluationRule {
+  kind: 'weekly-status';
+  /** Shared rule shape; the selected review status is authoritative for this check. */
+  statusIds: GoalRuleStatusIds;
+}
+
+export type GoalEvaluationRule =
+  GoalHabitEvaluationRule | GoalActivityDurationEvaluationRule | GoalWeeklyStatusEvaluationRule;
 
 export interface Goal extends Timestamps {
   id: UUID;
   title: string;
+  /** First canonical goal week; omitted on older records and inferred from createdAt. */
+  startWeek?: LogicalDayKey;
   sourceLinks: GoalSourceLink[];
   overallStatus: GoalOverallStatus;
   /** Weekly statuses are either manually reviewed or derived from rules. */

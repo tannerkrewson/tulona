@@ -1,6 +1,7 @@
 import {
   goalWeekIdentity,
   logicalDayDifference,
+  logicalDayBounds,
   logicalDayKey,
   shiftLogicalDay,
   timestampMs,
@@ -68,6 +69,7 @@ export interface GoalEvaluation {
 }
 
 type WeekPhase = 'future' | 'current' | 'historical';
+type AutomaticGoalRule = Exclude<GoalEvaluationRule, { kind: 'weekly-status' }>;
 
 interface HabitMeasurement {
   completed: number;
@@ -260,8 +262,18 @@ function trackedDuration(
   week: GoalWeekIdentity,
   nowMs: number
 ): number {
-  const endOfEvidence = Math.min(week.endMs, Math.max(week.startMs, nowMs));
-  if (endOfEvidence <= week.startMs) return 0;
+  return trackedDurationInRange(intervals, activityId, week.startMs, week.endMs, nowMs);
+}
+
+function trackedDurationInRange(
+  intervals: readonly TimeInterval[],
+  activityId: UUID,
+  rangeStartMs: number,
+  rangeEndMs: number,
+  nowMs: number
+): number {
+  const endOfEvidence = Math.min(rangeEndMs, Math.max(rangeStartMs, nowMs));
+  if (endOfEvidence <= rangeStartMs) return 0;
   return intervals.reduce((total, interval) => {
     if (interval.activityId !== activityId) return total;
     if (
@@ -271,7 +283,7 @@ function trackedDuration(
     ) {
       return total;
     }
-    const start = Math.max(interval.startMs, week.startMs);
+    const start = Math.max(interval.startMs, rangeStartMs);
     const end = Math.min(interval.endMs, endOfEvidence);
     return end > start ? total + end - start : total;
   }, 0);
@@ -293,8 +305,43 @@ function durationOutcome(
   return rule.baselineMs !== undefined && measuredMs < rule.baselineMs ? 'partial' : 'no-progress';
 }
 
+function dailyDurationOutcome(
+  rule: Extract<GoalEvaluationRule, { kind: 'activity-duration' }>,
+  intervals: readonly TimeInterval[],
+  week: GoalWeekIdentity,
+  phase: WeekPhase,
+  currentDay: string | null,
+  nowMs: number,
+  rolloverHour: number
+): { outcome: GoalRuleOutcome; measuredMs: number } {
+  const days = Array.from({ length: 7 }, (_, index) =>
+    shiftLogicalDay(week.weekStart, index, { rolloverHour })
+  ).filter((day) => phase !== 'current' || currentDay === null || day < currentDay);
+  let goodDays = 0;
+  let progressedDays = 0;
+  let measuredMs = 0;
+  for (const day of days) {
+    const bounds = logicalDayBounds(day, { rolloverHour });
+    const duration = trackedDurationInRange(
+      intervals,
+      rule.activityId,
+      bounds.startMs,
+      bounds.endMs,
+      nowMs
+    );
+    measuredMs += duration;
+    const outcome = durationOutcome(rule, duration, true);
+    if (outcome === 'good') goodDays += 1;
+    if (outcome !== 'no-progress') progressedDays += 1;
+  }
+  if (days.length > 0 && goodDays === days.length) {
+    return { outcome: 'good', measuredMs };
+  }
+  return { outcome: progressedDays > 0 ? 'partial' : 'no-progress', measuredMs };
+}
+
 function evaluateRule(
-  rule: GoalEvaluationRule,
+  rule: AutomaticGoalRule,
   ruleIndex: number,
   data: GoalEvaluationData,
   week: GoalWeekIdentity,
@@ -353,14 +400,26 @@ function evaluateRule(
     week,
     nowMs
   );
-  const outcome = durationOutcome(rule, measuredMs, sourceFound);
+  const dailyMeasurement =
+    sourceFound && rule.frequency === 'daily'
+      ? dailyDurationOutcome(
+          rule,
+          data.intervals ?? data.materializedIntervals ?? [],
+          week,
+          phase,
+          currentDay,
+          nowMs,
+          rolloverHour
+        )
+      : null;
+  const outcome = dailyMeasurement?.outcome ?? durationOutcome(rule, measuredMs, sourceFound);
   return {
     ruleIndex,
     rule,
     outcome,
     statusId: statusIdForOutcome(rule.statusIds, outcome),
     sourceFound,
-    measuredValue: measuredMs,
+    measuredValue: dailyMeasurement?.measuredMs ?? measuredMs,
     targetValue: rule.targetMs,
   };
 }
@@ -392,10 +451,30 @@ export function evaluateGoal(
   if (rules.length === 0) {
     return { mode, week, outcome: 'no-rules', statusId: null, rules: [] };
   }
+  const automaticRules = rules.filter(
+    (rule): rule is AutomaticGoalRule => rule.kind !== 'weekly-status'
+  );
+  if (automaticRules.length === 0) {
+    return { mode, week, outcome: 'manual', statusId: null, rules: [] };
+  }
   const phase = weekPhase(week, nowMs);
   const currentDay = phase === 'current' ? logicalDayKey(nowMs, { rolloverHour }) : null;
-  const evaluations = rules.map((rule, ruleIndex) =>
-    evaluateRule(rule, ruleIndex, data, week, phase, currentDay, nowMs, rolloverHour, weekStartsOn)
+  const evaluations = rules.flatMap((rule, ruleIndex) =>
+    rule.kind === 'weekly-status'
+      ? []
+      : [
+          evaluateRule(
+            rule,
+            ruleIndex,
+            data,
+            week,
+            phase,
+            currentDay,
+            nowMs,
+            rolloverHour,
+            weekStartsOn
+          ),
+        ]
   );
   const worst = evaluations.reduce(
     (selected, candidate) => {

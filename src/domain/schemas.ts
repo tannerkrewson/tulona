@@ -140,6 +140,7 @@ export const goalActivityDurationEvaluationRuleSchema = z
     kind: z.literal('activity-duration'),
     activityId: uuid,
     comparison: goalActivityDurationComparisonSchema,
+    frequency: z.enum(['daily', 'weekly']).default('weekly'),
     targetMs: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
     baselineMs: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
     statusIds: goalRuleStatusIdsSchema,
@@ -161,14 +162,19 @@ export const goalActivityDurationEvaluationRuleSchema = z
       });
     }
   });
+export const goalWeeklyStatusEvaluationRuleSchema = z
+  .object({ kind: z.literal('weekly-status'), statusIds: goalRuleStatusIdsSchema })
+  .strict();
 export const goalEvaluationRuleSchema = z.discriminatedUnion('kind', [
   goalHabitEvaluationRuleSchema,
   goalActivityDurationEvaluationRuleSchema,
+  goalWeeklyStatusEvaluationRuleSchema,
 ]);
 export const goalSchema = z
   .object({
     id: uuid,
     title: z.string().trim().min(1),
+    startWeek: logicalDay.optional(),
     sourceLinks: z.array(goalSourceLinkSchema),
     overallStatus: goalOverallStatusSchema,
     evaluationMode: goalEvaluationModeSchema,
