@@ -64,7 +64,9 @@ export function ActivityRow({
   const iconName = editMode
     ? 'pencil'
     : active
-      ? 'pause'
+      ? item.kind === 'routine'
+        ? 'repeat'
+        : 'pause'
       : item.kind === 'routine'
         ? 'repeat'
         : 'play';
@@ -90,7 +92,9 @@ export function ActivityRow({
             editMode
               ? `Edit ${item.name}`
               : active
-                ? `${item.name} pause`
+                ? item.kind === 'routine'
+                  ? `${item.name} active routine`
+                  : `${item.name} pause`
                 : item.kind === 'routine'
                   ? `${item.name} routine`
                   : `${item.name} play`
