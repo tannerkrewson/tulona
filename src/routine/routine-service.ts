@@ -1,8 +1,10 @@
 import {
   timestampMs,
+  monthKey,
   toTimestamp,
   type ActiveRoutine,
   type IsoTimestamp,
+  type MonthKey,
   type RoutineRunHistory,
   type RoutineStep,
   type RoutineTrackingMode,
@@ -32,6 +34,7 @@ import {
   routineRunHistory,
   routineTiming,
   markRoutineAlarmFired,
+  setRoutineStepEnabled as setRoutineStepEnabledState,
   skipRoutineStep,
   startRoutine as startRoutineState,
   type RoutineStepAction,
@@ -40,6 +43,7 @@ import {
 import type { TrackerServiceApi } from '../tracker/tracker-service';
 
 const NEXT_ACTIVITY_NOTE = 'Next activity after routine';
+const DURATION_COMPARISON_LOOKBACK_MONTHS = 12;
 
 function routineTrackingMode(active: ActiveRoutine): RoutineTrackingMode {
   return active.routineSnapshot.trackingMode;
@@ -52,6 +56,22 @@ function routineOwnsActivity(active: ActiveRoutine, activityId: UUID): boolean {
 
 function orderedSnapshotSteps(active: ActiveRoutine) {
   return [...active.routineSnapshot.steps].sort((left, right) => left.sortOrder - right.sortOrder);
+}
+
+function monthKeysBetween(start: string, end: string): MonthKey[] {
+  const cursor = new Date(timestampMs(start));
+  const endDate = new Date(timestampMs(end));
+  cursor.setDate(1);
+  cursor.setHours(12, 0, 0, 0);
+  const months: MonthKey[] = [];
+  while (
+    cursor.getFullYear() < endDate.getFullYear() ||
+    (cursor.getFullYear() === endDate.getFullYear() && cursor.getMonth() <= endDate.getMonth())
+  ) {
+    months.push(monthKey(cursor));
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return months;
 }
 
 export interface StartRoutineOptions {
@@ -70,6 +90,13 @@ export type RoutineFinalizationStatus = 'completed' | 'cancelled';
 export interface RoutineFinalizationResult {
   activeRoutine: ActiveRoutine;
   run: RoutineRunHistory;
+}
+
+export interface RoutineDurationComparison {
+  previousRunCount: number;
+  averageDurationMs: number;
+  differenceMs: number;
+  lookbackMonths: number;
 }
 
 export interface RoutineServiceApi {
@@ -99,6 +126,12 @@ export interface RoutineServiceApi {
   cancelAndDiscard(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   selectNextActivity(activityId: UUID | null): Promise<TimeTransition>;
   markAlarmFired(stepId: UUID): Promise<ActiveRoutine>;
+  setStepEnabled(
+    stepId: UUID,
+    enabled: boolean,
+    at?: RoutineTimestampInput
+  ): Promise<ActiveRoutine>;
+  durationComparison(run: RoutineRunHistory): Promise<RoutineDurationComparison | null>;
   recover(at?: RoutineTimestampInput): Promise<ActiveRoutine | null>;
   getTiming(at?: RoutineTimestampInput): Promise<ReturnType<typeof routineTiming> | null>;
   history(status?: RoutineRunHistory['status']): Promise<RoutineRunHistory>;
@@ -152,7 +185,7 @@ export class RoutineService implements RoutineServiceApi {
     const initialActivityId =
       routineTrackingMode(active) === 'overall'
         ? routineId
-        : (active.routineSnapshot.steps[0]?.activityId ?? null);
+        : (active.routineSnapshot.steps[active.currentStepIndex]?.activityId ?? null);
     if (initialActivityId === null) {
       throw new Error('Step-tracked routines require an activity for every step');
     }
@@ -372,6 +405,104 @@ export class RoutineService implements RoutineServiceApi {
     return this.mutate((active) => markRoutineAlarmFired(active, stepId));
   }
 
+  async setStepEnabled(
+    stepId: UUID,
+    enabled: boolean,
+    at: RoutineTimestampInput = this.now()
+  ): Promise<ActiveRoutine> {
+    await this.ensureJournalRecovered();
+    const previous = activeRequired(await this.routineRepository.readActive());
+    const configuredRoutine = await this.catalogService.getRoutine(previous.routineId);
+    const configuredStep = configuredRoutine.steps.find((step) => step.id === stepId);
+    if (!configuredStep) throw new Error(`Unknown routine step "${stepId}"`);
+    const wasConfiguredEnabled = configuredStep.enabled !== false;
+    const next = setRoutineStepEnabledState(previous, stepId, enabled, at);
+    try {
+      await this.routineRepository.writeActive(next);
+    } catch (activeWriteError) {
+      try {
+        await this.routineRepository.writeActive(previous);
+      } catch (rollbackError) {
+        throw new PersistenceError(
+          'write',
+          `The routine step toggle could not be saved, and the active run rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+          undefined,
+          new AggregateError([activeWriteError, rollbackError])
+        );
+      }
+      throw activeWriteError;
+    }
+
+    try {
+      await this.catalogService.updateRoutineStep(previous.routineId, stepId, { enabled });
+    } catch (configurationError) {
+      const rollbackErrors: unknown[] = [];
+      try {
+        const persistedRoutine = await this.catalogService.getRoutine(previous.routineId);
+        const persistedStep = persistedRoutine.steps.find((step) => step.id === stepId);
+        if (persistedStep && (persistedStep.enabled !== false) !== wasConfiguredEnabled) {
+          await this.catalogService.updateRoutineStep(previous.routineId, stepId, {
+            enabled: wasConfiguredEnabled,
+          });
+        }
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+      try {
+        await this.routineRepository.writeActive(previous);
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+      if (rollbackErrors.length > 0) {
+        const detail = rollbackErrors
+          .map((error) => (error instanceof Error ? error.message : String(error)))
+          .join('; ');
+        throw new PersistenceError(
+          'write',
+          `The routine step toggle could not be saved, and rollback was incomplete: ${detail}`,
+          undefined,
+          new AggregateError([configurationError, ...rollbackErrors])
+        );
+      }
+      throw configurationError;
+    }
+
+    await this.synchronizeStepTracking(previous, next);
+    return next;
+  }
+
+  async durationComparison(run: RoutineRunHistory): Promise<RoutineDurationComparison | null> {
+    const routine = await this.catalogService.getRoutine(run.routineId);
+    const completedMonth = new Date(timestampMs(run.completedAt));
+    completedMonth.setDate(1);
+    completedMonth.setHours(12, 0, 0, 0);
+    completedMonth.setMonth(completedMonth.getMonth() - (DURATION_COMPARISON_LOOKBACK_MONTHS - 1));
+    const earliestHistoryDate = Math.max(timestampMs(routine.createdAt), completedMonth.getTime());
+    const months = monthKeysBetween(new Date(earliestHistoryDate).toISOString(), run.completedAt);
+    const history = await Promise.all(
+      months.map((month) => this.routineRepository.readHistory(month))
+    );
+    const previousRuns = history
+      .flatMap((collection) => collection.runs)
+      .filter(
+        (candidate) =>
+          candidate.routineId === run.routineId &&
+          candidate.id !== run.id &&
+          candidate.status === 'completed' &&
+          timestampMs(candidate.completedAt) < timestampMs(run.completedAt)
+      );
+    if (previousRuns.length < 2) return null;
+    const averageDurationMs =
+      previousRuns.reduce((total, candidate) => total + candidate.durationMs, 0) /
+      previousRuns.length;
+    return {
+      previousRunCount: previousRuns.length,
+      averageDurationMs,
+      differenceMs: run.durationMs - averageDurationMs,
+      lookbackMonths: DURATION_COMPARISON_LOOKBACK_MONTHS,
+    };
+  }
+
   async recover(at: RoutineTimestampInput = this.now()): Promise<ActiveRoutine | null> {
     try {
       const recovery = await this.routineRepository.recoverJournal();
@@ -485,7 +616,10 @@ export class RoutineService implements RoutineServiceApi {
 
     for (const session of completed) {
       const stepIndex = steps.findIndex((step) => step.id === session.stepId);
-      const nextStep = stepIndex < 0 ? undefined : steps[stepIndex + 1];
+      const nextStep =
+        stepIndex < 0
+          ? undefined
+          : steps.slice(stepIndex + 1).find((step) => step.enabled !== false);
       const activityId = next.status === 'cancelled' ? null : (nextStep?.activityId ?? null);
       await this.switchRoutineActivity(activityId, session.completedAt!, previous);
     }

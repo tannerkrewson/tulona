@@ -82,6 +82,23 @@ function orderedSteps(snapshot: RoutineSnapshot) {
   return [...snapshot.steps].sort((left, right) => left.sortOrder - right.sortOrder);
 }
 
+function stepIsEnabled(step: RoutineSnapshot['steps'][number]): boolean {
+  return step.enabled !== false;
+}
+
+function nextEnabledPendingIndex(
+  steps: RoutineSnapshot['steps'],
+  sessions: readonly RoutineStepSession[],
+  afterIndex: number
+): number {
+  for (let index = afterIndex + 1; index < steps.length; index += 1) {
+    const step = steps[index];
+    const session = sessions.find((candidate) => candidate.stepId === step?.id);
+    if (step && stepIsEnabled(step) && session?.status === 'pending') return index;
+  }
+  return -1;
+}
+
 function normalizeStepOrder(steps: RoutineSnapshot['steps']): RoutineSnapshot['steps'] {
   return steps.map((step, sortOrder) => ({ ...step, sortOrder }));
 }
@@ -152,7 +169,7 @@ function initializeNextStep(
 ): ActiveRoutine {
   const next = cloneRoutine(activeRoutine);
   const step = orderedSteps(next.routineSnapshot)[nextIndex];
-  if (!step) {
+  if (!step || !stepIsEnabled(step)) {
     next.status = 'awaiting-next-activity';
     next.completedAt = toTimestamp(startedAtMs);
     next.currentStepIndex = orderedSteps(next.routineSnapshot).length;
@@ -196,14 +213,15 @@ function completeCurrentStep(
   next.currentStepStartedAt = null;
   next.currentStepDeadlineAt = null;
   next.remainingMsWhenPaused = null;
-  if (!step || next.currentStepIndex >= steps.length - 1) {
+  const nextIndex = nextEnabledPendingIndex(steps, next.stepSessions, next.currentStepIndex);
+  if (!step || nextIndex < 0) {
     next.status = 'awaiting-next-activity';
     next.completedAt = session.completedAt;
     next.currentStepIndex = steps.length;
     next.pausedAt = null;
     return next;
   }
-  return initializeNextStep(next, next.currentStepIndex + 1, completedAtMs);
+  return initializeNextStep(next, nextIndex, completedAtMs);
 }
 
 /** Creates the sole persisted active object for a new routine run. */
@@ -213,17 +231,24 @@ export function startRoutine(
   options: StartRoutineStateOptions = {}
 ): ActiveRoutine {
   const steps = orderedSteps(routineSnapshot);
-  if (steps.length === 0) throw new RangeError('A routine needs at least one startable step');
+  const firstEnabledIndex = steps.findIndex(stepIsEnabled);
+  if (firstEnabledIndex < 0) {
+    throw new RangeError('Enable at least one step before starting this routine');
+  }
   steps.forEach((step) => assertDuration(step.durationMs));
   const startedAtTimestamp = timestamp(startedAt);
-  const sessions: RoutineStepSession[] = steps.map((step, index) => ({
-    stepId: step.id,
-    status: index === 0 ? 'active' : 'pending',
-    startedAt: index === 0 ? startedAtTimestamp : null,
-    completedAt: null,
-    addedTimeMs: 0,
-    plannedDurationMs: step.durationMs,
-  }));
+  const sessions: RoutineStepSession[] = steps.map((step, index) => {
+    const enabled = stepIsEnabled(step);
+    return {
+      stepId: step.id,
+      status: index === firstEnabledIndex ? 'active' : enabled ? 'pending' : 'skipped',
+      startedAt: index === firstEnabledIndex ? startedAtTimestamp : null,
+      completedAt: null,
+      addedTimeMs: 0,
+      ...(enabled ? {} : { outcome: 'disabled' as const }),
+      plannedDurationMs: step.durationMs,
+    };
+  });
   return {
     id: options.id ?? createId(),
     routineId: routineSnapshot.id,
@@ -232,11 +257,11 @@ export function startRoutine(
     startedAt: startedAtTimestamp,
     pausedAt: null,
     completedAt: null,
-    currentStepIndex: 0,
+    currentStepIndex: firstEnabledIndex,
     currentStepStartedAt: startedAtTimestamp,
     pausedDurationMs: 0,
     stepSessions: sessions,
-    currentStepDeadlineAt: toTimestamp(atMs(startedAt) + steps[0].durationMs),
+    currentStepDeadlineAt: toTimestamp(atMs(startedAt) + steps[firstEnabledIndex]!.durationMs),
     remainingMsWhenPaused: null,
     alarmFiredStepIds: [],
   };
@@ -432,13 +457,98 @@ export function reorderActiveRoutineStep(
   return next;
 }
 
+/** Enables or disables a configured step without deleting its active-run snapshot. */
+export function setRoutineStepEnabled(
+  activeRoutine: ActiveRoutine,
+  stepId: UUID,
+  enabled: boolean,
+  at: RoutineTimestampInput = Date.now()
+): ActiveRoutine {
+  if (
+    activeRoutine.status !== 'running' &&
+    activeRoutine.status !== 'paused' &&
+    activeRoutine.status !== 'awaiting-next-activity'
+  ) {
+    throw new Error(`Routine steps cannot be changed while ${activeRoutine.status}`);
+  }
+  const atMsValue = atMs(at);
+  const atTimestamp = toTimestamp(atMsValue);
+  const next = cloneRoutine(activeRoutine);
+  const steps = orderedSteps(next.routineSnapshot);
+  const stepIndex = steps.findIndex((step) => step.id === stepId);
+  if (stepIndex < 0) throw new Error(`Unknown routine step "${stepId}"`);
+  const step = steps[stepIndex]!;
+  if (stepIsEnabled(step) === enabled) return next;
+  step.enabled = enabled;
+
+  const session = next.stepSessions.find((candidate) => candidate.stepId === stepId);
+  if (!session) throw new Error('Routine step history is not contiguous');
+  if (enabled) {
+    if (session.status === 'skipped' && session.outcome === 'disabled') {
+      session.status = 'pending';
+      session.startedAt = null;
+      session.completedAt = null;
+      session.outcome = undefined;
+      session.addedTimeMs = 0;
+      session.plannedDurationMs = step.durationMs;
+    }
+    if (next.status === 'awaiting-next-activity' && session.status === 'pending') {
+      return initializeNextStep(next, stepIndex, atMsValue);
+    }
+    return next;
+  }
+
+  if (session.status === 'pending') {
+    session.status = 'skipped';
+    session.startedAt = null;
+    session.completedAt = null;
+    session.outcome = 'disabled';
+    session.addedTimeMs = 0;
+    session.plannedDurationMs = step.durationMs;
+    return next;
+  }
+
+  if (session.status !== 'active' || next.currentStepIndex !== stepIndex) return next;
+  session.status = 'skipped';
+  session.completedAt = atTimestamp;
+  session.outcome = 'disabled';
+  next.currentStepStartedAt = null;
+  next.currentStepDeadlineAt = null;
+  next.remainingMsWhenPaused = null;
+  const wasPaused = next.status === 'paused';
+  if (wasPaused && next.pausedAt) {
+    const pausedMs = atMsValue - atMs(next.pausedAt);
+    if (pausedMs < 0) throw new RangeError('Step-disable timestamp cannot precede pause timestamp');
+    next.pausedDurationMs += pausedMs;
+  }
+  const nextIndex = nextEnabledPendingIndex(steps, next.stepSessions, stepIndex);
+  if (nextIndex < 0) {
+    next.status = 'awaiting-next-activity';
+    next.completedAt = atTimestamp;
+    next.currentStepIndex = steps.length;
+    next.pausedAt = null;
+    return next;
+  }
+  const initialized = initializeNextStep(next, nextIndex, atMsValue);
+  if (wasPaused && initialized.status === 'running') {
+    initialized.status = 'paused';
+    initialized.pausedAt = atTimestamp;
+    initialized.remainingMsWhenPaused = steps[nextIndex]!.durationMs;
+  }
+  return initialized;
+}
+
 /** Moves the active cursor to a selected step and resets that step's future work. */
 export function jumpToRoutineStep(
   activeRoutine: ActiveRoutine,
   stepId: UUID,
   at: RoutineTimestampInput = Date.now()
 ): ActiveRoutine {
-  if (activeRoutine.status !== 'running' && activeRoutine.status !== 'paused') {
+  if (
+    activeRoutine.status !== 'running' &&
+    activeRoutine.status !== 'paused' &&
+    activeRoutine.status !== 'awaiting-next-activity'
+  ) {
     throw new Error(`Routine steps cannot be selected while ${activeRoutine.status}`);
   }
   const atTimestamp = timestamp(at);
@@ -446,13 +556,24 @@ export function jumpToRoutineStep(
   const steps = orderedSteps(next.routineSnapshot);
   const targetIndex = steps.findIndex((step) => step.id === stepId);
   if (targetIndex < 0) throw new Error(`Unknown routine step "${stepId}"`);
+  if (!stepIsEnabled(steps[targetIndex]!)) throw new Error('Enable this step before starting it');
   if (targetIndex === next.currentStepIndex) return next;
 
   for (const [index, step] of steps.entries()) {
     const session = next.stepSessions.find((candidate) => candidate.stepId === step.id);
     if (!session) throw new Error('Routine step history is not contiguous');
     if (index < targetIndex) {
-      if (session.status === 'active' || session.status === 'pending') {
+      if (!stepIsEnabled(step) && session.status === 'pending') {
+        session.status = 'skipped';
+        session.startedAt = null;
+        session.completedAt = null;
+        session.outcome = 'disabled';
+        session.addedTimeMs = 0;
+        session.plannedDurationMs = step.durationMs;
+      } else if (
+        stepIsEnabled(step) &&
+        (session.status === 'active' || session.status === 'pending')
+      ) {
         session.status = 'completed';
         session.startedAt ??= atTimestamp;
         session.completedAt = atTimestamp;
@@ -465,6 +586,15 @@ export function jumpToRoutineStep(
       session.startedAt = atTimestamp;
       session.completedAt = null;
       session.outcome = undefined;
+      session.addedTimeMs = 0;
+      session.plannedDurationMs = step.durationMs;
+      continue;
+    }
+    if (!stepIsEnabled(step)) {
+      session.status = 'skipped';
+      session.startedAt = null;
+      session.completedAt = null;
+      session.outcome = 'disabled';
       session.addedTimeMs = 0;
       session.plannedDurationMs = step.durationMs;
       continue;
@@ -485,7 +615,7 @@ export function jumpToRoutineStep(
   next.remainingMsWhenPaused =
     activeRoutine.status === 'paused' ? steps[targetIndex]!.durationMs : null;
   next.pausedDurationMs = 0;
-  next.status = activeRoutine.status;
+  next.status = activeRoutine.status === 'paused' ? 'paused' : 'running';
   return next;
 }
 
@@ -506,7 +636,11 @@ export function moveCurrentRoutineStepToEnd(
   if (!current || !session || session.status !== 'active') {
     throw new Error('Routine must have exactly one active step');
   }
-  if (steps.length < 2 || next.currentStepIndex === steps.length - 1) return next;
+  const hasAnotherRunnableStep = steps.some((step) => {
+    const candidate = next.stepSessions.find((stepSession) => stepSession.stepId === step.id);
+    return step.id !== current.id && stepIsEnabled(step) && candidate?.status === 'pending';
+  });
+  if (steps.length < 2 || !hasAnotherRunnableStep) return next;
   session.status = 'pending';
   session.startedAt = null;
   session.completedAt = null;
@@ -517,7 +651,7 @@ export function moveCurrentRoutineStepToEnd(
   next.routineSnapshot.steps = normalizeStepOrder(steps);
   const nextIndex = next.routineSnapshot.steps.findIndex((step) => {
     const candidate = next.stepSessions.find((stepSession) => stepSession.stepId === step.id);
-    return candidate?.status === 'pending';
+    return stepIsEnabled(step) && candidate?.status === 'pending';
   });
   if (nextIndex < 0) throw new Error('Routine has no pending step after moving the current step');
   return initializeNextStep(next, nextIndex, atMs(at));

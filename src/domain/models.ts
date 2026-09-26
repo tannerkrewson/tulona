@@ -20,7 +20,7 @@ export type RoutineRunStatus =
 export type RoutineStepStatus = 'pending' | 'active' | 'completed' | 'skipped';
 export type RoutineTrackingMode = 'overall' | 'steps';
 export type RoutineStepEndBehavior = 'overtime' | 'auto-advance' | 'autoAdvance';
-export type RoutineStepCompletionOutcome = 'done' | 'skipped' | 'autoAdvanced';
+export type RoutineStepCompletionOutcome = 'done' | 'skipped' | 'autoAdvanced' | 'disabled';
 export type HabitSignalSource = 'manual' | 'automatic';
 export type HabitDayOutcome = 'done' | 'failed' | 'skipped';
 export type GoalOverallStatus = 'in-progress' | 'future' | 'completed' | 'gave-up';
@@ -67,6 +67,8 @@ export interface RoutineStep extends Timestamps, Archivable {
   sortOrder: number;
   color: string | null;
   iconName: string | null;
+  /** Defaults to enabled for routines saved before step disabling was added. */
+  enabled?: boolean;
   /** Defaults to overtime for records written before end behavior was added. */
   endBehavior?: RoutineStepEndBehavior;
   notes?: string | null;
@@ -135,6 +137,8 @@ export interface RoutineStepSnapshot {
   sortOrder: number;
   color: string | null;
   iconName: string | null;
+  /** Defaults to enabled for snapshots written before step disabling was added. */
+  enabled?: boolean;
   endBehavior?: RoutineStepEndBehavior;
   notes?: string | null;
 }
