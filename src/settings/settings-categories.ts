@@ -15,12 +15,6 @@ export const settingsCategories = [
     path: '/settings/routines',
   },
   {
-    id: 'catalog',
-    title: 'Catalog',
-    icon: 'archive',
-    path: '/settings/catalog',
-  },
-  {
     id: 'goals',
     title: 'Goals',
     icon: 'award',
@@ -47,7 +41,6 @@ const legacyCategoryIds: Readonly<Record<string, SettingsCategoryId>> = {
   'short-activity-filter': 'time-and-activity',
   'routine-alarm': 'routines',
   'routine-defaults': 'routines',
-  'catalog-visibility': 'catalog',
   'backup-restore': 'data',
   'prototype-data': 'data',
 };
