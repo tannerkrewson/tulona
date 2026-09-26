@@ -1193,6 +1193,15 @@ export default function GoalsScreen() {
     if (focused) void Promise.resolve().then(load);
   }, [focused, load]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onSynchronizedData = () => {
+      if (focused) void load();
+    };
+    window.addEventListener('tulona:dropbox-sync', onSynchronizedData);
+    return () => window.removeEventListener('tulona:dropbox-sync', onSynchronizedData);
+  }, [focused, load]);
+
   const visibleGoals = useMemo(
     () => resource?.goals.filter((goal) => filter === 'all' || goal.overallStatus === filter) ?? [],
     [filter, resource]

@@ -39,6 +39,46 @@ async function run(): Promise<void> {
     'IndexedDB storage must remove batched values'
   );
 
+  if (!database.readSnapshot || !database.compareAndApplySnapshot) {
+    throw new Error('IndexedDB database must provide consistent snapshots and compare-and-apply');
+  }
+  const datasetPrefix = `${prefix}:dataset:`;
+  const datasetKey = `${datasetPrefix}catalog`;
+  const syncKey = `${prefix}:sync-state`;
+  await database.write(datasetKey, 'before-sync');
+  const beforeSync = await database.readSnapshot();
+  const expectedDataset = new Map([...beforeSync].filter(([key]) => key.startsWith(datasetPrefix)));
+  const applied = await database.compareAndApplySnapshot({
+    prefix: datasetPrefix,
+    expectedPrefix: expectedDataset,
+    compare: new Map([[syncKey, null]]),
+    writes: new Map([
+      [datasetKey, 'after-sync'],
+      [syncKey, 'document-state'],
+    ]),
+    deletes: [],
+    source: 'sync',
+  });
+  assert(applied, 'a matching IndexedDB snapshot must commit synchronized projection and metadata');
+  assert(
+    (await database.read(datasetKey)) === 'after-sync' &&
+      (await database.read(syncKey)) === 'document-state',
+    'the projected dataset and Automerge state must be committed together'
+  );
+  const staleApplied = await database.compareAndApplySnapshot({
+    prefix: datasetPrefix,
+    expectedPrefix: expectedDataset,
+    compare: new Map([[syncKey, null]]),
+    writes: new Map([[datasetKey, 'stale-overwrite']]),
+    deletes: [],
+    source: 'sync',
+  });
+  assert(
+    !staleApplied && (await database.read(datasetKey)) === 'after-sync',
+    'a stale local view must fail compare-and-apply without overwriting a newer projection'
+  );
+  await database.multiRemove([datasetKey, syncKey]);
+
   const legacyValues = new Map([
     ['tulona:metadata', 'legacy metadata'],
     ['ds:legacy-dataset:catalog', 'legacy catalog'],

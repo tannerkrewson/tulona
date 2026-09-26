@@ -9,5 +9,6 @@ export * from './backup-runtime';
 export * from './timemator-import';
 export * from './dropbox-backup';
 export * from './dropbox-backup-storage';
+export * from './dropbox-sync-document';
 
 export type BackupLayer = 'backup';

@@ -433,7 +433,31 @@ export class BootCoordinator {
       this.database,
       reporting
     );
-    const dropboxBackup = new DropboxBackupService(backup, this.database);
+    const dropboxBackup = new DropboxBackupService(backup, this.database, {
+      onExternalSync: async () => {
+        const runtime = runtimeHolder.current;
+        if (!runtime) return;
+        const nextSettings = await runtime.services.settings.read();
+        Object.assign(runtime.settings, nextSettings, {
+          alarmSettings: { ...nextSettings.alarmSettings },
+        });
+        runtime.services.routineAlarm.setSettings(nextSettings.alarmSettings);
+        runtime.services.tracker.setMinimumActivityDurationMs(
+          nextSettings.minimumActivityDurationMs
+        );
+        runtime.services.reconciliation.updateSettings({
+          rolloverHour: nextSettings.logicalDayRolloverHour,
+          weekStartsOn: nextSettings.weekStartsOn,
+        });
+        runtime.stores.tracker.getState().updateSettings(nextSettings, this.now());
+        runtime.stores.habits.getState().updateSettings(nextSettings);
+        await Promise.all([
+          runtime.stores.settings.getState().reload(),
+          runtime.stores.tracker.getState().hydrate(),
+          runtime.stores.habits.getState().hydrate(),
+        ]);
+      },
+    });
     const routineAlarm = createRoutineAlarmService();
     routineAlarm.setSettings(settings.alarmSettings);
     const logicalDay = logicalDayKey(this.now(), {

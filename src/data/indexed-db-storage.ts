@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 
-import type { AsyncStorageLike } from './database';
+import type { AsyncStorageLike, DatabaseSnapshotCommit } from './database';
 
 interface TulonaStorageSchema extends DBSchema {
   entries: {
@@ -45,6 +45,40 @@ export class IndexedDbStorage implements AsyncStorageLike {
   async getAllKeys(): Promise<readonly string[]> {
     const database = await this.database;
     return database.getAllKeys(INDEXED_DB_STORE);
+  }
+
+  async readSnapshot(): Promise<ReadonlyMap<string, string>> {
+    const database = await this.database;
+    const transaction = database.transaction(INDEXED_DB_STORE, 'readonly');
+    const [keys, values] = await Promise.all([
+      transaction.store.getAllKeys(),
+      transaction.store.getAll(),
+    ]);
+    await transaction.done;
+    return new Map(keys.map((key, index) => [String(key), values[index]]));
+  }
+
+  async compareAndApplySnapshot(commit: DatabaseSnapshotCommit): Promise<boolean> {
+    const database = await this.database;
+    const transaction = database.transaction(INDEXED_DB_STORE, 'readwrite');
+    const store = transaction.store;
+    const [keys, values] = await Promise.all([store.getAllKeys(), store.getAll()]);
+    const current = new Map(keys.map((key, index) => [String(key), values[index]]));
+    const actualPrefix = new Map([...current].filter(([key]) => key.startsWith(commit.prefix)));
+    const prefixMatches =
+      actualPrefix.size === commit.expectedPrefix.size &&
+      [...actualPrefix].every(([key, value]) => commit.expectedPrefix.get(key) === value);
+    const comparisonsMatch = [...commit.compare].every(
+      ([key, expected]) => (current.get(key) ?? null) === expected
+    );
+    if (!prefixMatches || !comparisonsMatch) {
+      await transaction.done;
+      return false;
+    }
+    for (const [key, value] of commit.writes) store.put(value, key);
+    for (const key of commit.deletes) store.delete(key);
+    await transaction.done;
+    return true;
   }
 
   async multiGet(keys: readonly string[]): Promise<readonly (readonly [string, string | null])[]> {

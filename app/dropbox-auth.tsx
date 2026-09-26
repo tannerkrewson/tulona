@@ -33,7 +33,7 @@ export default function DropboxAuthRoute() {
         if (oauthError) throw new Error(`Dropbox authorization was not completed: ${oauthError}`);
         if (!code || !state) throw new Error('Dropbox authorization did not return a code.');
         await dropboxBackupService.completeAuthorization(code, state);
-        await dropboxBackupService.backupNow();
+        await dropboxBackupService.syncNow();
       })
       .then(() => {
         if (cancelled) return;
