@@ -364,7 +364,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
                 active={active}
                 actionsTestID={`catalog-actions-${item.id}`}
                 color={resolved?.displayColor}
-                disabled={busy || item.archivedAt !== null}
+                disabled={busy || (!editMode && item.archivedAt !== null)}
                 editMode={editMode}
                 item={item}
                 onMoveDown={() => reorderRootEntry(item.id, 'down')}

@@ -236,13 +236,13 @@ function ActivityEditor({
     ? (selectedFolder.color ?? colors.primary)
     : color || colors.primary;
 
-  const run = async (action: () => Promise<void>) => {
+  const run = async (action: () => Promise<void>, returnToPrevious = false) => {
     lastAction.current = action;
     setBusy(true);
     setError(null);
     try {
       await action();
-      if (!activity) {
+      if (!activity || returnToPrevious) {
         onBack();
         return;
       }
@@ -271,7 +271,7 @@ function ActivityEditor({
           folderId: selectedFolderId,
         });
       }
-    });
+    }, true);
   };
 
   return (

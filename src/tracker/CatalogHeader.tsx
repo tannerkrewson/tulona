@@ -111,32 +111,34 @@ export function CatalogHeader({
             width: 220,
           }}
         >
-          <Column
-            spacing={2}
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 16,
-              borderWidth: 1,
-              padding: 6,
-              width: '100%',
-            }}
-            testID="catalog-create-menu"
-          >
-            {createActions.map((action) => (
-              <AppButton
-                key={action.label}
-                label={action.label}
-                onPress={() => {
-                  onToggleCreate();
-                  action.onPress();
-                }}
-                style={{ height: 44, width: '100%' }}
-                testID={action.testID}
-                variant="text"
-              />
-            ))}
-          </Column>
+          <View style={{ borderRadius: 16, overflow: 'hidden' }}>
+            <Column
+              spacing={2}
+              style={{
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: 16,
+                borderWidth: 1,
+                padding: 6,
+                width: '100%',
+              }}
+              testID="catalog-create-menu"
+            >
+              {createActions.map((action) => (
+                <AppButton
+                  key={action.label}
+                  label={action.label}
+                  onPress={() => {
+                    onToggleCreate();
+                    action.onPress();
+                  }}
+                  style={{ height: 44, width: '100%' }}
+                  testID={action.testID}
+                  variant="text"
+                />
+              ))}
+            </Column>
+          </View>
         </View>
       ) : null}
     </View>

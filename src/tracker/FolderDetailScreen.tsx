@@ -233,7 +233,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
                 active={active}
                 actionsTestID={`folder-child-actions-${item.id}`}
                 color={resolved?.displayColor}
-                disabled={busy || item.archivedAt !== null}
+                disabled={busy || (!editMode && item.archivedAt !== null)}
                 editMode={editMode}
                 item={item}
                 onMoveDown={() => reorderItem(item.id, 'down')}
