@@ -48,7 +48,8 @@ function triggerName(habit: Habit, catalog: CatalogCollection | null): string | 
         ? 'Folder time'
         : 'Routine time';
   const seconds = habit.trigger.minimumSeconds ?? (habit.trigger.minimumMs ?? 1000) / 1000;
-  return `${kind}: ${source ?? 'Unavailable source'} · ${seconds} second${seconds === 1 ? '' : 's'} minimum`;
+  const comparison = habit.trigger.comparison ?? 'at-least';
+  return `${kind}: ${source ?? 'Unavailable source'} · ${comparison === 'at-most' ? 'at most' : 'at least'} ${seconds} second${seconds === 1 ? '' : 's'} per day`;
 }
 
 export interface HabitDetailScreenProps {

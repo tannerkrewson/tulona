@@ -2,7 +2,7 @@ import { Row, Text } from '@expo/ui';
 import { Pressable, View } from 'react-native';
 
 import type { TrackableItem } from '@domain';
-import { getDarkerColor, useAppTheme } from '@theme';
+import { getAccessibleTextColor, useAppTheme } from '@theme';
 import {
   AppButton,
   getRowSurfaceBackground,
@@ -55,7 +55,7 @@ export function ActivityRow({
   const { colorScheme, colors } = useAppTheme();
   const configuredColor = color ?? item.color;
   const accent = isHexColor(configuredColor) ? configuredColor.trim() : colors.primary;
-  const activeForeground = getDarkerColor(accent);
+  const activeForeground = getAccessibleTextColor(accent);
   const inactiveBackground = getRowSurfaceBackground({
     colorScheme,
     surface: colors.surface,

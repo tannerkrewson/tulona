@@ -14,10 +14,6 @@ import { formatSessionDate, formatSessionTime } from './session-time';
 import type { TransitionContext } from './tracker-service';
 import { orderTransitions } from './tracker-engine';
 
-function readableDateTime(value: number): string {
-  return `${formatSessionDate(value)} · ${formatSessionTime(value)}`;
-}
-
 function visibleAdjacentTransition(
   transitions: readonly TimeTransition[],
   transition: TimeTransition,
@@ -141,7 +137,6 @@ function ActivitySessionContent({
     transitions.find((candidate) => candidate.id === transitionId) ??
     (activeTransition?.id === transitionId ? activeTransition : null);
   const [transitionContext, setTransitionContext] = useState<TransitionContext | null>(null);
-  const [contextLoading, setContextLoading] = useState(true);
   const [contextError, setContextError] = useState<string | null>(null);
   const contextRequest = useRef(0);
   const transition: TimeTransition | null =
@@ -156,19 +151,16 @@ function ActivitySessionContent({
     const requestId = contextRequest.current + 1;
     contextRequest.current = requestId;
     setTransitionContext(null);
-    setContextLoading(true);
     setContextError(null);
     void runtime.trackerService
       .getTransitionContext(transitionId)
       .then((nextContext) => {
         if (contextRequest.current !== requestId) return;
         setTransitionContext(nextContext);
-        setContextLoading(false);
       })
       .catch((error: unknown) => {
         if (contextRequest.current !== requestId) return;
         setContextError(errorText(error));
-        setContextLoading(false);
       });
   }, [runtime, transitionId]);
 
@@ -228,8 +220,13 @@ function ActivitySessionContent({
       resolveCatalogItem(catalog, previous.activityId, colors.primary)?.item.name ??
       'previous activity')
     : 'previous state';
-  const canSnapToPrevious =
-    previous !== null && timestampMs(previous.timestamp) < timestampMs(transition.timestamp);
+  const followingName = following?.activityId
+    ? (following.activitySnapshot?.name ??
+      resolveCatalogItem(catalog, following.activityId, colors.primary)?.item.name ??
+      'next activity')
+    : following
+      ? 'idle time'
+      : null;
 
   const runAction = async (action: () => Promise<void>) => {
     if (busy) return;
@@ -244,14 +241,8 @@ function ActivitySessionContent({
     }
   };
 
-  const snapToPrevious = () =>
-    void runAction(async () => {
-      await store.getState().snapTransitionStartToPrevious(transition.id);
-      loadTransitionContext();
-    });
-
   const resetToNow = () =>
-    void runAction(async () => {
+    runAction(async () => {
       await store.getState().resetActiveStartToNow(transition.id);
       loadTransitionContext();
     });
@@ -372,57 +363,19 @@ function ActivitySessionContent({
 
           <HistoricalSessionEditor
             key={`${transition.id}-${transition.timestamp}-${following?.timestamp ?? 'open'}`}
+            activityLabel={activityName}
             busy={busy}
             following={following}
+            followingLabel={followingName}
             isActive={isActive}
             nowMs={nowMs}
+            onResetStart={resetToNow}
             onSaveEnd={saveHistoricalEnd}
             onSaveStart={saveHistoricalStart}
             previous={previous}
+            previousLabel={previousName}
             transition={transition}
           />
-
-          <Column spacing={12} style={{ width: '100%' }} testID="activity-session-corrections">
-            <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-              Correct start time
-            </Text>
-            <Text
-              numberOfLines={2}
-              textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}
-            >
-              {contextLoading && !previous
-                ? 'Checking for a preceding transition...'
-                : previous
-                  ? `Previous: ${previousName} · ${readableDateTime(timestampMs(previous.timestamp))}`
-                  : 'No previous transition available'}
-            </Text>
-            <Row alignment="center" spacing={10} style={{ width: '100%' }}>
-              <AppButton
-                disabled={busy || !canSnapToPrevious}
-                label={
-                  contextLoading && !previous
-                    ? 'Checking previous activity'
-                    : canSnapToPrevious
-                      ? 'Snap to previous end'
-                      : previous
-                        ? 'Already at previous end'
-                        : 'No previous end available'
-                }
-                onPress={snapToPrevious}
-                style={{ height: 44, width: '48%' }}
-                testID="activity-session-snap-previous"
-                variant="outlined"
-              />
-              <AppButton
-                disabled={busy || !isActive}
-                label={isActive ? 'Reset start to now' : 'Reset start to now (active only)'}
-                onPress={resetToNow}
-                style={{ height: 44, width: '48%' }}
-                testID="activity-session-reset-now"
-                variant="outlined"
-              />
-            </Row>
-          </Column>
 
           {actionError ? (
             <Text

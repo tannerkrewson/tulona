@@ -4,7 +4,14 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
-import type { CatalogCollection, Habit, HabitSchedule, HabitTrigger, UUID } from '@domain';
+import type {
+  CatalogCollection,
+  Habit,
+  HabitSchedule,
+  HabitTrigger,
+  HabitTriggerComparison,
+  UUID,
+} from '@domain';
 import { useAppTheme } from '@theme';
 import {
   AccessiblePicker,
@@ -36,6 +43,7 @@ interface HabitDraft {
   triggerKind: TriggerKind;
   triggerId: string;
   thresholdSeconds: string;
+  thresholdComparison: HabitTriggerComparison;
 }
 
 interface HabitEditorResource {
@@ -69,6 +77,7 @@ function draftFromHabit(habit: Habit | null): HabitDraft {
           : habit.trigger.routineId
       : '',
     thresholdSeconds: thresholdFromTrigger(habit?.trigger ?? null),
+    thresholdComparison: habit?.trigger?.comparison ?? 'at-least',
   };
 }
 
@@ -112,20 +121,26 @@ function triggerFromDraft(draft: HabitDraft): HabitTrigger | null {
     return {
       kind: draft.triggerKind,
       activityId: draft.triggerId as UUID,
-      ...(threshold === undefined ? {} : { minimumSeconds: threshold }),
+      ...(threshold === undefined
+        ? {}
+        : { minimumSeconds: threshold, comparison: draft.thresholdComparison }),
     };
   }
   if (draft.triggerKind === 'folder-time') {
     return {
       kind: draft.triggerKind,
       folderId: draft.triggerId as UUID,
-      ...(threshold === undefined ? {} : { minimumSeconds: threshold }),
+      ...(threshold === undefined
+        ? {}
+        : { minimumSeconds: threshold, comparison: draft.thresholdComparison }),
     };
   }
   return {
     kind: draft.triggerKind,
     routineId: draft.triggerId as UUID,
-    ...(threshold === undefined ? {} : { minimumSeconds: threshold }),
+    ...(threshold === undefined
+      ? {}
+      : { minimumSeconds: threshold, comparison: draft.thresholdComparison }),
   };
 }
 
@@ -376,17 +391,8 @@ function HabitEditorForm({
   return (
     <Screen onBack={onBack} title={habit ? 'Edit habit' : 'New habit'}>
       <Column spacing={18} style={{ width: '100%' }}>
-        <Column
-          spacing={18}
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderRadius: 18,
-            borderWidth: 1,
-            padding: 18,
-            width: '100%',
-          }}
-        >
+        <Column spacing={18} style={{ paddingVertical: 6, width: '100%' }}>
+          <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>Habit</Text>
           <Column spacing={3} style={{ width: '100%' }}>
             <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
               {draft.name || 'Untitled habit'}
@@ -413,17 +419,7 @@ function HabitEditorForm({
           </Field>
         </Column>
 
-        <Column
-          spacing={16}
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderRadius: 18,
-            borderWidth: 1,
-            padding: 18,
-            width: '100%',
-          }}
-        >
+        <Column spacing={16} style={{ paddingVertical: 6, width: '100%' }}>
           <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>Schedule</Text>
           <Field label="Repeat">
             <AccessiblePicker
@@ -487,17 +483,7 @@ function HabitEditorForm({
           ) : null}
         </Column>
 
-        <Column
-          spacing={16}
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderRadius: 18,
-            borderWidth: 1,
-            padding: 18,
-            width: '100%',
-          }}
-        >
+        <Column spacing={16} style={{ paddingVertical: 6, width: '100%' }}>
           <Column spacing={3}>
             <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>
               Automatic evidence
@@ -531,16 +517,44 @@ function HabitEditorForm({
                   value={draft.triggerId}
                 />
               </Field>
-              <Field label="Threshold in seconds (optional)">
-                <Input
-                  label="Automatic trigger threshold in seconds"
-                  keyboardType="numeric"
-                  onChangeText={(thresholdSeconds) => update({ thresholdSeconds })}
-                  placeholder="1"
-                  testID="habit-trigger-threshold"
-                  value={draft.thresholdSeconds}
-                />
-              </Field>
+              <Column spacing={8} style={{ width: '100%' }}>
+                <Field label="Tracked time threshold (seconds, optional)">
+                  <Input
+                    label="Daily tracked time threshold in seconds"
+                    keyboardType="numeric"
+                    onChangeText={(thresholdSeconds) => update({ thresholdSeconds })}
+                    placeholder="1"
+                    testID="habit-trigger-threshold"
+                    value={draft.thresholdSeconds}
+                  />
+                </Field>
+                <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
+                  This is the total time logged for the selected activity, folder, or routine in one
+                  logical day. Leave it blank to use the 1 second default.
+                </Text>
+                {draft.thresholdSeconds.trim() ? (
+                  <>
+                    <Field label="When should this count as complete?">
+                      <AccessiblePicker
+                        label="Tracked time comparison"
+                        onValueChange={(next) =>
+                          update({ thresholdComparison: String(next) as HabitTriggerComparison })
+                        }
+                        selectedValue={draft.thresholdComparison}
+                        testID="habit-trigger-comparison"
+                      >
+                        <Picker.Item label="At least this time · more is better" value="at-least" />
+                        <Picker.Item label="At most this time · less is better" value="at-most" />
+                      </AccessiblePicker>
+                    </Field>
+                    {draft.thresholdComparison === 'at-most' ? (
+                      <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
+                        At-most results are finalized when this logical day ends.
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
+              </Column>
             </>
           ) : null}
         </Column>

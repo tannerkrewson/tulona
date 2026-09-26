@@ -412,6 +412,7 @@ const habitTriggerSchema = z.union([
       kind: z.literal('tracked-time'),
       activityId: uuid,
       minimumSeconds: z.number().positive().optional(),
+      comparison: z.enum(['at-least', 'at-most']).optional(),
       minimumMs: z.number().positive().optional(),
     })
     .refine(
@@ -424,6 +425,7 @@ const habitTriggerSchema = z.union([
       kind: z.literal('folder-time'),
       folderId: uuid,
       minimumSeconds: z.number().positive().optional(),
+      comparison: z.enum(['at-least', 'at-most']).optional(),
       minimumMs: z.number().positive().optional(),
     })
     .refine(
@@ -436,6 +438,7 @@ const habitTriggerSchema = z.union([
       kind: z.literal('routine-completion'),
       routineId: uuid,
       minimumSeconds: z.number().positive().optional(),
+      comparison: z.enum(['at-least', 'at-most']).optional(),
       minimumMs: z.number().positive().optional(),
     })
     .refine(
