@@ -1141,10 +1141,10 @@ function HabitListItem({
             opacity: 1,
             paddingHorizontal: ROW_SURFACE_PADDING_HORIZONTAL,
             paddingVertical: 0,
-            userSelect: 'none',
             width: '100%',
             ...(Platform.OS === 'web'
               ? ({
+                  userSelect: 'none',
                   WebkitUserSelect: 'none',
                   WebkitTouchCallout: 'none',
                 } as unknown as ViewStyle)
