@@ -1,6 +1,6 @@
 import { toTimestamp } from '@domain';
 
-import type { BackupRepositoryApi } from '@data/backup-repository';
+import type { BackupDatasetSnapshot, BackupRepositoryApi } from '@data/backup-repository';
 import type { DatasetNamespace } from '@data/namespaces';
 
 import {
@@ -22,6 +22,13 @@ export async function exportBackup(
   options: BackupExportOptions = {}
 ): Promise<LifeTrackerBackup> {
   const snapshot = await repository.read(namespace);
+  return exportBackupFromSnapshot(snapshot, options);
+}
+
+export function exportBackupFromSnapshot(
+  snapshot: BackupDatasetSnapshot,
+  options: BackupExportOptions = {}
+): LifeTrackerBackup {
   const backup = {
     format: BACKUP_FORMAT,
     backupVersion: CURRENT_BACKUP_VERSION,

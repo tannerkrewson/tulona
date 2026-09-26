@@ -44,6 +44,7 @@
     "test:indexed-db": "tsx tests/indexed-db-storage.ts",
     "test:database-observer": "tsx tests/database-observer.ts",
     "test:dropbox-backup": "tsx tests/dropbox-backup.ts",
+    "test:dropbox-sync": "tsx tests/dropbox-sync.ts",
     "test:dropbox-ui": "tsx tests/dropbox-ui-regressions.ts",
     "test:persistence": "tsx tests/persistence-checks.ts",
     "test:tracker": "tsx tests/tracker-engine.ts",
@@ -59,6 +60,7 @@
     "deploy": "npm run web:build && gh-pages --dist dist --nojekyll"
   },
   "dependencies": {
+    "@automerge/automerge": "^3.5.0",
     "@expo/ui": "~57.0.19",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@shopify/react-native-skia": "2.12.0",

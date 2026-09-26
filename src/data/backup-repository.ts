@@ -1,5 +1,15 @@
 import {
+  activeRoutineSchema,
+  appSettingsSchema,
+  catalogCollectionSchema,
+  goalCollectionSchema,
+  goalSettingsSchema,
+  goalWeekCollectionSchema,
+  habitCollectionSchema,
+  habitMonthCollectionSchema,
   monthKey,
+  routineHistoryCollectionSchema,
+  trackerMonthCollectionSchema,
   type CatalogCollection,
   type Habit,
   type HabitDayState,
@@ -13,7 +23,7 @@ import {
 } from '@domain';
 
 import { CatalogRepository } from './catalog-repository';
-import type { KeyValueDatabase } from './database';
+import type { DatabaseSnapshotCommit, KeyValueDatabase } from './database';
 import { PersistenceError } from './errors';
 import { HabitRepository } from './habit-repository';
 import { GoalRepository } from './goal-repository';
@@ -39,6 +49,62 @@ export interface BackupRepositoryApi {
   read(namespace: DatasetNamespace): Promise<BackupDatasetSnapshot>;
   write(namespace: DatasetNamespace, snapshot: BackupDatasetSnapshot): Promise<void>;
   verify(namespace: DatasetNamespace, expected: BackupDatasetSnapshot): Promise<void>;
+  readConsistent?(namespace: DatasetNamespace): Promise<ConsistentBackupRead>;
+  applySynchronizedSnapshot?(
+    namespace: DatasetNamespace,
+    snapshot: BackupDatasetSnapshot,
+    expectedEntries: ReadonlyMap<string, string>,
+    compare: ReadonlyMap<string, string | null>,
+    writes: ReadonlyMap<string, string>
+  ): Promise<boolean>;
+}
+
+export interface ConsistentBackupRead {
+  snapshot: BackupDatasetSnapshot;
+  /** Raw values from the same storage snapshot used to build `snapshot`. */
+  entries: ReadonlyMap<string, string>;
+}
+
+class SnapshotDatabase implements KeyValueDatabase {
+  private readonly values: Map<string, string>;
+
+  constructor(entries: ReadonlyMap<string, string>) {
+    this.values = new Map(entries);
+  }
+
+  async read(key: string): Promise<string | null> {
+    return this.values.get(key) ?? null;
+  }
+
+  async write(key: string, value: string): Promise<void> {
+    this.values.set(key, value);
+  }
+
+  async remove(key: string): Promise<void> {
+    this.values.delete(key);
+  }
+
+  async multiRead(keys: readonly string[]): Promise<ReadonlyMap<string, string | null>> {
+    return new Map(keys.map((key) => [key, this.values.get(key) ?? null]));
+  }
+
+  async multiWrite(entries: readonly (readonly [string, string])[]): Promise<void> {
+    for (const [key, value] of entries) this.values.set(key, value);
+  }
+
+  async multiRemove(keys: readonly string[]): Promise<void> {
+    for (const key of keys) this.values.delete(key);
+  }
+
+  async verify(key: string, expectedValue: string | null): Promise<void> {
+    if ((this.values.get(key) ?? null) !== expectedValue) {
+      throw new Error('The in-memory database snapshot did not retain a written value');
+    }
+  }
+
+  async keys(): Promise<readonly string[]> {
+    return [...this.values.keys()];
+  }
 }
 
 function sortTransitions(values: readonly Transition[]): Transition[] {
@@ -125,12 +191,28 @@ export class BackupRepository implements BackupRepositoryApi {
   constructor(private readonly database: KeyValueDatabase) {}
 
   async read(namespace: DatasetNamespace): Promise<BackupDatasetSnapshot> {
-    const catalogRepository = new CatalogRepository(this.database, namespace);
-    const trackerRepository = new TrackerRepository(this.database, namespace);
-    const routineRepository = new RoutineRepository(this.database, namespace);
-    const habitRepository = new HabitRepository(this.database, namespace);
-    const goalRepository = new GoalRepository(this.database, namespace);
-    const settingsRepository = new SettingsRepository(this.database, namespace);
+    return (await this.readConsistent(namespace)).snapshot;
+  }
+
+  async readConsistent(namespace: DatasetNamespace): Promise<ConsistentBackupRead> {
+    const entries = this.database.readSnapshot ? await this.database.readSnapshot() : null;
+    const database = entries ? new SnapshotDatabase(entries) : this.database;
+    return {
+      snapshot: await this.readFrom(database, namespace),
+      entries: entries ?? new Map(),
+    };
+  }
+
+  private async readFrom(
+    database: KeyValueDatabase,
+    namespace: DatasetNamespace
+  ): Promise<BackupDatasetSnapshot> {
+    const catalogRepository = new CatalogRepository(database, namespace);
+    const trackerRepository = new TrackerRepository(database, namespace);
+    const routineRepository = new RoutineRepository(database, namespace);
+    const habitRepository = new HabitRepository(database, namespace);
+    const goalRepository = new GoalRepository(database, namespace);
+    const settingsRepository = new SettingsRepository(database, namespace);
     const [
       catalog,
       settings,
@@ -150,9 +232,9 @@ export class BackupRepository implements BackupRepositoryApi {
       goalRepository.readGoals(),
       goalRepository.readSettings(),
       goalRepository.readWeeks(),
-      this.months(namespace, 'tracker'),
-      this.months(namespace, 'routine-history'),
-      this.months(namespace, 'habit-days'),
+      this.months(database, namespace, 'tracker'),
+      this.months(database, namespace, 'routine-history'),
+      this.months(database, namespace, 'habit-days'),
     ]);
     const transitions = (
       await Promise.all(trackerMonths.map((month) => trackerRepository.readMonth(month)))
@@ -175,6 +257,35 @@ export class BackupRepository implements BackupRepositoryApi {
       goalSettings,
       goalWeeks,
     });
+  }
+
+  async applySynchronizedSnapshot(
+    namespace: DatasetNamespace,
+    snapshot: BackupDatasetSnapshot,
+    expectedEntries: ReadonlyMap<string, string>,
+    compare: ReadonlyMap<string, string | null>,
+    writes: ReadonlyMap<string, string>
+  ): Promise<boolean> {
+    if (!this.database.compareAndApplySnapshot || !this.database.readSnapshot) {
+      await this.write(namespace, snapshot);
+      await this.database.multiWrite([...writes]);
+      return true;
+    }
+    const current = await this.database.readSnapshot();
+    const prefix = `${namespace.key('catalog').slice(0, namespace.key('catalog').lastIndexOf(':') + 1)}`;
+    const expectedPrefix = new Map([...expectedEntries].filter(([key]) => key.startsWith(prefix)));
+    const snapshotEntries = encodeDatasetSnapshot(namespace, snapshot);
+    const currentPrefix = [...current.keys()].filter((key) => key.startsWith(prefix));
+    const deletes = currentPrefix.filter((key) => !snapshotEntries.has(key));
+    const commit: DatabaseSnapshotCommit = {
+      prefix,
+      expectedPrefix,
+      compare,
+      writes: new Map([...snapshotEntries, ...writes]),
+      deletes,
+      source: 'sync',
+    };
+    return this.database.compareAndApplySnapshot(commit);
   }
 
   async write(namespace: DatasetNamespace, snapshot: BackupDatasetSnapshot): Promise<void> {
@@ -230,11 +341,12 @@ export class BackupRepository implements BackupRepositoryApi {
   }
 
   private async months(
+    database: KeyValueDatabase,
     namespace: DatasetNamespace,
     collection: 'tracker' | 'routine-history' | 'habit-days'
   ): Promise<string[]> {
     const prefix = `${namespace.key(collection)}:`;
-    const keys = this.database.keys ? await this.database.keys() : [];
+    const keys = database.keys ? await database.keys() : [];
     const discovered = keys
       .filter((key) => key.startsWith(prefix))
       .map((key) => key.slice(prefix.length))
@@ -283,4 +395,52 @@ function groupStates(states: readonly HabitDayState[]) {
     month: month as `${number}-${number}`,
     states: values,
   }));
+}
+
+function latestTransitions(transitions: readonly Transition[]): Transition[] {
+  const latest = new Map<string, Transition>();
+  for (const transition of sortTransitions(transitions)) {
+    latest.set(transition.activityId ?? 'none', transition);
+  }
+  return [...latest.values()];
+}
+
+function encodeDatasetSnapshot(
+  namespace: DatasetNamespace,
+  input: BackupDatasetSnapshot
+): Map<string, string> {
+  const snapshot = normalizeBackupSnapshot(input);
+  const values = new Map<string, string>();
+  const put = <T>(key: string, schema: { parse(value: unknown): T }, value: unknown) => {
+    values.set(key, JSON.stringify(schema.parse(value)));
+  };
+
+  put(namespace.key('catalog'), catalogCollectionSchema, snapshot.catalog);
+  put(namespace.key('settings'), appSettingsSchema, snapshot.settings);
+  put(namespace.key('habits'), habitCollectionSchema, { habits: snapshot.habits });
+  put(namespace.key('goals'), goalCollectionSchema, { goals: snapshot.goals });
+  put(namespace.key('goal-settings'), goalSettingsSchema, snapshot.goalSettings);
+  if (snapshot.activeRoutine) {
+    put(namespace.key('active-routine'), activeRoutineSchema, snapshot.activeRoutine);
+  }
+  for (const collection of groupTransitions(snapshot.transitions)) {
+    put(namespace.key('tracker', collection.month), trackerMonthCollectionSchema, {
+      ...collection,
+      latestTransitions: latestTransitions(collection.transitions),
+    });
+  }
+  for (const collection of groupRuns(snapshot.routineHistory)) {
+    put(
+      namespace.key('routine-history', collection.month),
+      routineHistoryCollectionSchema,
+      collection
+    );
+  }
+  for (const collection of groupStates(snapshot.habitDayStates)) {
+    put(namespace.key('habit-days', collection.month), habitMonthCollectionSchema, collection);
+  }
+  for (const week of snapshot.goalWeeks) {
+    put(namespace.key('goal-weeks', week.weekStart), goalWeekCollectionSchema, week);
+  }
+  return values;
 }

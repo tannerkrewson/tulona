@@ -196,10 +196,10 @@ function importErrorMessage(actionError: unknown): string {
 }
 
 function formatDropboxTimestamp(value: string | null): string {
-  if (!value) return 'Not backed up yet';
+  if (!value) return 'Not synchronized yet';
   const timestamp = new Date(value);
-  if (Number.isNaN(timestamp.getTime())) return 'Not backed up yet';
-  return `Last backup · ${new Intl.DateTimeFormat(undefined, {
+  if (Number.isNaN(timestamp.getTime())) return 'Not synchronized yet';
+  return `Last synchronized · ${new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(timestamp)}`;
@@ -221,6 +221,8 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => service.subscribeStatus(setStatus), [service]);
 
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
@@ -254,11 +256,11 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
       testID="dropbox-backup-actions"
     >
       <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-        Automatic Dropbox backup
+        Dropbox synchronization
       </Text>
       <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-        Keep one complete, current copy of this dataset in Dropbox. Local data is never changed by a
-        failed upload.
+        Keep this dataset synchronized across Tulona tabs and devices. Local data remains available
+        if Dropbox is offline.
       </Text>
       {!appKeyConfigured ? (
         <Text textStyle={{ color: colors.textMuted, fontSize: 13 }} testID="dropbox-app-key-help">
@@ -270,27 +272,45 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
         <>
           <Switch
             disabled={busy}
-            label="Back up automatically after changes"
+            label="Sync automatically after changes"
             onValueChange={(value) => void run(() => service.setEnabled(value))}
             testID="dropbox-auto-backup-enabled"
             value={status?.enabled ?? false}
           />
           <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-            {formatDropboxTimestamp(status?.lastBackupAt ?? null)}
+            {formatDropboxTimestamp(status?.lastSyncAt ?? status?.lastBackupAt ?? null)}
           </Text>
+          {status?.syncPhase === 'syncing' ? (
+            <Text textStyle={{ color: colors.textMuted, fontSize: 13 }} testID="dropbox-sync-state">
+              Synchronizing changes…
+            </Text>
+          ) : null}
+          {status?.syncPhase === 'offline' ? (
+            <Text textStyle={{ color: colors.textMuted, fontSize: 13 }} testID="dropbox-sync-state">
+              Dropbox is unavailable. Local changes are saved and will sync when you reconnect.
+            </Text>
+          ) : null}
+          {status?.unresolvedConflictCount ? (
+            <Text
+              textStyle={{ color: colors.danger.foreground, fontSize: 13 }}
+              testID="dropbox-sync-conflicts"
+            >
+              {`${status.unresolvedConflictCount} sync conflict${status.unresolvedConflictCount === 1 ? '' : 's'} need review. Both values are retained in synchronization history.`}
+            </Text>
+          ) : null}
           {status?.lastError ? (
             <Text
               textStyle={{ color: colors.danger.foreground, fontSize: 13 }}
               testID="dropbox-last-error"
             >
-              {`Last backup failed: ${status.lastError}`}
+              {`Synchronization needs attention: ${status.lastError}`}
             </Text>
           ) : null}
           <Row spacing={8} style={{ width: '100%' }}>
             <AppButton
               disabled={busy}
-              label="Back up now"
-              onPress={() => void run(() => service.backupNow())}
+              label="Sync now"
+              onPress={() => void run(() => service.syncNow())}
               style={{ height: 48, width: '48%' }}
               testID="dropbox-backup-now"
             />
@@ -303,6 +323,21 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
               variant="outlined"
             />
           </Row>
+          {status?.syncPhase === 'authentication-required' ? (
+            <AppButton
+              disabled={busy}
+              label="Reconnect to Dropbox"
+              onPress={() =>
+                void run(async () => {
+                  const { url } = await service.beginAuthorization();
+                  await Linking.openURL(url);
+                })
+              }
+              style={{ height: 48, width: '100%' }}
+              testID="dropbox-reconnect"
+              variant="outlined"
+            />
+          ) : null}
         </>
       ) : (
         <AppButton

@@ -86,10 +86,15 @@ For a local unsigned archive on macOS, generate the project with
 `npx expo prebuild --platform ios`, run `pod install --project-directory=ios`,
 then use the same `xcodebuild` signing flags from the workflow.
 
-## Dropbox Automatic Backup
+## Dropbox Synchronization
 
-Create a Dropbox app with the `files.content.write` scope and set its app key
-when building or starting Expo:
+Create a Dropbox app with these scopes and set its app key when building or
+starting Expo:
+
+- `files.content.read` to download synchronized and legacy backup files.
+- `files.content.write` to create and update the synchronization document.
+- `files.metadata.read` to read the Dropbox file revision used for conditional
+  updates.
 
 ```bash
 EXPO_PUBLIC_DROPBOX_APP_KEY=your-app-key npm run web
@@ -103,11 +108,38 @@ deployment uses `https://<account>.github.io/tulona/dropbox-auth`. If
 builds use the `tulona://dropbox-auth` scheme.
 
 Open Settings → Data → Backup & restore and connect Dropbox. Tulona uses the
-Dropbox SDK's PKCE flow, so no app secret is shipped to the client. Once
-connected, automatic backups are debounced after local writes and also run at
-startup. The latest complete JSON snapshot replaces
-`/tulona-backup.json` at the root of the Dropbox app folder; remote files are never deleted and failed
-uploads do not change local data.
+Dropbox SDK's PKCE flow, so no app secret is shipped to the client. If this app
+was already connected with the old write-only permission, disconnect and
+reconnect after updating the Dropbox app permissions so Dropbox grants the new
+read scopes.
+
+Tulona stores its persistent Automerge document in `/tulona-sync.am`. It reads
+the current file revision, merges it with local IndexedDB state, validates the
+merged dataset, and updates the file only against that exact revision. Initial
+creation also uses a conditional add; a competing creator triggers a fresh
+download and merge. A bounded retry handles later revision conflicts.
+
+Automatic synchronization runs after startup and debounced local writes, and
+when the app regains visibility or network connectivity. The existing manual
+action now synchronizes immediately. The Automerge history and its projected
+dataset are stored locally so a reload does not rebuild synchronization state
+from a backup snapshot. Changes from another tab are announced with
+`BroadcastChannel`; browser locks reduce duplicate work, while Dropbox revision
+checks and Automerge provide correctness.
+
+`/tulona-backup.json` remains the human-readable backup and restore format. It
+is not repurposed as the CRDT file. After a successful sync, Tulona conditionally
+updates this JSON projection too. When `/tulona-sync.am` does not exist, Tulona
+bootstraps from the legacy JSON and combines independent local and remote
+records before updating the JSON projection. The regular Backup & restore
+export/import actions continue to use JSON.
+
+Concurrent edits to separate records or fields merge automatically. Incompatible
+edits, delete-versus-edit, routine ordering collisions, and tracker transitions
+with duplicate timestamps are retained in Automerge conflict history and
+reported in the Dropbox panel. For tracker timestamp collisions, the local
+projection uses a deterministic winner to satisfy the domain's timestamp
+uniqueness constraint while keeping both transitions in the sync document.
 
 ## Universal UI Convention
 
