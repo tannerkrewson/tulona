@@ -36,6 +36,7 @@ import {
   getRowSurfaceBackground,
   getRowSurfaceStyle,
   IconButton,
+  PageFilterMenu,
   Screen,
 } from '@ui';
 
@@ -46,12 +47,13 @@ import { GoalStartWeekPicker } from './GoalStartWeekPicker';
 const OVERALL_STATUS_OPTIONS: readonly {
   value: GoalOverallStatusFilter;
   label: string;
+  icon: string;
 }[] = [
-  { value: 'in-progress', label: 'Active' },
-  { value: 'future', label: 'Future' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'gave-up', label: 'Gave up' },
-  { value: 'all', label: 'All goals' },
+  { value: 'in-progress', label: 'Active', icon: 'activity' },
+  { value: 'future', label: 'Future', icon: 'calendar-days' },
+  { value: 'completed', label: 'Completed', icon: 'check-circle-2' },
+  { value: 'gave-up', label: 'Gave up', icon: 'archive' },
+  { value: 'all', label: 'All goals', icon: 'award' },
 ];
 
 const STATUS_SWATCHES: Record<GoalStatusColor, { background: string; foreground: string }> = {
@@ -1411,18 +1413,14 @@ export default function GoalsScreen() {
                 {formatWeek(resource.currentWeek)}
               </Text>
             </Column>
-            <View style={{ width: '100%' }}>
-              <AccessiblePicker
-                label="Goal status filter"
-                onValueChange={(value) => setFilter(String(value) as GoalOverallStatusFilter)}
-                selectedValue={filter}
-                testID="goal-status-filter"
-              >
-                {OVERALL_STATUS_OPTIONS.map((option) => (
-                  <Picker.Item key={option.value} label={option.label} value={option.value} />
-                ))}
-              </AccessiblePicker>
-            </View>
+            <PageFilterMenu
+              accessibilityLabel="Choose goal view"
+              defaultValue="in-progress"
+              onChange={setFilter}
+              options={OVERALL_STATUS_OPTIONS}
+              testID="goal-view-menu"
+              value={filter}
+            />
             {visibleGoals.length === 0 ? (
               <EmptyState
                 actionLabel={filter === 'in-progress' ? 'Create your first goal' : undefined}
