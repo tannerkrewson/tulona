@@ -30,10 +30,11 @@ export function GoalStartWeekPicker({
 
   return (
     <Column spacing={8} style={{ width: '100%' }}>
-      <Row alignment="center" spacing={12} style={{ width: '100%' }}>
+      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text
-            textStyle={{ color: colors.text, fontSize: 16, fontWeight: '600' }}
+            numberOfLines={1}
+            textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600', lineHeight: 18 }}
             testID="goal-start-week-range"
           >
             {valueLabel}
@@ -41,14 +42,16 @@ export function GoalStartWeekPicker({
         </View>
         {Platform.OS !== 'web' ? (
           <AppButton
-            label="Change"
             onPress={() => {
               setDraft(value);
               setOpen(true);
             }}
+            style={{ height: 44, paddingHorizontal: 8, width: 84 }}
             testID="goal-start-week-change"
             variant="outlined"
-          />
+          >
+            <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>Change</Text>
+          </AppButton>
         ) : null}
       </Row>
       {Platform.OS === 'android' && open ? (
@@ -88,33 +91,42 @@ export function GoalStartWeekPicker({
                 <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>
                   Starting week
                 </Text>
-                <DateTimePickerComponent
-                  accentColor={colors.primary}
-                  display="spinner"
-                  maximumDate={maximumDate}
-                  mode="date"
-                  onDismiss={() => setOpen(false)}
-                  onValueChange={(_event, date) => {
-                    if (Number.isFinite(date.getTime())) setDraft(date);
-                  }}
-                  testID="goal-start-week-native-picker"
-                  themeVariant={colorScheme}
-                  value={draft}
-                />
+                <View style={{ alignItems: 'center', overflow: 'hidden', width: '100%' }}>
+                  <DateTimePickerComponent
+                    accentColor={colors.primary}
+                    display="spinner"
+                    maximumDate={maximumDate}
+                    mode="date"
+                    onDismiss={() => setOpen(false)}
+                    onValueChange={(_event, date) => {
+                      if (Number.isFinite(date.getTime())) setDraft(date);
+                    }}
+                    style={{ width: '100%' }}
+                    testID="goal-start-week-native-picker"
+                    themeVariant={colorScheme}
+                    value={draft}
+                  />
+                </View>
                 <Row alignment="center" spacing={8} style={{ width: '100%' }}>
                   <AppButton
-                    label="Cancel"
                     onPress={() => setOpen(false)}
-                    style={{ width: '48%' }}
+                    style={{ height: 44, paddingHorizontal: 8, width: '48%' }}
                     testID="goal-start-week-cancel"
                     variant="outlined"
-                  />
+                  >
+                    <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
+                      Cancel
+                    </Text>
+                  </AppButton>
                   <AppButton
-                    label="Select week"
                     onPress={confirm}
-                    style={{ width: '48%' }}
+                    style={{ height: 44, paddingHorizontal: 8, width: '48%' }}
                     testID="goal-start-week-confirm"
-                  />
+                  >
+                    <Text textStyle={{ color: colors.onPrimary, fontSize: 14, fontWeight: '600' }}>
+                      Select week
+                    </Text>
+                  </AppButton>
                 </Row>
               </Column>
             </View>

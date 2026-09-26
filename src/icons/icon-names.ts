@@ -42,6 +42,7 @@ const iconDefinitions = [
   { name: 'leaf', label: 'Nature', keywords: ['outside', 'garden', 'wellbeing'] },
   { name: 'lightbulb', label: 'Idea', keywords: ['creative', 'inspiration', 'thought'] },
   { name: 'list-checks', label: 'Steps', keywords: ['tasks', 'checklist', 'routine'] },
+  { name: 'list-filter', label: 'Filter list', keywords: ['view', 'filter', 'choose'] },
   { name: 'medal', label: 'Milestone', keywords: ['goal', 'achievement', 'reward'] },
   { name: 'message-circle', label: 'Conversation', keywords: ['talk', 'communication', 'social'] },
   { name: 'moon', label: 'Sleep', keywords: ['night', 'rest', 'bedtime'] },

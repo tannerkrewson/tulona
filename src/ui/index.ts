@@ -18,8 +18,10 @@ export { IconButton, type IconButtonProps, type IconButtonVariant } from './Icon
 export { IconPicker, searchIconCatalog, type IconPickerProps } from './IconPicker';
 export {
   PageFilterMenu,
+  PageFilterMenuSelection,
   type PageFilterMenuOption,
   type PageFilterMenuProps,
+  type PageFilterMenuSelectionProps,
   type PageFilterMenuToggle,
 } from './PageFilterMenu';
 export { ReorderControls, type ReorderControlsProps } from './ReorderControls';

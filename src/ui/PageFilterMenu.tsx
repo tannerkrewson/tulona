@@ -1,4 +1,4 @@
-import { Row, Spacer, Text } from '@expo/ui';
+import { Text } from '@expo/ui';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
@@ -22,7 +22,6 @@ export interface PageFilterMenuToggle {
 
 export interface PageFilterMenuProps<T extends string = string> {
   value: T;
-  defaultValue: T;
   options: readonly PageFilterMenuOption<T>[];
   onChange: (value: T) => void;
   accessibilityLabel: string;
@@ -30,13 +29,17 @@ export interface PageFilterMenuProps<T extends string = string> {
   toggles?: readonly PageFilterMenuToggle[];
 }
 
-/**
- * An icon button for switching the page's visible collection. Non-default
- * views keep their name in sight and offer one-tap return to the default.
- */
+export interface PageFilterMenuSelectionProps<T extends string = string> {
+  value: T;
+  defaultValue: T;
+  options: readonly PageFilterMenuOption<T>[];
+  onChange: (value: T) => void;
+  testID?: string;
+}
+
+/** A compact header action for switching what a page's collection shows. */
 export function PageFilterMenu<T extends string = string>({
   value,
-  defaultValue,
   options,
   onChange,
   accessibilityLabel,
@@ -45,12 +48,11 @@ export function PageFilterMenu<T extends string = string>({
 }: PageFilterMenuProps<T>) {
   const { colors } = useAppTheme();
   const [open, setOpen] = useState(false);
-  const currentOption = options.find((option) => option.value === value);
-  const defaultOption = options.find((option) => option.value === defaultValue);
-  const isDefault = value === defaultValue;
 
   return (
-    <View style={{ position: 'relative', width: '100%', zIndex: open ? 30 : 0 }}>
+    <View
+      style={{ alignItems: 'flex-end', position: 'relative', width: 54, zIndex: open ? 30 : 0 }}
+    >
       {open ? (
         <Pressable
           accessibilityLabel="Close view menu"
@@ -67,51 +69,15 @@ export function PageFilterMenu<T extends string = string>({
           testID={`${testID}-backdrop`}
         />
       ) : null}
-      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-        {isDefault || !currentOption ? null : (
-          <View
-            style={{ alignItems: 'center', flexDirection: 'row', flexShrink: 1, gap: 4 }}
-            testID={`${testID}-label`}
-          >
-            <Text
-              numberOfLines={1}
-              textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}
-            >
-              {`Showing ${currentOption.label}`}
-            </Text>
-            <Pressable
-              accessibilityHint="Returns to the default view"
-              accessibilityLabel={`Show ${defaultOption?.label ?? 'default view'}`}
-              accessibilityRole="button"
-              onPress={() => {
-                onChange(defaultValue);
-                setOpen(false);
-              }}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                borderRadius: 14,
-                height: 28,
-                justifyContent: 'center',
-                opacity: pressed ? 0.65 : 1,
-                width: 28,
-              })}
-              testID={`${testID}-clear`}
-            >
-              <AppIcon color={colors.textMuted} name="x" size={16} strokeWidth={2.5} />
-            </Pressable>
-          </View>
-        )}
-        <Spacer flexible />
-        <IconButton
-          accessibilityHint="Opens choices for what this page shows"
-          expanded={open}
-          icon="settings"
-          label={accessibilityLabel}
-          onPress={() => setOpen((isOpen) => !isOpen)}
-          testID={`${testID}-button`}
-          variant="muted"
-        />
-      </Row>
+      <IconButton
+        accessibilityHint="Opens choices for what this page shows"
+        expanded={open}
+        icon="list-filter"
+        label={accessibilityLabel}
+        onPress={() => setOpen((isOpen) => !isOpen)}
+        testID={`${testID}-button`}
+        variant="muted"
+      />
       {open ? (
         <View
           style={{
@@ -228,6 +194,56 @@ export function PageFilterMenu<T extends string = string>({
           </View>
         </View>
       ) : null}
+    </View>
+  );
+}
+
+/** Shows the selected view and a one-tap return to the default in page content. */
+export function PageFilterMenuSelection<T extends string = string>({
+  value,
+  defaultValue,
+  options,
+  onChange,
+  testID = 'page-filter-menu',
+}: PageFilterMenuSelectionProps<T>) {
+  const { colors } = useAppTheme();
+  const currentOption = options.find((option) => option.value === value);
+  const defaultOption = options.find((option) => option.value === defaultValue);
+  if (value === defaultValue || !currentOption) return null;
+
+  return (
+    <View
+      style={{
+        alignSelf: 'flex-start',
+        alignItems: 'center',
+        flexDirection: 'row',
+        gap: 4,
+        maxWidth: '100%',
+      }}
+      testID={`${testID}-label`}
+    >
+      <View style={{ flexShrink: 1, minWidth: 0 }}>
+        <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
+          {`Showing ${currentOption.label}`}
+        </Text>
+      </View>
+      <Pressable
+        accessibilityHint="Returns to the default view"
+        accessibilityLabel={`Show ${defaultOption?.label ?? 'default view'}`}
+        accessibilityRole="button"
+        onPress={() => onChange(defaultValue)}
+        style={({ pressed }) => ({
+          alignItems: 'center',
+          borderRadius: 14,
+          height: 28,
+          justifyContent: 'center',
+          opacity: pressed ? 0.65 : 1,
+          width: 28,
+        })}
+        testID={`${testID}-clear`}
+      >
+        <AppIcon color={colors.textMuted} name="x" size={16} strokeWidth={2.5} />
+      </Pressable>
     </View>
   );
 }
