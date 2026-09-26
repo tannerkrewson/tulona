@@ -107,10 +107,7 @@ export interface RoutineDurationComparison {
 export interface RoutineServiceApi {
   getActive(): Promise<ActiveRoutine | null>;
   startRoutine(routineId: UUID, options?: StartRoutineOptions): Promise<ActiveRoutine>;
-  switchToActivity(
-    activityId: UUID | null,
-    at?: RoutineTimestampInput
-  ): Promise<TimeTransition>;
+  switchToActivity(activityId: UUID | null, at?: RoutineTimestampInput): Promise<TimeTransition>;
   pause(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   resume(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   addTime(addedTimeMs: number, at?: RoutineTimestampInput): Promise<ActiveRoutine>;
@@ -188,10 +185,7 @@ export class RoutineService implements RoutineServiceApi {
       // The completion screen may already have stored the user's next activity.
       // Finalize the finished run without rewriting that transition; the new
       // routine will begin at its own start timestamp below.
-      await this.routineRepository.finalize(
-        existing,
-        routineRunHistory(existing, 'completed')
-      );
+      await this.routineRepository.finalize(existing, routineRunHistory(existing, 'completed'));
       existing = await this.routineRepository.readActive();
     } else if (existing?.status === 'cancelled' || existing?.status === 'abandoned') {
       await this.recover(startedAt);
@@ -633,17 +627,33 @@ export class RoutineService implements RoutineServiceApi {
       const result = catchUpRoutine(active, at);
       if (JSON.stringify(result.activeRoutine) !== JSON.stringify(active))
         await this.routineRepository.writeActive(result.activeRoutine);
-      await this.synchronizeStepTracking(active, result.activeRoutine);
+
+      let trackerMovedPastCompletion = false;
       if (result.activeRoutine.status === 'awaiting-next-activity') {
         const completedAt = result.activeRoutine.completedAt;
         if (!completedAt) throw new Error('Completed routine has no completion timestamp');
-        const nextActivity = await this.transitionAt(completedAt);
-        if (
-          nextActivity &&
-          nextActivity.activityId !== null &&
-          (!routineOwnsActivity(result.activeRoutine, nextActivity.activityId) ||
-            nextActivity.note === NEXT_ACTIVITY_NOTE)
-        ) {
+        const completionTransition = await this.transitionAt(completedAt);
+        const latestTransition = await this.trackerService.getActiveTransition(at);
+        const completionActivityWasSelected =
+          completionTransition !== null &&
+          completionTransition.activityId !== null &&
+          (!routineOwnsActivity(result.activeRoutine, completionTransition.activityId) ||
+            completionTransition.note === NEXT_ACTIVITY_NOTE);
+        if (completionActivityWasSelected) {
+          const run = routineRunHistory(result.activeRoutine, 'completed');
+          await this.routineRepository.finalize(result.activeRoutine, run);
+          return null;
+        }
+
+        trackerMovedPastCompletion =
+          latestTransition !== null &&
+          timestampMs(latestTransition.timestamp) > timestampMs(completedAt);
+      }
+
+      // Step synchronization writes at or before completion, preserving a later tracker event.
+      await this.synchronizeStepTracking(active, result.activeRoutine);
+      if (result.activeRoutine.status === 'awaiting-next-activity') {
+        if (trackerMovedPastCompletion) {
           const run = routineRunHistory(result.activeRoutine, 'completed');
           await this.routineRepository.finalize(result.activeRoutine, run);
           return null;
