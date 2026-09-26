@@ -1,6 +1,6 @@
 import { Column, Row, Text } from '@expo/ui';
 import DateTimePickerComponent from '@expo/ui/community/datetime-picker';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { useAppTheme } from '@theme';
@@ -23,10 +23,6 @@ export function GoalStartWeekPicker({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
 
-  useEffect(() => {
-    if (open) setDraft(value);
-  }, [open, value]);
-
   const confirm = () => {
     onValueChange(draft);
     setOpen(false);
@@ -46,7 +42,10 @@ export function GoalStartWeekPicker({
         {Platform.OS !== 'web' ? (
           <AppButton
             label="Change"
-            onPress={() => setOpen(true)}
+            onPress={() => {
+              setDraft(value);
+              setOpen(true);
+            }}
             testID="goal-start-week-change"
             variant="outlined"
           />
