@@ -1,10 +1,11 @@
 import { Column, Picker, Row, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import type {
+  ActiveRoutine,
   Activity,
   CatalogCollection,
   Folder,
@@ -37,6 +38,7 @@ import {
   type CreateRoutineStepInput,
 } from '../catalog/catalog-service';
 import { loadRoutineRuntime } from './routine-runtime';
+import { RoutineStartConflictModal } from './RoutineStartConflictModal';
 
 const ROOT_VALUE = '__root__';
 const NEW_ID = 'new';
@@ -594,6 +596,12 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
   const [resource, setResource] = useState<EditorResource | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
+  const [routineConflict, setRoutineConflict] = useState<{
+    active: ActiveRoutine;
+    target: RoutineDefinition;
+  } | null>(null);
+  const [conflictBusy, setConflictBusy] = useState(false);
+  const [conflictError, setConflictError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -639,23 +647,87 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
   }
   const runRoutine = async (routineId: UUID) => {
     const runtime = await loadRoutineRuntime();
-    await runtime.routineService.startRoutine(routineId);
-    router.push(`/routine/${routineId}`);
+    const active = await runtime.routineService.getActive();
+    if (
+      active &&
+      active.routineId !== routineId &&
+      (active.status === 'running' || active.status === 'paused')
+    ) {
+      if (active.status === 'running') await runtime.routineService.switchToActivity(null);
+      const [pausedActive, target] = await Promise.all([
+        runtime.routineService.getActive(),
+        runtime.catalogService.getRoutine(routineId),
+      ]);
+      if (!pausedActive) throw new Error('The active routine could not be paused');
+      setConflictError(null);
+      setRoutineConflict({ active: pausedActive, target });
+      return;
+    }
+    if (runtime.settings.alarmSettings.enabled && runtime.settings.alarmSettings.sound) {
+      try {
+        await runtime.routineAlarmService.prepare();
+      } catch {
+        // Alarm playback is best-effort; the routine can still start.
+      }
+    }
+    const started = await runtime.routineService.startRoutine(routineId);
+    router.push(`/routine/${started.routineId}`);
   };
-  const refresh = () => {
-    setResource(null);
-    setVersion((current) => current + 1);
+  const resolveRoutineConflict = async (choice: 'resume' | 'cancel-and-start') => {
+    const conflict = routineConflict;
+    if (!conflict || conflictBusy) return;
+    setConflictBusy(true);
+    setConflictError(null);
+    try {
+      const runtime = await loadRoutineRuntime();
+      if (choice === 'resume') {
+        if (runtime.settings.alarmSettings.enabled && runtime.settings.alarmSettings.sound) {
+          await runtime.routineAlarmService.prepare().catch(() => undefined);
+        }
+        const resumed = await runtime.routineService.resume();
+        setRoutineConflict(null);
+        router.push(`/routine/${resumed.routineId}`);
+        return;
+      }
+
+      await runtime.routineService.cancelAndFinalize();
+      if (runtime.settings.alarmSettings.enabled && runtime.settings.alarmSettings.sound) {
+        await runtime.routineAlarmService.prepare().catch(() => undefined);
+      }
+      const started = await runtime.routineService.startRoutine(conflict.target.id);
+      setRoutineConflict(null);
+      router.push(`/routine/${started.routineId}`);
+    } catch (error) {
+      setConflictError(errorText(error));
+    } finally {
+      setConflictBusy(false);
+    }
   };
   return (
-    <RoutineEditorForm
-      key={`${id}-${version}`}
-      initialFolderId={initialFolderId}
-      onBack={() => router.back()}
-      resource={resource}
-      onChanged={refresh}
-      onSaved={() => router.replace('/(tabs)')}
-      onRun={runRoutine}
-    />
+    <Fragment>
+      <RoutineEditorForm
+        key={`${id}-${version}`}
+        initialFolderId={initialFolderId}
+        onBack={() => router.back()}
+        resource={resource}
+        onSaved={() => router.replace('/(tabs)')}
+        onRun={runRoutine}
+      />
+      <RoutineStartConflictModal
+        activeRoutine={routineConflict?.active ?? null}
+        targetRoutine={routineConflict?.target ?? null}
+        visible={routineConflict !== null}
+        busy={conflictBusy}
+        error={conflictError}
+        onResume={() => void resolveRoutineConflict('resume')}
+        onCancelAndStart={() => void resolveRoutineConflict('cancel-and-start')}
+        onKeepPaused={() => {
+          if (conflictBusy) return;
+          setConflictError(null);
+          setRoutineConflict(null);
+        }}
+      />
+    </Fragment>
   );
 }
 
@@ -663,19 +735,18 @@ function RoutineEditorForm({
   resource,
   initialFolderId,
   onBack,
-  onChanged,
   onSaved,
   onRun,
 }: {
   resource: EditorResource;
   initialFolderId: UUID | null;
   onBack: () => void;
-  onChanged: () => void;
   onSaved: () => void;
   onRun: (routineId: UUID) => Promise<void>;
 }) {
   const { colors } = useAppTheme();
-  const { service, catalog, routine } = resource;
+  const [currentResource, setCurrentResource] = useState(resource);
+  const { service, catalog, routine } = currentResource;
   const [name, setName] = useState(routine?.name ?? '');
   const [color, setColor] = useState(routine?.color ?? '');
   const [iconName, setIconName] = useState(routine?.iconName ?? '');
@@ -703,7 +774,13 @@ function RoutineEditorForm({
     setError(null);
     try {
       await action();
-      onChanged();
+      if (currentResource.routine) {
+        const [nextCatalog, nextRoutine] = await Promise.all([
+          service.read(),
+          service.getRoutine(currentResource.routine.id),
+        ]);
+        setCurrentResource({ service, catalog: nextCatalog, routine: nextRoutine });
+      }
     } catch (actionError) {
       setError(errorText(actionError));
     } finally {

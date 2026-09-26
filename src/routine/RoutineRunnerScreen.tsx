@@ -1,4 +1,4 @@
-import { Column, Row, Text } from '@expo/ui';
+import { Column, Row, ScrollView, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Circle, Svg } from 'react-native-svg';
@@ -589,7 +589,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           {isPaused ? (
             <View style={styles.pausedOverlay} testID="routine-paused-state">
               <Text textStyle={{ color: RUNNER.muted, fontSize: 14, fontWeight: '700' }}>
-                Paused
+                Paused for
               </Text>
               <Text
                 textStyle={{
@@ -602,6 +602,20 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
               >
                 {formatCountdownMs(pausedElapsedMs)}
               </Text>
+              <View style={styles.pausedRemaining} testID="routine-paused-remaining">
+                <Text textStyle={{ color: RUNNER.muted, fontSize: 12, fontWeight: '700' }}>
+                  Step time remaining
+                </Text>
+                <Text
+                  textStyle={{
+                    color: RUNNER.muted,
+                    fontSize: 17,
+                    fontWeight: '700',
+                  }}
+                >
+                  {displayCountdown}
+                </Text>
+              </View>
               <Pressable
                 accessibilityLabel="Resume routine"
                 accessibilityRole="button"
@@ -737,6 +751,12 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
         onSkip={() =>
           void runAction(
             (nextRuntime) => nextRuntime.routineService.skip(),
+            () => setSkipOpen(false)
+          )
+        }
+        onSkipAndDisableFuture={() =>
+          void runAction(
+            (nextRuntime) => nextRuntime.routineService.skipAndDisableStep(currentStep.id),
             () => setSkipOpen(false)
           )
         }
@@ -882,7 +902,7 @@ function RunnerModal({
 }) {
   const insets = useSafeAreaInsets();
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
       <View style={styles.modalRoot}>
         <Pressable accessibilityLabel="Close modal" onPress={onClose} style={styles.modalScrim} />
         <View
@@ -903,7 +923,11 @@ function RunnerModal({
               <Text textStyle={{ color: palette.muted, fontSize: 24 }}>×</Text>
             </Pressable>
           </Row>
-          {children}
+          <ScrollView style={styles.modalContent}>
+            <Column spacing={14} style={{ width: '100%' }}>
+              {children}
+            </Column>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -919,7 +943,7 @@ function ModalAction({
   testID,
 }: {
   disabled?: boolean;
-  icon: 'arrow-left' | 'check' | 'chevron-down' | 'skip-forward' | 'trash-2';
+  icon: 'arrow-left' | 'check' | 'chevron-down' | 'skip-forward' | 'trash-2' | 'x';
   label: string;
   onPress: () => void;
   palette: RunnerPalette;
@@ -1037,6 +1061,7 @@ function SkipModal({
   onClose,
   onMoveToEnd,
   onSkip,
+  onSkipAndDisableFuture,
   palette,
   visible,
 }: {
@@ -1044,6 +1069,7 @@ function SkipModal({
   onClose: () => void;
   onMoveToEnd: () => void;
   onSkip: () => void;
+  onSkipAndDisableFuture: () => void;
   palette: RunnerPalette;
   visible: boolean;
 }) {
@@ -1064,6 +1090,14 @@ function SkipModal({
         onPress={onSkip}
         palette={palette}
         testID="routine-skip-step"
+      />
+      <ModalAction
+        disabled={busy}
+        icon="x"
+        label="Skip and disable future"
+        onPress={onSkipAndDisableFuture}
+        palette={palette}
+        testID="routine-skip-disable-future"
       />
     </RunnerModal>
   );
@@ -1297,6 +1331,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     width: '100%',
   },
+  modalContent: {
+    maxHeight: '75%',
+    width: '100%',
+  },
   compactOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1304,12 +1342,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   modalRoot: {
+    alignItems: 'center',
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
   },
   modalScrim: {
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.72)',
+    backgroundColor: 'rgba(0,0,0,0.46)',
     left: 0,
     position: 'absolute',
     right: 0,
@@ -1318,10 +1358,11 @@ const styles = StyleSheet.create({
   modalSheet: {
     backgroundColor: '#0D0D0D',
     borderColor: RUNNER_DARK.border,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderRadius: 22,
     borderWidth: 1,
     gap: 14,
+    maxHeight: '85%',
+    maxWidth: 560,
     paddingHorizontal: 20,
     paddingTop: 18,
     width: '100%',
@@ -1410,6 +1451,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     top: 0,
+  },
+  pausedRemaining: {
+    alignItems: 'center',
+    gap: 2,
+    marginBottom: 2,
   },
   resumeButton: {
     alignItems: 'center',

@@ -123,9 +123,25 @@ function ActiveActivityBarContent({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [activeRoutine, setActiveRoutine] = useState<ActiveRoutine | null>(null);
   const isActive = activeTransition !== null && activeTransition.activityId !== null;
   const activeTransitionId = isActive ? activeTransition.id : null;
   const activeTransitionTimestamp = isActive ? activeTransition.timestamp : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    void runtime.routineService
+      .getActive()
+      .then((nextRoutine) => {
+        if (!cancelled) setActiveRoutine(nextRoutine);
+      })
+      .catch(() => {
+        if (!cancelled) setActiveRoutine(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTransitionId, runtime]);
 
   useEffect(() => {
     if (!isActive || activeTransitionTimestamp === null) return undefined;
@@ -173,13 +189,11 @@ function ActiveActivityBarContent({
       const activeRoutine = await runtime.routineService.getActive();
       if (activeRoutine?.status === 'running') {
         await runtime.routineService.pause();
-      }
-      const current = await runtime.trackerService.getActiveTransition();
-      if (current && current.activityId !== null) {
-        await store.getState().switchActivity(null);
       } else {
-        await store.getState().refresh();
+        await runtime.routineService.switchToActivity(null);
       }
+      await store.getState().refresh();
+      setActiveRoutine(await runtime.routineService.getActive());
     } catch (pauseError) {
       setActionError(errorText(pauseError));
     } finally {
@@ -195,14 +209,19 @@ function ActiveActivityBarContent({
     try {
       const activeRoutine = await runtime.routineService.getActive();
       if (activeRoutine?.status === 'paused' && routineOwnsActivity(activeRoutine, activityId)) {
-        await runtime.routineService.resume();
-        await store.getState().switchActivity(activityId, { source: 'routine' });
+        const resumed = await runtime.routineService.resume();
+        setActiveRoutine(resumed);
+        await store.getState().refresh();
         router.push(`/routine/${activeRoutine.routineId}` as Href);
-      } else if (resolved?.item.kind === 'routine' && activeRoutine === null) {
-        await runtime.routineService.startRoutine(resolved.item.id);
-        router.push(`/routine/${resolved.item.id}` as Href);
+      } else if (resolved?.item.kind === 'routine') {
+        const started = await runtime.routineService.startRoutine(resolved.item.id);
+        setActiveRoutine(started);
+        await store.getState().refresh();
+        router.push(`/routine/${started.routineId}` as Href);
       } else {
-        await store.getState().switchActivity(activityId);
+        await runtime.routineService.switchToActivity(activityId);
+        setActiveRoutine(await runtime.routineService.getActive());
+        await store.getState().refresh();
       }
     } catch (playError) {
       setActionError(errorText(playError));
@@ -210,6 +229,26 @@ function ActiveActivityBarContent({
       setBusy(false);
     }
   };
+
+  const resumePausedRoutine = async () => {
+    if (busy || activeRoutine?.status !== 'paused') return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const resumed = await runtime.routineService.resume();
+      setActiveRoutine(resumed);
+      await store.getState().refresh();
+      router.push(`/routine/${resumed.routineId}` as Href);
+    } catch (resumeError) {
+      setActionError(errorText(resumeError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const showResumeRoutine =
+    activeRoutine?.status === 'paused' &&
+    (isActive || !routineOwnsActivity(activeRoutine, activeActivityId));
 
   return (
     <View
@@ -296,6 +335,29 @@ function ActiveActivityBarContent({
             />
           </View>
         </Pressable>
+        {showResumeRoutine ? (
+          <Pressable
+            accessibilityHint="Switches back to the paused routine at its current step"
+            accessibilityLabel={`Resume ${activeRoutine.routineSnapshot.name}`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: busy }}
+            disabled={busy}
+            onPress={() => void resumePausedRoutine()}
+            style={({ pressed }) => [
+              styles.resumeRoutine,
+              {
+                borderLeftColor: isWeb ? webBorder : colors.border,
+                opacity: busy ? 0.45 : pressed ? 0.72 : 1,
+              },
+            ]}
+            testID="active-activity-resume-routine"
+          >
+            <AppIcon color={colors.primary} name="play" size={16} />
+            <Text textStyle={{ color: colors.primary, fontSize: 12, fontWeight: '800' }}>
+              Resume
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -341,5 +403,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: 68,
+  },
+  resumeRoutine: {
+    alignItems: 'center',
+    borderLeftWidth: 1,
+    flexDirection: 'row',
+    gap: 4,
+    justifyContent: 'center',
+    paddingHorizontal: 9,
   },
 });
