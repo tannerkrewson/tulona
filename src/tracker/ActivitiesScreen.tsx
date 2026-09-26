@@ -3,7 +3,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
-import type { Activity, CatalogCollection, Folder, RoutineDefinition } from '@domain';
+import type {
+  ActiveRoutine,
+  Activity,
+  CatalogCollection,
+  Folder,
+  RoutineDefinition,
+} from '@domain';
 import { useAppTheme } from '@theme';
 import {
   errorText,
@@ -16,6 +22,7 @@ import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
+import { RoutineStartConflictModal } from '../routine/RoutineStartConflictModal';
 import { ACTIVE_ACTIVITY_BAR_HEIGHT } from './ActiveActivityBar';
 import { ActivityRow } from './ActivityRow';
 import { CatalogHeader } from './CatalogHeader';
@@ -175,6 +182,10 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
   const [catalogView, setCatalogView] = useState<TrackerCatalogView>('all');
   const [showArchived, setShowArchived] = useState(settings.showArchived);
   const [archiveSettingBusy, setArchiveSettingBusy] = useState(false);
+  const [routineConflict, setRoutineConflict] = useState<{
+    active: ActiveRoutine;
+    target: RoutineDefinition;
+  } | null>(null);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
 
   useFocusEffect(
@@ -250,32 +261,67 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
   const activate = (item: Activity | RoutineDefinition) => {
     void runAction(async () => {
       if (activeTransition?.activityId === item.id) {
-        const activeRoutine = await runtime.routineService.getActive();
-        if (activeRoutine?.status === 'running') {
-          await runtime.routineService.pause();
-          if (await runtime.trackerService.getActiveTransition()) {
-            await runtime.trackerService.switchActivity(null);
-          }
-        } else await store.getState().switchActivity(null);
+        await runtime.routineService.switchToActivity(null);
         await store.getState().refresh();
         return;
       }
 
       if (item.kind === 'routine') {
-        if (runtime.settings.alarmSettings.enabled && runtime.settings.alarmSettings.sound) {
-          try {
-            await runtime.routineAlarmService.prepare();
-          } catch {
-            // Alarm playback remains best-effort; the routine can still start.
+        const activeRoutine = await runtime.routineService.getActive();
+        if (
+          activeRoutine &&
+          activeRoutine.routineId !== item.id &&
+          (activeRoutine.status === 'running' || activeRoutine.status === 'paused')
+        ) {
+          let resolvedActive = activeRoutine;
+          if (activeRoutine.status === 'running') {
+            await runtime.routineService.switchToActivity(null);
+            resolvedActive = (await runtime.routineService.getActive()) ?? activeRoutine;
           }
+          setRoutineConflict({ active: resolvedActive, target: item });
+          return;
         }
+
+        await prepareRoutineAlarm();
         const started = await runtime.routineService.startRoutine(item.id);
         await store.getState().refresh();
         router.push(`/routine/${started.routineId}`);
         return;
       }
 
-      await store.getState().switchActivity(item.id);
+      await runtime.routineService.switchToActivity(item.id);
+      await store.getState().refresh();
+    });
+  };
+
+  const prepareRoutineAlarm = async () => {
+    if (!runtime.settings.alarmSettings.enabled || !runtime.settings.alarmSettings.sound) return;
+    try {
+      await runtime.routineAlarmService.prepare();
+    } catch {
+      // Alarm playback remains best-effort; the routine can still start.
+    }
+  };
+
+  const resolveRoutineConflict = (choice: 'resume' | 'cancel-and-start') => {
+    const conflict = routineConflict;
+    if (!conflict) return;
+    void runAction(async () => {
+      if (choice === 'resume') {
+        await prepareRoutineAlarm();
+        await runtime.routineService.resume();
+        setRoutineConflict(null);
+        await store.getState().refresh();
+        router.push(`/routine/${conflict.active.routineId}`);
+        return;
+      }
+
+      await runtime.routineService.cancelAndFinalize();
+      setRoutineConflict(null);
+      await prepareRoutineAlarm();
+      const started = await runtime.routineService.startRoutine(conflict.target.id);
+      await store.getState().refresh();
+      router.push(`/routine/${started.routineId}`);
     });
   };
 
@@ -398,6 +444,15 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
           <View style={{ height: ACTIVE_ACTIVITY_BAR_HEIGHT + 20, width: '100%' }} />
         </Column>
       </Column>
+      <RoutineStartConflictModal
+        activeRoutine={routineConflict?.active ?? null}
+        targetRoutine={routineConflict?.target ?? null}
+        visible={routineConflict !== null}
+        busy={busy}
+        onResume={() => resolveRoutineConflict('resume')}
+        onCancelAndStart={() => resolveRoutineConflict('cancel-and-start')}
+        onKeepPaused={() => setRoutineConflict(null)}
+      />
     </Screen>
   );
 }
