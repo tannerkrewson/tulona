@@ -25,6 +25,7 @@ export interface HabitTriggerEvaluation {
   complete: boolean;
   totalMs: number;
   minimumSeconds: number;
+  comparison: 'at-least' | 'at-most';
   range: TrackerRange;
   targetIds: string[];
 }
@@ -45,13 +46,29 @@ function minimumSeconds(trigger: HabitTrigger): number {
 
 export function normalizeHabitTrigger(trigger: HabitTrigger): HabitTrigger {
   const seconds = minimumSeconds(trigger);
+  const comparison = trigger.comparison ?? 'at-least';
   switch (trigger.kind) {
     case 'tracked-time':
-      return { kind: trigger.kind, activityId: trigger.activityId, minimumSeconds: seconds };
+      return {
+        kind: trigger.kind,
+        activityId: trigger.activityId,
+        minimumSeconds: seconds,
+        comparison,
+      };
     case 'folder-time':
-      return { kind: trigger.kind, folderId: trigger.folderId, minimumSeconds: seconds };
+      return {
+        kind: trigger.kind,
+        folderId: trigger.folderId,
+        minimumSeconds: seconds,
+        comparison,
+      };
     case 'routine-completion':
-      return { kind: trigger.kind, routineId: trigger.routineId, minimumSeconds: seconds };
+      return {
+        kind: trigger.kind,
+        routineId: trigger.routineId,
+        minimumSeconds: seconds,
+        comparison,
+      };
   }
 }
 
@@ -92,12 +109,14 @@ export function evaluateHabitTrigger(
   catalog: CatalogCollection | null = null
 ): Omit<HabitTriggerEvaluation, 'range'> {
   const seconds = minimumSeconds(trigger);
+  const comparison = trigger.comparison ?? 'at-least';
   const ids = targetIds(trigger, catalog);
   const totalMs = trackedMilliseconds(intervals, ids);
   return {
-    complete: totalMs >= seconds * 1000,
+    complete: comparison === 'at-most' ? totalMs <= seconds * 1000 : totalMs >= seconds * 1000,
     totalMs,
     minimumSeconds: seconds,
+    comparison,
     targetIds: ids,
   };
 }
@@ -128,6 +147,7 @@ export class HabitTriggerEvaluator {
         complete: false,
         totalMs: 0,
         minimumSeconds: 1,
+        comparison: 'at-least',
         range: { startMs: bounds.startMs, endMs: bounds.endMs },
         targetIds: [],
       };
@@ -136,8 +156,13 @@ export class HabitTriggerEvaluator {
     const range = { startMs: bounds.startMs, endMs: bounds.endMs };
     const result: TrackerQuery = await this.tracker.query(range, nowMs);
     const catalog = this.catalog ? await this.catalog.read() : null;
+    const evaluation = evaluateHabitTrigger(habit.trigger, result.intervals, catalog);
     return {
-      ...evaluateHabitTrigger(habit.trigger, result.intervals, catalog),
+      ...evaluation,
+      // A lower-is-better duration can only be judged once the logical day is
+      // over; otherwise an unfinished day would look complete at zero time.
+      complete:
+        evaluation.comparison === 'at-most' && nowMs < bounds.endMs ? false : evaluation.complete,
       range,
     };
   }

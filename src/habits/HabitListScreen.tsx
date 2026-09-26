@@ -30,6 +30,7 @@ import {
   ROW_SURFACE_ICON_SIZE,
   ROW_SURFACE_PADDING_HORIZONTAL,
   ROW_SURFACE_RADIUS,
+  PageFilterMenu,
   Screen,
 } from '@ui';
 
@@ -39,7 +40,6 @@ import { findLatestIncompleteHabitDay } from './habit-review';
 import {
   DEFAULT_HABIT_CATEGORY,
   groupHabitsByCategory,
-  HABIT_CATEGORY_OPTIONS,
   habitStartDay,
   type HabitCategory,
 } from './categories';
@@ -233,9 +233,16 @@ function HabitListContent({ store }: { store: HabitStore }) {
               runAction(action ?? (() => store.getState().refresh()));
             }}
           />
-          <HabitCategorySwitcher
-            counts={habitsByCategory}
+          <PageFilterMenu
+            accessibilityLabel="Choose habit view"
+            defaultValue={DEFAULT_HABIT_CATEGORY}
             onChange={setSelectedCategory}
+            options={[
+              { value: 'active', label: 'Active habits', icon: 'heart' },
+              { value: 'future', label: 'Future habits', icon: 'calendar-days' },
+              { value: 'archived', label: 'Archived habits', icon: 'archive' },
+            ]}
+            testID="habit-view-menu"
             value={selectedCategory}
           />
           {selectedCategory === 'active' ? (
@@ -320,57 +327,6 @@ function HabitListContent({ store }: { store: HabitStore }) {
         visible={pastMidnightWarningVisible}
       />
     </>
-  );
-}
-
-function HabitCategorySwitcher({
-  counts,
-  onChange,
-  value,
-}: {
-  counts: Readonly<Record<HabitCategory, readonly Habit[]>>;
-  onChange: (category: HabitCategory) => void;
-  value: HabitCategory;
-}) {
-  const { colors } = useAppTheme();
-
-  return (
-    <View
-      accessibilityLabel="Habit categories"
-      style={[styles.categorySwitcher, { backgroundColor: colors.surfaceMuted }]}
-      testID="habit-category-switcher"
-    >
-      {HABIT_CATEGORY_OPTIONS.map((option) => {
-        const selected = option.value === value;
-        const count = counts[option.value].length;
-        return (
-          <Pressable
-            accessibilityLabel={`${option.label} habits, ${count}`}
-            accessibilityRole="tab"
-            accessibilityState={{ selected }}
-            key={option.value}
-            onPress={() => onChange(option.value)}
-            style={({ pressed }) => [
-              styles.categoryOption,
-              { backgroundColor: selected ? colors.primary : 'transparent' },
-              pressed ? styles.categoryPressed : null,
-            ]}
-            testID={`habit-category-${option.value}`}
-          >
-            <NativeText
-              selectable={false}
-              style={{
-                color: selected ? colors.onPrimary : colors.textMuted,
-                fontSize: 13,
-                fontWeight: '700',
-              }}
-            >
-              {`${option.label} (${count})`}
-            </NativeText>
-          </Pressable>
-        );
-      })}
-    </View>
   );
 }
 
@@ -533,23 +489,8 @@ const styles = StyleSheet.create({
     marginRight: ROW_SURFACE_CONTENT_GAP,
     minWidth: 0,
   },
-  categoryOption: {
-    alignItems: 'center',
-    borderRadius: 9,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: 8,
-  },
   categoryPressed: {
     opacity: 0.72,
-  },
-  categorySwitcher: {
-    borderRadius: 12,
-    flexDirection: 'row',
-    gap: 4,
-    padding: 4,
-    width: '100%',
   },
 });
 

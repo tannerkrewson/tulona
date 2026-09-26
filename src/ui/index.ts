@@ -16,6 +16,12 @@ export { DurationPicker, type DurationPickerProps, type DurationValue } from './
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { IconButton, type IconButtonProps, type IconButtonVariant } from './IconButton';
 export { IconPicker, searchIconCatalog, type IconPickerProps } from './IconPicker';
+export {
+  PageFilterMenu,
+  type PageFilterMenuOption,
+  type PageFilterMenuProps,
+  type PageFilterMenuToggle,
+} from './PageFilterMenu';
 export { ReorderControls, type ReorderControlsProps } from './ReorderControls';
 export {
   getRowSurfaceBackground,

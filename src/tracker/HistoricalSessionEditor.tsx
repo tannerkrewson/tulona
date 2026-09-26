@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { timestampMs, type TimeTransition } from '@domain';
 import { useAppTheme } from '@theme';
+import { AppButton } from '@ui';
 
 import { SessionDateTimePicker, type SessionDateTimePickerTarget } from './SessionDateTimePicker';
 import { formatSessionDate, formatSessionTime } from './session-time';
@@ -12,29 +13,35 @@ export interface HistoricalSessionEditorProps {
   transition: TimeTransition;
   previous: TimeTransition | null;
   following: TimeTransition | null;
+  activityLabel: string;
+  previousLabel: string | null;
+  followingLabel: string | null;
   isActive: boolean;
   nowMs: number;
   busy: boolean;
   onSaveStart: (timestamp: number) => Promise<void>;
   onSaveEnd: (timestamp: number) => Promise<void>;
+  onResetStart?: () => Promise<void>;
 }
 
 /**
- * Historical sessions are derived from transition boundaries. Editing a
- * session's end therefore edits the following boundary, keeping the existing
- * tracker service as the single overlap validator and mutation path. An
- * active session has no end transition: its To value remains Now until the
- * user explicitly chooses a concrete end.
+ * Sessions are projections between shared tracker transitions. Each picker
+ * edits one transition, moving this session and its neighbor together. An
+ * active session has no end transition until the user chooses a concrete end.
  */
 export function HistoricalSessionEditor({
   transition,
   previous,
   following,
+  activityLabel,
+  previousLabel,
+  followingLabel,
   isActive,
   nowMs,
   busy,
   onSaveStart,
   onSaveEnd,
+  onResetStart,
 }: HistoricalSessionEditorProps) {
   const { colors } = useAppTheme();
   const [pickerTarget, setPickerTarget] = useState<SessionDateTimePickerTarget | null>(null);
@@ -86,18 +93,31 @@ export function HistoricalSessionEditor({
     void (target === 'start' ? onSaveStart(nextTimestamp) : onSaveEnd(nextTimestamp));
   };
 
-  const fromAccessibilityLabel = `From, ${formatSessionDate(startMs)}, ${formatSessionTime(startMs)}`;
-  const toAccessibilityLabel = following
-    ? `To, ${formatSessionDate(timestampMs(following.timestamp))}, ${formatSessionTime(timestampMs(following.timestamp))}`
+  const startLabel = previous ? `Switch to ${activityLabel}` : `Start ${activityLabel}`;
+  const endLabel = followingLabel
+    ? `Switch to ${followingLabel}`
     : isActive
-      ? `To, Now, ${formatSessionDate(nowMs)}`
-      : 'To, no recorded end';
-  const dateContext = `From ${formatSessionDate(startMs)} · To ${toDateContext}`;
+      ? 'Stop tracking'
+      : 'No end recorded';
+  const startBoundaryLabel =
+    previous && previousLabel
+      ? `${previousLabel} ends and ${activityLabel} starts`
+      : `Start ${activityLabel}`;
+  const fromAccessibilityLabel = `${startBoundaryLabel}, ${formatSessionDate(startMs)}, ${formatSessionTime(startMs)}`;
+  const toAccessibilityLabel = following
+    ? `${activityLabel} ends and ${followingLabel ?? 'the next session'} starts at ${formatSessionDate(timestampMs(following.timestamp))}, ${formatSessionTime(timestampMs(following.timestamp))}`
+    : isActive
+      ? `${endLabel}, Now, ${formatSessionDate(nowMs)}`
+      : `${endLabel}, no recorded time`;
+  const dateContext = `Starts ${formatSessionDate(startMs)} · Ends ${toDateContext}`;
 
   return (
     <Column spacing={8} style={{ width: '100%' }} testID="activity-session-edit-times">
       <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-        Edit session times
+        Session transitions
+      </Text>
+      <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+        Each time below is one shared boundary: it ends one session and starts the next.
       </Text>
       <View
         style={[
@@ -119,7 +139,12 @@ export function HistoricalSessionEditor({
           ]}
           testID="activity-session-from"
         >
-          <Text textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>From</Text>
+          <Text
+            numberOfLines={2}
+            textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}
+          >
+            {startLabel}
+          </Text>
           <Text
             numberOfLines={1}
             textStyle={{ color: colors.text, fontSize: 24, fontWeight: '700' }}
@@ -148,7 +173,12 @@ export function HistoricalSessionEditor({
           ]}
           testID="activity-session-to"
         >
-          <Text textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>To</Text>
+          <Text
+            numberOfLines={2}
+            textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}
+          >
+            {endLabel}
+          </Text>
           <Text
             numberOfLines={1}
             textStyle={{ color: colors.text, fontSize: 24, fontWeight: '700' }}
@@ -164,9 +194,28 @@ export function HistoricalSessionEditor({
       >
         {dateContext}
       </Text>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-        Changes are checked against neighboring sessions.
-      </Text>
+      {previous && previousLabel ? (
+        <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
+          {`This time also sets when ${previousLabel} ends.`}
+        </Text>
+      ) : null}
+      {following && followingLabel ? (
+        <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
+          {`This time also sets when ${followingLabel} starts.`}
+        </Text>
+      ) : null}
+      {isActive && onResetStart ? (
+        <View style={{ alignItems: 'flex-start', width: '100%' }}>
+          <AppButton
+            disabled={busy}
+            label="Set start to now"
+            onPress={() => void onResetStart()}
+            style={{ height: 40 }}
+            testID="activity-session-reset-now"
+            variant="outlined"
+          />
+        </View>
+      ) : null}
       {pickerError ? (
         <Text
           testID="activity-session-picker-error"

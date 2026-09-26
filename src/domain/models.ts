@@ -199,27 +199,33 @@ export type HabitSchedule =
   | { kind: 'weekly-count'; timesPerWeek: number }
   | { kind: 'interval'; everyDays: number; startDate: LogicalDayKey };
 
+export type HabitTriggerComparison = 'at-least' | 'at-most';
+
 export type HabitTrigger =
   | {
       kind: 'tracked-time';
       activityId: UUID;
-      /** Seconds of materialized activity time required; omitted means one second. */
+      /** Per-day tracked-time threshold; omitted means the one second default. */
       minimumSeconds?: number;
+      /** Whether tracked time must reach or stay within the configured threshold. */
+      comparison?: HabitTriggerComparison;
       /** Legacy persisted spelling accepted at the boundary; services normalize to seconds. */
       minimumMs?: number;
     }
   | {
       kind: 'folder-time';
       folderId: UUID;
-      /** Seconds of materialized child time required; omitted means one second. */
+      /** Per-day tracked-time threshold; omitted means the one second default. */
       minimumSeconds?: number;
+      comparison?: HabitTriggerComparison;
       minimumMs?: number;
     }
   | {
       kind: 'routine-completion';
       routineId: UUID;
-      /** Top-level routine time required; omitted means one second. */
+      /** Per-day tracked-time threshold; omitted means the one second default. */
       minimumSeconds?: number;
+      comparison?: HabitTriggerComparison;
       minimumMs?: number;
     };
 

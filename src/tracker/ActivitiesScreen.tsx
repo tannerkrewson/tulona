@@ -5,7 +5,7 @@ import { View } from 'react-native';
 
 import type { Activity, CatalogCollection, Folder, RoutineDefinition } from '@domain';
 import { useAppTheme } from '@theme';
-import { errorText, ROW_SURFACE_LIST_GAP, Screen } from '@ui';
+import { errorText, PageFilterMenu, ROW_SURFACE_LIST_GAP, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
@@ -17,6 +17,15 @@ import { FolderRow } from './FolderRow';
 
 type RootCatalogEntry =
   { kind: 'folder'; folder: Folder } | { kind: 'item'; item: Activity | RoutineDefinition };
+
+type TrackerCatalogView = 'all' | 'activities' | 'routines' | 'folders';
+
+const TRACKER_VIEW_OPTIONS = [
+  { value: 'all', label: 'All items', icon: 'activity' },
+  { value: 'activities', label: 'Activities', icon: 'play' },
+  { value: 'routines', label: 'Routines', icon: 'repeat' },
+  { value: 'folders', label: 'Folders', icon: 'folder' },
+] as const;
 
 function sortedRootEntries(catalog: CatalogCollection, showArchived: boolean): RootCatalogEntry[] {
   return [
@@ -34,6 +43,33 @@ function sortedRootEntries(catalog: CatalogCollection, showArchived: boolean): R
       leftEntity.name.localeCompare(rightEntity.name)
     );
   });
+}
+
+function entriesForView(
+  catalog: CatalogCollection,
+  showArchived: boolean,
+  view: TrackerCatalogView
+): RootCatalogEntry[] {
+  if (view === 'all') return sortedRootEntries(catalog, showArchived);
+  if (view === 'folders') {
+    return catalog.folders
+      .filter((folder) => showArchived || folder.archivedAt === null)
+      .map((folder) => ({ kind: 'folder' as const, folder }))
+      .sort(
+        (left, right) =>
+          left.folder.sortOrder - right.folder.sortOrder ||
+          left.folder.name.localeCompare(right.folder.name)
+      );
+  }
+
+  const items = view === 'activities' ? catalog.activities : catalog.routines;
+  return items
+    .filter((item) => showArchived || item.archivedAt === null)
+    .map((item) => ({ kind: 'item' as const, item }))
+    .sort(
+      (left, right) =>
+        left.item.sortOrder - right.item.sortOrder || left.item.name.localeCompare(right.item.name)
+    );
 }
 
 function CatalogError({
@@ -130,6 +166,9 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
   const [busy, setBusy] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [catalogView, setCatalogView] = useState<TrackerCatalogView>('all');
+  const [showArchived, setShowArchived] = useState(settings.showArchived);
+  const [archiveSettingBusy, setArchiveSettingBusy] = useState(false);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
 
   useFocusEffect(
@@ -139,8 +178,12 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
         .getState()
         .hydrate()
         .catch(() => undefined);
+      void runtime.settingsService
+        .read()
+        .then((currentSettings) => setShowArchived(currentSettings.showArchived))
+        .catch(() => undefined);
       return undefined;
-    }, [settings, store])
+    }, [runtime.settingsService, settings, store])
   );
 
   if (!catalog) {
@@ -162,7 +205,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
     );
   }
 
-  const rootEntries = sortedRootEntries(catalog, settings.showArchived);
+  const rootEntries = entriesForView(catalog, showArchived, catalogView);
   const visibleError = actionError ?? (persistenceError ? errorText(persistenceError) : null);
 
   const runAction = async (action: () => Promise<void>) => {
@@ -175,6 +218,20 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
       setActionError(errorText(actionFailure));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const changeArchivedVisibility = async (nextValue: boolean) => {
+    if (archiveSettingBusy) return;
+    setArchiveSettingBusy(true);
+    setActionError(null);
+    try {
+      const nextSettings = await runtime.settingsService.setShowArchived(nextValue);
+      setShowArchived(nextSettings.showArchived);
+    } catch (error) {
+      setActionError(errorText(error));
+    } finally {
+      setArchiveSettingBusy(false);
     }
   };
 
@@ -250,6 +307,22 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
           onHistory={() => router.push('/history')}
           title="Tracker"
         />
+        <PageFilterMenu
+          accessibilityLabel="Choose tracker view"
+          defaultValue="all"
+          onChange={setCatalogView}
+          options={TRACKER_VIEW_OPTIONS}
+          testID="tracker-view-menu"
+          toggles={[
+            {
+              label: 'Include archived items',
+              value: showArchived,
+              onChange: (value) => void changeArchivedVisibility(value),
+              testID: 'tracker-show-archived',
+            },
+          ]}
+          value={catalogView}
+        />
         {visibleError ? (
           <CatalogError
             title="Catalog action failed"
@@ -303,7 +376,9 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
           })}
           {rootEntries.length === 0 ? (
             <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>
-              No activities or folders yet. Use + to add one.
+              {catalogView === 'all'
+                ? 'No activities or folders yet. Use + to add one.'
+                : `No ${TRACKER_VIEW_OPTIONS.find((option) => option.value === catalogView)?.label.toLowerCase() ?? 'items'} found.`}
             </Text>
           ) : null}
           <View style={{ height: ACTIVE_ACTIVITY_BAR_HEIGHT + 20, width: '100%' }} />
