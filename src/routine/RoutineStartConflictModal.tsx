@@ -41,7 +41,9 @@ export function RoutineStartConflictModal({
       transparent
       visible={visible}
     >
-      <View style={[styles.root, { paddingBottom: 20 + insets.bottom, paddingTop: 20 + insets.top }]}>
+      <View
+        style={[styles.root, { paddingBottom: 20 + insets.bottom, paddingTop: 20 + insets.top }]}
+      >
         <Pressable
           accessibilityLabel="Keep routine paused"
           accessibilityRole="button"
@@ -64,9 +66,7 @@ export function RoutineStartConflictModal({
               {`${activeRoutine.routineSnapshot.name} is ${activeRoutine.status === 'running' ? 'running' : 'paused'}. Resume it, or cancel this run before starting ${targetRoutine.name}.`}
             </Text>
             {error ? (
-              <Text
-                textStyle={{ color: colors.danger.foreground, fontSize: 14, lineHeight: 19 }}
-              >
+              <Text textStyle={{ color: colors.danger.foreground, fontSize: 14, lineHeight: 19 }}>
                 {error}
               </Text>
             ) : null}
