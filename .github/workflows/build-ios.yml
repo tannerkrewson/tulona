@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate iOS navigation without widget extension
+    name: Validate iOS navigation and widget extension
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -37,6 +37,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Test widget state mapping
+        run: npm run test:widget
+
       - name: Validate iOS JavaScript bundle
         run: |
           bundle_dir="$(mktemp -d)"
@@ -55,14 +58,22 @@ jobs:
           node <<'NODE'
           const fs = require('node:fs');
           const config = JSON.parse(fs.readFileSync('expo-config.json', 'utf8'));
-          const widgetPlugin = (config.plugins ?? []).find((plugin) =>
-            Array.isArray(plugin) && plugin[0] === 'expo-widgets'
+          const widgetPlugin = (config.plugins ?? []).find(
+            (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-widgets'
+          );
+          const activeActivityWidget = widgetPlugin?.[1]?.widgets?.find(
+            (widget) => widget.name === 'ActiveActivityWidget'
           );
           if (config.ios?.bundleIdentifier !== 'com.tannerkrewson.tulona') {
             throw new Error('Unexpected iOS bundle identifier');
           }
-          if (widgetPlugin) {
-            throw new Error('The diagnostic iOS build must not include the expo-widgets plugin');
+          if (
+            !activeActivityWidget?.ios?.supportedFamilies?.includes('systemSmall')
+          ) {
+            throw new Error('The ActiveActivityWidget systemSmall family is not configured');
+          }
+          if (widgetPlugin?.[1]?.groupIdentifier !== 'group.com.tannerkrewson.tulona') {
+            throw new Error('The widget app group is not configured');
           }
           NODE
 
@@ -70,9 +81,15 @@ jobs:
         run: |
           npx expo prebuild --platform ios --no-install --clean
           test -f ios/Tulona.xcodeproj/project.pbxproj
-          test ! -e ios/ExpoWidgetsTarget
-          ! grep -Fq 'ExpoWidgetsTarget' ios/Tulona.xcodeproj/project.pbxproj
-          ! grep -Fq 'ActiveActivityWidgetBridge' app/_layout.tsx
+          test -f ios/ExpoWidgetsTarget/ActiveActivityWidget.swift
+          test -f ios/ExpoWidgetsTarget/ExpoWidgetsTarget.entitlements
+          test -f ios/Tulona/Tulona.entitlements
+          grep -Fq 'ExpoWidgetsTarget' ios/Tulona.xcodeproj/project.pbxproj
+          grep -Fq '.systemSmall' ios/ExpoWidgetsTarget/ActiveActivityWidget.swift
+          grep -Fq 'group.com.tannerkrewson.tulona' ios/ExpoWidgetsTarget/ExpoWidgetsTarget.entitlements
+          grep -Fq 'group.com.tannerkrewson.tulona' ios/Tulona/Tulona.entitlements
+          grep -Fq 'ActiveActivityWidgetBridge' app/_layout.tsx
+          grep -Fq '<ActiveActivityWidgetBridge />' app/_layout.tsx
           grep -Fq 'expo-router/unstable-native-tabs' src/navigation/AppTabs.native.tsx
           grep -Fq 'name="(tracker)"' src/navigation/AppTabs.native.tsx
           grep -Fq 'gestureEnabled: true' 'app/(tabs)/(tracker)/_layout.tsx'
@@ -95,7 +112,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate native iOS project without widget extension
+      - name: Generate native iOS project with widget extension
         run: npx expo prebuild --platform ios --no-install --clean
 
       - name: Install CocoaPods dependencies
@@ -121,22 +138,25 @@ jobs:
           APP_PATH="$RUNNER_TEMP/Tulona.xcarchive/Products/Applications/Tulona.app"
           test -d "$APP_PATH"
           test ! -d "$APP_PATH/_CodeSignature"
-          test ! -e "$APP_PATH/PlugIns/ExpoWidgetsTarget.appex"
+          WIDGET_PATH="$APP_PATH/PlugIns/ExpoWidgetsTarget.appex"
+          test -d "$WIDGET_PATH"
+          test -f "$WIDGET_PATH/Info.plist"
+          test ! -d "$WIDGET_PATH/_CodeSignature"
           rm -rf artifacts
           mkdir -p artifacts/Payload
           cp -R "$APP_PATH" artifacts/Payload/Tulona.app
           (
             cd artifacts
-            zip -qry "Tulona-${GITHUB_SHA}-unsigned-no-widget.ipa" Payload
+            zip -qry "Tulona-${GITHUB_SHA}-unsigned.ipa" Payload
           )
-          unzip -t "artifacts/Tulona-${GITHUB_SHA}-unsigned-no-widget.ipa" >/dev/null
-          unzip -l "artifacts/Tulona-${GITHUB_SHA}-unsigned-no-widget.ipa" > ipa-contents.txt
-          ! grep -Fq '.appex/' ipa-contents.txt
+          unzip -t "artifacts/Tulona-${GITHUB_SHA}-unsigned.ipa" >/dev/null
+          unzip -l "artifacts/Tulona-${GITHUB_SHA}-unsigned.ipa" > ipa-contents.txt
+          grep -Fq 'ExpoWidgetsTarget.appex/Info.plist' ipa-contents.txt
 
       - name: Upload unsigned IPA directly
         uses: actions/upload-artifact@v7
         with:
-          path: artifacts/Tulona-${{ github.sha }}-unsigned-no-widget.ipa
+          path: artifacts/Tulona-${{ github.sha }}-unsigned.ipa
           archive: false
           if-no-files-found: error
           retention-days: 14

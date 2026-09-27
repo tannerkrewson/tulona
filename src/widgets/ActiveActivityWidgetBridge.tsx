@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 
 import { useAppTheme } from '@theme';
 
@@ -20,6 +21,8 @@ export function ActiveActivityWidgetBridge() {
   const idleColor = colors.surfaceMuted;
 
   useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+
     let cancelled = false;
     let unsubscribe: (() => void) | null = null;
 
