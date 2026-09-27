@@ -3,6 +3,7 @@ import { SafeAreaView, ScrollView, Share, StyleSheet, Text, Pressable, View } fr
 
 import {
   formatLaunchDiagnosticReport,
+  isNativeObjCExceptionReport,
   isNativeTurboModuleReport,
   type LaunchDiagnosticReport,
 } from './launchCrashReporter';
@@ -29,10 +30,14 @@ export default function LaunchCrashRecovery({
   };
 
   const isNativeReport = isNativeTurboModuleReport(report);
-  const reportName = isNativeReport ? report.exceptionName : report.name;
+  const isObjCException = isNativeObjCExceptionReport(report);
+  const hasNativeReport = isNativeReport || isObjCException;
+  const reportName = hasNativeReport ? report.exceptionName : report.name;
   const reportMessage = isNativeReport
     ? `${report.moduleName}.${report.methodName}: ${report.reason}`
-    : report.message;
+    : isObjCException
+      ? report.reason
+      : report.message;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -42,13 +47,17 @@ export default function LaunchCrashRecovery({
         </View>
         <Text style={styles.eyebrow}>STARTUP DIAGNOSTIC</Text>
         <Text style={styles.title}>
-          {isNativeReport
-            ? 'A native module exception was intercepted'
+          {hasNativeReport
+            ? isNativeReport
+              ? 'A native module exception was intercepted'
+              : 'An uncaught iOS exception was recorded'
             : 'A previous launch stopped unexpectedly'}
         </Text>
         <Text style={styles.description}>
-          {isNativeReport
-            ? 'Tulona recorded the native module, method, exception, and stack, then held back its normal screens so you can share the report.'
+          {hasNativeReport
+            ? isNativeReport
+              ? 'Tulona recorded the native module, method, exception, and stack, then held back its normal screens so you can share the report.'
+              : 'Tulona recorded the iOS exception reason and native stack before closing, then held back its normal screens so you can share the report.'
             : 'Tulona saved the fatal JavaScript error and held back its normal screens so you can share the report before trying again.'}
         </Text>
 
@@ -59,7 +68,7 @@ export default function LaunchCrashRecovery({
           </Text>
           <Text style={styles.metadata}>
             Tulona {report.appVersion} ({report.buildNumber}) ·{' '}
-            {isNativeReport ? 'iOS' : report.platform} {report.platformVersion}
+            {hasNativeReport ? 'iOS' : report.platform} {report.platformVersion}
           </Text>
           <Text selectable style={styles.buildSha}>
             Build {report.buildSha}

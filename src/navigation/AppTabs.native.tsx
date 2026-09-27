@@ -3,14 +3,19 @@ import { Platform } from 'react-native';
 
 import { ActiveActivityBar, supportsNativeBottomAccessory } from '@/src/tracker/ActiveActivityBar';
 import { useAppTheme } from '@theme';
+import AppTabsJavaScript from './AppTabsJavaScript';
+import { shouldUseExperimentalNativeTabs } from './nativeTabsPolicy';
 
 /**
- * Use the system tab bar on native platforms. On iOS 26+, this is the native
- * Liquid Glass tab bar; older iOS versions receive the system tab bar style
- * supported by that OS. The web/PWA keeps its intentionally styled tab bar.
+ * Use the system tab bar on native platforms except iOS 27, where the
+ * experimental Expo NativeTabs host is temporarily bypassed during diagnosis.
  */
 export default function AppTabs() {
   const { colors } = useAppTheme();
+  if (!shouldUseExperimentalNativeTabs(Platform.OS, Platform.Version)) {
+    return <AppTabsJavaScript />;
+  }
+
   const useBottomAccessory = Platform.OS === 'ios' && supportsNativeBottomAccessory();
 
   return (

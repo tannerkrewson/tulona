@@ -36,7 +36,15 @@ export type NativeTurboModuleReport = {
   stackSymbols: string[];
 };
 
-export type LaunchDiagnosticReport = LaunchCrashReport | NativeTurboModuleReport;
+export type NativeObjCExceptionReport = Omit<
+  NativeTurboModuleReport,
+  'kind' | 'moduleName' | 'methodName'
+> & {
+  kind: 'native-objc-exception';
+};
+
+export type LaunchDiagnosticReport =
+  LaunchCrashReport | NativeTurboModuleReport | NativeObjCExceptionReport;
 
 export const NATIVE_TURBOMODULE_REPORT_FILENAME = 'tulona-native-turbo-module-diagnostic.json';
 
@@ -169,17 +177,60 @@ export function parseNativeTurboModuleReport(value: string | null): NativeTurboM
   }
 }
 
+export function parseNativeObjCExceptionReport(
+  value: string | null
+): NativeObjCExceptionReport | null {
+  if (!value) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+
+    const report = parsed as Partial<NativeObjCExceptionReport>;
+    if (
+      report.schemaVersion !== REPORT_SCHEMA_VERSION ||
+      report.kind !== 'native-objc-exception' ||
+      typeof report.capturedAt !== 'string' ||
+      typeof report.appVersion !== 'string' ||
+      typeof report.buildNumber !== 'string' ||
+      typeof report.buildSha !== 'string' ||
+      typeof report.bundleIdentifier !== 'string' ||
+      typeof report.platformVersion !== 'string' ||
+      typeof report.exceptionName !== 'string' ||
+      typeof report.reason !== 'string' ||
+      !Array.isArray(report.stackSymbols) ||
+      !report.stackSymbols.every((symbol) => typeof symbol === 'string')
+    ) {
+      return null;
+    }
+
+    return report as NativeObjCExceptionReport;
+  } catch {
+    return null;
+  }
+}
+
 export function parseLaunchDiagnosticReport(
   javascriptValue: string | null,
   nativeValue: string | null
 ): LaunchDiagnosticReport | null {
-  return parseNativeTurboModuleReport(nativeValue) ?? parseLaunchCrashReport(javascriptValue);
+  return (
+    parseNativeObjCExceptionReport(nativeValue) ??
+    parseNativeTurboModuleReport(nativeValue) ??
+    parseLaunchCrashReport(javascriptValue)
+  );
 }
 
 export function isNativeTurboModuleReport(
   report: LaunchDiagnosticReport
 ): report is NativeTurboModuleReport {
   return 'kind' in report && report.kind === 'native-turbo-module';
+}
+
+export function isNativeObjCExceptionReport(
+  report: LaunchDiagnosticReport
+): report is NativeObjCExceptionReport {
+  return 'kind' in report && report.kind === 'native-objc-exception';
 }
 
 export function formatLaunchCrashReport(report: LaunchCrashReport): string {
@@ -198,6 +249,21 @@ export function formatLaunchCrashReport(report: LaunchCrashReport): string {
 }
 
 export function formatLaunchDiagnosticReport(report: LaunchDiagnosticReport): string {
+  if (isNativeObjCExceptionReport(report)) {
+    return [
+      'Tulona uncaught native exception diagnostic',
+      `Captured: ${report.capturedAt}`,
+      `App: ${report.appVersion} (${report.buildNumber})`,
+      `Build commit: ${report.buildSha}`,
+      `Bundle ID: ${report.bundleIdentifier}`,
+      `iOS: ${report.platformVersion}`,
+      `Exception: ${report.exceptionName}: ${report.reason}`,
+      '',
+      'Native stack symbols:',
+      report.stackSymbols.join('\n') || '(no native stack was provided)',
+    ].join('\n');
+  }
+
   if (!isNativeTurboModuleReport(report)) {
     return formatLaunchCrashReport(report);
   }

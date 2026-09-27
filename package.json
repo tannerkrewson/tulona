@@ -41,6 +41,8 @@
     "test:settings-ui": "tsx tests/settings-ui-regressions.ts",
     "test:launch-crash-reporter": "tsx tests/launch-crash-reporter.ts",
     "test:turbo-module-diagnostic-patch": "node scripts/test-turbo-module-diagnostic-patch.cjs",
+    "test:native-exception-diagnostic-patch": "node scripts/test-native-exception-diagnostic-patch.cjs",
+    "test:native-tabs-runtime-policy": "tsx tests/native-tabs-runtime-policy.ts",
     "test:active-session": "tsx tests/active-session-regressions.ts",
     "test:modal-ui": "tsx tests/modal-ui-regressions.ts",
     "test:indexed-db": "tsx tests/indexed-db-storage.ts",

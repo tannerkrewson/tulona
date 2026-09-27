@@ -49,8 +49,14 @@ jobs:
       - name: Test TurboModule diagnostic patch
         run: npm run test:turbo-module-diagnostic-patch
 
+      - name: Test uncaught native exception diagnostic patch
+        run: npm run test:native-exception-diagnostic-patch
+
       - name: Test unsupported Dropbox WebAssembly runtime handling
         run: npm run test:dropbox-sync-runtime
+
+      - name: Test native tab runtime fallback
+        run: npm run test:native-tabs-runtime-policy
 
       - name: Test Dropbox sync merge behavior
         run: npm run test:dropbox-sync
@@ -165,6 +171,14 @@ jobs:
         run: |
           node scripts/verify-turbo-module-diagnostic-binary.cjs \
             "$RUNNER_TEMP/Tulona.xcarchive/Products/Applications/Tulona.app"
+
+      - name: Upload iOS debug symbols
+        uses: actions/upload-artifact@v7
+        with:
+          name: Tulona-${{ github.sha }}-dSYMs
+          path: ${{ runner.temp }}/Tulona.xcarchive/dSYMs/Tulona.app.dSYM
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Package and validate unsigned IPA
         run: |

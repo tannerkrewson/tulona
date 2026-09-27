@@ -2,6 +2,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { DIAGNOSTIC_FILENAME, PATCH_MARKER } = require('./turbo-module-diagnostic-patch.cjs');
+const {
+  DIAGNOSTIC_MARKER: NATIVE_EXCEPTION_MARKER,
+} = require('./native-exception-diagnostic-patch.cjs');
 
 const sourcePath = path.join(
   process.cwd(),
@@ -10,6 +13,8 @@ const sourcePath = path.join(
 const source = fs.readFileSync(sourcePath, 'utf8');
 const infoPlistPath = path.join(process.cwd(), 'ios/Tulona/Info.plist');
 const infoPlist = fs.readFileSync(infoPlistPath, 'utf8');
+const appDelegatePath = path.join(process.cwd(), 'ios/Tulona/AppDelegate.swift');
+const appDelegate = fs.readFileSync(appDelegatePath, 'utf8');
 const functionStart = source.indexOf('void ObjCTurboModule::performVoidMethodInvocation(');
 const functionEnd = source.indexOf(
   '\njsi::Value ObjCTurboModule::convertReturnIdToJSIValue(',
@@ -37,4 +42,12 @@ if (
   throw new Error('The native diagnostic report is missing the build SHA from Info.plist');
 }
 
-console.log('Verified native TurboModule catch, durable diagnostic report, and build SHA');
+if (
+  !appDelegate.includes(NATIVE_EXCEPTION_MARKER) ||
+  !appDelegate.includes('NSSetUncaughtExceptionHandler(tulonaHandleUncaughtException)') ||
+  !appDelegate.includes(DIAGNOSTIC_FILENAME)
+) {
+  throw new Error('The uncaught Objective-C exception reporter was not applied to AppDelegate');
+}
+
+console.log('Verified native exception reporters, durable diagnostic report, and build SHA');

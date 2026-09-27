@@ -3,6 +3,7 @@ const path = require('node:path');
 
 const { withDangerousMod, withInfoPlist } = require('expo/config-plugins');
 const { patchTurboModuleSource } = require('../scripts/turbo-module-diagnostic-patch.cjs');
+const { patchAppDelegateSource } = require('../scripts/native-exception-diagnostic-patch.cjs');
 
 module.exports = function withDiagnosticTurboModuleRecovery(config) {
   config = withInfoPlist(config, (modConfig) => {
@@ -28,7 +29,23 @@ module.exports = function withDiagnosticTurboModuleRecovery(config) {
         fs.writeFileSync(sourcePath, patchedSource);
       }
 
-      console.log('[Tulona diagnostic] Applied async void TurboModule exception workaround.');
+      const appDelegatePath = path.join(
+        modConfig.modRequest.projectRoot,
+        'ios/Tulona/AppDelegate.swift'
+      );
+      if (!fs.existsSync(appDelegatePath)) {
+        throw new Error(`Expo AppDelegate.swift not found at ${appDelegatePath}`);
+      }
+
+      const appDelegateSource = fs.readFileSync(appDelegatePath, 'utf8');
+      const patchedAppDelegateSource = patchAppDelegateSource(appDelegateSource);
+      if (patchedAppDelegateSource !== appDelegateSource) {
+        fs.writeFileSync(appDelegatePath, patchedAppDelegateSource);
+      }
+
+      console.log(
+        '[Tulona diagnostic] Applied TurboModule workaround and uncaught Objective-C exception reporter.'
+      );
       return modConfig;
     },
   ]);

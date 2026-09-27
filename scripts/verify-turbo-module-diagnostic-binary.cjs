@@ -3,11 +3,16 @@ const path = require('node:path');
 const { Buffer } = require('node:buffer');
 
 const { DIAGNOSTIC_FILENAME, PATCH_MARKER } = require('./turbo-module-diagnostic-patch.cjs');
+const { DIAGNOSTIC_MARKER } = require('./native-exception-diagnostic-patch.cjs');
 
 const appPath = process.argv[2];
 if (!appPath) throw new Error('Pass the built .app directory as the first argument');
 
-const expectedStrings = [Buffer.from(PATCH_MARKER), Buffer.from(DIAGNOSTIC_FILENAME)];
+const expectedStrings = [
+  Buffer.from(PATCH_MARKER),
+  Buffer.from(DIAGNOSTIC_MARKER),
+  Buffer.from(DIAGNOSTIC_FILENAME),
+];
 const executablePaths = [path.join(appPath, path.basename(appPath, '.app'))];
 const frameworksPath = path.join(appPath, 'Frameworks');
 

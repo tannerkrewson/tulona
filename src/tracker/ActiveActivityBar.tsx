@@ -28,9 +28,12 @@ const ACTIVE_BAR_BOTTOM = TAB_BAR_HEIGHT;
 
 export type ActiveActivityBarPlacement = 'overlay' | 'accessory';
 
-/** iOS 26+ can host the activity control inside the system tab bar accessory. */
+/** iOS 26 can host the activity control inside the system tab bar accessory. */
 export function supportsNativeBottomAccessory(): boolean {
-  return Platform.OS === 'ios' && Number(Platform.Version) >= 26;
+  const iosVersion = Number(Platform.Version);
+  // Keep the accessory off on iOS 27 while investigating a native view-mount
+  // crash during launch. The normal in-app overlay remains available there.
+  return Platform.OS === 'ios' && iosVersion >= 26 && iosVersion < 27;
 }
 
 function activeItem(

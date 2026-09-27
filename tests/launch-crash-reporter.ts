@@ -6,6 +6,7 @@ import {
   LAUNCH_CRASH_REPORT_KEY,
   parseLaunchDiagnosticReport,
   parseLaunchCrashReport,
+  parseNativeObjCExceptionReport,
   parseNativeTurboModuleReport,
   type CrashReportMetadata,
   type ErrorHandler,
@@ -91,6 +92,41 @@ async function run() {
     'formats native module and method'
   );
   assertEqual(parseNativeTurboModuleReport('{not json'), null, 'rejects malformed native report');
+
+  const objcReport = {
+    schemaVersion: 1 as const,
+    kind: 'native-objc-exception' as const,
+    capturedAt: '2026-09-27T20:00:02.000Z',
+    appVersion: '0.1.0',
+    buildNumber: '3',
+    buildSha: 'ghi789',
+    bundleIdentifier: 'com.tannerkrewson.tulona',
+    platformVersion: 'Version 27.0',
+    exceptionName: 'NSInvalidArgumentException',
+    reason: 'Cannot add view as a subview of itself',
+    stackSymbols: ['0 Tulona 0x5678 mountView + 32'],
+  };
+  const serializedObjcReport = JSON.stringify(objcReport);
+  assertEqual(
+    parseNativeObjCExceptionReport(serializedObjcReport)?.exceptionName,
+    'NSInvalidArgumentException',
+    'parses uncaught Objective-C exception details'
+  );
+  const preferredObjcReport = parseLaunchDiagnosticReport(
+    JSON.stringify(report),
+    serializedObjcReport
+  );
+  assert(
+    preferredObjcReport !== null &&
+      'kind' in preferredObjcReport &&
+      preferredObjcReport.kind === 'native-objc-exception',
+    'prefers uncaught Objective-C exception details when both reports exist'
+  );
+  assertMatch(
+    formatLaunchDiagnosticReport(objcReport),
+    /Cannot add view as a subview of itself/,
+    'formats uncaught native exception reason'
+  );
 
   const saved = new Map<string, string>();
   let delegatedError: unknown;
