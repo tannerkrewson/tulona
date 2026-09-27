@@ -80,7 +80,7 @@ assert(
     session.includes('await store.getState().deleteTransition(transition.id, { confirm: true })') &&
     session.includes('setDeleteConfirmationOpen(false)') &&
     session.includes('visible={deleteConfirmationOpen}') &&
-    session.includes("goBackInAppStack(router, '/(tabs)')"),
+    session.includes("goBackInAppStack(router, '/')"),
   'activity sessions must expose an explicit, confirmed delete action that returns after success'
 );
 const deleteModalStart = session.indexOf('<ConfirmationModal');
@@ -89,7 +89,7 @@ const deleteCall = session.indexOf(
   'await store.getState().deleteTransition(transition.id, { confirm: true })'
 );
 const deleteClose = session.indexOf('setDeleteConfirmationOpen(false)', deleteCall);
-const deleteReturn = session.indexOf("goBackInAppStack(router, '/(tabs)')", deleteClose);
+const deleteReturn = session.indexOf("goBackInAppStack(router, '/')", deleteClose);
 assert(
   deleteModalStart > deleteScreenEnd &&
     deleteCall >= 0 &&

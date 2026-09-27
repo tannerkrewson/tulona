@@ -319,7 +319,7 @@ export function NextActivityChooserScreen() {
     setError(null);
     try {
       await runtime.routineService.selectNextActivity(activityId);
-      router.replace('/(tabs)');
+      router.replace('/');
     } catch (choiceError) {
       setError(errorText(choiceError));
     } finally {
@@ -329,11 +329,11 @@ export function NextActivityChooserScreen() {
 
   if (!active || !catalog) {
     return (
-      <Screen onBack={() => router.replace('/(tabs)')} title="Choose activity" scrollable={false}>
+      <Screen onBack={() => router.replace('/')} title="Choose activity" scrollable={false}>
         <Column alignment="center" spacing={16} style={{ width: '100%' }}>
           <ChooserError message={error ?? 'Restoring the next-activity chooser...'}>
             <RecoveryActions
-              onClose={() => router.replace('/(tabs)')}
+              onClose={() => router.replace('/')}
               onRetry={load}
               testID="chooser-recovery"
             />
@@ -355,7 +355,7 @@ export function NextActivityChooserScreen() {
 
   return (
     <Screen
-      onBack={() => (folderId === null ? router.replace('/(tabs)') : setFolderId(null))}
+      onBack={() => (folderId === null ? router.replace('/') : setFolderId(null))}
       title={title}
     >
       <Column spacing={ROW_SURFACE_LIST_GAP} style={{ width: '100%' }}>
@@ -442,7 +442,7 @@ export function NextActivityChooserScreen() {
         ) : null}
         <ChooserError message={error}>
           <RecoveryActions
-            onClose={() => router.replace('/(tabs)')}
+            onClose={() => router.replace('/')}
             onRetry={() => {
               if (lastChoice.current) void choose(lastChoice.current);
               else load();
@@ -453,7 +453,7 @@ export function NextActivityChooserScreen() {
         <AppButton
           disabled={busy}
           label="Decide later"
-          onPress={() => router.replace('/(tabs)')}
+          onPress={() => router.replace('/')}
           style={{ height: 48, width: '100%' }}
           variant="outlined"
           testID="chooser-decide-later"

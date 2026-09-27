@@ -153,7 +153,7 @@ export default function ActivitiesScreen() {
           <CatalogError
             title="Activities unavailable"
             message={error}
-            onBack={() => router.replace('/(tabs)')}
+            onBack={() => router.replace('/')}
             onRetry={load}
           />
         ) : (
@@ -215,7 +215,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
                 ? 'Loading activities...'
                 : 'No catalog loaded yet.'
           }
-          onBack={() => router.replace('/(tabs)')}
+          onBack={() => router.replace('/')}
           onRetry={() => void store.getState().hydrate()}
         />
       </Screen>
@@ -387,7 +387,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
           <CatalogError
             title="Catalog action failed"
             message={visibleError}
-            onBack={() => router.replace('/(tabs)')}
+            onBack={() => router.replace('/')}
             onRetry={() => {
               if (lastAction.current) void runAction(lastAction.current);
               else void store.getState().hydrate();

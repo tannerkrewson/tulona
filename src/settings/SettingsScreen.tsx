@@ -128,7 +128,7 @@ export default function SettingsScreen() {
     <Screen title="Settings">
       <Column spacing={16} style={{ width: '100%' }}>
         {store ? (
-          <SettingsActionError onBack={() => router.replace('/(tabs)')} store={store} />
+          <SettingsActionError onBack={() => router.replace('/')} store={store} />
         ) : null}
         {!store ? (
           <Column spacing={12} style={{ width: '100%' }}>
@@ -143,7 +143,7 @@ export default function SettingsScreen() {
             {loadError ? (
               <RecoveryActions
                 onRetry={load}
-                onClose={() => router.replace('/(tabs)')}
+                onClose={() => router.replace('/')}
                 retryTestID="settings-retry"
                 testID="settings-load-recovery"
               />

@@ -68,13 +68,13 @@ export function destinationAfterBoot(
 ): string | null {
   const target =
     destination.kind === 'tabs'
-      ? '/(tabs)'
+      ? '/'
       : destination.kind === 'runner'
         ? `/routine/${destination.routineId}`
         : '/routine-chooser';
   if (destination.kind === 'runner') return pathname === target ? null : target;
   if (destination.kind === 'chooser') return pathname === target ? null : target;
-  if (pathname === '/(tabs)') return null;
+  if (pathname === '/') return null;
   if (
     pathname !== '/' &&
     /^(?:\/history|\/goals|\/backup|\/habits|\/settings|\/dropbox-auth|\/routine-chooser|\/folder\/[^/]+|\/activity\/[^/]+|\/activity-session\/[^/]+|\/routine\/[^/]+|\/routine-edit\/[^/]+|\/folder-edit\/[^/]+|\/habit\/[^/]+)$/.test(

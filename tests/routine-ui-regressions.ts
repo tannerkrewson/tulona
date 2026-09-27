@@ -43,16 +43,33 @@ assert(
   'routine runner uses parent or current-step activity styling'
 );
 assert(
-  runner.includes('<SlideUpSheet') &&
-    runner.includes('testID="routine-title"') &&
+  runner.includes('<Screen') &&
+    runner.includes('title={active.routineSnapshot.name}') &&
+    !runner.includes('<SlideUpSheet') &&
     runner.includes('testID="routine-current-step-name"') &&
     runner.includes('testID="open-routine-steps"') &&
     runner.includes('icon="square"') &&
-    runner.includes('icon="play"'),
-  'the routine runner uses the shared sheet, keeps its step name in the timer, and orders player controls around a centered play action'
+    runner.includes('icon="arrow-right"') &&
+    runner.includes('label="Back"') &&
+    runner.includes('animationType="fade"') &&
+    !runner.includes('styles.modalHandleArea') &&
+    runner.includes('paddingBottom: Math.max(insets.bottom, 18) + 16') &&
+    runner.includes('height: 44') &&
+    runner.includes('const strokeWidth = 8'),
+  'the routine runner is full screen with a stop-menu back action, right-arrow control, subtle menus, and a thicker timer ring'
+);
+const controlRowStart = runner.indexOf('<Row alignment="center" style={styles.controlRow}>');
+const controlRowEnd = runner.indexOf('</Row>', controlRowStart);
+const controlRow = runner.slice(controlRowStart, controlRowEnd);
+assert(
+  controlRow.indexOf('icon="square"') < controlRow.indexOf('icon="clock"') &&
+    controlRow.indexOf('icon="clock"') < controlRow.indexOf('icon="arrow-right"') &&
+    controlRow.indexOf('icon="arrow-right"') < controlRow.indexOf('icon="pause"') &&
+    controlRow.indexOf('icon="pause"') < controlRow.indexOf('icon="skip-forward"'),
+  'routine controls must remain in stop, clock, next, pause, skip order'
 );
 assert(
-  editor.includes("onSaved={() => router.replace('/(tabs)')}") &&
+  editor.includes("onSaved={() => router.replace('/')}") &&
     editor.includes('onSaved: () => void') &&
     editor.includes('await service.createRoutine({') &&
     editor.includes('await service.updateRoutine(routine.id') &&

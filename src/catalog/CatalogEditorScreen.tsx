@@ -69,7 +69,7 @@ export function CatalogEditorScreen({
   const title = kind === 'activity' ? 'Activity editor' : 'Folder editor';
   if (!resource) {
     return (
-      <Screen onBack={() => goBackInAppStack(router, '/(tabs)')} title={title}>
+      <Screen onBack={() => goBackInAppStack(router, '/')} title={title}>
         <Column
           spacing={12}
           style={{
@@ -91,7 +91,7 @@ export function CatalogEditorScreen({
           </Text>
           {loadError ? (
             <RecoveryActions
-              onClose={() => goBackInAppStack(router, '/(tabs)')}
+              onClose={() => goBackInAppStack(router, '/')}
               onRetry={() => {
                 setLoadError(null);
                 setVersion((current) => current + 1);
@@ -140,7 +140,7 @@ export function CatalogEditorScreen({
           );
           router.replace(`/routine-edit/${encodeURIComponent(converted.id)}` as Href);
         }}
-        onBack={() => goBackInAppStack(router, '/(tabs)')}
+        onBack={() => goBackInAppStack(router, '/')}
         onChanged={refresh}
       />
     );
@@ -150,7 +150,7 @@ export function CatalogEditorScreen({
       key={`${id}-${version}`}
       folder={resource.catalog.folders.find((candidate) => candidate.id === id) ?? null}
       service={resource.service}
-      onBack={() => goBackInAppStack(router, '/(tabs)')}
+      onBack={() => goBackInAppStack(router, '/')}
       onChanged={refresh}
     />
   );

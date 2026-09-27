@@ -14,6 +14,8 @@ export default function RootHtml({ children }: { children: ReactNode }) {
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="color-scheme" content="light dark" />
         <meta name="theme-color" content="#F5F5F5" />
         <link rel="manifest" href={basePathAsset('manifest.json')} />
@@ -106,10 +108,22 @@ export default function RootHtml({ children }: { children: ReactNode }) {
             --tulona-text: #171717;
             --tulona-tab-active: #111111;
             --tulona-tab-inactive: #666666;
+            --tulona-safe-area-top: 0px;
             --tulona-safe-area-bottom: 0px;
           }
           :root[data-tulona-safe-area="ios"] {
+            --tulona-safe-area-top: env(safe-area-inset-top, 0px);
             --tulona-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+          }
+          /* Keep the iOS status area solid while page scrims cover the viewport. */
+          body::before {
+            background: var(--tulona-background);
+            content: "";
+            height: var(--tulona-safe-area-top);
+            inset: 0 0 auto;
+            pointer-events: none;
+            position: fixed;
+            z-index: 10000;
           }
           /* Keep browser history edge-swipes from popping the root tabs. The
              habit navigator owns its inner horizontal day gesture. */

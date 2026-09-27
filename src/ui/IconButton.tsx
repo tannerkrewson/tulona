@@ -51,7 +51,6 @@ export function IconButton({
         borderWidth: primary || plain ? 0 : 1,
         height: size,
         justifyContent: 'center',
-        marginHorizontal: 4,
         opacity: disabled ? 0.45 : pressed ? 0.72 : 1,
         width: size,
       })}

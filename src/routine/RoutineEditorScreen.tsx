@@ -629,13 +629,13 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
   if (!resource) {
     return (
       <Screen
-        onBack={() => goBackInAppStack(router, '/(tabs)')}
+        onBack={() => goBackInAppStack(router, '/')}
         title={id === NEW_ID ? 'New routine' : 'Routine editor'}
       >
         {loadError ? (
           <ErrorMessage
             message={loadError}
-            onClose={() => goBackInAppStack(router, '/(tabs)')}
+            onClose={() => goBackInAppStack(router, '/')}
             onRetry={() => {
               setLoadError(null);
               setVersion((current) => current + 1);
@@ -712,9 +712,9 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
       <RoutineEditorForm
         key={`${id}-${version}`}
         initialFolderId={initialFolderId}
-        onBack={() => goBackInAppStack(router, '/(tabs)')}
+        onBack={() => goBackInAppStack(router, '/')}
         resource={resource}
-        onSaved={() => router.replace('/(tabs)')}
+        onSaved={() => router.replace('/')}
         onRun={runRoutine}
       />
       <RoutineStartConflictModal

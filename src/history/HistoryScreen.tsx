@@ -359,7 +359,7 @@ export default function HistoryScreen({
   const [dateJumpVisible, setDateJumpVisible] = useState(false);
 
   const goBack = useCallback(() => {
-    goBackInAppStack(router, '/(tabs)');
+    goBackInAppStack(router, '/');
   }, [router]);
 
   const load = useCallback(() => {

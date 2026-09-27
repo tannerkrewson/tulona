@@ -69,7 +69,6 @@ export function HabitHeader({
             onPress={onToggleEdit}
             testID={editTestID}
             variant="muted"
-            iconSize={editOpen ? 23 : 21}
           />
         ) : null}
         {onAdd ? (

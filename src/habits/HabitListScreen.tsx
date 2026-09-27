@@ -108,7 +108,7 @@ export default function HabitListScreen() {
                 .then((nextStore) => setStore(() => nextStore))
                 .catch((error: unknown) => setLoadError(errorText(error)));
             }}
-            onBack={() => router.replace('/(tabs)')}
+            onBack={() => router.replace('/')}
             retryTestID="habits-retry"
           />
           <Column
@@ -237,7 +237,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
           />
           <HabitErrorMessage
             message={persistenceError ? errorText(persistenceError) : null}
-            onBack={() => router.replace('/(tabs)')}
+            onBack={() => router.replace('/')}
             onRetry={() => {
               const action = lastAction.current;
               runAction(action ?? (() => store.getState().refresh()));

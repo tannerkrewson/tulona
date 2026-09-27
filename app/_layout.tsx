@@ -43,15 +43,7 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen name="activity-session/activity-chooser" />
-            <Stack.Screen
-              name="routine/[routineId]"
-              options={{
-                animation: 'slide_from_bottom',
-                contentStyle: { backgroundColor: 'transparent' },
-                gestureEnabled: false,
-                presentation: 'transparentModal',
-              }}
-            />
+            <Stack.Screen name="routine/[routineId]" />
             <Stack.Screen name="routine-edit/[routineId]" />
             <Stack.Screen name="routine-chooser" />
             <Stack.Screen name="habit/[habitId]" />

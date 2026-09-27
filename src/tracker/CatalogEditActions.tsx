@@ -25,6 +25,7 @@ export function CatalogEditActions({
       style={{
         alignItems: 'center',
         flexDirection: 'row',
+        gap: 8,
         ...(inline ? { flexShrink: 0 } : { justifyContent: 'flex-end', width: '100%' }),
       }}
     >

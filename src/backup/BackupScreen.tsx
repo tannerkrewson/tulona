@@ -653,14 +653,14 @@ function BackupContent({
           {success?.startsWith('Data replaced') ? (
             <AppButton
               label="Reload active dataset"
-              onPress={() => router.replace('/(tabs)')}
+              onPress={() => router.replace('/')}
               testID="reload-after-restore"
             />
           ) : null}
           {success?.startsWith('Timemator tracker data') ? (
             <AppButton
               label="Reload tracker"
-              onPress={() => router.replace('/(tabs)')}
+              onPress={() => router.replace('/')}
               testID="reload-after-timemator-import"
             />
           ) : null}
@@ -708,7 +708,7 @@ export default function BackupScreen({
 }) {
   const { colors } = useAppTheme();
   const router = useRouter();
-  const backAction = onBack ?? (() => goBackInAppStack(router, '/(tabs)/settings'));
+  const backAction = onBack ?? (() => goBackInAppStack(router, '/settings'));
   const [runtime, setRuntime] = useState<BackupRuntime | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 

@@ -152,16 +152,16 @@ function bootRoutingPreservesDeepLinks(): void {
     'boot must preserve a valid folder deep link'
   );
   assert(
-    destinationAfterBoot({ kind: 'tabs' }, '/(tabs)') === null,
-    'boot must not replace an already-resolved tab route'
+    destinationAfterBoot({ kind: 'tabs' }, '/(tabs)') === '/',
+    'boot must normalize a route-group path to the tracker root'
   );
   assert(
     destinationAfterBoot({ kind: 'tabs' }, '/activity/activity-id') === null,
     'boot must preserve an activity deep link'
   );
   assert(
-    destinationAfterBoot({ kind: 'tabs' }, '/') === '/(tabs)',
-    'boot must route the root path to the tabs'
+    destinationAfterBoot({ kind: 'tabs' }, '/') === null,
+    'the root path is already the tracker tab and needs no redirect'
   );
   assert(
     destinationAfterBoot({ kind: 'runner', routineId: ids.routine }, '/history') ===

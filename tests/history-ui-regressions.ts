@@ -22,6 +22,8 @@ const catalogHeader = read('src/tracker/CatalogHeader.tsx');
 const dayTimeline = read('src/history/DayTimeline.tsx');
 const pageHeader = read('src/ui/PageHeader.tsx');
 const filterMenu = read('src/ui/PageFilterMenu.tsx');
+const iconButton = read('src/ui/IconButton.tsx');
+const habitHeader = read('src/habits/HabitHeader.tsx');
 
 assert(
   tabs.includes('name="goals"') &&
@@ -102,7 +104,7 @@ assert(
     history.includes('isCurrentPeriod') &&
     history.includes('onPress={() => setSelectedAnchor(null)}') &&
     history.includes('const goBack = useCallback') &&
-    history.includes("goBackInAppStack(router, '/(tabs)')") &&
+    history.includes("goBackInAppStack(router, '/')") &&
     !history.includes('todayButtonWrap'),
   'History must place Today beside the header while retaining its current-period hide guard'
 );
@@ -115,16 +117,20 @@ assert(
 );
 assert(
   pageHeader.includes('height: 42') &&
+    pageHeader.includes('gap: 8') &&
     read('src/ui/AppScreen.tsx').includes('<PageHeader') &&
     catalogHeader.includes('<PageHeader') &&
-    read('src/habits/HabitHeader.tsx').includes('<PageHeader'),
+    habitHeader.includes('<PageHeader'),
   'Goals, tracker, and habits must share one title row to stay aligned'
 );
 assert(
-  filterMenu.includes('width: 42') &&
+  !filterMenu.includes('width: 42') &&
+    !iconButton.includes('marginHorizontal') &&
+    !habitHeader.includes('iconSize={editOpen') &&
+    iconButton.includes('const size = primary ? 46 : 42') &&
     catalogHeader.includes('borderRadius: 16') &&
     catalogHeader.includes("overflow: 'hidden'"),
-  'tracker header spacing and create-menu clipping must match the shared controls'
+  'header actions must share one gap and one icon size, and the create menu must clip to its rounded surface'
 );
 assert(
   history.includes('accessibilityRole="tab"') &&

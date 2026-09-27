@@ -14,7 +14,7 @@ import {
 } from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { AppButton, errorText, SlideUpSheet } from '@ui';
+import { AppButton, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { goBackInAppStack } from '../navigation/app-back';
 
@@ -187,7 +187,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     ((nextRuntime: RoutineRuntime) => Promise<ActiveRoutine | void>) | null
   >(null);
 
-  const goBack = useCallback(() => goBackInAppStack(router, '/(tabs)'), [router]);
+  const goBack = useCallback(() => goBackInAppStack(router, '/'), [router]);
 
   const routeRecovered = useCallback(
     (next: ActiveRoutine | null): boolean => {
@@ -316,10 +316,11 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
 
   if (!active || !runtime) {
     return (
-      <SlideUpSheet
+      <Screen
         backgroundColor={BASE_RUNNER.background}
-        onClose={goBack}
-        testID="routine-sheet"
+        scrollable={false}
+        testID="routine-runner-screen"
+        title="Routine"
       >
         <Column alignment="center" spacing={16} style={{ width: '100%' }}>
           <AppIcon name="timer" color={BASE_RUNNER.accent} size={40} />
@@ -333,16 +334,16 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             <RecoveryActions onClose={goBack} onRetry={restore} testID="routine-recovery" />
           </RunnerError>
         </Column>
-      </SlideUpSheet>
+      </Screen>
     );
   }
 
   if (active.status === 'awaiting-next-activity') {
     return (
-      <SlideUpSheet
+      <Screen
         backgroundColor={BASE_RUNNER.background}
-        onClose={goBack}
-        testID="routine-sheet"
+        testID="routine-runner-screen"
+        title={active.routineSnapshot.name}
       >
         <Column alignment="center" spacing={16} style={{ width: '100%' }}>
           <AppIcon name="check-circle-2" color={BASE_RUNNER.accent} size={42} />
@@ -373,6 +374,14 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             variant="outlined"
             testID="routine-completion-review-steps"
           />
+          <AppButton
+            disabled={busy}
+            label="Back"
+            onPress={goBack}
+            style={{ height: 48, width: '100%' }}
+            variant="outlined"
+            testID="routine-back-to-tracker"
+          />
         </Column>
         <RoutineStepsModal
           active={active}
@@ -399,7 +408,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           }
           visible={routineMenuOpen}
         />
-      </SlideUpSheet>
+      </Screen>
     );
   }
 
@@ -408,15 +417,15 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const currentStep = steps[active.currentStepIndex];
   if (!currentStep) {
     return (
-      <SlideUpSheet
+      <Screen
         backgroundColor={BASE_RUNNER.background}
-        onClose={goBack}
-        testID="routine-sheet"
+        testID="routine-runner-screen"
+        title={active.routineSnapshot.name}
       >
         <RunnerError message="The active routine has no current step." palette={BASE_RUNNER}>
           <RecoveryActions onClose={goBack} testID="routine-step-recovery" />
         </RunnerError>
-      </SlideUpSheet>
+      </Screen>
     );
   }
 
@@ -469,23 +478,12 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     : RUNNER.accent;
 
   return (
-    <SlideUpSheet
+    <Screen
       backgroundColor={RUNNER.background}
-      contentTestID="routine-runner-content"
-      onClose={goBack}
-      testID="routine-sheet"
+      testID="routine-runner-screen"
+      title={active.routineSnapshot.name}
     >
       <Column spacing={18} style={styles.runnerContent}>
-        <View style={styles.titleWrap}>
-          <Text
-            numberOfLines={1}
-            textStyle={{ color: RUNNER.text, fontSize: 30, fontWeight: '700', lineHeight: 36 }}
-            testID="routine-title"
-          >
-            {active.routineSnapshot.name}
-          </Text>
-        </View>
-
         <Row alignment="center" spacing={10} style={styles.timeRange}>
           <Text textStyle={{ color: RUNNER.muted, fontSize: 15 }}>
             {absoluteTime(currentSession?.startedAt ?? active.currentStepStartedAt)}
@@ -637,7 +635,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           <RoundControl
             disabled={busy || isPaused}
             emphasis
-            icon="play"
+            icon="arrow-right"
             label="Complete current step"
             onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.done())}
             palette={RUNNER}
@@ -757,6 +755,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
         busy={busy}
         allowReplace={active.routineSnapshot.trackingMode === 'overall'}
         onClose={() => setStopOpen(false)}
+        onBack={goBack}
         palette={RUNNER}
         onSwitch={() =>
           void runAction(
@@ -779,7 +778,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
         }}
         visible={stopOpen}
       />
-    </SlideUpSheet>
+    </Screen>
   );
 }
 
@@ -792,7 +791,7 @@ function ProgressRing({
   size: number;
   palette: RunnerPalette;
 }) {
-  const strokeWidth = 6;
+  const strokeWidth = 8;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   return (
@@ -839,7 +838,15 @@ function RoundControl({
 }: {
   disabled: boolean;
   emphasis?: boolean;
-  icon: 'check' | 'clock' | 'list-checks' | 'pause' | 'play' | 'skip-forward' | 'square';
+  icon:
+    | 'arrow-right'
+    | 'check'
+    | 'clock'
+    | 'list-checks'
+    | 'pause'
+    | 'play'
+    | 'skip-forward'
+    | 'square';
   label: string;
   onPress: () => void;
   palette: RunnerPalette;
@@ -893,7 +900,7 @@ function RunnerModal({
 }) {
   const insets = useSafeAreaInsets();
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
       <View style={styles.modalRoot}>
         <Pressable accessibilityLabel="Close modal" onPress={onClose} style={styles.modalScrim} />
         <View
@@ -902,19 +909,16 @@ function RunnerModal({
             {
               backgroundColor: palette.modalSheet,
               borderColor: palette.border,
-              paddingBottom: Math.max(insets.bottom, 18),
+              paddingBottom: Math.max(insets.bottom, 18) + 16,
             },
           ]}
         >
-          <View style={styles.modalHandleArea}>
-            <View style={[styles.modalHandle, { backgroundColor: palette.muted }]} />
-          </View>
           <Row alignment="center" style={styles.modalHeader}>
             <Text textStyle={{ color: palette.text, fontSize: 20, fontWeight: '800' }}>
               {title}
             </Text>
             <Pressable accessibilityLabel="Close modal" onPress={onClose} style={styles.modalClose}>
-              <Text textStyle={{ color: palette.muted, fontSize: 24 }}>×</Text>
+              <AppIcon color={palette.muted} name="x" size={23} strokeWidth={2.5} />
             </Pressable>
           </Row>
           {scrollable ? (
@@ -1254,6 +1258,7 @@ function RoutineStepsModal({
 function StopModal({
   allowReplace,
   busy,
+  onBack,
   onClose,
   onReplace,
   onSwitch,
@@ -1262,6 +1267,7 @@ function StopModal({
 }: {
   allowReplace: boolean;
   busy: boolean;
+  onBack: () => void;
   onClose: () => void;
   onReplace: () => void;
   onSwitch: () => void;
@@ -1287,6 +1293,14 @@ function StopModal({
         onPress={onSwitch}
         palette={palette}
         testID="stop-and-switch-routine"
+      />
+      <ModalAction
+        disabled={busy}
+        icon="arrow-left"
+        label="Back"
+        onPress={onBack}
+        palette={palette}
+        testID="routine-back"
       />
     </RunnerModal>
   );
@@ -1320,9 +1334,9 @@ const styles = StyleSheet.create({
   },
   modalClose: {
     alignItems: 'center',
-    height: 38,
+    height: 44,
     justifyContent: 'center',
-    width: 38,
+    width: 44,
   },
   modalHeader: {
     justifyContent: 'space-between',
@@ -1333,13 +1347,6 @@ const styles = StyleSheet.create({
     maxHeight: '68%',
     width: '100%',
   },
-  modalHandleArea: {
-    alignItems: 'center',
-    height: 22,
-    justifyContent: 'center',
-    width: '100%',
-  },
-  modalHandle: { borderRadius: 2, height: 4, opacity: 0.5, width: 38 },
   compactOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1417,7 +1424,6 @@ const styles = StyleSheet.create({
     minHeight: 34,
     paddingHorizontal: 12,
   },
-  titleWrap: { alignSelf: 'flex-start', maxWidth: '100%' },
   currentStepName: { alignItems: 'center', width: '100%' },
   stepText: {
     flex: 1,

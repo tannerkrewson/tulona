@@ -80,7 +80,7 @@ export interface ActivitySessionScreenProps {
 export function ActivitySessionScreen({ transitionId }: ActivitySessionScreenProps) {
   const { colors } = useAppTheme();
   const router = useRouter();
-  const close = useCallback(() => goBackInAppStack(router, '/(tabs)'), [router]);
+  const close = useCallback(() => goBackInAppStack(router, '/'), [router]);
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -186,7 +186,7 @@ function ActivitySessionContent({
   if (!catalog || !transition) {
     return (
       <SlideUpSheet
-        onClose={() => goBackInAppStack(router, '/(tabs)')}
+        onClose={() => goBackInAppStack(router, '/')}
         testID="activity-session-sheet"
       >
         <SessionError
@@ -195,7 +195,7 @@ function ActivitySessionContent({
               ? errorText(persistenceError)
               : (contextError ?? 'This activity session is no longer available.')
           }
-          onClose={() => goBackInAppStack(router, '/(tabs)')}
+          onClose={() => goBackInAppStack(router, '/')}
           onRetry={() => {
             void store.getState().hydrate();
             loadTransitionContext();
@@ -289,14 +289,14 @@ function ActivitySessionContent({
     void runAction(async () => {
       await store.getState().deleteTransition(transition.id, { confirm: true });
       setDeleteConfirmationOpen(false);
-      goBackInAppStack(router, '/(tabs)');
+      goBackInAppStack(router, '/');
     });
 
   return (
     <>
       <SlideUpSheet
         contentTestID="activity-session-screen"
-        onClose={() => goBackInAppStack(router, '/(tabs)')}
+        onClose={() => goBackInAppStack(router, '/')}
         testID="activity-session-sheet"
       >
         <Column spacing={18} style={{ width: '100%' }}>

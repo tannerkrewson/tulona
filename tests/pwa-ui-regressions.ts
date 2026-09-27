@@ -104,6 +104,13 @@ assert(
   'the default safe-area token must be zero for non-iOS web targets'
 );
 assert(
+  html.includes('--tulona-safe-area-top: env(safe-area-inset-top, 0px)') &&
+    html.includes('body::before') &&
+    html.includes('height: var(--tulona-safe-area-top)') &&
+    html.includes('apple-mobile-web-app-status-bar-style" content="default"'),
+  'the iOS PWA status area must stay opaque above page scrims'
+);
+assert(
   tabs.includes('height: (isWeb ? `calc(64px + ${safeAreaBottom})`') &&
     tabs.includes('paddingBottom: (isWeb ? `calc(6px + ${safeAreaBottom})`'),
   'the tab bar must reserve the gated inset during its first layout'
@@ -153,7 +160,7 @@ assert(
   'tracker edit-mode activity arrows must be inline and refresh the visible catalog after reorder'
 );
 assert(
-  folderDetail.includes("const goBackToTracker = () => router.replace('/(tabs)')") &&
+  folderDetail.includes("const goBackToTracker = () => router.replace('/')") &&
     folderDetail.includes('onBack={goBackToTracker}') &&
     folderDetail.includes('await store.getState().hydrate()'),
   'folder back must return to the tracker context and child reorders must refresh the catalog'

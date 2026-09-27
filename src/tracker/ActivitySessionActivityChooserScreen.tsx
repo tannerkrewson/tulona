@@ -80,7 +80,7 @@ export function ActivitySessionActivityChooserScreen({
     if (routineId) {
       goBackInAppStack(router, `/routine/${encodeURIComponent(routineId)}`);
     } else if (returnToTracker) {
-      router.replace('/(tabs)');
+      router.replace('/');
     } else {
       goBackInAppStack(router, `/activity-session/${encodeURIComponent(transitionId ?? '')}`);
     }
@@ -135,10 +135,10 @@ export function ActivitySessionActivityChooserScreen({
     try {
       if (routineId) {
         await runtime.routineService.stopAndReplaceActivity(activityId as UUID);
-        router.replace('/(tabs)');
+        router.replace('/');
       } else if (transition) {
         await runtime.trackerStore.getState().reassignTransition(transition.id, activityId);
-        if (returnToTracker) router.replace('/(tabs)');
+        if (returnToTracker) router.replace('/');
         else returnToSession();
       }
     } catch (choiceError) {

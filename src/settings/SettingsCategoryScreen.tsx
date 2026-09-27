@@ -197,7 +197,7 @@ function SettingsCategoryContent({ category, goBack, router, store }: CategoryCo
         footer={
           <Column spacing={16} style={{ width: '100%' }}>
             <SettingsActionError onBack={goBack} store={store} />
-            <PrototypeDataReset onCleared={() => router.replace('/(tabs)')} />
+            <PrototypeDataReset onCleared={() => router.replace('/')} />
           </Column>
         }
         onBack={goBack}
@@ -231,8 +231,8 @@ export default function SettingsCategoryScreen({
     : returnFromDropbox;
   const goBack = () =>
     isDropboxReturn === '1'
-      ? router.replace('/(tabs)/settings')
-      : goBackInAppStack(router, '/(tabs)/settings');
+      ? router.replace('/settings')
+      : goBackInAppStack(router, '/settings');
   const category = getSettingsCategory(categoryId);
   const [store, setStore] = useState<SettingsStore | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -274,7 +274,7 @@ export default function SettingsCategoryScreen({
             />
           ) : null}
           {category.id === 'data' ? (
-            <PrototypeDataReset onCleared={() => router.replace('/(tabs)')} />
+            <PrototypeDataReset onCleared={() => router.replace('/')} />
           ) : null}
         </Column>
       </Screen>
