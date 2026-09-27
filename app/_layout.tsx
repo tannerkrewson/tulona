@@ -1,67 +1,63 @@
-import { useEffect } from 'react';
-import { Stack } from 'expo-router';
-import Head from 'expo-router/head';
-import { StyleSheet, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { Suspense, useEffect, useState } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 
-import { registerServiceWorker } from '@/src/pwa/registerServiceWorker';
-import { BootCoordinatorGate } from '@/src/orchestration';
-import { ActiveActivityBar } from '@/src/tracker';
-import { ActiveActivityWidgetBridge } from '@/src/widgets/ActiveActivityWidgetBridge';
-import { ThemeProvider } from '@theme';
+import LaunchCrashRecovery from '../src/diagnostics/LaunchCrashRecovery';
+import {
+  LAUNCH_CRASH_REPORT_KEY,
+  parseLaunchCrashReport,
+  type LaunchCrashReport,
+} from '../src/diagnostics/launchCrashReporter';
+
+const NormalAppLayout = React.lazy(() => import('../src/diagnostics/NormalAppLayout'));
 
 export default function RootLayout() {
+  const [report, setReport] = useState<LaunchCrashReport | null | undefined>(() =>
+    Platform.OS === 'web' ? null : undefined
+  );
+
   useEffect(() => {
-    registerServiceWorker();
+    let isMounted = true;
+
+    if (Platform.OS === 'web') return;
+
+    AsyncStorage.getItem(LAUNCH_CRASH_REPORT_KEY)
+      .then((storedReport) => {
+        if (isMounted) setReport(parseLaunchCrashReport(storedReport));
+      })
+      .catch(() => {
+        if (isMounted) setReport(null);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
+  if (report === undefined) return <View style={styles.loading} />;
+
+  if (report) {
+    return (
+      <LaunchCrashRecovery
+        report={report}
+        onContinue={() => {
+          void AsyncStorage.removeItem(LAUNCH_CRASH_REPORT_KEY).catch(() => {});
+          setReport(null);
+        }}
+      />
+    );
+  }
+
   return (
-    <ThemeProvider>
-      <>
-        <Head>
-          <title>Tulona</title>
-        </Head>
-        <View role="main" style={{ flex: 1 }}>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen
-              name="(tabs)"
-              options={{
-                // The tab navigator is the root destination. Never let an
-                // edge swipe pop it while leaving nested route gestures on.
-                gestureEnabled: false,
-              }}
-            />
-            <Stack.Screen name="history" />
-            <Stack.Screen name="goal-edit/[goalId]" />
-            <Stack.Screen name="goal-review/[goalId]" />
-            <Stack.Screen name="activity/[activityId]" />
-            <Stack.Screen
-              name="activity-session/[transitionId]"
-              options={{
-                animation: 'slide_from_bottom',
-                contentStyle: { backgroundColor: 'transparent' },
-                gestureEnabled: false,
-                presentation: 'transparentModal',
-              }}
-            />
-            <Stack.Screen name="activity-session/activity-chooser" />
-            <Stack.Screen name="routine/[routineId]" />
-            <Stack.Screen name="routine-edit/[routineId]" />
-            <Stack.Screen name="routine-chooser" />
-            <Stack.Screen name="habit/[habitId]" />
-            <Stack.Screen name="habit-import" />
-            <Stack.Screen name="habit-review" />
-            <Stack.Screen name="folder-edit/[folderId]" />
-            <Stack.Screen name="backup" />
-            <Stack.Screen name="dropbox-auth" />
-            <Stack.Screen name="settings/[category]" />
-          </Stack>
-          <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-            <BootCoordinatorGate />
-            <ActiveActivityWidgetBridge />
-            <ActiveActivityBar />
-          </View>
-        </View>
-      </>
-    </ThemeProvider>
+    <Suspense fallback={<View style={styles.loading} />}>
+      <NormalAppLayout />
+    </Suspense>
   );
 }
+
+const styles = StyleSheet.create({
+  loading: {
+    backgroundColor: '#0f0e13',
+    flex: 1,
+  },
+});

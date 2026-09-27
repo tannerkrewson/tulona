@@ -5,6 +5,7 @@
     "noEmit": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "customConditions": ["react-native", "react-native-legacy-deep-imports"],
     "baseUrl": ".",
     "ignoreDeprecations": "6.0",
     "paths": {

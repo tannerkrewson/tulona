@@ -10,9 +10,8 @@ function assert(condition: unknown, message: string): asserts condition {
 const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const importer = read('src/habits/HabitImportScreen.tsx');
-const header = read('src/habits/HabitHeader.tsx');
-const list = read('src/habits/HabitListScreen.tsx');
-const layout = read('app/_layout.tsx');
+const backupScreen = read('src/backup/BackupScreen.tsx');
+const layout = read('src/diagnostics/NormalAppLayout.tsx');
 const gitignore = read('.gitignore');
 
 assert(gitignore.includes('/Habits_*.xlsx'), 'TickTick exports must remain ignored');
@@ -38,10 +37,11 @@ assert(
   'the importer must expose history, status, archive, and duplicate controls'
 );
 assert(
-  header.includes('import-ticktick-habits') &&
-    list.includes("router.push('/habit-import' as Href)") &&
+  backupScreen.includes('testID="import-ticktick-habits"') &&
+    backupScreen.includes('Import TickTick habits') &&
+    backupScreen.includes("router.push('/habit-import' as Href)") &&
     layout.includes('<Stack.Screen name="habit-import" />'),
-  'the habit list must provide a route to the TickTick importer'
+  'the import control must live with backup and import options in Settings'
 );
 
 console.log('Validated TickTick importer selection and review controls.');

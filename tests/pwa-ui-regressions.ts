@@ -21,7 +21,8 @@ const activityRow = read('src/tracker/ActivityRow.tsx');
 const catalogEditActions = read('src/tracker/CatalogEditActions.tsx');
 const folderDetail = read('src/tracker/FolderDetailScreen.tsx');
 const systemColorScheme = read('src/theme/systemColorScheme.ts');
-const rootLayout = read('app/_layout.tsx');
+const metroConfig = read('metro.config.js');
+const rootLayout = read('src/diagnostics/NormalAppLayout.tsx');
 const folderRoute = 'app/(tabs)/(tracker)/folder/[folderId].tsx';
 
 const safariUA =
@@ -181,6 +182,12 @@ assert(
   systemColorScheme.includes("window.addEventListener('pageshow', sync)") &&
     systemColorScheme.includes('media.addListener?.(sync)'),
   'system theme changes must resync after a page return and legacy media-query events'
+);
+assert(
+  metroConfig.includes("moduleName === 'react-native/Libraries/Image/AssetRegistry'") &&
+    metroConfig.includes("'react-native/asset-registry'") &&
+    metroConfig.includes("platform === 'web'"),
+  'the Skia web renderer must use RN 0.88’s public asset registry entry'
 );
 
 console.log('Validated iOS Safari/PWA safe-area gating and live tab-theme regression guards.');

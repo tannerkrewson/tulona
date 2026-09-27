@@ -26,5 +26,5 @@ export function useSystemColorScheme(): ColorSchemeName {
     };
   }, []);
 
-  return Platform.OS === 'web' ? webColorScheme : nativeColorScheme;
+  return Platform.OS === 'web' ? webColorScheme : (nativeColorScheme ?? 'light');
 }

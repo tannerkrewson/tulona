@@ -14,9 +14,12 @@ concurrency:
   group: ios-build-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  EXPO_PUBLIC_BUILD_SHA: ${{ github.sha }}
+
 jobs:
   validate:
-    name: Validate iOS navigation and widget extension
+    name: Validate iOS launch diagnostics
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -40,11 +43,14 @@ jobs:
       - name: Test widget state mapping
         run: npm run test:widget
 
+      - name: Test fatal launch error capture
+        run: npm run test:launch-crash-reporter
+
       - name: Validate iOS JavaScript bundle
         run: |
           bundle_dir="$(mktemp -d)"
           npx expo export:embed \
-            --entry-file node_modules/expo-router/entry.js \
+            --entry-file index.js \
             --platform ios \
             --dev false \
             --bundle-output "$bundle_dir/main.jsbundle" \
@@ -61,19 +67,17 @@ jobs:
           const widgetPlugin = (config.plugins ?? []).find(
             (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-widgets'
           );
-          const activeActivityWidget = widgetPlugin?.[1]?.widgets?.find(
-            (widget) => widget.name === 'ActiveActivityWidget'
-          );
+          const packageConfig = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           if (config.ios?.bundleIdentifier !== 'com.tannerkrewson.tulona') {
             throw new Error('Unexpected iOS bundle identifier');
           }
-          if (
-            !activeActivityWidget?.ios?.supportedFamilies?.includes('systemSmall')
-          ) {
-            throw new Error('The ActiveActivityWidget systemSmall family is not configured');
+          if (widgetPlugin) {
+            throw new Error('The diagnostic build must not configure expo-widgets');
           }
-          if (widgetPlugin?.[1]?.groupIdentifier !== 'group.com.tannerkrewson.tulona') {
-            throw new Error('The widget app group is not configured');
+          if (
+            !packageConfig.expo?.autolinking?.apple?.exclude?.includes('expo-widgets')
+          ) {
+            throw new Error('expo-widgets must be excluded from Apple autolinking');
           }
           NODE
 
@@ -81,15 +85,21 @@ jobs:
         run: |
           npx expo prebuild --platform ios --no-install --clean
           test -f ios/Tulona.xcodeproj/project.pbxproj
-          test -f ios/ExpoWidgetsTarget/ActiveActivityWidget.swift
-          test -f ios/ExpoWidgetsTarget/ExpoWidgetsTarget.entitlements
-          test -f ios/Tulona/Tulona.entitlements
-          grep -Fq 'ExpoWidgetsTarget' ios/Tulona.xcodeproj/project.pbxproj
-          grep -Fq '.systemSmall' ios/ExpoWidgetsTarget/ActiveActivityWidget.swift
-          grep -Fq 'group.com.tannerkrewson.tulona' ios/ExpoWidgetsTarget/ExpoWidgetsTarget.entitlements
-          grep -Fq 'group.com.tannerkrewson.tulona' ios/Tulona/Tulona.entitlements
-          grep -Fq 'ActiveActivityWidgetBridge' app/_layout.tsx
-          grep -Fq '<ActiveActivityWidgetBridge />' app/_layout.tsx
+          test ! -e ios/ExpoWidgetsTarget
+          if grep -Fq 'ExpoWidgetsTarget' ios/Tulona.xcodeproj/project.pbxproj; then
+            echo 'Unexpected widget extension target in generated Xcode project'
+            exit 1
+          fi
+          if grep -R -Fq 'group.com.tannerkrewson.tulona' ios/Tulona; then
+            echo 'Unexpected widget app-group entitlement in generated iOS app'
+            exit 1
+          fi
+          if grep -Fq 'ActiveActivityWidgetBridge' app/_layout.tsx; then
+            echo 'The diagnostic root must not mount the widget bridge'
+            exit 1
+          fi
+          grep -Fq 'LAUNCH_CRASH_REPORT_KEY' app/_layout.tsx
+          grep -Fq 'installLaunchCrashReporter' index.js
           grep -Fq 'expo-router/unstable-native-tabs' src/navigation/AppTabs.native.tsx
           grep -Fq 'name="(tracker)"' src/navigation/AppTabs.native.tsx
           grep -Fq 'gestureEnabled: true' 'app/(tabs)/(tracker)/_layout.tsx'
@@ -98,7 +108,7 @@ jobs:
     name: Build unsigned IPA
     if: github.event_name != 'pull_request'
     needs: validate
-    runs-on: macos-latest
+    runs-on: xcode-27
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -112,7 +122,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate native iOS project with widget extension
+      - name: Generate native iOS diagnostic project without widgets
         run: npx expo prebuild --platform ios --no-install --clean
 
       - name: Install CocoaPods dependencies
@@ -139,9 +149,7 @@ jobs:
           test -d "$APP_PATH"
           test ! -d "$APP_PATH/_CodeSignature"
           WIDGET_PATH="$APP_PATH/PlugIns/ExpoWidgetsTarget.appex"
-          test -d "$WIDGET_PATH"
-          test -f "$WIDGET_PATH/Info.plist"
-          test ! -d "$WIDGET_PATH/_CodeSignature"
+          test ! -e "$WIDGET_PATH"
           rm -rf artifacts
           mkdir -p artifacts/Payload
           cp -R "$APP_PATH" artifacts/Payload/Tulona.app
@@ -151,7 +159,10 @@ jobs:
           )
           unzip -t "artifacts/Tulona-${GITHUB_SHA}-unsigned.ipa" >/dev/null
           unzip -l "artifacts/Tulona-${GITHUB_SHA}-unsigned.ipa" > ipa-contents.txt
-          grep -Fq 'ExpoWidgetsTarget.appex/Info.plist' ipa-contents.txt
+          if grep -Fq 'ExpoWidgetsTarget.appex' ipa-contents.txt; then
+            echo 'The diagnostic IPA unexpectedly contains a widget extension'
+            exit 1
+          fi
 
       - name: Upload unsigned IPA directly
         uses: actions/upload-artifact@v7

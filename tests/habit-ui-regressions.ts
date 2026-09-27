@@ -37,11 +37,12 @@ assert(
   habitList.includes(
     'const [selectedCategory, setSelectedCategory] = useState<HabitCategory>(DEFAULT_HABIT_CATEGORY);'
   ) &&
-    habitList.includes('testID="habit-category-switcher"') &&
-    habitList.includes('accessibilityRole="tab"') &&
-    habitList.includes('testID={`habit-category-${option.value}`}') &&
+    habitList.includes('<PageFilterMenu') &&
+    habitList.includes('accessibilityLabel="Choose habit view"') &&
+    habitList.includes('testID="habit-view-menu"') &&
+    habitList.includes('defaultValue={DEFAULT_HABIT_CATEGORY}') &&
     habitList.includes("selectedCategory === 'active'"),
-  'habit list must expose an accessible category switcher with Active selected by default'
+  'habit list must expose an accessible view menu with Active selected by default'
 );
 assert(
   habitList.includes('function HabitCategoryList(') &&
