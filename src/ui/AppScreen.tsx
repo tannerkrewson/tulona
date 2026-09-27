@@ -1,10 +1,10 @@
-import { Column, Host, Row, ScrollView, Spacer, Text } from '@expo/ui';
+import { Column, Host, ScrollView } from '@expo/ui';
 import type { ComponentProps, ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAppTheme, type ThemeColors } from '@theme';
-import { IconButton } from './IconButton';
+import { useAppTheme } from '@theme';
+import { PageHeader } from './PageHeader';
 
 export interface AppScreenProps {
   onBack?: () => void;
@@ -29,57 +29,6 @@ const hostStyles = StyleSheet.create({
     gap: 16,
     maxWidth: 720,
     width: '100%',
-  },
-});
-
-function TitleRow({
-  colors,
-  headerRight,
-  onBack,
-  title,
-}: {
-  colors: ThemeColors;
-  headerRight?: ReactNode;
-  onBack?: () => void;
-  title?: string;
-}) {
-  return (
-    <View style={titleRowStyles.row}>
-      {onBack ? (
-        <IconButton
-          accessibilityHint="Returns to the previous screen"
-          icon="arrow-left"
-          label="Back"
-          onPress={onBack}
-          testID="screen-back"
-          variant="plain"
-          iconSize={23}
-        />
-      ) : null}
-      {title ? (
-        <Text
-          numberOfLines={1}
-          textStyle={{ color: colors.text, fontSize: 30, fontWeight: '700', lineHeight: 36 }}
-        >
-          {title}
-        </Text>
-      ) : null}
-      <View style={titleRowStyles.spacer} />
-      {headerRight}
-    </View>
-  );
-}
-
-const titleRowStyles = StyleSheet.create({
-  row: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 4,
-    height: 42,
-    width: '100%',
-  },
-  spacer: {
-    flex: 1,
   },
 });
 
@@ -125,7 +74,9 @@ export function AppScreen({
         <View style={[hostStyles.fill, frameStyle]}>
           <View style={hostStyles.content}>
             {onBack || title || headerRight ? (
-              <TitleRow colors={colors} headerRight={headerRight} onBack={onBack} title={title} />
+              <PageHeader onBack={onBack} title={title}>
+                {headerRight}
+              </PageHeader>
             ) : null}
             {children}
           </View>
@@ -147,29 +98,9 @@ export function AppScreen({
       }}
     >
       {onBack || title || headerRight ? (
-        <Row alignment="center" spacing={4} style={{ height: 42, width: '100%' }}>
-          {onBack ? (
-            <IconButton
-              accessibilityHint="Returns to the previous screen"
-              icon="arrow-left"
-              label="Back"
-              onPress={onBack}
-              testID="screen-back"
-              variant="plain"
-              iconSize={23}
-            />
-          ) : null}
-          {title ? (
-            <Text
-              numberOfLines={1}
-              textStyle={{ color: colors.text, fontSize: 30, fontWeight: '700', lineHeight: 36 }}
-            >
-              {title}
-            </Text>
-          ) : null}
-          <Spacer flexible />
+        <PageHeader onBack={onBack} title={title}>
           {headerRight}
-        </Row>
+        </PageHeader>
       ) : null}
       {children}
     </Column>

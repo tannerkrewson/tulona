@@ -54,11 +54,15 @@ function ChooserError({ message, children }: { message: string; children: ReactN
 }
 
 export interface ActivitySessionActivityChooserScreenProps {
-  transitionId: string;
+  transitionId?: string;
+  routineId?: string;
+  returnToTracker?: boolean;
 }
 
 export function ActivitySessionActivityChooserScreen({
   transitionId,
+  routineId,
+  returnToTracker = false,
 }: ActivitySessionActivityChooserScreenProps) {
   const { colors } = useAppTheme();
   const router = useRouter();
@@ -66,31 +70,53 @@ export function ActivitySessionActivityChooserScreen({
   const [catalog, setCatalog] = useState<CatalogCollection | null>(null);
   const [transition, setTransition] = useState<TimeTransition | null>(null);
   const [folderId, setFolderId] = useState<UUID | null>(null);
+  const [routineName, setRoutineName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const lastChoice = useRef<UUID | null | undefined>(undefined);
 
   const returnToSession = useCallback(() => {
-    goBackInAppStack(router, `/activity-session/${encodeURIComponent(transitionId)}`);
-  }, [router, transitionId]);
+    if (routineId) {
+      goBackInAppStack(router, `/routine/${encodeURIComponent(routineId)}`);
+    } else if (returnToTracker) {
+      router.replace('/(tabs)');
+    } else {
+      goBackInAppStack(router, `/activity-session/${encodeURIComponent(transitionId ?? '')}`);
+    }
+  }, [returnToTracker, router, routineId, transitionId]);
 
   useEffect(() => {
     let cancelled = false;
     void loadRoutineRuntime()
       .then(async (nextRuntime) => {
-        const [nextCatalog, context] = await Promise.all([
-          nextRuntime.catalogService.read(),
-          nextRuntime.trackerService.getTransitionContext(transitionId),
-        ]);
-        return { context, nextCatalog, nextRuntime };
+        const nextCatalog = await nextRuntime.catalogService.read();
+        if (routineId) {
+          const active = await nextRuntime.routineService.getActive();
+          if (!active || active.routineId !== routineId) {
+            throw new Error('This routine is no longer active.');
+          }
+          if (active.routineSnapshot.trackingMode !== 'overall') {
+            throw new Error('Only an overall-tracked routine can replace its activity.');
+          }
+          return {
+            context: null,
+            nextCatalog,
+            nextRuntime,
+            routineName: active.routineSnapshot.name,
+          };
+        }
+        const context = await nextRuntime.trackerService.getTransitionContext(transitionId ?? '');
+        return { context, nextCatalog, nextRuntime, routineName: null };
       })
-      .then(({ context, nextCatalog, nextRuntime }) => {
+      .then(({ context, nextCatalog, nextRuntime, routineName: nextRoutineName }) => {
         if (cancelled) return;
         setRuntime(nextRuntime);
         setCatalog(nextCatalog);
-        setTransition(context.transition);
-        if (!context.transition) setError('This activity session is no longer available.');
+        setTransition(context?.transition ?? null);
+        setRoutineName(nextRoutineName);
+        if (!routineId && !context?.transition)
+          setError('This activity session is no longer available.');
       })
       .catch((loadError: unknown) => {
         if (!cancelled) setError(errorText(loadError));
@@ -98,16 +124,23 @@ export function ActivitySessionActivityChooserScreen({
     return () => {
       cancelled = true;
     };
-  }, [reloadToken, transitionId]);
+  }, [reloadToken, routineId, transitionId]);
 
   const choose = async (activityId: UUID | null) => {
-    if (!runtime || !transition || busy) return;
+    if (!runtime || busy || (!routineId && !transition) || (routineId && activityId === null))
+      return;
     lastChoice.current = activityId;
     setBusy(true);
     setError(null);
     try {
-      await runtime.trackerStore.getState().reassignTransition(transition.id, activityId);
-      returnToSession();
+      if (routineId) {
+        await runtime.routineService.stopAndReplaceActivity(activityId as UUID);
+        router.replace('/(tabs)');
+      } else if (transition) {
+        await runtime.trackerStore.getState().reassignTransition(transition.id, activityId);
+        if (returnToTracker) router.replace('/(tabs)');
+        else returnToSession();
+      }
     } catch (choiceError) {
       setError(errorText(choiceError));
     } finally {
@@ -129,7 +162,7 @@ export function ActivitySessionActivityChooserScreen({
     setReloadToken((value) => value + 1);
   };
 
-  if (!runtime || !catalog || !transition) {
+  if (!runtime || !catalog || (!routineId && !transition)) {
     return (
       <Screen onBack={returnToSession} title="Choose activity">
         {error ? (
@@ -149,15 +182,19 @@ export function ActivitySessionActivityChooserScreen({
     );
   }
 
-  const items = [...catalog.activities, ...catalog.routines].sort(sortItems);
+  const items = (
+    routineId ? catalog.activities : [...catalog.activities, ...catalog.routines]
+  ).sort(sortItems);
   const folders = [...catalog.folders].sort(sortFolders);
   const visibleFolders = folderId === null ? folders : [];
   const visibleItems = items.filter((item) => item.folderId === folderId);
   const currentFolder = folderId === null ? null : folders.find((folder) => folder.id === folderId);
-  const currentName = transition.activityId
-    ? (resolveCatalogItem(catalog, transition.activityId, colors.primary)?.item.name ??
-      'Unavailable activity')
-    : 'No activity';
+  const currentName = routineId
+    ? (routineName ?? 'routine')
+    : transition?.activityId
+      ? (resolveCatalogItem(catalog, transition.activityId, colors.primary)?.item.name ??
+        'Unavailable activity')
+      : 'No activity';
 
   return (
     <Screen
@@ -170,13 +207,17 @@ export function ActivitySessionActivityChooserScreen({
         testID="activity-session-activity-chooser"
       >
         <Text textStyle={{ color: colors.textMuted, fontSize: 15, lineHeight: 21 }}>
-          {`Choose a replacement for ${currentName}. Activities and routines are both available.`}
+          {routineId
+            ? `Choose an activity to replace the time logged in ${currentName}.`
+            : returnToTracker
+              ? 'Choose what to track next.'
+              : `Choose a replacement for ${currentName}. Activities and routines are both available.`}
         </Text>
 
-        {folderId === null ? (
+        {folderId === null && !routineId && !returnToTracker ? (
           <AppButton
             disabled={busy}
-            label={transition.activityId === null ? 'No activity (selected)' : 'No activity'}
+            label={transition?.activityId === null ? 'No activity (selected)' : 'No activity'}
             onPress={() => void choose(null)}
             style={{ height: 54, width: '100%' }}
             testID="activity-session-choice-none"
@@ -197,7 +238,7 @@ export function ActivitySessionActivityChooserScreen({
         {visibleItems.map((item) => (
           <ActivityRow
             key={item.id}
-            active={transition.activityId === item.id}
+            active={transition?.activityId === item.id}
             color={resolveCatalogItem(catalog, item.id, colors.primary)?.displayColor}
             disabled={busy}
             item={displayItem(item)}

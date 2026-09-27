@@ -1,9 +1,9 @@
-import { Column, Row, Spacer, Text } from '@expo/ui';
+import { Column } from '@expo/ui';
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { useAppTheme } from '@theme';
-import { AppButton, IconButton } from '@ui';
+import { AppButton, IconButton, PageHeader } from '@ui';
 
 export interface HabitHeaderAction {
   label: string;
@@ -53,27 +53,12 @@ export function HabitHeader({
       }}
       testID={testID}
     >
-      <Row alignment="center" spacing={4} style={{ width: '100%' }}>
-        {onBack ? (
-          <IconButton
-            accessibilityHint="Returns to the habits list"
-            icon="arrow-left"
-            label="Back to habits"
-            onPress={onBack}
-            testID="habit-detail-back"
-            variant="plain"
-            iconSize={24}
-          />
-        ) : null}
-        <View style={{ flex: 1 }}>
-          <Text
-            numberOfLines={1}
-            textStyle={{ color: colors.text, fontSize: 30, fontWeight: '700', lineHeight: 36 }}
-          >
-            {title}
-          </Text>
-        </View>
-        <Spacer flexible />
+      <PageHeader
+        backLabel="Back to habits"
+        backTestID="habit-detail-back"
+        onBack={onBack}
+        title={title}
+      >
         {filterMenu}
         {onToggleEdit ? (
           <IconButton
@@ -97,7 +82,7 @@ export function HabitHeader({
             variant="primary"
           />
         ) : null}
-      </Row>
+      </PageHeader>
       {editOpen && editActions.length > 0 ? (
         <Pressable
           accessibilityLabel="Dismiss habit edit menu"

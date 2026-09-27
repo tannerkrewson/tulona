@@ -19,6 +19,9 @@ const goalEditorScreen = read('src/goals/GoalEditorScreen.tsx');
 const history = read('src/history/HistoryScreen.tsx');
 const tracker = read('src/tracker/ActivitiesScreen.tsx');
 const catalogHeader = read('src/tracker/CatalogHeader.tsx');
+const dayTimeline = read('src/history/DayTimeline.tsx');
+const pageHeader = read('src/ui/PageHeader.tsx');
+const filterMenu = read('src/ui/PageFilterMenu.tsx');
 
 assert(
   tabs.includes('name="goals"') &&
@@ -42,7 +45,7 @@ assert(
   'the Goals tab must render the replacement weekly-goals screen rather than a placeholder'
 );
 assert(
-  goalsScreen.includes('goal-status-filter') &&
+  goalsScreen.includes('goal-view-menu') &&
     goalsScreen.includes('goal-list') &&
     goalsScreen.includes('goal-history-circle') &&
     goalsScreen.includes('historicalCircleCount'),
@@ -99,9 +102,29 @@ assert(
     history.includes('isCurrentPeriod') &&
     history.includes('onPress={() => setSelectedAnchor(null)}') &&
     history.includes('const goBack = useCallback') &&
-    history.includes("else router.replace('/(tabs)')") &&
+    history.includes("goBackInAppStack(router, '/(tabs)')") &&
     !history.includes('todayButtonWrap'),
   'History must place Today beside the header while retaining its current-period hide guard'
+);
+assert(
+  dayTimeline.includes("tick.kind === 'hour' ? 14 : 7") &&
+    dayTimeline.includes('numberOfLines={1}') &&
+    dayTimeline.includes('tick.y - 8') &&
+    dayTimeline.includes('styles.hourMark'),
+  'day timeline must align single-line hour labels with full and half-hour marks'
+);
+assert(
+  pageHeader.includes('height: 42') &&
+    read('src/ui/AppScreen.tsx').includes('<PageHeader') &&
+    catalogHeader.includes('<PageHeader') &&
+    read('src/habits/HabitHeader.tsx').includes('<PageHeader'),
+  'Goals, tracker, and habits must share one title row to stay aligned'
+);
+assert(
+  filterMenu.includes('width: 42') &&
+    catalogHeader.includes('borderRadius: 16') &&
+    catalogHeader.includes("overflow: 'hidden'"),
+  'tracker header spacing and create-menu clipping must match the shared controls'
 );
 assert(
   history.includes('accessibilityRole="tab"') &&
@@ -112,7 +135,8 @@ assert(
   'History navigation and loading/error states must provide accessible identifiers and labels'
 );
 assert(
-  history.includes('contentState: HistoryContentState') &&
+  history.includes('contentState?: HistoryContentState') &&
+    history.includes('contentState: HistoryContentState') &&
     history.includes('testID="history-loading"') &&
     history.includes('testID="history-empty"') &&
     history.includes('testID="history-error"') &&

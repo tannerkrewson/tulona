@@ -34,6 +34,8 @@ import { createTrackerService } from '../src/tracker/tracker-service';
 import type { TrackerRepositoryApi } from '../src/data/tracker-repository';
 import { parseBackup } from '../src/backup/backup-import';
 import { CURRENT_BACKUP_SCHEMA_VERSION, CURRENT_BACKUP_VERSION } from '../src/backup/backup-schema';
+import { dayTimelineHourTicks } from '../src/history/day-timeline-layout';
+import { parseLocalDateTimeInput } from '../src/tracker/session-time';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -366,6 +368,42 @@ if (dstBefore !== dstAfter) {
     dstDay.endMs - dstDay.startMs,
     23 * 60 * 60 * 1000,
     'spring-forward logical day uses the local DST boundary'
+  );
+  const springTicks = dayTimelineHourTicks(dstDay);
+  assertEqual(springTicks.length, 46, 'spring-forward timeline advances by elapsed half-hours');
+  assert(
+    springTicks.every((tick) => !/^2 AM$/.test(tick.label)),
+    'spring-forward timeline omits the skipped local hour'
+  );
+  assertEqual(
+    parseLocalDateTimeInput('2026-03-08T02:30'),
+    null,
+    'a nonexistent spring-forward wall time is rejected'
+  );
+}
+
+const fallBefore = new Date(2026, 10, 1).getTimezoneOffset();
+const fallAfter = new Date(2026, 10, 2).getTimezoneOffset();
+if (fallBefore !== fallAfter) {
+  const fallDay = historyDayPeriod(localTimestamp(2026, 11, 1, 12), { rolloverHour: 0 });
+  assertEqual(
+    fallDay.endMs - fallDay.startMs,
+    25 * 60 * 60 * 1000,
+    'fall-back logical day includes the repeated local hour'
+  );
+  const fallTicks = dayTimelineHourTicks(fallDay);
+  const repeatedOneAm = fallTicks.filter(
+    (tick) => tick.kind === 'hour' && tick.label.startsWith('1 AM')
+  );
+  assertEqual(fallTicks.length, 50, 'fall-back timeline advances by elapsed half-hours');
+  assertEqual(repeatedOneAm.length, 2, 'fall-back timeline marks both one o’clock hours');
+  assert(
+    repeatedOneAm[0]?.label !== repeatedOneAm[1]?.label,
+    'repeated fall-back hour labels distinguish their timezone offsets'
+  );
+  assert(
+    parseLocalDateTimeInput('2026-11-01T01:30') instanceof Date,
+    'an ambiguous fall-back wall time resolves to a valid instant'
   );
 }
 

@@ -130,7 +130,7 @@ assert(
 const session = read('src/tracker/ActivitySessionScreen.tsx');
 const sessionModalStart = session.indexOf('<ConfirmationModal');
 assert(
-  sessionModalStart > session.lastIndexOf('</Screen>') &&
+  sessionModalStart > session.lastIndexOf('</SlideUpSheet>') &&
     session.includes('onConfirm={confirmDeleteSession}') &&
     session.includes('tone="danger"'),
   'activity-session deletion must render its destructive confirmation as a sibling modal after the screen'

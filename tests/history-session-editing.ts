@@ -25,31 +25,27 @@ const service = read('src/tracker/tracker-service.ts');
 const trackerStore = read('src/tracker/tracker-store.ts');
 
 assert(
-  screen.includes('<Screen onBack={() => router.back()} title={activityName}>') &&
-    [...screen.matchAll(/\{activityName\}/g)].length === 1 &&
+  screen.includes('<SlideUpSheet') &&
     screen.includes('testID="activity-session-summary"') &&
+    screen.includes('activityColor') &&
     !screen.includes('ACTIVE SESSION') &&
-    !screen.includes('SESSION'),
-  'the session summary must keep only the page title and remove the duplicate activity name'
+    !screen.includes('<Screen'),
+  'the session detail must use a draggable sheet with a color-treated activity hero and no page labels'
 );
 assert(
-  screen.includes('testID="activity-session-status"') &&
-    screen.includes('testID="activity-session-duration"') &&
-    screen.includes('<Spacer flexible />') &&
+  screen.includes('testID="activity-session-duration"') &&
+    screen.includes('styles.timeSummary') &&
     screen.includes('formatSessionDate(startMs)') &&
     screen.includes('formatSessionTime(startMs)') &&
     screen.includes('numberOfLines={1}'),
-  'session status and prominent duration must share the top row with separated non-wrapping dates/times'
+  'session duration and compact start/end times must stay readable without wrapping'
 );
 assert(
-  screen.includes(
-    '<Column spacing={14} style={{ width: \'100%\' }} testID="activity-session-summary">'
-  ) &&
-    screen.includes(
-      '<Column spacing={12} style={{ width: \'100%\' }} testID="activity-session-corrections">'
-    ) &&
-    !screen.includes('backgroundColor: colors.surface'),
-  'the summary and corrections must be direct page content rather than card shells'
+  screen.includes('styles.hero') &&
+    screen.includes('activity-session-actions') &&
+    editor.includes('testID="activity-session-edit-times"') &&
+    !screen.includes('activity-session-corrections'),
+  'the sheet must prioritize the colored activity, duration, time controls, and direct actions'
 );
 assert(
   editor.includes("<Column spacing={8} style={{ width: '100%' }}") &&
@@ -70,7 +66,7 @@ assert(
   /isActive\s*\?\s*'Now'/.test(editor) &&
     screen.includes('isActive={isActive}') &&
     editor.includes('activity-session-time-context') &&
-    editor.includes('Changes are checked against neighboring sessions.'),
+    editor.includes('Starts ${formatSessionDate(startMs)} · Ends ${toDateContext}'),
   'active sessions must show an open-ended Now value and date context outside the control'
 );
 assert(
@@ -138,5 +134,5 @@ assert(
 );
 
 console.log(
-  'Validated session hierarchy, direct surfaces, two-section native/web time editing, open-ended Now semantics, local dates, and order validation.'
+  'Validated the activity session sheet, two-section native/web time editing, open-ended Now semantics, local dates, and order validation.'
 );

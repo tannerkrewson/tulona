@@ -369,6 +369,10 @@ async function run(): Promise<void> {
     (await stepTracked.trackerService.getActiveTransition(startedAt))?.activityId === activityId,
     'step-tracked routines start with the first step activity'
   );
+  await rejects(
+    () => stepTracked.routineService.stopAndReplaceActivity(secondActivityId),
+    'step-tracked routines cannot replace a single activity for the whole run'
+  );
   stepTracked.setNow(at(2_000));
   await stepTracked.routineService.skip(at(1_000));
   assert(
@@ -389,6 +393,76 @@ async function run(): Promise<void> {
   assert(
     stepRun.id === 'ffffffff-ffff-4fff-8fff-ffffffffffff',
     'step run persists its supplied ID'
+  );
+
+  const aliasedIds = await createServices(new MemoryStorage());
+  const sharedId = 'abababab-abab-4aba-8aba-abababababab';
+  await aliasedIds.routineService.startRoutine(routineId, {
+    id: sharedId,
+    transitionId: sharedId,
+    startedAt,
+  });
+  aliasedIds.setNow(at(4_000));
+  const stoppedAliasedRun = await aliasedIds.routineService.cancelAndFinalize(at(4_000));
+  const aliasedTransitions = (
+    await aliasedIds.trackerService.query(
+      { startMs: Date.parse(startedAt) - 1_000, endMs: Date.parse(at(4_000)) },
+      Date.parse(at(4_000))
+    )
+  ).transitions;
+  assert(
+    stoppedAliasedRun.run.status === 'cancelled' &&
+      aliasedTransitions.some(
+        (transition) =>
+          transition.id !== sharedId &&
+          transition.timestamp === at(4_000) &&
+          transition.activityId === null
+      ),
+    'stopping a run whose start transition shares its run ID creates a unique, recoverable stop marker'
+  );
+
+  const replacedRun = await createServices(new MemoryStorage());
+  await replacedRun.routineService.startRoutine(routineId, {
+    id: '12121212-1212-4121-8121-121212121212',
+    startedAt,
+  });
+  replacedRun.setNow(at(20_000));
+  await replacedRun.routineService.stopAndReplaceActivity(secondActivityId, at(20_000));
+  const replacedTransitions = (
+    await replacedRun.trackerService.query(
+      { startMs: Date.parse(startedAt) - 1_000, endMs: Date.parse(at(20_000)) },
+      Date.parse(at(20_000))
+    )
+  ).transitions;
+  assert(
+    replacedTransitions.some(
+      (transition) =>
+        transition.timestamp === startedAt && transition.activityId === secondActivityId
+    ) && (await replacedRun.routineRepository.readActive()) === null,
+    'replace rewrites the routine logged time as one activity and finalizes the run'
+  );
+
+  const switchedRun = await createServices(new MemoryStorage());
+  await switchedRun.routineService.startRoutine(routineId, {
+    id: '34343434-3434-4434-8434-343434343434',
+    startedAt,
+  });
+  switchedRun.setNow(at(10_000));
+  const nextBoundary = await switchedRun.routineService.stopAndSwitch(at(10_000));
+  await switchedRun.trackerService.reassignTransition(nextBoundary.id, secondActivityId);
+  const switchedTransitions = (
+    await switchedRun.trackerService.query(
+      { startMs: Date.parse(startedAt) - 1_000, endMs: Date.parse(at(10_000)) },
+      Date.parse(at(10_000))
+    )
+  ).transitions;
+  assert(
+    switchedTransitions.some(
+      (transition) => transition.timestamp === startedAt && transition.activityId === routineId
+    ) &&
+      (await switchedRun.trackerService.getActiveTransition(at(10_000)))?.activityId ===
+        secondActivityId,
+    'switch leaves routine history intact and lets the next activity begin at the stop boundary'
   );
 
   const discarded = await createServices(new MemoryStorage());
@@ -420,21 +494,15 @@ async function run(): Promise<void> {
   assert(
     pausedRun.id === '12121212-1212-4121-8121-121212121212' &&
       paused.status === 'paused' &&
-      (await pausedRoutine.trackerService.getActiveTransition())?.activityId === routineId,
-    'pausing a routine preserves its state and tracker attribution until the bar stops it'
-  );
-  await pausedRoutine.trackerService.switchActivity(null);
-  assert(
-    (await pausedRoutine.trackerService.getActiveTransition())?.activityId === null,
-    'the tracker can enter idle while the routine remains paused'
+      (await pausedRoutine.trackerService.getActiveTransition())?.activityId === null,
+    'pausing a routine preserves its state and closes its tracked interval'
   );
   pausedRoutine.setNow(at(10_000));
   const resumed = await pausedRoutine.routineService.resume();
-  const resumedTransition = await pausedRoutine.trackerService.switchActivity(routineId, {
-    source: 'routine',
-  });
+  const resumedTransition = await pausedRoutine.trackerService.getActiveTransition(at(10_000));
   assert(
     resumed.status === 'running' &&
+      resumedTransition !== null &&
       resumedTransition.activityId === routineId &&
       resumedTransition.timestamp === at(10_000),
     'resuming a paused routine reopens a new session for the same activity'

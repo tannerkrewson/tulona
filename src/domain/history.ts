@@ -11,6 +11,7 @@ import type {
   Transition,
   UUID,
 } from './models';
+import { DateTime } from 'luxon';
 import {
   clipInterval,
   dateForLogicalDay,
@@ -112,12 +113,6 @@ function yearMonthKey(year: number, month: number): MonthKey {
   return `${year}-${String(month).padStart(2, '0')}` as MonthKey;
 }
 
-function localDateKey(date: Date): LogicalDayKey {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-    date.getDate()
-  ).padStart(2, '0')}` as LogicalDayKey;
-}
-
 function parseMonthKey(value: string): { year: number; month: number } {
   const match = /^(\d{4})-(\d{2})$/.exec(value);
   const year = match ? Number(match[1]) : Number.NaN;
@@ -186,8 +181,10 @@ export function historyMonthPeriod(
       : (logicalDayKey(value, { rolloverHour }).slice(0, 7) as MonthKey);
   const { year, month } = parseMonthKey(key);
   const start = logicalDayBounds(`${yearMonthKey(year, month)}-01`, { rolloverHour });
-  const nextMonth = new Date(year, month, 1);
-  const endDay = localDateKey(nextMonth);
+  const nextMonth = DateTime.fromObject({ year, month, day: 1 }, { zone: 'local' }).plus({
+    months: 1,
+  });
+  const endDay = nextMonth.toISODate() as LogicalDayKey;
   const end = logicalDayBounds(endDay, { rolloverHour });
   return {
     kind: 'month',
@@ -249,8 +246,10 @@ export function currentHistoryPeriod(
 
 function shiftCalendarMonth(key: MonthKey, amount: number): MonthKey {
   const { year, month } = parseMonthKey(key);
-  const shifted = new Date(year, month - 1 + amount, 1);
-  return yearMonthKey(shifted.getFullYear(), shifted.getMonth() + 1);
+  const shifted = DateTime.fromObject({ year, month, day: 1 }, { zone: 'UTC' }).plus({
+    months: amount,
+  });
+  return yearMonthKey(shifted.year, shifted.month);
 }
 
 function shiftCalendarYear(key: string, amount: number): string {

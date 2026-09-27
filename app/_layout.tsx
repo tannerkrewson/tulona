@@ -33,9 +33,25 @@ export default function RootLayout() {
             <Stack.Screen name="goal-edit/[goalId]" />
             <Stack.Screen name="goal-review/[goalId]" />
             <Stack.Screen name="activity/[activityId]" />
-            <Stack.Screen name="activity-session/[transitionId]" />
+            <Stack.Screen
+              name="activity-session/[transitionId]"
+              options={{
+                animation: 'slide_from_bottom',
+                contentStyle: { backgroundColor: 'transparent' },
+                gestureEnabled: false,
+                presentation: 'transparentModal',
+              }}
+            />
             <Stack.Screen name="activity-session/activity-chooser" />
-            <Stack.Screen name="routine/[routineId]" />
+            <Stack.Screen
+              name="routine/[routineId]"
+              options={{
+                animation: 'slide_from_bottom',
+                contentStyle: { backgroundColor: 'transparent' },
+                gestureEnabled: false,
+                presentation: 'transparentModal',
+              }}
+            />
             <Stack.Screen name="routine-edit/[routineId]" />
             <Stack.Screen name="routine-chooser" />
             <Stack.Screen name="habit/[habitId]" />

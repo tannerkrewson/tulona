@@ -1,5 +1,6 @@
 import { createId, monthKey, trackerMonthCollectionSchema } from '@domain';
 import type { MonthKey, Transition, TrackerMonthCollection } from '@domain';
+import { DateTime } from 'luxon';
 
 import type { KeyValueDatabase } from './database';
 import { DatasetStore } from './dataset-store';
@@ -113,10 +114,10 @@ export class TrackerRepository implements TrackerRepositoryApi {
   async readRange(startMs: number, endMs: number): Promise<Transition[]> {
     if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs)
       throw new RangeError('Invalid tracker range');
-    const startDate = new Date(startMs);
-    startDate.setDate(1);
-    startDate.setMonth(startDate.getMonth() - 1);
-    return this.readMonths(monthKey(startDate), monthKey(endMs));
+    const firstMonth = DateTime.fromMillis(startMs, { zone: 'local' })
+      .startOf('month')
+      .minus({ months: 1 });
+    return this.readMonths(monthKey(firstMonth.toJSDate()), monthKey(endMs));
   }
 
   /** Reads every persisted tracker month without making History render do so. */

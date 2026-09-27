@@ -1,20 +1,20 @@
+import { DateTime } from 'luxon';
+
 /** Formats a persisted timestamp in the device/browser's local timezone. */
 export function formatSessionDate(timestampMs: number): string {
-  return new Date(timestampMs).toLocaleDateString([], { dateStyle: 'medium' });
+  return DateTime.fromMillis(timestampMs, { zone: 'local' }).toLocaleString({
+    dateStyle: 'medium',
+  });
 }
 
 /** Formats a persisted timestamp in the device/browser's local timezone. */
 export function formatSessionTime(timestampMs: number): string {
-  return new Date(timestampMs).toLocaleTimeString([], { timeStyle: 'short' });
+  return DateTime.fromMillis(timestampMs, { zone: 'local' }).toLocaleString({ timeStyle: 'short' });
 }
 
 /** Converts a timestamp to the local wall-clock value expected by datetime-local. */
 export function localDateTimeInputValue(timestampMs: number): string {
-  const date = new Date(timestampMs);
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours()
-  )}:${pad(date.getMinutes())}`;
+  return DateTime.fromMillis(timestampMs, { zone: 'local' }).toFormat("yyyy-MM-dd'T'HH:mm");
 }
 
 /** Parses a browser datetime-local value without treating it as a UTC timestamp. */
@@ -23,13 +23,13 @@ export function parseLocalDateTimeInput(value: string): Date | null {
   if (!match) return null;
   const [, yearText, monthText, dayText, hourText, minuteText] = match;
   const year = Number(yearText);
-  const month = Number(monthText) - 1;
+  const month = Number(monthText);
   const day = Number(dayText);
   const hour = Number(hourText);
   const minute = Number(minuteText);
   if (
-    month < 0 ||
-    month > 11 ||
+    month < 1 ||
+    month > 12 ||
     day < 1 ||
     day > 31 ||
     hour < 0 ||
@@ -39,17 +39,21 @@ export function parseLocalDateTimeInput(value: string): Date | null {
   ) {
     return null;
   }
-  const date = new Date(year, month, day, hour, minute, 0, 0);
+  const date = DateTime.fromObject(
+    { year, month, day, hour, minute, second: 0, millisecond: 0 },
+    { zone: 'local' }
+  );
   if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month ||
-    date.getDate() !== day ||
-    date.getHours() !== hour ||
-    date.getMinutes() !== minute
+    !date.isValid ||
+    date.year !== year ||
+    date.month !== month ||
+    date.day !== day ||
+    date.hour !== hour ||
+    date.minute !== minute
   ) {
     return null;
   }
-  return date;
+  return date.toJSDate();
 }
 
 /**
@@ -63,15 +67,19 @@ export function combinePickerDateAndTime(
   datePartsAreUtc = false
 ): Date {
   const year = datePartsAreUtc ? datePart.getUTCFullYear() : datePart.getFullYear();
-  const month = datePartsAreUtc ? datePart.getUTCMonth() : datePart.getMonth();
+  const month = (datePartsAreUtc ? datePart.getUTCMonth() : datePart.getMonth()) + 1;
   const day = datePartsAreUtc ? datePart.getUTCDate() : datePart.getDate();
-  const result = new Date(timePart);
-  result.setFullYear(year, month, day);
-  result.setHours(
-    timePart.getHours(),
-    timePart.getMinutes(),
-    timePart.getSeconds(),
-    timePart.getMilliseconds()
+  const result = DateTime.fromObject(
+    {
+      year,
+      month,
+      day,
+      hour: timePart.getHours(),
+      minute: timePart.getMinutes(),
+      second: timePart.getSeconds(),
+      millisecond: timePart.getMilliseconds(),
+    },
+    { zone: 'local' }
   );
-  return result;
+  return result.isValid ? result.toJSDate() : new Date(Number.NaN);
 }

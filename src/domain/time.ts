@@ -1,4 +1,5 @@
 import type { IsoTimestamp, LogicalDayKey, MonthKey, TimeInterval, Transition } from './models';
+import { DateTime } from 'luxon';
 
 export interface LogicalDayOptions {
   rolloverHour?: number;
@@ -56,12 +57,8 @@ function parseLogicalDay(value: string): { year: number; month: number; day: num
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
-  const check = new Date(Date.UTC(year, month - 1, day));
-  if (
-    check.getUTCFullYear() !== year ||
-    check.getUTCMonth() !== month - 1 ||
-    check.getUTCDate() !== day
-  ) {
+  const check = DateTime.fromObject({ year, month, day }, { zone: 'UTC' });
+  if (!check.isValid || check.year !== year || check.month !== month || check.day !== day) {
     throw new RangeError(`Invalid logical day "${value}"`);
   }
   return { year, month, day };
@@ -70,40 +67,36 @@ function parseLogicalDay(value: string): { year: number; month: number; day: num
 export function logicalDayDifference(start: LogicalDayKey, end: LogicalDayKey): number {
   const left = parseLogicalDay(start);
   const right = parseLogicalDay(end);
-  return (
-    (Date.UTC(right.year, right.month - 1, right.day) -
-      Date.UTC(left.year, left.month - 1, left.day)) /
-    (24 * 60 * 60 * 1000)
-  );
+  const leftDate = DateTime.fromObject(left, { zone: 'UTC' });
+  const rightDate = DateTime.fromObject(right, { zone: 'UTC' });
+  return rightDate.diff(leftDate, 'days').days;
 }
 
 /** Returns the local timestamp at the start of a logical day. */
 export function dateForLogicalDay(value: LogicalDayKey, rolloverHour = 0): Date {
   validateRolloverHour(rolloverHour);
   const parsed = parseLogicalDay(value);
-  const date = new Date(parsed.year, parsed.month - 1, parsed.day, rolloverHour, 0, 0, 0);
+  const date = DateTime.fromObject({ ...parsed, hour: rolloverHour }, { zone: 'local' });
   if (
-    date.getFullYear() !== parsed.year ||
-    date.getMonth() !== parsed.month - 1 ||
-    date.getDate() !== parsed.day
+    !date.isValid ||
+    date.year !== parsed.year ||
+    date.month !== parsed.month ||
+    date.day !== parsed.day
   ) {
     throw new RangeError(`Logical day cannot be represented locally: "${value}"`);
   }
-  return date;
+  return date.toJSDate();
 }
 
-function localDateForLogicalDay(value: Date | number | string, rolloverHour: number): Date {
-  const date = new Date(timestampMs(value));
-  if (date.getHours() < rolloverHour) {
-    date.setDate(date.getDate() - 1);
-  }
-  return date;
+function localDateForLogicalDay(value: Date | number | string, rolloverHour: number): DateTime {
+  const date = DateTime.fromMillis(timestampMs(value), { zone: 'local' });
+  return date.hour < rolloverHour ? date.minus({ days: 1 }) : date;
 }
 
-function dateKey(date: Date): LogicalDayKey {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+function dateKey(date: DateTime): LogicalDayKey {
+  const year = date.year;
+  const month = String(date.month).padStart(2, '0');
+  const day = String(date.day).padStart(2, '0');
   return `${year}-${month}-${day}` as LogicalDayKey;
 }
 
@@ -114,7 +107,7 @@ export function logicalDayKey(
   const rolloverHour = options.rolloverHour ?? 0;
   validateRolloverHour(rolloverHour);
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return dateKey(dateForLogicalDay(value as LogicalDayKey, rolloverHour));
+    return dateKey(DateTime.fromJSDate(dateForLogicalDay(value as LogicalDayKey, rolloverHour)));
   }
   return dateKey(localDateForLogicalDay(value, rolloverHour));
 }
@@ -127,13 +120,11 @@ export function logicalDayBounds(
   validateRolloverHour(rolloverHour);
   const logicalDate =
     typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
-      ? dateForLogicalDay(value as LogicalDayKey, rolloverHour)
+      ? DateTime.fromJSDate(dateForLogicalDay(value as LogicalDayKey, rolloverHour))
       : localDateForLogicalDay(value, rolloverHour);
-  const start = new Date(logicalDate);
-  start.setHours(rolloverHour, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return { key: dateKey(logicalDate), startMs: start.getTime(), endMs: end.getTime() };
+  const start = logicalDate.set({ hour: rolloverHour, minute: 0, second: 0, millisecond: 0 });
+  const end = start.plus({ days: 1 });
+  return { key: dateKey(logicalDate), startMs: start.toMillis(), endMs: end.toMillis() };
 }
 
 /** Shifts a logical-day key while retaining local timezone and rollover rules. */
@@ -144,8 +135,7 @@ export function shiftLogicalDay(
 ): LogicalDayKey {
   if (!Number.isInteger(amount)) throw new RangeError('Logical-day shift must be an integer');
   const rolloverHour = options.rolloverHour ?? 0;
-  const date = dateForLogicalDay(value, rolloverHour);
-  date.setDate(date.getDate() + amount);
+  const date = DateTime.fromJSDate(dateForLogicalDay(value, rolloverHour)).plus({ days: amount });
   return dateKey(date);
 }
 
@@ -158,19 +148,16 @@ export function weekBounds(
     throw new RangeError('weekStartsOn must be an integer from 0 through 6');
   }
   const day = logicalDayBounds(value, options);
-  const start = new Date(day.startMs);
-  const distance = (start.getDay() - weekStartsOn + 7) % 7;
-  start.setDate(start.getDate() - distance);
-  const startBounds = logicalDayBounds(start, options);
-  const endDate = new Date(startBounds.startMs);
-  endDate.setDate(endDate.getDate() + 6);
-  const endBounds = logicalDayBounds(endDate, options);
+  const start = DateTime.fromMillis(day.startMs, { zone: 'local' });
+  const distance = ((start.weekday % 7) - weekStartsOn + 7) % 7;
+  const startBounds = logicalDayBounds(start.minus({ days: distance }).toMillis(), options);
+  const endDate = DateTime.fromMillis(startBounds.startMs, { zone: 'local' }).plus({ days: 6 });
+  const endBounds = logicalDayBounds(endDate.toMillis(), options);
   return { start: startBounds, end: endBounds };
 }
 
 export function monthKey(value: Date | number | string): MonthKey {
-  const date = new Date(timestampMs(value));
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` as MonthKey;
+  return DateTime.fromMillis(timestampMs(value), { zone: 'local' }).toFormat('yyyy-MM') as MonthKey;
 }
 
 export function formatDuration(durationMs: number): string {

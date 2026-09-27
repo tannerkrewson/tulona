@@ -59,6 +59,7 @@ const iconDefinitions = [
   { name: 'shopping-bag', label: 'Shopping', keywords: ['errands', 'store', 'supplies'] },
   { name: 'shower-head', label: 'Shower', keywords: ['hygiene', 'morning', 'self-care'] },
   { name: 'skip-forward', label: 'Skip', keywords: ['next', 'advance'] },
+  { name: 'square', label: 'Stop', keywords: ['end', 'finish', 'halt'] },
   { name: 'smile', label: 'Wellbeing', keywords: ['mood', 'happy', 'care'] },
   { name: 'sparkles', label: 'Special', keywords: ['new', 'important', 'highlight'] },
   { name: 'sun', label: 'Morning', keywords: ['day', 'light', 'outside'] },

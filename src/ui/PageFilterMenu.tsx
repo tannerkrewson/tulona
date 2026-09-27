@@ -56,7 +56,7 @@ export function PageFilterMenu<T extends string = string>({
         elevation: open ? 1000 : 0,
         overflow: 'visible',
         position: 'relative',
-        width: 54,
+        width: 42,
         zIndex: open ? 1000 : 0,
       }}
     >

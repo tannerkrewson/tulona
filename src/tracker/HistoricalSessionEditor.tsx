@@ -113,12 +113,6 @@ export function HistoricalSessionEditor({
 
   return (
     <Column spacing={8} style={{ width: '100%' }} testID="activity-session-edit-times">
-      <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-        Session transitions
-      </Text>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-        Each time below is one shared boundary: it ends one session and starts the next.
-      </Text>
       <View
         style={[
           styles.timeControl,

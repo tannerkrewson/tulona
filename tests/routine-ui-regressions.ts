@@ -29,9 +29,11 @@ assert(
 );
 assert(
   !runner.includes('label="Keep running"') &&
-    runner.includes('label="Stop and discard"') &&
-    runner.includes('cancelAndDiscard()'),
-  'stop routine offers discard and removes the keep-running action'
+    runner.includes('label="Stop and replace"') &&
+    runner.includes('label="Stop and switch"') &&
+    runner.includes("allowReplace={active.routineSnapshot.trackingMode === 'overall'}") &&
+    !runner.includes('cancelAndDiscard()'),
+  'stop routine offers replace only for overall tracking and keeps logged time when switching'
 );
 assert(
   runner.includes('routineStyle(active, catalog') &&
@@ -39,6 +41,15 @@ assert(
     runner.includes('currentStep,') &&
     runner.includes('name={currentIcon}'),
   'routine runner uses parent or current-step activity styling'
+);
+assert(
+  runner.includes('<SlideUpSheet') &&
+    runner.includes('testID="routine-title"') &&
+    runner.includes('testID="routine-current-step-name"') &&
+    runner.includes('testID="open-routine-steps"') &&
+    runner.includes('icon="square"') &&
+    runner.includes('icon="play"'),
+  'the routine runner uses the shared sheet, keeps its step name in the timer, and orders player controls around a centered play action'
 );
 assert(
   editor.includes("onSaved={() => router.replace('/(tabs)')}") &&
@@ -71,4 +82,12 @@ assert(
     activeBar.includes('strokeWidth={0}') &&
     activeBar.includes('backgroundColor: isActive ? accent : colors.surfaceMuted'),
   'activity preview preserves its previous duration and both playback states use solid icons'
+);
+assert(
+  activeBar.includes('routineInFocus') &&
+    activeBar.includes('name="repeat"') &&
+    activeBar.includes('Paused · ${displayName}') &&
+    activeBar.includes('pausedRoutineStepName') &&
+    activeBar.includes('routineTimer'),
+  'the tracker bar shows routine identity, current step, countdown, and a visible paused state'
 );

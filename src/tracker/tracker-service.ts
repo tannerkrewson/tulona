@@ -128,6 +128,7 @@ export interface TrackerServiceApi {
   insertMissedSwitch(input: TransitionInput): Promise<TimeTransition>;
   editTransition(id: UUID, input: TransitionEditInput): Promise<TimeTransition>;
   reassignTransition(id: UUID, activityId: UUID | null): Promise<TimeTransition>;
+  reassignTransitions(ids: readonly UUID[], activityId: UUID | null): Promise<TimeTransition[]>;
   snapTransitionStartToPrevious(id: UUID): Promise<TimeTransition>;
   resetActiveStartToNow(id: UUID): Promise<TimeTransition>;
   deleteTransition(id: UUID, confirmation?: HistoricalConfirmationInput): Promise<TimeTransition>;
@@ -570,7 +571,17 @@ export class TrackerService implements TrackerServiceApi {
     );
     assertNotFuture(transition.timestamp, now);
     const existing = await this.readHistory(now);
-    if (existing.some((candidate) => candidate.id === transition.id)) {
+    const existingWithId = existing.find((candidate) => candidate.id === transition.id);
+    if (
+      existingWithId &&
+      existingWithId.activityId === transition.activityId &&
+      existingWithId.timestamp === transition.timestamp &&
+      existingWithId.source === transition.source &&
+      existingWithId.note === transition.note
+    ) {
+      return existingWithId;
+    }
+    if (existingWithId) {
       throw new PersistenceError('conflict', `Transition "${transition.id}" already exists`);
     }
     this.assertInsertionOrder(existing, transition, now);
@@ -713,6 +724,85 @@ export class TrackerService implements TrackerServiceApi {
 
   async reassignTransition(id: UUID, activityId: UUID | null): Promise<TimeTransition> {
     return this.editTransitionWithKind(id, { activityId }, 'reassign');
+  }
+
+  async reassignTransitions(
+    ids: readonly UUID[],
+    activityId: UUID | null
+  ): Promise<TimeTransition[]> {
+    if (activityId !== null) assertUuid(activityId, 'Activity ID');
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length !== ids.length) validation('Transition IDs must be unique');
+    if (uniqueIds.length === 0) return [];
+    uniqueIds.forEach((id) => assertUuid(id, 'Transition ID'));
+
+    const now = normalizeNow(this.now());
+    const transitions = await this.readHistory(now);
+    const byId = new Map(transitions.map((transition) => [transition.id, transition]));
+    const changed: { previous: TimeTransition; next: TimeTransition }[] = [];
+    for (const id of uniqueIds) {
+      const previous = byId.get(id);
+      if (!previous) validation(`Unknown transition "${id}"`);
+      if (previous.status !== 'recorded') validation('Only recorded transitions can be edited');
+      if (previous.activityId === activityId) continue;
+      const next: TimeTransition = {
+        ...previous,
+        activityId,
+        activitySnapshot: await this.snapshotForExplicitActivityChange(
+          activityId,
+          undefined,
+          normalizeTimestamp(now, 'Snapshot captured at')
+        ),
+      };
+      changed.push({ previous, next });
+    }
+
+    if (changed.length === 0) return uniqueIds.map((id) => byId.get(id) as TimeTransition);
+    const changedByMonth = new Map<ReturnType<typeof monthKey>, Map<UUID, TimeTransition>>();
+    for (const { next } of changed) {
+      const month = monthKey(next.timestamp);
+      const replacements = changedByMonth.get(month) ?? new Map<UUID, TimeTransition>();
+      replacements.set(next.id, next);
+      changedByMonth.set(month, replacements);
+    }
+    const collections = await Promise.all(
+      [...changedByMonth].map(async ([month, replacements]) => {
+        const collection = await this.repository.readMonth(month);
+        return {
+          ...collection,
+          transitions: collection.transitions.map(
+            (transition) => replacements.get(transition.id) ?? transition
+          ),
+          latestTransitions: [],
+        };
+      })
+    );
+    await this.repository.writeCrossMonth(
+      collections,
+      `tracker-transition-bulk-reassign-${createId()}`,
+      'tracker-transition-bulk-reassign'
+    );
+
+    for (const { previous, next } of changed) {
+      const prior = orderTransitions(transitions)
+        .filter(
+          (transition) =>
+            transition.id !== previous.id &&
+            transition.status === 'recorded' &&
+            timestampMs(transition.timestamp) < timestampMs(previous.timestamp)
+        )
+        .at(-1);
+      await this.notifyMutation({
+        kind: 'reassign',
+        previous,
+        current: next,
+        affectedActivityIds: [prior?.activityId, previous.activityId, next.activityId].filter(
+          (value): value is UUID => value !== undefined && value !== null
+        ),
+      });
+    }
+    const changedById = new Map(changed.map(({ next }) => [next.id, next]));
+    return uniqueIds.map((id) => changedById.get(id) ?? (byId.get(id) as TimeTransition));
   }
 
   async deleteTransition(

@@ -14,7 +14,7 @@ import {
 } from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { AppButton, errorText, IconButton, Screen } from '@ui';
+import { AppButton, errorText, SlideUpSheet } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { goBackInAppStack } from '../navigation/app-back';
 
@@ -38,7 +38,6 @@ interface RunnerPalette {
   danger: string;
   errorCard: string;
   modalSheet: string;
-  stepToggle: string;
 }
 
 const RUNNER_DARK: RunnerPalette = {
@@ -53,7 +52,6 @@ const RUNNER_DARK: RunnerPalette = {
   danger: '#FF9898',
   errorCard: '#271616',
   modalSheet: '#0D0D0D',
-  stepToggle: '#202020',
 };
 
 const RUNNER_LIGHT: RunnerPalette = {
@@ -68,7 +66,6 @@ const RUNNER_LIGHT: RunnerPalette = {
   danger: '#B3261E',
   errorCard: '#F7E4E4',
   modalSheet: '#FFFFFF',
-  stepToggle: '#EEEEEE',
 };
 
 function runnerPalette(colorScheme: 'light' | 'dark'): RunnerPalette {
@@ -215,7 +212,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
       setLoadError(null);
       return true;
     },
-    [router, routineId]
+    [routineId]
   );
 
   const restore = useCallback(() => {
@@ -319,11 +316,10 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
 
   if (!active || !runtime) {
     return (
-      <Screen
+      <SlideUpSheet
         backgroundColor={BASE_RUNNER.background}
-        onBack={goBack}
-        scrollable={false}
-        title="Routine"
+        onClose={goBack}
+        testID="routine-sheet"
       >
         <Column alignment="center" spacing={16} style={{ width: '100%' }}>
           <AppIcon name="timer" color={BASE_RUNNER.accent} size={40} />
@@ -337,17 +333,16 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             <RecoveryActions onClose={goBack} onRetry={restore} testID="routine-recovery" />
           </RunnerError>
         </Column>
-      </Screen>
+      </SlideUpSheet>
     );
   }
 
   if (active.status === 'awaiting-next-activity') {
     return (
-      <Screen
+      <SlideUpSheet
         backgroundColor={BASE_RUNNER.background}
-        onBack={goBack}
-        scrollable
-        title="Routine complete"
+        onClose={goBack}
+        testID="routine-sheet"
       >
         <Column alignment="center" spacing={16} style={{ width: '100%' }}>
           <AppIcon name="check-circle-2" color={BASE_RUNNER.accent} size={42} />
@@ -404,7 +399,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           }
           visible={routineMenuOpen}
         />
-      </Screen>
+      </SlideUpSheet>
     );
   }
 
@@ -413,16 +408,15 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const currentStep = steps[active.currentStepIndex];
   if (!currentStep) {
     return (
-      <Screen
+      <SlideUpSheet
         backgroundColor={BASE_RUNNER.background}
-        onBack={goBack}
-        scrollable={false}
-        title="Routine"
+        onClose={goBack}
+        testID="routine-sheet"
       >
         <RunnerError message="The active routine has no current step." palette={BASE_RUNNER}>
           <RecoveryActions onClose={goBack} testID="routine-step-recovery" />
         </RunnerError>
-      </Screen>
+      </SlideUpSheet>
     );
   }
 
@@ -475,51 +469,22 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     : RUNNER.accent;
 
   return (
-    <Screen backgroundColor={RUNNER.background} scrollable testID="routine-runner">
+    <SlideUpSheet
+      backgroundColor={RUNNER.background}
+      contentTestID="routine-runner-content"
+      onClose={goBack}
+      testID="routine-sheet"
+    >
       <Column spacing={18} style={styles.runnerContent}>
-        <Row alignment="center" spacing={10} style={styles.headerRow}>
-          <IconButton
-            accessibilityHint="Returns to the previous screen"
-            color={RUNNER.text}
-            icon="arrow-left"
-            label="Back"
-            onPress={goBack}
-            variant="plain"
-          />
-          <View style={styles.headerText}>
-            <Column spacing={2}>
-              <Text
-                numberOfLines={1}
-                textStyle={{ color: RUNNER.muted, fontSize: 13, fontWeight: '600' }}
-              >
-                {active.routineSnapshot.name}
-              </Text>
-              <Text
-                numberOfLines={2}
-                textStyle={{ color: RUNNER.text, fontSize: 30, fontWeight: '800', lineHeight: 34 }}
-              >
-                {currentVisual.name || 'Current step'}
-              </Text>
-            </Column>
-          </View>
-          <Pressable
-            accessibilityLabel="Stop routine"
-            accessibilityRole="button"
-            disabled={busy}
-            onPress={() => setStopOpen(true)}
-            style={({ pressed }) => [
-              styles.stopButton,
-              {
-                backgroundColor: RUNNER.surface,
-                borderColor: RUNNER.border,
-                opacity: pressed || busy ? 0.65 : 1,
-              },
-            ]}
-            testID="stop-routine"
+        <View style={styles.titleWrap}>
+          <Text
+            numberOfLines={1}
+            textStyle={{ color: RUNNER.text, fontSize: 30, fontWeight: '700', lineHeight: 36 }}
+            testID="routine-title"
           >
-            <Text textStyle={{ color: RUNNER.muted, fontSize: 14, fontWeight: '700' }}>Stop</Text>
-          </Pressable>
-        </Row>
+            {active.routineSnapshot.name}
+          </Text>
+        </View>
 
         <Row alignment="center" spacing={10} style={styles.timeRange}>
           <Text textStyle={{ color: RUNNER.muted, fontSize: 15 }}>
@@ -548,26 +513,20 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           >
             {!isPaused ? (
               <>
-                <Pressable
-                  accessibilityLabel={`Open routine steps, step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
-                  accessibilityRole="button"
-                  onPress={() => setRoutineMenuOpen(true)}
-                  style={({ pressed }) => [
-                    styles.stepToggle,
-                    {
-                      backgroundColor: RUNNER.stepToggle,
-                      borderColor: RUNNER.border,
-                      opacity: pressed ? 0.7 : 1,
-                    },
-                  ]}
-                  testID="open-routine-steps"
-                >
-                  <AppIcon name="list-checks" color={RUNNER.accent} size={17} />
-                  <Text textStyle={{ color: RUNNER.muted, fontSize: 12, fontWeight: '700' }}>
-                    {`Step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
+                <View style={styles.currentStepName}>
+                  <Text
+                    numberOfLines={2}
+                    textStyle={{
+                      color: RUNNER.text,
+                      fontSize: 20,
+                      fontWeight: '700',
+                      textAlign: 'center',
+                    }}
+                    testID="routine-current-step-name"
+                  >
+                    {currentVisual.name || 'Current step'}
                   </Text>
-                  <AppIcon name="chevron-down" color={RUNNER.muted} size={16} />
-                </Pressable>
+                </View>
                 <AppIcon name={currentIcon} color={RUNNER.accent} size={70} />
                 <Text
                   textStyle={{
@@ -586,6 +545,17 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           </View>
           {isPaused ? (
             <View style={styles.pausedOverlay} testID="routine-paused-state">
+              <Text
+                numberOfLines={2}
+                textStyle={{
+                  color: RUNNER.text,
+                  fontSize: 19,
+                  fontWeight: '700',
+                  textAlign: 'center',
+                }}
+              >
+                {currentVisual.name || 'Current step'}
+              </Text>
               <Text textStyle={{ color: RUNNER.muted, fontSize: 14, fontWeight: '700' }}>
                 Paused for
               </Text>
@@ -647,13 +617,32 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
 
         <Row alignment="center" style={styles.controlRow}>
           <RoundControl
+            disabled={busy}
+            icon="square"
+            label="Stop routine"
+            onPress={() => setStopOpen(true)}
+            palette={RUNNER}
+            size={46}
+            testID="stop-routine"
+          />
+          <RoundControl
             disabled={busy || isPaused}
             icon="clock"
             label="Add time"
             onPress={() => setAddTimeOpen(true)}
             palette={RUNNER}
-            size={52}
+            size={48}
             testID="open-add-time"
+          />
+          <RoundControl
+            disabled={busy || isPaused}
+            emphasis
+            icon="play"
+            label="Complete current step"
+            onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.done())}
+            palette={RUNNER}
+            size={68}
+            testID="routine-done"
           />
           <RoundControl
             disabled={busy || isPaused}
@@ -661,18 +650,8 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             label="Pause routine"
             onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.pause())}
             palette={RUNNER}
-            size={58}
+            size={48}
             testID="routine-pause"
-          />
-          <RoundControl
-            disabled={busy || isPaused}
-            emphasis
-            icon="check"
-            label="Complete current step"
-            onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.done())}
-            palette={RUNNER}
-            size={78}
-            testID="routine-done"
           />
           <RoundControl
             disabled={busy || isPaused}
@@ -680,10 +659,24 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             label="Skip or move current step"
             onPress={() => setSkipOpen(true)}
             palette={RUNNER}
-            size={58}
+            size={48}
             testID="routine-skip"
           />
         </Row>
+
+        <Pressable
+          accessibilityLabel={`Open routine steps, step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
+          accessibilityRole="button"
+          onPress={() => setRoutineMenuOpen(true)}
+          style={({ pressed }) => [styles.stepCounter, { opacity: pressed ? 0.68 : 1 }]}
+          testID="open-routine-steps"
+        >
+          <AppIcon name="list-checks" color={RUNNER.accent} size={19} />
+          <Text textStyle={{ color: RUNNER.text, fontSize: 16, fontWeight: '700' }}>
+            {`Step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
+          </Text>
+          <AppIcon name="chevron-down" color={RUNNER.muted} size={16} />
+        </Pressable>
 
         {nextStep ? (
           <Row alignment="center" spacing={10} style={styles.nextRow}>
@@ -762,33 +755,31 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
       />
       <StopModal
         busy={busy}
+        allowReplace={active.routineSnapshot.trackingMode === 'overall'}
         onClose={() => setStopOpen(false)}
         palette={RUNNER}
-        onStop={() =>
+        onSwitch={() =>
           void runAction(
             async (nextRuntime) => {
-              await nextRuntime.routineService.cancelAndFinalize();
+              const boundary = await nextRuntime.routineService.stopAndSwitch();
+              router.replace(
+                `/activity-session/activity-chooser?transitionId=${encodeURIComponent(boundary.id)}&returnToTracker=1`
+              );
             },
             () => {
               setStopOpen(false);
-              router.replace('/(tabs)');
             }
           )
         }
-        onDiscard={() =>
-          void runAction(
-            async (nextRuntime) => {
-              await nextRuntime.routineService.cancelAndDiscard();
-            },
-            () => {
-              setStopOpen(false);
-              router.replace('/(tabs)');
-            }
-          )
-        }
+        onReplace={() => {
+          setStopOpen(false);
+          router.push(
+            `/activity-session/activity-chooser?routineId=${encodeURIComponent(active.routineId)}`
+          );
+        }}
         visible={stopOpen}
       />
-    </Screen>
+    </SlideUpSheet>
   );
 }
 
@@ -848,7 +839,7 @@ function RoundControl({
 }: {
   disabled: boolean;
   emphasis?: boolean;
-  icon: 'check' | 'clock' | 'list-checks' | 'pause' | 'play' | 'skip-forward';
+  icon: 'check' | 'clock' | 'list-checks' | 'pause' | 'play' | 'skip-forward' | 'square';
   label: string;
   onPress: () => void;
   palette: RunnerPalette;
@@ -889,18 +880,20 @@ function RunnerModal({
   children,
   onClose,
   palette,
+  scrollable = false,
   visible,
   title,
 }: {
   children: ReactNode;
   onClose: () => void;
   palette: RunnerPalette;
+  scrollable?: boolean;
   visible: boolean;
   title: string;
 }) {
   const insets = useSafeAreaInsets();
   return (
-    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
+    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
       <View style={styles.modalRoot}>
         <Pressable accessibilityLabel="Close modal" onPress={onClose} style={styles.modalScrim} />
         <View
@@ -913,6 +906,9 @@ function RunnerModal({
             },
           ]}
         >
+          <View style={styles.modalHandleArea}>
+            <View style={[styles.modalHandle, { backgroundColor: palette.muted }]} />
+          </View>
           <Row alignment="center" style={styles.modalHeader}>
             <Text textStyle={{ color: palette.text, fontSize: 20, fontWeight: '800' }}>
               {title}
@@ -921,11 +917,17 @@ function RunnerModal({
               <Text textStyle={{ color: palette.muted, fontSize: 24 }}>×</Text>
             </Pressable>
           </Row>
-          <ScrollView style={styles.modalContent}>
+          {scrollable ? (
+            <ScrollView style={styles.modalContent}>
+              <Column spacing={14} style={{ width: '100%' }}>
+                {children}
+              </Column>
+            </ScrollView>
+          ) : (
             <Column spacing={14} style={{ width: '100%' }}>
               {children}
             </Column>
-          </ScrollView>
+          )}
         </View>
       </View>
     </Modal>
@@ -941,7 +943,7 @@ function ModalAction({
   testID,
 }: {
   disabled?: boolean;
-  icon: 'arrow-left' | 'check' | 'chevron-down' | 'skip-forward' | 'trash-2' | 'x';
+  icon: 'arrow-left' | 'check' | 'chevron-down' | 'skip-forward' | 'x';
   label: string;
   onPress: () => void;
   palette: RunnerPalette;
@@ -1126,7 +1128,7 @@ function RoutineStepsModal({
 }) {
   const steps = orderedSteps(active);
   return (
-    <RunnerModal onClose={onClose} palette={palette} title="Steps" visible={visible}>
+    <RunnerModal onClose={onClose} palette={palette} scrollable title="Steps" visible={visible}>
       <Column
         spacing={0}
         style={{
@@ -1250,37 +1252,41 @@ function RoutineStepsModal({
 }
 
 function StopModal({
+  allowReplace,
   busy,
   onClose,
-  onDiscard,
-  onStop,
+  onReplace,
+  onSwitch,
   palette,
   visible,
 }: {
+  allowReplace: boolean;
   busy: boolean;
   onClose: () => void;
-  onDiscard: () => void;
-  onStop: () => void;
+  onReplace: () => void;
+  onSwitch: () => void;
   palette: RunnerPalette;
   visible: boolean;
 }) {
   return (
     <RunnerModal onClose={onClose} palette={palette} title="Stop routine" visible={visible}>
+      {allowReplace ? (
+        <ModalAction
+          disabled={busy}
+          icon="check"
+          label="Stop and replace"
+          onPress={onReplace}
+          palette={palette}
+          testID="stop-and-replace-routine"
+        />
+      ) : null}
       <ModalAction
         disabled={busy}
-        icon="check"
-        label="Stop and save"
-        onPress={onStop}
+        icon="skip-forward"
+        label="Stop and switch"
+        onPress={onSwitch}
         palette={palette}
-        testID="confirm-stop-routine"
-      />
-      <ModalAction
-        disabled={busy}
-        icon="trash-2"
-        label="Stop and discard"
-        onPress={onDiscard}
-        palette={palette}
-        testID="discard-stop-routine"
+        testID="stop-and-switch-routine"
       />
     </RunnerModal>
   );
@@ -1299,13 +1305,6 @@ const styles = StyleSheet.create({
     gap: 7,
     padding: 14,
     width: '100%',
-  },
-  headerRow: {
-    width: '100%',
-  },
-  headerText: {
-    flex: 1,
-    minWidth: 0,
   },
   modalAction: {
     alignItems: 'center',
@@ -1330,9 +1329,17 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   modalContent: {
-    maxHeight: '75%',
+    flexGrow: 0,
+    maxHeight: '68%',
     width: '100%',
   },
+  modalHandleArea: {
+    alignItems: 'center',
+    height: 22,
+    justifyContent: 'center',
+    width: '100%',
+  },
+  modalHandle: { borderRadius: 2, height: 4, opacity: 0.5, width: 38 },
   compactOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1340,10 +1347,9 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   modalRoot: {
-    alignItems: 'center',
+    alignItems: 'stretch',
     flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'flex-end',
   },
   modalScrim: {
     bottom: 0,
@@ -1356,13 +1362,13 @@ const styles = StyleSheet.create({
   modalSheet: {
     backgroundColor: '#0D0D0D',
     borderColor: RUNNER_DARK.border,
-    borderRadius: 22,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
     borderWidth: 1,
-    gap: 14,
     maxHeight: '85%',
-    maxWidth: 560,
+    gap: 12,
     paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingTop: 4,
     width: '100%',
   },
   nextRow: {
@@ -1402,6 +1408,17 @@ const styles = StyleSheet.create({
   runnerContent: {
     width: '100%',
   },
+  stepCounter: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    gap: 9,
+    justifyContent: 'center',
+    minHeight: 34,
+    paddingHorizontal: 12,
+  },
+  titleWrap: { alignSelf: 'flex-start', maxWidth: '100%' },
+  currentStepName: { alignItems: 'center', width: '100%' },
   stepText: {
     flex: 1,
     minWidth: 0,
@@ -1412,17 +1429,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 11,
     minWidth: 0,
-  },
-  stepToggle: {
-    alignItems: 'center',
-    backgroundColor: '#202020',
-    borderColor: RUNNER_DARK.border,
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 7,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
   },
   resetButton: {
     alignItems: 'center',
@@ -1464,17 +1470,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 44,
     paddingHorizontal: 18,
-  },
-  stopButton: {
-    alignItems: 'center',
-    backgroundColor: RUNNER_DARK.surface,
-    borderColor: RUNNER_DARK.border,
-    borderRadius: 15,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minWidth: 53,
-    paddingHorizontal: 11,
-    paddingVertical: 9,
   },
   timerCircle: {
     alignItems: 'center',

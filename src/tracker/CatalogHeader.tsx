@@ -1,9 +1,9 @@
-import { Column, Row, Spacer, Text } from '@expo/ui';
+import { Column } from '@expo/ui';
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { useAppTheme } from '@theme';
-import { AppButton } from '@ui';
+import { AppButton, PageHeader } from '@ui';
 
 import { CatalogIconButton } from './CatalogIconButton';
 
@@ -58,53 +58,31 @@ export function CatalogHeader({
           testID="catalog-create-backdrop"
         />
       ) : null}
-      <Column spacing={12} style={{ width: '100%' }}>
-        <Row alignment="center" spacing={4} style={{ width: '100%' }}>
-          {onBack ? (
-            <CatalogIconButton
-              icon="arrow-left"
-              label={backLabel}
-              onPress={onBack}
-              testID="catalog-back"
-            />
-          ) : null}
-          <Text
-            numberOfLines={1}
-            textStyle={{
-              color: colors.text,
-              fontSize: 30,
-              fontWeight: '700',
-              lineHeight: 36,
-            }}
-          >
-            {title}
-          </Text>
-          <Spacer flexible />
-          {onHistory ? (
-            <CatalogIconButton
-              icon="clock"
-              label="History"
-              onPress={onHistory}
-              testID="tracker-history"
-            />
-          ) : null}
-          {filterMenu}
+      <PageHeader backLabel={backLabel} backTestID="catalog-back" onBack={onBack} title={title}>
+        {onHistory ? (
           <CatalogIconButton
-            icon={editMode ? 'check' : 'pencil'}
-            label={editMode ? 'Done' : 'Edit'}
-            onPress={onToggleEdit}
-            testID="catalog-edit"
+            icon="clock"
+            label="History"
+            onPress={onHistory}
+            testID="tracker-history"
           />
-          <CatalogIconButton
-            expanded={createOpen}
-            icon="plus"
-            label={createOpen ? 'Close add menu' : 'Add'}
-            onPress={onToggleCreate}
-            testID="catalog-add"
-            primary
-          />
-        </Row>
-      </Column>
+        ) : null}
+        {filterMenu}
+        <CatalogIconButton
+          icon={editMode ? 'check' : 'pencil'}
+          label={editMode ? 'Done' : 'Edit'}
+          onPress={onToggleEdit}
+          testID="catalog-edit"
+        />
+        <CatalogIconButton
+          expanded={createOpen}
+          icon="plus"
+          label={createOpen ? 'Close add menu' : 'Add'}
+          onPress={onToggleCreate}
+          testID="catalog-add"
+          primary
+        />
+      </PageHeader>
       {createOpen ? (
         <View
           style={{
@@ -115,19 +93,18 @@ export function CatalogHeader({
             width: 220,
           }}
         >
-          <View style={{ borderRadius: 16, overflow: 'hidden' }}>
-            <Column
-              spacing={2}
-              style={{
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: 16,
-                borderWidth: 1,
-                padding: 6,
-                width: '100%',
-              }}
-              testID="catalog-create-menu"
-            >
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderRadius: 16,
+              borderWidth: 1,
+              overflow: 'hidden',
+              padding: 6,
+              width: '100%',
+            }}
+          >
+            <Column spacing={2} style={{ width: '100%' }} testID="catalog-create-menu">
               {createActions.map((action) => (
                 <AppButton
                   key={action.label}

@@ -1,10 +1,12 @@
-import { Column, Row, Spacer, Text } from '@expo/ui';
+import { Column, Text } from '@expo/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import { formatDuration, timestampMs, type TimeTransition } from '@domain';
-import { useAppTheme } from '@theme';
-import { AppButton, ConfirmationModal, errorText, Screen } from '@ui';
+import { AppIcon } from '@icons';
+import { getAccessibleTextColor, useAppTheme } from '@theme';
+import { AppButton, ConfirmationModal, errorText, SlideUpSheet } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -78,6 +80,7 @@ export interface ActivitySessionScreenProps {
 export function ActivitySessionScreen({ transitionId }: ActivitySessionScreenProps) {
   const { colors } = useAppTheme();
   const router = useRouter();
+  const close = useCallback(() => goBackInAppStack(router, '/(tabs)'), [router]);
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -99,11 +102,11 @@ export function ActivitySessionScreen({ transitionId }: ActivitySessionScreenPro
 
   if (!runtime) {
     return (
-      <Screen onBack={() => goBackInAppStack(router, '/(tabs)')} title="Session">
+      <SlideUpSheet onClose={close} testID="activity-session-sheet">
         {loadError ? (
           <SessionError
             message={loadError}
-            onClose={() => goBackInAppStack(router, '/(tabs)')}
+            onClose={close}
             onRetry={() => {
               setLoadError(null);
               setRuntime(null);
@@ -113,7 +116,7 @@ export function ActivitySessionScreen({ transitionId }: ActivitySessionScreenPro
         ) : (
           <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>Loading session...</Text>
         )}
-      </Screen>
+      </SlideUpSheet>
     );
   }
 
@@ -182,7 +185,10 @@ function ActivitySessionContent({
 
   if (!catalog || !transition) {
     return (
-      <Screen onBack={() => goBackInAppStack(router, '/(tabs)')} title="Session">
+      <SlideUpSheet
+        onClose={() => goBackInAppStack(router, '/(tabs)')}
+        testID="activity-session-sheet"
+      >
         <SessionError
           message={
             persistenceError
@@ -195,7 +201,7 @@ function ActivitySessionContent({
             loadTransitionContext();
           }}
         />
-      </Screen>
+      </SlideUpSheet>
     );
   }
 
@@ -216,6 +222,11 @@ function ActivitySessionContent({
   const endMs = following ? timestampMs(following.timestamp) : isActive ? nowMs : null;
   const durationMs = endMs === null ? 0 : Math.max(0, endMs - timestampMs(transition.timestamp));
   const startMs = timestampMs(transition.timestamp);
+  const activityColor =
+    transition.activitySnapshot?.color ?? resolved?.displayColor ?? colors.primary;
+  const activityIcon =
+    transition.activitySnapshot?.iconName ?? resolved?.item.iconName ?? 'activity';
+  const iconForeground = getAccessibleTextColor(activityColor);
   const previousName = previous?.activityId
     ? (previous.activitySnapshot?.name ??
       resolveCatalogItem(catalog, previous.activityId, colors.primary)?.item.name ??
@@ -283,84 +294,86 @@ function ActivitySessionContent({
 
   return (
     <>
-      <Screen onBack={() => goBackInAppStack(router, '/(tabs)')} title={activityName}>
-        <Column spacing={16} style={{ width: '100%' }} testID="activity-session-screen">
-          <Column spacing={14} style={{ width: '100%' }} testID="activity-session-summary">
-            <Row alignment="center" spacing={12} style={{ width: '100%' }}>
+      <SlideUpSheet
+        contentTestID="activity-session-screen"
+        onClose={() => goBackInAppStack(router, '/(tabs)')}
+        testID="activity-session-sheet"
+      >
+        <Column spacing={18} style={{ width: '100%' }}>
+          <View
+            style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            testID="activity-session-summary"
+          >
+            <View style={[styles.activityIcon, { backgroundColor: activityColor }]}>
+              <AppIcon color={iconForeground} name={activityIcon} size={24} />
+            </View>
+            <View style={styles.heroText}>
               <Text
-                testID="activity-session-status"
-                textStyle={{
-                  color: isActive ? colors.active.foreground : colors.textMuted,
-                  fontSize: 13,
-                  fontWeight: '700',
-                }}
+                numberOfLines={1}
+                textStyle={{ color: colors.text, fontSize: 25, fontWeight: '700' }}
               >
-                {isActive ? 'Active' : 'Recorded'}
+                {activityName}
               </Text>
-              <Spacer flexible />
               <Text
                 numberOfLines={1}
                 testID="activity-session-duration"
-                textStyle={{ color: colors.text, fontSize: 24, fontWeight: '700' }}
+                textStyle={{ color: activityColor, fontSize: 19, fontWeight: '700' }}
               >
-                {endMs === null ? '—' : formatDuration(durationMs)}
+                {endMs === null ? 'In progress' : formatDuration(durationMs)}
               </Text>
-            </Row>
-            <Row alignment="start" spacing={16} style={{ width: '100%' }}>
-              <Column style={{ width: '48%' }}>
-                <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>From</Text>
-                <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 15 }}>
-                  {formatSessionDate(startMs)}
-                </Text>
-                <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 15 }}>
-                  {formatSessionTime(startMs)}
-                </Text>
-              </Column>
-              <Column style={{ width: '48%' }}>
-                <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>To</Text>
-                <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 15 }}>
-                  {isActive ? 'Now' : endMs === null ? 'No end recorded' : formatSessionDate(endMs)}
-                </Text>
-                {endMs !== null ? (
-                  <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 15 }}>
-                    {formatSessionTime(endMs)}
-                  </Text>
-                ) : null}
-              </Column>
-            </Row>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              {endMs === null
-                ? isActive
-                  ? 'In progress'
-                  : 'End not recorded'
-                : 'Recorded duration'}
-            </Text>
-          </Column>
+            </View>
+          </View>
 
-          <Column spacing={10} style={{ width: '100%' }} testID="activity-session-actions">
-            <Row alignment="center" spacing={10} style={{ width: '100%' }}>
-              <AppButton
-                disabled={busy}
-                label="Choose activity"
-                onPress={() =>
-                  router.push(
-                    `/activity-session/activity-chooser?transitionId=${encodeURIComponent(transition.id)}`
-                  )
-                }
-                style={{ height: 44, width: '48%' }}
-                testID="activity-session-choose-activity"
-                variant="outlined"
-              />
-              <AppButton
-                disabled={busy}
-                label="Delete session"
-                onPress={openDeleteConfirmation}
-                style={{ height: 44, width: '48%' }}
-                testID="activity-session-delete"
-                variant="outlined"
-              />
-            </Row>
-          </Column>
+          <View style={[styles.timeSummary, { backgroundColor: colors.surfaceMuted }]}>
+            <View style={styles.timePoint}>
+              <Text
+                numberOfLines={1}
+                textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}
+              >
+                {formatSessionDate(startMs)}
+              </Text>
+              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+                {formatSessionTime(startMs)}
+              </Text>
+            </View>
+            <AppIcon color={colors.textMuted} name="chevron-right" size={18} />
+            <View style={[styles.timePoint, { alignItems: 'flex-end' }]}>
+              <Text
+                numberOfLines={1}
+                textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}
+              >
+                {isActive ? 'Now' : endMs === null ? 'Open' : formatSessionDate(endMs)}
+              </Text>
+              {endMs !== null ? (
+                <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+                  {formatSessionTime(endMs)}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
+          <View style={styles.actionRow} testID="activity-session-actions">
+            <AppButton
+              disabled={busy}
+              label="Change activity"
+              onPress={() =>
+                router.push(
+                  `/activity-session/activity-chooser?transitionId=${encodeURIComponent(transition.id)}`
+                )
+              }
+              style={{ height: 48, width: '66%' }}
+              testID="activity-session-choose-activity"
+              variant="outlined"
+            />
+            <AppButton
+              disabled={busy}
+              label="Delete"
+              onPress={openDeleteConfirmation}
+              style={{ height: 48, width: '29%' }}
+              testID="activity-session-delete"
+              variant="outlined"
+            />
+          </View>
 
           <HistoricalSessionEditor
             key={`${transition.id}-${transition.timestamp}-${following?.timestamp ?? 'open'}`}
@@ -387,7 +400,7 @@ function ActivitySessionContent({
             </Text>
           ) : null}
         </Column>
-      </Screen>
+      </SlideUpSheet>
       <ConfirmationModal
         busy={busy}
         cancelLabel="Cancel"
@@ -405,3 +418,36 @@ function ActivitySessionContent({
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  hero: {
+    alignItems: 'center',
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 14,
+    minHeight: 100,
+    padding: 16,
+    width: '100%',
+  },
+  activityIcon: {
+    alignItems: 'center',
+    borderRadius: 18,
+    height: 56,
+    justifyContent: 'center',
+    width: 56,
+  },
+  heroText: { flex: 1, gap: 4, minWidth: 0 },
+  timeSummary: {
+    alignItems: 'center',
+    borderRadius: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 72,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    width: '100%',
+  },
+  timePoint: { flex: 1, gap: 3, minWidth: 0 },
+  actionRow: { flexDirection: 'row', gap: 10, width: '100%' },
+});

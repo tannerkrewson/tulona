@@ -4,6 +4,7 @@ import { usePathname, useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 
 import {
+  formatCountdownMs,
   timestampMs,
   type ActiveRoutine,
   type CatalogCollection,
@@ -14,6 +15,7 @@ import { getAccessibleTextColor, useAppTheme } from '@theme';
 import { DurationText, errorText } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
+import { routineTiming } from '../routine/routine-engine';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 
 function isCatalogPath(pathname: string): boolean {
@@ -166,6 +168,49 @@ function ActiveActivityBarContent({
       ? configuredColor.trim()
       : colors.primary;
   const onAccent = getAccessibleTextColor(accent);
+  const routineInFocus =
+    activeRoutine !== null && routineOwnsActivity(activeRoutine, activeActivityId);
+  const routineSteps = routineInFocus
+    ? [...activeRoutine.routineSnapshot.steps].sort(
+        (left, right) => left.sortOrder - right.sortOrder
+      )
+    : [];
+  const routineStep = routineInFocus ? routineSteps[activeRoutine.currentStepIndex] : null;
+  const routineTimingValue = routineInFocus ? routineTiming(activeRoutine, nowMs) : null;
+  const routineTimer = routineTimingValue
+    ? routineTimingValue.remainingMs === null
+      ? '—'
+      : routineTimingValue.isOvertime
+        ? `+${formatCountdownMs(routineTimingValue.overtimeMs)}`
+        : formatCountdownMs(routineTimingValue.remainingMs)
+    : null;
+  const displayName = routineInFocus
+    ? (routineStep?.name ??
+      catalog?.activities.find((item) => item.id === routineStep?.activityId)?.name ??
+      'Routine step')
+    : name;
+  const displayContext = routineInFocus ? activeRoutine.routineSnapshot.name : context;
+  const pausedRoutineStep =
+    activeRoutine?.status === 'paused'
+      ? [...activeRoutine.routineSnapshot.steps].sort(
+          (left, right) => left.sortOrder - right.sortOrder
+        )[activeRoutine.currentStepIndex]
+      : null;
+  const pausedRoutineStepName =
+    pausedRoutineStep?.name ??
+    (pausedRoutineStep?.activityId
+      ? catalog?.activities.find((item) => item.id === pausedRoutineStep.activityId)?.name
+      : null) ??
+    'Routine step';
+  const pausedRoutineTiming =
+    activeRoutine?.status === 'paused' ? routineTiming(activeRoutine, nowMs) : null;
+  const pausedRoutineRemainingMs = pausedRoutineTiming?.remainingMs;
+  const pausedRoutineTimer =
+    pausedRoutineRemainingMs === null || pausedRoutineRemainingMs === undefined
+      ? '—'
+      : pausedRoutineTiming?.isOvertime
+        ? `+${formatCountdownMs(pausedRoutineTiming.overtimeMs)}`
+        : formatCountdownMs(pausedRoutineRemainingMs);
 
   const openDetails = async () => {
     let activeRoutine: ActiveRoutine | null = null;
@@ -246,9 +291,17 @@ function ActiveActivityBarContent({
     }
   };
 
-  const showResumeRoutine =
-    activeRoutine?.status === 'paused' &&
-    (isActive || !routineOwnsActivity(activeRoutine, activeActivityId));
+  const showResumeRoutine = activeRoutine?.status === 'paused' && !routineInFocus;
+
+  const togglePrimary = () => {
+    if (routineInFocus && activeRoutine.status === 'paused') {
+      void resumePausedRoutine();
+    } else if (isActive) {
+      void pause();
+    } else {
+      void play();
+    }
+  };
 
   return (
     <View
@@ -280,25 +333,49 @@ function ActiveActivityBarContent({
           accessibilityHint={
             isActive ? undefined : 'Starts a new tracking session for this activity'
           }
-          accessibilityLabel={isActive ? 'Pause active activity' : `Start ${name}`}
+          accessibilityLabel={
+            routineInFocus && activeRoutine.status === 'paused'
+              ? `Resume ${activeRoutine.routineSnapshot.name}`
+              : isActive
+                ? routineInFocus
+                  ? `Pause ${activeRoutine.routineSnapshot.name}`
+                  : 'Pause active activity'
+                : `Start ${name}`
+          }
           accessibilityRole="button"
           accessibilityState={{ disabled: busy }}
           disabled={busy}
-          onPress={() => void (isActive ? pause() : play())}
+          onPress={togglePrimary}
           style={[styles.pauseButton, { backgroundColor: isActive ? accent : colors.surfaceMuted }]}
           testID={isActive ? 'active-activity-pause' : 'active-activity-play'}
         >
           <AppIcon
-            accessibilityLabel={isActive ? 'Pause' : 'Play'}
+            accessibilityLabel={
+              routineInFocus && activeRoutine.status === 'paused'
+                ? 'Play'
+                : isActive
+                  ? 'Pause'
+                  : 'Play'
+            }
             color={isActive ? onAccent : accent}
             fill={isActive ? onAccent : accent}
-            name={isActive ? 'pause' : 'play'}
+            name={
+              routineInFocus && activeRoutine.status === 'paused'
+                ? 'play'
+                : isActive
+                  ? 'pause'
+                  : 'play'
+            }
             size={25}
             strokeWidth={0}
           />
         </Pressable>
         <Pressable
-          accessibilityLabel={`Open ${name} session details`}
+          accessibilityLabel={
+            routineInFocus
+              ? `Open ${activeRoutine.routineSnapshot.name} routine`
+              : `Open ${name} session details`
+          }
           accessibilityRole="button"
           onPress={() => void openDetails()}
           style={styles.info}
@@ -306,20 +383,25 @@ function ActiveActivityBarContent({
         >
           <View style={styles.infoRow}>
             <View style={styles.infoText}>
-              {context ? (
+              {displayContext ? (
                 <Text
                   numberOfLines={1}
                   textStyle={{ color: colors.textMuted, fontSize: 11, fontWeight: '800' }}
                 >
-                  {context}
+                  {displayContext}
                 </Text>
               ) : null}
-              <Text
-                numberOfLines={1}
-                textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}
-              >
-                {name}
-              </Text>
+              <View style={styles.activityTitle}>
+                {routineInFocus ? <AppIcon color={accent} name="repeat" size={15} /> : null}
+                <Text
+                  numberOfLines={1}
+                  textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}
+                >
+                  {routineInFocus && activeRoutine.status === 'paused'
+                    ? `Paused · ${displayName}`
+                    : displayName}
+                </Text>
+              </View>
               {actionError ? (
                 <Text
                   numberOfLines={1}
@@ -329,10 +411,16 @@ function ActiveActivityBarContent({
                 </Text>
               ) : null}
             </View>
-            <DurationText
-              durationMs={isActive ? elapsedMs : previousDurationMs}
-              textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}
-            />
+            {routineInFocus && routineTimer !== null ? (
+              <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>
+                {routineTimer}
+              </Text>
+            ) : (
+              <DurationText
+                durationMs={isActive ? elapsedMs : previousDurationMs}
+                textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}
+              />
+            )}
           </View>
         </Pressable>
         {showResumeRoutine ? (
@@ -352,10 +440,19 @@ function ActiveActivityBarContent({
             ]}
             testID="active-activity-resume-routine"
           >
-            <AppIcon color={colors.primary} name="play" size={16} />
-            <Text textStyle={{ color: colors.primary, fontSize: 12, fontWeight: '800' }}>
-              Resume
-            </Text>
+            <AppIcon color={colors.primary} name="repeat" size={16} />
+            <View style={styles.resumeRoutineText}>
+              <Text
+                numberOfLines={1}
+                textStyle={{ color: colors.text, fontSize: 11, fontWeight: '700' }}
+              >
+                {activeRoutine.routineSnapshot.name}
+              </Text>
+              <Text numberOfLines={1} textStyle={{ color: colors.textMuted, fontSize: 11 }}>
+                {`${pausedRoutineStepName} · ${pausedRoutineTimer}`}
+              </Text>
+            </View>
+            <AppIcon color={colors.primary} name="play" size={17} />
           </Pressable>
         ) : null}
       </View>
@@ -393,6 +490,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  activityTitle: { alignItems: 'center', flexDirection: 'row', gap: 6, minWidth: 0 },
   overlay: {
     alignItems: 'stretch',
   },
@@ -408,8 +506,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderLeftWidth: 1,
     flexDirection: 'row',
-    gap: 4,
+    flexShrink: 1,
+    gap: 6,
     justifyContent: 'center',
-    paddingHorizontal: 9,
+    maxWidth: 176,
+    paddingHorizontal: 10,
   },
+  resumeRoutineText: { flexShrink: 1, minWidth: 0 },
 });

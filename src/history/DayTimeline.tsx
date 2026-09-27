@@ -26,10 +26,10 @@ import {
   type DayTimelineRowGeometry,
 } from './day-timeline-layout';
 
-const HOUR_LABEL_WIDTH = 42;
-const RAIL_LEFT = 53;
+const HOUR_LABEL_WIDTH = 58;
+const RAIL_LEFT = 70;
 const RAIL_WIDTH = 12;
-const CONNECTOR_ROW_LEFT = 91;
+const CONNECTOR_ROW_LEFT = 108;
 const CONNECTOR_GUTTER_RIGHT = 10;
 const SESSION_ROW_HEIGHT = DAY_TIMELINE_ROW_HEIGHT;
 
@@ -244,10 +244,29 @@ function DayRail({
         ]}
       />
       {layout.hourTicks.map((tick) => (
-        <View key={tick.atMs} style={[styles.hourTick, { pointerEvents: 'none', top: tick.y }]}>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 11, textAlign: 'right' }}>
-            {tick.label}
-          </Text>
+        <View key={tick.atMs} style={{ pointerEvents: 'none' }}>
+          <View
+            style={[
+              styles.hourMark,
+              {
+                backgroundColor: colors.textMuted,
+                left: tick.kind === 'hour' ? RAIL_LEFT - 4 : RAIL_LEFT + 1,
+                opacity: tick.kind === 'hour' ? 0.8 : 0.5,
+                top: tick.y,
+                width: tick.kind === 'hour' ? 14 : 7,
+              },
+            ]}
+          />
+          {tick.kind === 'hour' ? (
+            <View style={[styles.hourLabel, { top: Math.max(0, tick.y - 8) }]}>
+              <Text
+                numberOfLines={1}
+                textStyle={{ color: colors.textMuted, fontSize: 11, textAlign: 'right' }}
+              >
+                {tick.label}
+              </Text>
+            </View>
+          ) : null}
         </View>
       ))}
       <View
@@ -429,11 +448,15 @@ const styles = StyleSheet.create({
     top: 0,
     width: 3,
   },
-  hourTick: {
+  hourLabel: {
     left: 0,
     position: 'absolute',
     top: 0,
     width: HOUR_LABEL_WIDTH,
+  },
+  hourMark: {
+    height: 1,
+    position: 'absolute',
   },
   railMarker: {
     borderRadius: RAIL_WIDTH / 2,

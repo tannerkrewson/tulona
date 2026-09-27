@@ -2,6 +2,8 @@ export { AccessiblePicker, type AccessiblePickerProps } from './AccessiblePicker
 export { AccessibleTextInput, type AccessibleTextInputProps } from './AccessibleTextInput';
 export { AppButton } from './AppButton';
 export { AppScreen, type AppScreenProps } from './AppScreen';
+export { PageHeader, type PageHeaderProps } from './PageHeader';
+export { SlideUpSheet, type SlideUpSheetProps } from './SlideUpSheet';
 export { ConfirmationModal, type ConfirmationModalProps } from './ConfirmationModal';
 export {
   ColorPicker,

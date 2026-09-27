@@ -11,6 +11,7 @@ import {
   type TimeTransition,
   type UUID,
 } from '@domain';
+import { DateTime } from 'luxon';
 import type {
   CatalogServiceApi,
   CreateRoutineStepInput,
@@ -64,17 +65,12 @@ function routineActivityId(active: ActiveRoutine): UUID | null {
 }
 
 function monthKeysBetween(start: string, end: string): MonthKey[] {
-  const cursor = new Date(timestampMs(start));
-  const endDate = new Date(timestampMs(end));
-  cursor.setDate(1);
-  cursor.setHours(12, 0, 0, 0);
+  let cursor = DateTime.fromMillis(timestampMs(start), { zone: 'local' }).startOf('month');
+  const endDate = DateTime.fromMillis(timestampMs(end), { zone: 'local' }).startOf('month');
   const months: MonthKey[] = [];
-  while (
-    cursor.getFullYear() < endDate.getFullYear() ||
-    (cursor.getFullYear() === endDate.getFullYear() && cursor.getMonth() <= endDate.getMonth())
-  ) {
-    months.push(monthKey(cursor));
-    cursor.setMonth(cursor.getMonth() + 1);
+  while (cursor.toMillis() <= endDate.toMillis()) {
+    months.push(monthKey(cursor.toJSDate()));
+    cursor = cursor.plus({ months: 1 });
   }
   return months;
 }
@@ -131,6 +127,11 @@ export interface RoutineServiceApi {
   finalizeCancellation(at?: RoutineTimestampInput): Promise<RoutineFinalizationResult>;
   cancelAndFinalize(at?: RoutineTimestampInput): Promise<RoutineFinalizationResult>;
   cancelAndDiscard(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
+  stopAndSwitch(at?: RoutineTimestampInput): Promise<TimeTransition>;
+  stopAndReplaceActivity(
+    activityId: UUID,
+    at?: RoutineTimestampInput
+  ): Promise<RoutineFinalizationResult>;
   selectNextActivity(activityId: UUID | null): Promise<TimeTransition>;
   markAlarmFired(stepId: UUID): Promise<ActiveRoutine>;
   setStepEnabled(
@@ -457,6 +458,62 @@ export class RoutineService implements RoutineServiceApi {
     return active;
   }
 
+  async stopAndSwitch(at: RoutineTimestampInput = this.now()): Promise<TimeTransition> {
+    const { activeRoutine } = await this.finalizeCancellation(at);
+    if (!activeRoutine.completedAt) throw new Error('Routine has no completion timestamp');
+    const completedAtMs = timestampMs(activeRoutine.completedAt);
+    const current = await this.trackerService.getActiveTransition(activeRoutine.completedAt);
+    if (!current) {
+      return this.trackerService.switchActivity(null, {
+        timestamp: activeRoutine.completedAt,
+        source: 'routine',
+        note: 'Routine stopped; choose next activity',
+      });
+    }
+    if (current.activityId === null) return current;
+    if (timestampMs(current.timestamp) === completedAtMs) {
+      return this.trackerService.editTransition(current.id, {
+        activityId: null,
+        source: 'routine',
+        note: 'Routine stopped; choose next activity',
+      });
+    }
+    return this.trackerService.switchActivity(null, {
+      timestamp: activeRoutine.completedAt,
+      source: 'routine',
+      note: 'Routine stopped; choose next activity',
+    });
+  }
+
+  async stopAndReplaceActivity(
+    activityId: UUID,
+    at: RoutineTimestampInput = this.now()
+  ): Promise<RoutineFinalizationResult> {
+    await this.ensureJournalRecovered();
+    const current = activeRequired(await this.routineRepository.readActive());
+    if (current.routineSnapshot.trackingMode !== 'overall') {
+      throw new Error('Only an overall-tracked routine can replace its activity');
+    }
+    const stopAt = current.completedAt ?? asTimestamp(at);
+    const stopAtMs = timestampMs(stopAt);
+    const query = await this.trackerService.query(
+      { startMs: timestampMs(current.startedAt), endMs: stopAtMs },
+      stopAtMs
+    );
+    const routineTransitionIds = query.transitions
+      .filter(
+        (transition) =>
+          transition.status === 'recorded' &&
+          transition.source === 'routine' &&
+          transition.activityId === current.routineId &&
+          timestampMs(transition.timestamp) >= timestampMs(current.startedAt) &&
+          timestampMs(transition.timestamp) <= stopAtMs
+      )
+      .map((transition) => transition.id);
+    await this.trackerService.reassignTransitions(routineTransitionIds, activityId);
+    return this.finalizeCancellation(stopAt);
+  }
+
   async selectNextActivity(activityId: UUID | null): Promise<TimeTransition> {
     await this.ensureJournalRecovered();
     const currentActive = await this.routineRepository.readActive();
@@ -588,11 +645,10 @@ export class RoutineService implements RoutineServiceApi {
 
   async durationComparison(run: RoutineRunHistory): Promise<RoutineDurationComparison | null> {
     const routine = await this.catalogService.getRoutine(run.routineId);
-    const completedMonth = new Date(timestampMs(run.completedAt));
-    completedMonth.setDate(1);
-    completedMonth.setHours(12, 0, 0, 0);
-    completedMonth.setMonth(completedMonth.getMonth() - (DURATION_COMPARISON_LOOKBACK_MONTHS - 1));
-    const earliestHistoryDate = Math.max(timestampMs(routine.createdAt), completedMonth.getTime());
+    const completedMonth = DateTime.fromMillis(timestampMs(run.completedAt), { zone: 'local' })
+      .startOf('month')
+      .minus({ months: DURATION_COMPARISON_LOOKBACK_MONTHS - 1 });
+    const earliestHistoryDate = Math.max(timestampMs(routine.createdAt), completedMonth.toMillis());
     const months = monthKeysBetween(new Date(earliestHistoryDate).toISOString(), run.completedAt);
     const history = await Promise.all(
       months.map((month) => this.routineRepository.readHistory(month))
@@ -872,7 +928,6 @@ export class RoutineService implements RoutineServiceApi {
       });
     }
     return this.trackerService.switchActivity(null, {
-      id: active.id,
       timestamp: active.completedAt,
       source: 'routine',
       note,

@@ -42,7 +42,9 @@ assert(
   'the live timer must tick immediately, use stable timestamp dependencies, and clean up'
 );
 assert(
-  activeBar.includes("name={isActive ? 'pause' : 'play'}") &&
+  activeBar.includes("routineInFocus && activeRoutine.status === 'paused'") &&
+    activeBar.includes("? 'pause'") &&
+    activeBar.includes("? 'play'") &&
     activeBar.includes("testID={isActive ? 'active-activity-pause' : 'active-activity-play'}") &&
     activeBar.includes('Starts a new tracking session for this activity'),
   'the tracker bar must expose accessible active pause and idle play controls'
@@ -71,20 +73,20 @@ assert(
 assert(
   activeBar.includes("activeRoutine?.status === 'paused'") &&
     activeBar.includes('runtime.routineService.resume()') &&
-    activeBar.includes("store.getState().switchActivity(activityId, { source: 'routine' })") &&
-    activeBar.includes('router.push(`/routine/${activeRoutine.routineId}` as Href)'),
+    activeBar.includes('router.push(`/routine/${resumed.routineId}` as Href)') &&
+    activeBar.includes('pausedRoutineStepName'),
   'idle play must preserve paused routine resume semantics'
 );
 assert(
-  activeBar.includes("resolved?.item.kind === 'routine' && activeRoutine === null") &&
+  activeBar.includes("resolved?.item.kind === 'routine'") &&
     activeBar.includes('runtime.routineService.startRoutine(resolved.item.id)') &&
-    activeBar.includes('router.push(`/routine/${resolved.item.id}` as Href)'),
+    activeBar.includes('router.push(`/routine/${started.routineId}` as Href)'),
   'idle play must start an inactive routine from its full runner view'
 );
 assert(
   activeBar.includes("activeRoutine?.status === 'running'") &&
     activeBar.includes('runtime.routineService.pause()') &&
-    activeBar.includes('store.getState().switchActivity(null)'),
+    activeBar.includes('runtime.routineService.switchToActivity(null)'),
   'active pause must persist routine pause state before entering tracker idle state'
 );
 

@@ -1,4 +1,5 @@
 import type { HistoryPeriod, HistorySession } from '@domain';
+import { DateTime } from 'luxon';
 
 export const DAY_TIMELINE_HOUR_HEIGHT = 64;
 export const DAY_TIMELINE_ROW_HEIGHT = 58;
@@ -16,6 +17,7 @@ export interface DayTimelineEntry {
 export interface DayTimelineHourTick {
   atMs: number;
   label: string;
+  kind: 'hour' | 'half-hour';
   y: number;
 }
 
@@ -60,11 +62,11 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value));
 }
 
-function readableHour(date: Date): string {
-  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+function readableHour(date: DateTime): string {
+  return date.toLocaleString({ hour: 'numeric' });
 }
 
-/** Returns local wall-clock hour marks without assuming every day is 24 elapsed hours. */
+/** Returns elapsed half-hour marks with local wall-clock labels, including DST repeats. */
 export function dayTimelineHourTicks(
   period: Pick<HistoryPeriod, 'startMs' | 'endMs'>,
   hourHeight = DAY_TIMELINE_HOUR_HEIGHT
@@ -73,19 +75,33 @@ export function dayTimelineHourTicks(
   if (period.endMs <= period.startMs) return [];
 
   const ticks: DayTimelineHourTick[] = [];
-  const date = new Date(period.startMs);
+  let date = DateTime.fromMillis(period.startMs, { zone: 'local' });
   let previousMs = period.startMs - 1;
-  while (date.getTime() < period.endMs) {
-    const atMs = date.getTime();
+  while (date.toMillis() < period.endMs) {
+    const atMs = date.toMillis();
     if (!Number.isFinite(atMs) || atMs <= previousMs) break;
-    const y =
-      ((atMs - period.startMs) / (period.endMs - period.startMs)) *
-      (hourHeight * ((period.endMs - period.startMs) / (60 * 60 * 1000)));
-    ticks.push({ atMs, label: readableHour(date), y });
+    const y = ((atMs - period.startMs) / (60 * 60 * 1000)) * hourHeight;
+    const kind = date.minute === 0 ? 'hour' : 'half-hour';
+    ticks.push({ atMs, label: kind === 'hour' ? readableHour(date) : '', kind, y });
     previousMs = atMs;
-    date.setHours(date.getHours() + 1, 0, 0, 0);
+    date = date.plus({ minutes: 30 });
   }
-  return ticks;
+
+  const labelCounts = new Map<string, number>();
+  for (const tick of ticks) {
+    if (tick.kind === 'hour') labelCounts.set(tick.label, (labelCounts.get(tick.label) ?? 0) + 1);
+  }
+  return ticks.map((tick) =>
+    tick.kind === 'hour' && (labelCounts.get(tick.label) ?? 0) > 1
+      ? {
+          ...tick,
+          label: DateTime.fromMillis(tick.atMs, { zone: 'local' }).toLocaleString({
+            hour: 'numeric',
+            timeZoneName: 'short',
+          }),
+        }
+      : tick
+  );
 }
 
 function rowTopFor(
