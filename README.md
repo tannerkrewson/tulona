@@ -112,6 +112,11 @@ was already connected with the old write-only permission, disconnect and
 reconnect after updating the Dropbox app permissions so Dropbox grants the new
 read scopes.
 
+Dropbox synchronization requires a JavaScript runtime with WebAssembly and
+WebAssembly exception support. The current native Hermes runtime does not expose
+those APIs, so sync is disabled in that app; local data is unchanged, and JSON
+backup export/import or Dropbox sync in the web app remain available.
+
 Tulona stores its persistent Automerge document in `/tulona-sync.am`. It reads
 the current file revision, merges it with local IndexedDB state, validates the
 merged dataset, and updates the file only against that exact revision. Initial

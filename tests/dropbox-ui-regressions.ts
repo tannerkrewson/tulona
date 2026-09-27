@@ -17,6 +17,7 @@ const callback = read('app/dropbox-auth.tsx');
 const coordinator = read('src/orchestration/boot-coordinator.ts');
 const syncDocument = read('src/backup/dropbox-sync-document.ts');
 const readme = read('README.md');
+const compactReadme = readme.replace(/\s+/g, ' ');
 const packageJson = JSON.parse(read('package.json')) as {
   dependencies?: { dropbox?: string; '@automerge/automerge'?: string };
 };
@@ -40,6 +41,12 @@ assert(
   'automatic synchronization must be debounced, serialized, and retried on focus/reconnect'
 );
 assert(
+  backup.includes("import type { SyncConflict, SyncDocument } from './dropbox-sync-document'") &&
+    backup.includes("import('./dropbox-sync-document')") &&
+    backup.includes('isDropboxSyncRuntimeSupported'),
+  'Automerge must load lazily and only in runtimes that provide its required WebAssembly APIs'
+);
+assert(
   syncDocument.includes('Automerge.merge') &&
     syncDocument.includes('routineSteps: Record') &&
     syncDocument.includes('habitDayStates: Record') &&
@@ -50,7 +57,9 @@ assert(
   screen.includes('dropbox-connect') &&
     screen.includes('dropbox-auto-backup-enabled') &&
     screen.includes('dropbox-backup-now') &&
-    screen.includes('dropbox-disconnect'),
+    screen.includes('dropbox-disconnect') &&
+    screen.includes('dropbox-sync-unsupported') &&
+    screen.includes('status.syncSupported'),
   'backup UI must expose connect, automatic, manual, and disconnect actions'
 );
 assert(
@@ -70,6 +79,12 @@ assert(
     readme.includes('files.metadata.read') &&
     readme.includes('tulona-sync.am'),
   'Dropbox setup, OAuth scopes, and sync-file policy must be documented'
+);
+assert(
+  compactReadme.includes('WebAssembly exception support') &&
+    compactReadme.includes('JSON backup export/import') &&
+    compactReadme.includes('sync is disabled in that app'),
+  'native runtimes without the required WebAssembly APIs must have a documented safe fallback'
 );
 
 console.log('Validated Dropbox synchronization UI, boot integration, and setup contract.');

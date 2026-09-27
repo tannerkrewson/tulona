@@ -247,62 +247,84 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
           /dropbox-auth redirect URI in the Dropbox app.
         </Text>
       ) : null}
+      {status && !status.syncSupported ? (
+        <Text
+          textStyle={{ color: colors.textMuted, fontSize: 13 }}
+          testID="dropbox-sync-unsupported"
+        >
+          Dropbox synchronization is unavailable in this app runtime because it does not support
+          WebAssembly. Your local data is safe; use backup export/import or sync with Tulona on the
+          web.
+        </Text>
+      ) : null}
       {connected ? (
         <>
-          <Switch
-            disabled={busy}
-            label="Sync automatically after changes"
-            onValueChange={(value) => void run(() => service.setEnabled(value))}
-            testID="dropbox-auto-backup-enabled"
-            value={status?.enabled ?? false}
-          />
-          <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-            {formatDropboxTimestamp(status?.lastSyncAt ?? status?.lastBackupAt ?? null)}
-          </Text>
-          {status?.syncPhase === 'syncing' ? (
-            <Text textStyle={{ color: colors.textMuted, fontSize: 13 }} testID="dropbox-sync-state">
-              Synchronizing changes…
-            </Text>
-          ) : null}
-          {status?.syncPhase === 'offline' ? (
-            <Text textStyle={{ color: colors.textMuted, fontSize: 13 }} testID="dropbox-sync-state">
-              Dropbox is unavailable. Local changes are saved and will sync when you reconnect.
-            </Text>
-          ) : null}
-          {status?.unresolvedConflictCount ? (
-            <Text
-              textStyle={{ color: colors.danger.foreground, fontSize: 13 }}
-              testID="dropbox-sync-conflicts"
-            >
-              {`${status.unresolvedConflictCount} sync conflict${status.unresolvedConflictCount === 1 ? '' : 's'} need review. Both values are retained in synchronization history.`}
-            </Text>
-          ) : null}
-          {status?.lastError ? (
-            <Text
-              textStyle={{ color: colors.danger.foreground, fontSize: 13 }}
-              testID="dropbox-last-error"
-            >
-              {`Synchronization needs attention: ${status.lastError}`}
-            </Text>
+          {status?.syncSupported ? (
+            <>
+              <Switch
+                disabled={busy}
+                label="Sync automatically after changes"
+                onValueChange={(value) => void run(() => service.setEnabled(value))}
+                testID="dropbox-auto-backup-enabled"
+                value={status.enabled}
+              />
+              <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
+                {formatDropboxTimestamp(status.lastSyncAt ?? status.lastBackupAt)}
+              </Text>
+              {status.syncPhase === 'syncing' ? (
+                <Text
+                  textStyle={{ color: colors.textMuted, fontSize: 13 }}
+                  testID="dropbox-sync-state"
+                >
+                  Synchronizing changes…
+                </Text>
+              ) : null}
+              {status.syncPhase === 'offline' ? (
+                <Text
+                  textStyle={{ color: colors.textMuted, fontSize: 13 }}
+                  testID="dropbox-sync-state"
+                >
+                  Dropbox is unavailable. Local changes are saved and will sync when you reconnect.
+                </Text>
+              ) : null}
+              {status.unresolvedConflictCount ? (
+                <Text
+                  textStyle={{ color: colors.danger.foreground, fontSize: 13 }}
+                  testID="dropbox-sync-conflicts"
+                >
+                  {`${status.unresolvedConflictCount} sync conflict${status.unresolvedConflictCount === 1 ? '' : 's'} need review. Both values are retained in synchronization history.`}
+                </Text>
+              ) : null}
+              {status.lastError ? (
+                <Text
+                  textStyle={{ color: colors.danger.foreground, fontSize: 13 }}
+                  testID="dropbox-last-error"
+                >
+                  {`Synchronization needs attention: ${status.lastError}`}
+                </Text>
+              ) : null}
+            </>
           ) : null}
           <Row spacing={8} style={{ width: '100%' }}>
-            <AppButton
-              disabled={busy}
-              label="Sync now"
-              onPress={() => void run(() => service.syncNow())}
-              style={{ height: 48, width: '48%' }}
-              testID="dropbox-backup-now"
-            />
+            {status?.syncSupported ? (
+              <AppButton
+                disabled={busy}
+                label="Sync now"
+                onPress={() => void run(() => service.syncNow())}
+                style={{ height: 48, width: '48%' }}
+                testID="dropbox-backup-now"
+              />
+            ) : null}
             <AppButton
               disabled={busy}
               label="Disconnect"
               onPress={() => void run(() => service.disconnect())}
-              style={{ height: 48, width: '48%' }}
+              style={{ height: 48, width: status?.syncSupported ? '48%' : '100%' }}
               testID="dropbox-disconnect"
               variant="outlined"
             />
           </Row>
-          {status?.syncPhase === 'authentication-required' ? (
+          {status?.syncSupported && status.syncPhase === 'authentication-required' ? (
             <AppButton
               disabled={busy}
               label="Reconnect to Dropbox"
@@ -318,7 +340,7 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
             />
           ) : null}
         </>
-      ) : (
+      ) : status?.syncSupported ? (
         <AppButton
           disabled={busy || !appKeyConfigured}
           label="Connect Dropbox"
@@ -331,7 +353,7 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
           style={{ height: 50, width: '100%' }}
           testID="dropbox-connect"
         />
-      )}
+      ) : null}
       {error ? (
         <Text textStyle={{ color: colors.danger.foreground, fontSize: 13 }} testID="dropbox-error">
           {error}

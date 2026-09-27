@@ -49,6 +49,15 @@ jobs:
       - name: Test TurboModule diagnostic patch
         run: npm run test:turbo-module-diagnostic-patch
 
+      - name: Test unsupported Dropbox WebAssembly runtime handling
+        run: npm run test:dropbox-sync-runtime
+
+      - name: Test Dropbox sync merge behavior
+        run: npm run test:dropbox-sync
+
+      - name: Test Dropbox backup UI contract
+        run: npm run test:dropbox-ui
+
       - name: Validate iOS JavaScript bundle
         run: |
           bundle_dir="$(mktemp -d)"

@@ -47,6 +47,7 @@
     "test:database-observer": "tsx tests/database-observer.ts",
     "test:dropbox-backup": "tsx tests/dropbox-backup.ts",
     "test:dropbox-sync": "tsx tests/dropbox-sync.ts",
+    "test:dropbox-sync-runtime": "tsx tests/dropbox-sync-runtime.ts",
     "test:dropbox-ui": "tsx tests/dropbox-ui-regressions.ts",
     "test:persistence": "tsx tests/persistence-checks.ts",
     "test:tracker": "tsx tests/tracker-engine.ts",
