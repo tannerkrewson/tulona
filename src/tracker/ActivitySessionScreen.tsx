@@ -185,10 +185,7 @@ function ActivitySessionContent({
 
   if (!catalog || !transition) {
     return (
-      <SlideUpSheet
-        onClose={() => goBackInAppStack(router, '/')}
-        testID="activity-session-sheet"
-      >
+      <SlideUpSheet onClose={() => goBackInAppStack(router, '/')} testID="activity-session-sheet">
         <SessionError
           message={
             persistenceError

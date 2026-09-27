@@ -127,9 +127,7 @@ export default function SettingsScreen() {
   return (
     <Screen title="Settings">
       <Column spacing={16} style={{ width: '100%' }}>
-        {store ? (
-          <SettingsActionError onBack={() => router.replace('/')} store={store} />
-        ) : null}
+        {store ? <SettingsActionError onBack={() => router.replace('/')} store={store} /> : null}
         {!store ? (
           <Column spacing={12} style={{ width: '100%' }}>
             <Text

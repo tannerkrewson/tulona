@@ -230,9 +230,7 @@ export default function SettingsCategoryScreen({
     ? returnFromDropbox[0]
     : returnFromDropbox;
   const goBack = () =>
-    isDropboxReturn === '1'
-      ? router.replace('/settings')
-      : goBackInAppStack(router, '/settings');
+    isDropboxReturn === '1' ? router.replace('/settings') : goBackInAppStack(router, '/settings');
   const category = getSettingsCategory(categoryId);
   const [store, setStore] = useState<SettingsStore | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
