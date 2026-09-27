@@ -46,6 +46,9 @@ jobs:
       - name: Test fatal launch error capture
         run: npm run test:launch-crash-reporter
 
+      - name: Test TurboModule diagnostic patch
+        run: npm run test:turbo-module-diagnostic-patch
+
       - name: Validate iOS JavaScript bundle
         run: |
           bundle_dir="$(mktemp -d)"
@@ -123,7 +126,12 @@ jobs:
         run: npm ci
 
       - name: Generate native iOS diagnostic project without widgets
+        env:
+          TULONA_DIAGNOSTIC_TURBOMODULE_CATCH: '1'
         run: npx expo prebuild --platform ios --no-install --clean
+
+      - name: Verify TurboModule diagnostic patch
+        run: node scripts/verify-turbo-module-diagnostic-patch.cjs
 
       - name: Install CocoaPods dependencies
         run: pod install --project-directory=ios

@@ -1,9 +1,12 @@
 import {
   createLaunchCrashReport,
   formatLaunchCrashReport,
+  formatLaunchDiagnosticReport,
   installLaunchCrashReporter,
   LAUNCH_CRASH_REPORT_KEY,
+  parseLaunchDiagnosticReport,
   parseLaunchCrashReport,
+  parseNativeTurboModuleReport,
   type CrashReportMetadata,
   type ErrorHandler,
 } from '../src/diagnostics/launchCrashReporter';
@@ -50,6 +53,44 @@ async function run() {
   assertEqual(parseLaunchCrashReport(null), null, 'handles missing report');
   assertMatch(formatLaunchCrashReport(report), /startup failed/, 'formats error message');
   assertMatch(formatLaunchCrashReport(report), /Build commit: abc123/, 'formats build commit');
+
+  const nativeReport = {
+    schemaVersion: 1 as const,
+    kind: 'native-turbo-module' as const,
+    capturedAt: '2026-09-27T20:00:01.000Z',
+    appVersion: '0.1.0',
+    buildNumber: '2',
+    buildSha: 'def456',
+    bundleIdentifier: 'com.tannerkrewson.tulona',
+    platformVersion: 'Version 27.0',
+    moduleName: 'ExpoFileSystem',
+    methodName: 'readAsStringAsync',
+    exceptionName: 'NSInvalidArgumentException',
+    reason: 'unexpected null value',
+    stackSymbols: ['0 Tulona 0x1234 nativeFailure + 12'],
+  };
+  const serializedNativeReport = JSON.stringify(nativeReport);
+  assertEqual(
+    parseNativeTurboModuleReport(serializedNativeReport)?.moduleName,
+    'ExpoFileSystem',
+    'parses native module details'
+  );
+  const preferredReport = parseLaunchDiagnosticReport(
+    JSON.stringify(report),
+    serializedNativeReport
+  );
+  assert(
+    preferredReport !== null &&
+      'kind' in preferredReport &&
+      preferredReport.kind === 'native-turbo-module',
+    'prefers native exception details when both reports exist'
+  );
+  assertMatch(
+    formatLaunchDiagnosticReport(nativeReport),
+    /ExpoFileSystem\.readAsStringAsync/,
+    'formats native module and method'
+  );
+  assertEqual(parseNativeTurboModuleReport('{not json'), null, 'rejects malformed native report');
 
   const saved = new Map<string, string>();
   let delegatedError: unknown;

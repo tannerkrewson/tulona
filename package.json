@@ -40,6 +40,7 @@
     "test:pwa-ui": "tsx tests/pwa-ui-regressions.ts",
     "test:settings-ui": "tsx tests/settings-ui-regressions.ts",
     "test:launch-crash-reporter": "tsx tests/launch-crash-reporter.ts",
+    "test:turbo-module-diagnostic-patch": "node scripts/test-turbo-module-diagnostic-patch.cjs",
     "test:active-session": "tsx tests/active-session-regressions.ts",
     "test:modal-ui": "tsx tests/modal-ui-regressions.ts",
     "test:indexed-db": "tsx tests/indexed-db-storage.ts",

@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { SafeAreaView, ScrollView, Share, StyleSheet, Text, Pressable, View } from 'react-native';
 
-import { formatLaunchCrashReport, type LaunchCrashReport } from './launchCrashReporter';
+import {
+  formatLaunchDiagnosticReport,
+  isNativeTurboModuleReport,
+  type LaunchDiagnosticReport,
+} from './launchCrashReporter';
 
 export default function LaunchCrashRecovery({
   report,
   onContinue,
 }: {
-  report: LaunchCrashReport;
+  report: LaunchDiagnosticReport;
   onContinue: () => void;
 }) {
   const [shareError, setShareError] = useState<string | null>(null);
@@ -17,12 +21,18 @@ export default function LaunchCrashRecovery({
     try {
       await Share.share({
         title: 'Tulona launch diagnostic',
-        message: formatLaunchCrashReport(report),
+        message: formatLaunchDiagnosticReport(report),
       });
     } catch (error) {
       setShareError(error instanceof Error ? error.message : String(error));
     }
   };
+
+  const isNativeReport = isNativeTurboModuleReport(report);
+  const reportName = isNativeReport ? report.exceptionName : report.name;
+  const reportMessage = isNativeReport
+    ? `${report.moduleName}.${report.methodName}: ${report.reason}`
+    : report.message;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -31,19 +41,25 @@ export default function LaunchCrashRecovery({
           <Text style={styles.iconText}>!</Text>
         </View>
         <Text style={styles.eyebrow}>STARTUP DIAGNOSTIC</Text>
-        <Text style={styles.title}>A previous launch stopped unexpectedly</Text>
+        <Text style={styles.title}>
+          {isNativeReport
+            ? 'A native module exception was intercepted'
+            : 'A previous launch stopped unexpectedly'}
+        </Text>
         <Text style={styles.description}>
-          Tulona saved the fatal JavaScript error and held back its normal screens so you can share
-          the report before trying again.
+          {isNativeReport
+            ? 'Tulona recorded the native module, method, exception, and stack, then held back its normal screens so you can share the report.'
+            : 'Tulona saved the fatal JavaScript error and held back its normal screens so you can share the report before trying again.'}
         </Text>
 
         <View style={styles.reportCard}>
-          <Text style={styles.errorName}>{report.name}</Text>
+          <Text style={styles.errorName}>{reportName}</Text>
           <Text selectable style={styles.errorMessage}>
-            {report.message}
+            {reportMessage}
           </Text>
           <Text style={styles.metadata}>
-            Tulona {report.appVersion} ({report.buildNumber}) · iOS {report.platformVersion}
+            Tulona {report.appVersion} ({report.buildNumber}) ·{' '}
+            {isNativeReport ? 'iOS' : report.platform} {report.platformVersion}
           </Text>
           <Text selectable style={styles.buildSha}>
             Build {report.buildSha}
@@ -67,8 +83,8 @@ export default function LaunchCrashRecovery({
           <Text style={styles.secondaryButtonText}>Try opening Tulona anyway</Text>
         </Pressable>
         <Text style={styles.privacyNote}>
-          The report stays on this device unless you choose to share it. It contains the error
-          message and JavaScript stack, so review it before sending. No habit database is attached.
+          The report stays on this device unless you choose to share it. It contains the exception
+          details and stack, so review it before sharing. Your habit database is not attached.
         </Text>
       </ScrollView>
     </SafeAreaView>
