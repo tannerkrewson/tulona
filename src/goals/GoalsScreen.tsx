@@ -172,7 +172,8 @@ function blankDraftRule(
       kind === 'habit'
         ? (habits[0]?.id ?? '')
         : kind === 'activity-duration'
-          ? (catalog.activities[0]?.id ?? '')
+          ? ([...catalog.activities, ...catalog.routines].find((item) => item.archivedAt === null)
+              ?.id ?? '')
           : '',
     measurement: 'completed-days',
     targetCount: '1',
@@ -219,8 +220,8 @@ function formatRule(
     );
   }
   const name =
-    catalog.activities.find((activity) => activity.id === rule.activityId)?.name ??
-    'Missing activity';
+    [...catalog.activities, ...catalog.routines].find((item) => item.id === rule.activityId)
+      ?.name ?? 'Missing activity';
   return (
     name +
     ': ' +
@@ -676,7 +677,11 @@ function RuleEditor({
 }) {
   const { colors } = useAppTheme();
   const candidates =
-    rule.kind === 'habit' ? habits : rule.kind === 'activity-duration' ? catalog.activities : [];
+    rule.kind === 'habit'
+      ? habits
+      : rule.kind === 'activity-duration'
+        ? [...catalog.activities, ...catalog.routines]
+        : [];
   return (
     <View style={{ width: '100%' }} testID={'goal-rule-editor-' + index}>
       {index > 0 ? (
@@ -711,15 +716,15 @@ function RuleEditor({
             testID={'goal-rule-kind-' + index}
           >
             <Picker.Item label="Habit progress" value="habit" />
-            <Picker.Item label="Activity time" value="activity-duration" />
+            <Picker.Item label="Activity or routine time" value="activity-duration" />
             <Picker.Item label="Weekly status (manual)" value="weekly-status" />
           </AccessiblePicker>
         </Field>
         {rule.kind !== 'weekly-status' ? (
-          <Field label={rule.kind === 'habit' ? 'Habit' : 'Activity'}>
+          <Field label={rule.kind === 'habit' ? 'Habit' : 'Activity or routine'}>
             <AccessiblePicker
               enabled={!disabled}
-              label={rule.kind === 'habit' ? 'Habit' : 'Activity'}
+              label={rule.kind === 'habit' ? 'Habit' : 'Activity or routine'}
               onValueChange={(value) => onChange({ ...rule, sourceId: String(value) })}
               selectedValue={rule.sourceId}
               testID={'goal-rule-source-' + index}
@@ -727,8 +732,10 @@ function RuleEditor({
               <Picker.Item
                 label={
                   candidates.length === 0
-                    ? 'No ' + (rule.kind === 'habit' ? 'habits' : 'activities') + ' available'
-                    : 'Choose ' + (rule.kind === 'habit' ? 'a habit' : 'an activity')
+                    ? 'No ' +
+                      (rule.kind === 'habit' ? 'habits' : 'activities or routines') +
+                      ' available'
+                    : 'Choose ' + (rule.kind === 'habit' ? 'a habit' : 'an activity or routine')
                 }
                 value=""
               />
@@ -736,9 +743,8 @@ function RuleEditor({
                 <Picker.Item
                   key={candidate.id}
                   label={
-                    'archivedAt' in candidate && candidate.archivedAt
-                      ? candidate.name + ' (archived)'
-                      : candidate.name
+                    `${candidate.name}${'kind' in candidate && candidate.kind === 'routine' ? ' (routine)' : ''}` +
+                    ('archivedAt' in candidate && candidate.archivedAt ? ' (archived)' : '')
                   }
                   value={candidate.id}
                 />
@@ -1019,7 +1025,7 @@ export function GoalEditor({
   const defaultNewRuleKind: GoalEvaluationRule['kind'] =
     habits.length > 0
       ? 'habit'
-      : catalog.activities.length > 0
+      : catalog.activities.length > 0 || catalog.routines.length > 0
         ? 'activity-duration'
         : 'weekly-status';
 
@@ -1281,7 +1287,7 @@ export async function loadGoalsPage(): Promise<GoalsPageData> {
     habits,
     habitStates,
     intervals: trackerQuery.intervals,
-    activityIds: catalog.activities.map((activity) => activity.id),
+    activityIds: [...catalog.activities, ...catalog.routines].map((item) => item.id),
   };
   const snapshots = weekIdentities.map((week, index) => {
     const stored = storedWeeks[index];

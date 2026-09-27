@@ -79,23 +79,26 @@ function routineGoalImpacts(
   getWeek: (value: Date | number | string) => GoalWeekIdentity,
   rolloverHour: number
 ): RoutineGoalImpact[] {
-  if (run.routineSnapshot.trackingMode !== 'steps') return [];
-  const startedStepIds = new Set(
-    run.stepSessions
-      .filter((session) => session.startedAt !== null)
-      .map((session) => session.stepId)
-  );
-  const activityIds = new Set(
-    run.routineSnapshot.steps
-      .filter((step) => step.activityId !== null && startedStepIds.has(step.id))
-      .map((step) => step.activityId as UUID)
-  );
+  const activityIds =
+    run.routineSnapshot.trackingMode === 'overall'
+      ? new Set<UUID>([run.routineId])
+      : new Set(
+          run.routineSnapshot.steps
+            .filter(
+              (step) =>
+                step.activityId !== null &&
+                run.stepSessions.some(
+                  (session) => session.stepId === step.id && session.startedAt !== null
+                )
+            )
+            .map((step) => step.activityId as UUID)
+        );
   if (activityIds.size === 0) return [];
   const runStartMs = timestampMs(run.startedAt);
   const runEndMs = timestampMs(run.completedAt);
   if (runEndMs <= runStartMs) return [];
 
-  const weeklyPeriods: Array<{ startMs: number; endMs: number; label: string }> = [];
+  const weeklyPeriods: { startMs: number; endMs: number; label: string }[] = [];
   let week = getWeek(run.startedAt);
   for (let count = 0; count < 520 && week.startMs < runEndMs; count += 1) {
     weeklyPeriods.push({
@@ -107,7 +110,7 @@ function routineGoalImpacts(
     week = getWeek(shiftLogicalDay(week.weekStart, 7, { rolloverHour }));
   }
 
-  const dailyPeriods: Array<{ startMs: number; endMs: number; label: string }> = [];
+  const dailyPeriods: { startMs: number; endMs: number; label: string }[] = [];
   let day = logicalDayBounds(run.startedAt, { rolloverHour });
   const todayKey = logicalDayBounds(Date.now(), { rolloverHour }).key;
   for (let count = 0; count < 520 && day.startMs < runEndMs; count += 1) {
@@ -132,8 +135,8 @@ function routineGoalImpacts(
     return goal.rules.flatMap((rule) => {
       if (rule.kind !== 'activity-duration' || !activityIds.has(rule.activityId)) return [];
       const activityName =
-        catalog.activities.find((activity) => activity.id === rule.activityId)?.name ??
-        'Tracked activity';
+        [...catalog.activities, ...catalog.routines].find((item) => item.id === rule.activityId)
+          ?.name ?? 'Tracked activity';
       const frequency = 'frequency' in rule && rule.frequency === 'daily' ? 'daily' : 'weekly';
       const periods = frequency === 'daily' ? dailyPeriods : weeklyPeriods;
       return periods.flatMap((period) => {

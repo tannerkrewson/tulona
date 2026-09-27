@@ -540,7 +540,9 @@ export class HabitService implements HabitServiceApi {
       const catalog = await this.options.catalog.read();
       const exists =
         normalized.kind === 'tracked-time'
-          ? catalog.activities.some((item) => item.id === normalized.activityId)
+          ? [...catalog.activities, ...catalog.routines].some(
+              (item) => item.id === normalized.activityId
+            )
           : normalized.kind === 'folder-time'
             ? catalog.folders.some((item) => item.id === normalized.folderId)
             : catalog.routines.some((item) => item.id === normalized.routineId);

@@ -141,6 +141,7 @@ export interface CatalogServiceApi {
   restoreFolder(id: UUID): Promise<Folder>;
   createActivity(input: CreateActivityInput): Promise<Activity>;
   updateActivity(id: UUID, input: UpdateActivityInput): Promise<Activity>;
+  convertActivityToRoutine(id: UUID, input?: UpdateActivityInput): Promise<RoutineDefinition>;
   moveActivity(id: UUID, folderId: UUID | null): Promise<Activity>;
   archiveActivity(id: UUID): Promise<Activity>;
   restoreActivity(id: UUID): Promise<Activity>;
@@ -577,6 +578,82 @@ export class CatalogService implements CatalogServiceApi {
     });
     await this.write(next);
     return next.activities.find((candidate) => candidate.id === id) as Activity;
+  }
+
+  async convertActivityToRoutine(
+    id: UUID,
+    input: UpdateActivityInput = {}
+  ): Promise<RoutineDefinition> {
+    const catalog = await this.read();
+    const current = catalog.activities.find((activity) => activity.id === id);
+    if (!current) throw new PersistenceError('validation', `Unknown activity "${id}"`);
+
+    const folderId = input.folderId === undefined ? current.folderId : input.folderId;
+    if (input.folderId !== undefined && folderId !== current.folderId) {
+      folderForPlacement(catalog, folderId);
+    }
+    const moved = folderId !== current.folderId;
+    const now = this.timestamp();
+    const referencedRoutines = catalog.routines.filter((routine) =>
+      routine.steps.some((step) => step.activityId === id)
+    );
+    const archivedStepActivity: Activity | null =
+      referencedRoutines.length > 0
+        ? {
+            ...current,
+            id: createId(),
+            sortOrder: nextSiblingOrder(catalog, current.folderId, id),
+            createdAt: now,
+            updatedAt: now,
+            archivedAt: now,
+          }
+        : null;
+    const stepRoutines =
+      archivedStepActivity === null
+        ? catalog.routines
+        : catalog.routines.map((routine) => {
+            if (!routine.steps.some((step) => step.activityId === id)) return routine;
+            return {
+              ...routine,
+              steps: routine.steps.map((step) =>
+                step.activityId === id
+                  ? {
+                      ...step,
+                      activityId: archivedStepActivity.id,
+                      name: current.name,
+                      color: current.color,
+                      iconName: isIconValue(current.iconName) ? current.iconName : null,
+                      updatedAt: now,
+                    }
+                  : step
+              ),
+              updatedAt: now,
+            };
+          });
+    const routine: RoutineDefinition = {
+      id: current.id,
+      kind: 'routine',
+      name: input.name === undefined ? current.name : validateName(input.name),
+      folderId,
+      sortOrder: moved ? nextSiblingOrder(catalog, folderId, id) : current.sortOrder,
+      color: input.color === undefined ? current.color : validateColor(input.color),
+      iconName: isIconValue(current.iconName) ? current.iconName : 'repeat',
+      trackingMode: 'overall',
+      steps: [],
+      createdAt: current.createdAt,
+      updatedAt: now,
+      archivedAt: current.archivedAt,
+    };
+    const next = normalizeCatalogOrders({
+      ...catalog,
+      activities: [
+        ...catalog.activities.filter((activity) => activity.id !== id),
+        ...(archivedStepActivity ? [archivedStepActivity] : []),
+      ],
+      routines: [...stepRoutines, routine],
+    });
+    await this.write(next);
+    return next.routines.find((candidate) => candidate.id === id) as RoutineDefinition;
   }
 
   async moveActivity(id: UUID, folderId: UUID | null): Promise<Activity> {

@@ -286,7 +286,9 @@ function validateSemantics(backup: LifeTrackerBackup): string[] {
     const runStepIds = validateSnapshot(
       run.routineSnapshot,
       `Routine run "${run.id}"`,
-      activityIds,
+      // Historical snapshots may retain an activity ID after that activity
+      // was converted into a routine; live routine definitions stay strict.
+      trackableIds,
       errors
     );
     validateStepSessions(run.stepSessions, `Routine run "${run.id}"`, runStepIds, errors);
@@ -311,8 +313,10 @@ function validateSemantics(backup: LifeTrackerBackup): string[] {
 
   const habitIds = duplicateIds(backup.habits, 'habit', errors);
   for (const habit of backup.habits) {
-    if (habit.trigger?.kind === 'tracked-time' && !activityIds.has(habit.trigger.activityId)) {
-      errors.push(`Habit "${habit.id}" references unknown activity "${habit.trigger.activityId}"`);
+    if (habit.trigger?.kind === 'tracked-time' && !trackableIds.has(habit.trigger.activityId)) {
+      errors.push(
+        `Habit "${habit.id}" references unknown trackable item "${habit.trigger.activityId}"`
+      );
     }
     if (habit.trigger?.kind === 'folder-time' && !folderIds.has(habit.trigger.folderId)) {
       errors.push(`Habit "${habit.id}" references unknown folder "${habit.trigger.folderId}"`);
@@ -335,7 +339,7 @@ function validateSemantics(backup: LifeTrackerBackup): string[] {
   const goalStatusIds = duplicateIds(backup.goalSettings.statusDefinitions, 'goal status', errors);
   for (const goal of backup.goals) {
     for (const source of goal.sourceLinks) {
-      const known = source.kind === 'habit' ? habitIds.has(source.id) : activityIds.has(source.id);
+      const known = source.kind === 'habit' ? habitIds.has(source.id) : trackableIds.has(source.id);
       if (!known) {
         errors.push(`Goal "${goal.id}" references unknown ${source.kind} "${source.id}"`);
       }
@@ -344,8 +348,8 @@ function validateSemantics(backup: LifeTrackerBackup): string[] {
       if (rule.kind === 'habit' && !habitIds.has(rule.habitId)) {
         errors.push(`Goal "${goal.id}" references unknown habit "${rule.habitId}"`);
       }
-      if (rule.kind === 'activity-duration' && !activityIds.has(rule.activityId)) {
-        errors.push(`Goal "${goal.id}" references unknown activity "${rule.activityId}"`);
+      if (rule.kind === 'activity-duration' && !trackableIds.has(rule.activityId)) {
+        errors.push(`Goal "${goal.id}" references unknown trackable item "${rule.activityId}"`);
       }
       if (rule.kind !== 'weekly-status') {
         for (const statusId of Object.values(rule.statusIds)) {

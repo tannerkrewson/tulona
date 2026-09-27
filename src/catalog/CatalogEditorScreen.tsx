@@ -1,5 +1,5 @@
 import { Column, Picker, Row, Text } from '@expo/ui';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -20,7 +20,7 @@ import {
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { goBackInAppStack } from '../navigation/app-back';
 
-import type { CatalogService } from './catalog-service';
+import type { CatalogService, UpdateActivityInput } from './catalog-service';
 import { loadRoutineRuntime } from '../routine/routine-runtime';
 
 const ROOT_VALUE = '__root__';
@@ -116,6 +116,30 @@ export function CatalogEditorScreen({
         folders={resource.catalog.folders}
         initialFolderId={initialFolderId}
         service={resource.service}
+        onConvert={async (input) => {
+          const runtime = await loadRoutineRuntime();
+          const [activeTransition, activeRoutine] = await Promise.all([
+            runtime.trackerService.getActiveTransition(),
+            runtime.routineService.getActive(),
+          ]);
+          if (activeTransition?.activityId === id) {
+            throw new Error('Stop tracking this activity before converting it to a routine.');
+          }
+          if (
+            activeRoutine &&
+            ['running', 'paused', 'awaiting-next-activity'].includes(activeRoutine.status) &&
+            activeRoutine.routineSnapshot.steps.some((step) => step.activityId === id)
+          ) {
+            throw new Error(
+              `Finish or resolve the active "${activeRoutine.routineSnapshot.name}" routine before converting this activity.`
+            );
+          }
+          const converted = await runtime.catalogService.convertActivityToRoutine(
+            id as UUID,
+            input
+          );
+          router.replace(`/routine-edit/${encodeURIComponent(converted.id)}` as Href);
+        }}
         onBack={() => goBackInAppStack(router, '/(tabs)')}
         onChanged={refresh}
       />
@@ -212,6 +236,7 @@ function ActivityEditor({
   folders,
   initialFolderId,
   service,
+  onConvert,
   onChanged,
   onBack,
 }: {
@@ -219,6 +244,7 @@ function ActivityEditor({
   folders: readonly Folder[];
   initialFolderId: UUID | null;
   service: CatalogService;
+  onConvert: (input: UpdateActivityInput) => Promise<void>;
   onChanged: () => void;
   onBack: () => void;
 }) {
@@ -230,6 +256,7 @@ function ActivityEditor({
   const [busy, setBusy] = useState(false);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
   const [confirmingArchive, setConfirmingArchive] = useState(false);
+  const [confirmingConversion, setConfirmingConversion] = useState(false);
   const originalFolderId = activity?.folderId ?? null;
   const selectedFolder =
     folderId === ROOT_VALUE ? null : folders.find((folder) => folder.id === folderId);
@@ -273,6 +300,24 @@ function ActivityEditor({
         });
       }
     }, true);
+  };
+
+  const convertToRoutine = async () => {
+    if (!activity || busy) return;
+    const selectedFolderId = folderId === ROOT_VALUE ? null : (folderId as UUID);
+    const action = () =>
+      onConvert({ name, color: color.trim() || null, folderId: selectedFolderId });
+    lastAction.current = action;
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      setConfirmingConversion(false);
+    } catch (actionError) {
+      setError(errorText(actionError));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -346,6 +391,14 @@ function ActivityEditor({
           />
           {activity ? (
             <>
+              <AppButton
+                disabled={busy}
+                label="Convert to routine"
+                onPress={() => setConfirmingConversion(true)}
+                style={{ height: 48, width: '100%' }}
+                testID="convert-activity-to-routine"
+                variant="outlined"
+              />
               <ReorderControls
                 canMoveUp
                 canMoveDown
@@ -376,24 +429,39 @@ function ActivityEditor({
         </Column>
       </Screen>
       {activity ? (
-        <ConfirmationModal
-          busy={busy}
-          cancelLabel="Keep activity"
-          cancelTestID="cancel-archive-activity"
-          confirmLabel="Yes, archive activity"
-          confirmTestID="confirm-archive-activity"
-          message="It will be hidden from active catalog views but retained for history. You can restore it later."
-          onCancel={() => setConfirmingArchive(false)}
-          onConfirm={() =>
-            void run(async () => {
-              await service.archiveActivity(activity.id);
-              setConfirmingArchive(false);
-            })
-          }
-          testID="archive-activity-confirmation"
-          title="Archive this activity?"
-          visible={confirmingArchive}
-        />
+        <>
+          <ConfirmationModal
+            busy={busy}
+            cancelLabel="Keep activity"
+            cancelTestID="cancel-archive-activity"
+            confirmLabel="Yes, archive activity"
+            confirmTestID="confirm-archive-activity"
+            message="It will be hidden from active catalog views but retained for history. You can restore it later."
+            onCancel={() => setConfirmingArchive(false)}
+            onConfirm={() =>
+              void run(async () => {
+                await service.archiveActivity(activity.id);
+                setConfirmingArchive(false);
+              })
+            }
+            testID="archive-activity-confirmation"
+            title="Archive this activity?"
+            visible={confirmingArchive}
+          />
+          <ConfirmationModal
+            busy={busy}
+            cancelLabel="Keep activity"
+            cancelTestID="cancel-convert-activity-to-routine"
+            confirmLabel="Convert to routine"
+            confirmTestID="confirm-convert-activity-to-routine"
+            message="This keeps the same item ID so its tracked time, goal checks, and habit triggers stay connected. Existing routines that use it as a step will keep an archived copy. The new routine will track one continuous activity for the whole routine; you can add its steps next."
+            onCancel={() => setConfirmingConversion(false)}
+            onConfirm={() => void convertToRoutine()}
+            testID="convert-activity-to-routine-confirmation"
+            title="Convert this activity?"
+            visible={confirmingConversion}
+          />
+        </>
       ) : null}
     </>
   );

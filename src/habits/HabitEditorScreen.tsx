@@ -256,14 +256,18 @@ function TriggerTargetPicker({
 }) {
   const candidates =
     kind === 'tracked-time'
-      ? catalog.activities.filter(
-          (activity) => activity.archivedAt === null || activity.id === value
+      ? [...catalog.activities, ...catalog.routines].filter(
+          (item) => item.archivedAt === null || item.id === value
         )
       : kind === 'folder-time'
         ? catalog.folders.filter((folder) => folder.archivedAt === null || folder.id === value)
         : catalog.routines.filter((routine) => routine.archivedAt === null || routine.id === value);
   const label =
-    kind === 'tracked-time' ? 'an activity' : kind === 'folder-time' ? 'a folder' : 'a routine';
+    kind === 'tracked-time'
+      ? 'an activity or routine'
+      : kind === 'folder-time'
+        ? 'a folder'
+        : 'a routine';
 
   return (
     <AccessiblePicker
@@ -276,7 +280,10 @@ function TriggerTargetPicker({
       {candidates.map((candidate) => (
         <Picker.Item
           key={candidate.id}
-          label={candidate.archivedAt ? `${candidate.name} (archived)` : candidate.name}
+          label={
+            `${candidate.name}${'kind' in candidate && candidate.kind === 'routine' ? ' (routine)' : ''}` +
+            (candidate.archivedAt ? ' (archived)' : '')
+          }
           value={candidate.id}
         />
       ))}
@@ -506,7 +513,7 @@ function HabitEditorForm({
               testID="habit-trigger-kind"
             >
               <Picker.Item label="No automatic trigger" value="none" />
-              <Picker.Item label="Tracked activity time" value="tracked-time" />
+              <Picker.Item label="Tracked activity or routine time" value="tracked-time" />
               <Picker.Item label="Folder time" value="folder-time" />
               <Picker.Item label="Routine completion time" value="routine-completion" />
             </AccessiblePicker>

@@ -38,13 +38,15 @@ function triggerName(habit: Habit, catalog: CatalogCollection | null): string | 
         : habit.trigger.routineId;
   const source =
     habit.trigger.kind === 'tracked-time'
-      ? catalog?.activities.find((activity) => activity.id === id)?.name
+      ? [...(catalog?.activities ?? []), ...(catalog?.routines ?? [])].find(
+          (item) => item.id === id
+        )?.name
       : habit.trigger.kind === 'folder-time'
         ? catalog?.folders.find((folder) => folder.id === id)?.name
         : catalog?.routines.find((routine) => routine.id === id)?.name;
   const kind =
     habit.trigger.kind === 'tracked-time'
-      ? 'Activity time'
+      ? 'Tracked time'
       : habit.trigger.kind === 'folder-time'
         ? 'Folder time'
         : 'Routine time';
