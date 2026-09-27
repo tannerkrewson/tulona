@@ -112,6 +112,9 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: validate
     runs-on: xcode-27
+    env:
+      RCT_USE_PREBUILT_RNCORE: '0'
+      TULONA_DIAGNOSTIC_TURBOMODULE_CATCH: '1'
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -126,8 +129,6 @@ jobs:
         run: npm ci
 
       - name: Generate native iOS diagnostic project without widgets
-        env:
-          TULONA_DIAGNOSTIC_TURBOMODULE_CATCH: '1'
         run: npx expo prebuild --platform ios --no-install --clean
 
       - name: Verify TurboModule diagnostic patch
@@ -150,6 +151,11 @@ jobs:
             CODE_SIGN_IDENTITY= \
             DEVELOPMENT_TEAM= \
             archive
+
+      - name: Verify patched React Native code is linked into the app
+        run: |
+          node scripts/verify-turbo-module-diagnostic-binary.cjs \
+            "$RUNNER_TEMP/Tulona.xcarchive/Products/Applications/Tulona.app"
 
       - name: Package and validate unsigned IPA
         run: |
