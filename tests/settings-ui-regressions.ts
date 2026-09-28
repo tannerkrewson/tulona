@@ -19,6 +19,13 @@ function assert(condition: unknown, message: string): asserts condition {
 const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const settingsScreen = read('src/settings/SettingsScreen.tsx');
+const recoveryActions = read('src/orchestration/RecoveryActions.tsx');
+const settingsListStart = settingsScreen.indexOf('function SettingsCategoryRow(');
+const settingsListEnd = settingsScreen.indexOf(
+  'export default function SettingsScreen',
+  settingsListStart
+);
+const settingsRows = settingsScreen.slice(settingsListStart, settingsListEnd);
 const activityRow = read('src/tracker/ActivityRow.tsx');
 const folderRow = read('src/tracker/FolderRow.tsx');
 const habitList = read('src/habits/HabitListScreen.tsx');
@@ -43,6 +50,22 @@ assert(
   settingsScreen.includes("overflow: 'hidden'") &&
     settingsScreen.includes('borderBottomWidth: isLast ? 0 : ROW_SURFACE_DIVIDER_WIDTH'),
   'settings list edges and dividers must render as one clipped surface'
+);
+assert(
+  settingsRows.includes('<NativeText') &&
+    !settingsRows.includes('<Text') &&
+    !settingsRows.includes('<Row') &&
+    !settingsRows.includes('<Column'),
+  'the native settings list must not mount SwiftUI descendants inside its React Native rows'
+);
+assert(
+  settingsScreen.includes("import { Host } from '@expo/ui'") &&
+    !settingsScreen.includes('import { Column') &&
+    !settingsScreen.includes('import { Text') &&
+    settingsScreen.includes('<NativeText') &&
+    !recoveryActions.includes("from '@expo/ui'") &&
+    recoveryActions.includes('<NativeText'),
+  'the Settings menu and shared recovery controls must avoid unhosted SwiftUI text in native layouts'
 );
 assert(
   activityRow.includes('getRowSurfaceStyle') &&

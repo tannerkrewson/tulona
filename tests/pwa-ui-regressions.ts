@@ -12,7 +12,7 @@ function assert(condition: unknown, message: string): asserts condition {
 const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const html = read('app/+html.tsx');
-const tabs = read('src/navigation/AppTabs.tsx');
+const tabs = read('src/navigation/AppTabsJavaScript.tsx');
 const nativeTabs = read('src/navigation/AppTabs.native.tsx');
 const trackerStack = read('app/(tabs)/(tracker)/_layout.tsx');
 const activeBar = read('src/tracker/ActiveActivityBar.tsx');
@@ -22,7 +22,7 @@ const catalogEditActions = read('src/tracker/CatalogEditActions.tsx');
 const folderDetail = read('src/tracker/FolderDetailScreen.tsx');
 const systemColorScheme = read('src/theme/systemColorScheme.ts');
 const metroConfig = read('metro.config.js');
-const rootLayout = read('src/diagnostics/NormalAppLayout.tsx');
+const rootLayout = read('app/_layout.tsx');
 const folderRoute = 'app/(tabs)/(tracker)/folder/[folderId].tsx';
 
 const safariUA =

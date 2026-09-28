@@ -78,7 +78,14 @@ export function AppScreen({
                 {headerRight}
               </PageHeader>
             ) : null}
-            {children}
+            <Host
+              colorScheme={colorScheme}
+              matchContents={{ vertical: true }}
+              seedColor={colors.primary}
+              style={{ flex: 1, minHeight: 0, width: '100%' }}
+            >
+              {children}
+            </Host>
           </View>
         </View>
       </Host>
@@ -102,7 +109,14 @@ export function AppScreen({
           {headerRight}
         </PageHeader>
       ) : null}
-      {children}
+      <Host
+        colorScheme={colorScheme}
+        matchContents={{ vertical: true }}
+        seedColor={colors.primary}
+        style={{ width: '100%' }}
+      >
+        {children}
+      </Host>
     </Column>
   );
 
@@ -116,7 +130,16 @@ export function AppScreen({
       testID={testID}
       useViewportSizeMeasurement
     >
-      <ScrollView style={{ height: '100%', width: '100%' }}>{content}</ScrollView>
+      <ScrollView style={{ height: '100%', width: '100%' }}>
+        <Host
+          colorScheme={colorScheme}
+          matchContents={{ vertical: true }}
+          seedColor={colors.primary}
+          style={{ width: '100%' }}
+        >
+          {content}
+        </Host>
+      </ScrollView>
     </Host>
   );
 }

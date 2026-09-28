@@ -1,9 +1,9 @@
-import { Button, Column, Row, Text } from '@expo/ui';
 import { useState } from 'react';
+import { Text as NativeText, View } from 'react-native';
 
 import { downloadRawDataJson } from '../backup/web-download';
 import { bootCoordinator } from './boot-coordinator';
-import { errorText, IconButton } from '@ui';
+import { AppButton, errorText, IconButton } from '@ui';
 import { useAppTheme } from '@theme';
 
 export interface RecoveryActionsProps {
@@ -38,10 +38,10 @@ export function RecoveryActions({
   };
 
   return (
-    <Column spacing={8} style={{ width: '100%' }} testID={testID}>
-      <Row alignment="center" spacing={8}>
+    <View style={{ gap: 8, width: '100%' }} testID={testID}>
+      <View style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}>
         {onRetry ? (
-          <Button
+          <AppButton
             disabled={disabled}
             label="Retry"
             onPress={onRetry}
@@ -59,17 +59,20 @@ export function RecoveryActions({
             variant="plain"
           />
         ) : null}
-        <Button
-          disabled={disabled}
-          label="Export raw local data"
-          onPress={exportRaw}
-          testID={`${testID}-export-raw`}
-          variant="outlined"
-        />
-      </Row>
+      </View>
+      <AppButton
+        disabled={disabled}
+        label="Export raw local data"
+        onPress={exportRaw}
+        style={{ width: '100%' }}
+        testID={`${testID}-export-raw`}
+        variant="outlined"
+      />
       {rawError ? (
-        <Text textStyle={{ color: colors.danger.foreground, fontSize: 13 }}>{rawError}</Text>
+        <NativeText style={{ color: colors.danger.foreground, fontSize: 13 }}>
+          {rawError}
+        </NativeText>
       ) : null}
-    </Column>
+    </View>
   );
 }

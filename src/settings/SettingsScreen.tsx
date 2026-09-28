@@ -1,6 +1,6 @@
-import { Column, Row, Text } from '@expo/ui';
+import { Host } from '@expo/ui';
 import { useIsFocused, useRouter, type Href } from 'expo-router';
-import { Pressable, View } from 'react-native';
+import { Pressable, Text as NativeText, View } from 'react-native';
 import { useCallback, useEffect, useState } from 'react';
 
 import { AppIcon } from '@icons';
@@ -45,7 +45,12 @@ function SettingsCategoryRow({
       })}
       testID={`settings-category-${category.id}`}
     >
-      <Row alignment="center" spacing={ROW_SURFACE_CONTENT_GAP} style={getRowSurfaceLayoutStyle()}>
+      <View
+        style={{
+          ...getRowSurfaceLayoutStyle(),
+          gap: ROW_SURFACE_CONTENT_GAP,
+        }}
+      >
         <View
           style={{
             alignItems: 'center',
@@ -59,12 +64,12 @@ function SettingsCategoryRow({
           <AppIcon color={colors.text} name={category.icon} size={19} strokeWidth={2.2} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text
+          <NativeText
             numberOfLines={1}
-            textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600' }}
+            style={{ color: colors.text, fontSize: 17, fontWeight: '600' }}
           >
             {category.title}
-          </Text>
+          </NativeText>
         </View>
         <View
           style={{
@@ -76,7 +81,7 @@ function SettingsCategoryRow({
         >
           <AppIcon color={colors.textMuted} name="chevron-right" size={20} strokeWidth={2.4} />
         </View>
-      </Row>
+      </View>
     </Pressable>
   );
 }
@@ -92,7 +97,7 @@ function SettingsCategoryList({ router }: { router: ReturnType<typeof useRouter>
       }}
       testID="settings-category-list"
     >
-      <Column style={{ width: '100%' }}>
+      <View style={{ width: '100%' }}>
         {settingsCategories.map((category, index) => (
           <SettingsCategoryRow
             category={category}
@@ -101,13 +106,13 @@ function SettingsCategoryList({ router }: { router: ReturnType<typeof useRouter>
             onPress={() => router.push(category.path as Href)}
           />
         ))}
-      </Column>
+      </View>
     </View>
   );
 }
 
 export default function SettingsScreen() {
-  const { colors } = useAppTheme();
+  const { colorScheme, colors } = useAppTheme();
   const focused = useIsFocused();
   const router = useRouter();
   const [store, setStore] = useState<SettingsStore | null>(null);
@@ -126,18 +131,22 @@ export default function SettingsScreen() {
 
   return (
     <Screen title="Settings">
-      <Column spacing={16} style={{ width: '100%' }}>
-        {store ? <SettingsActionError onBack={() => router.replace('/')} store={store} /> : null}
+      <View style={{ gap: 16, width: '100%' }}>
+        {store ? (
+          <Host
+            colorScheme={colorScheme}
+            matchContents={{ vertical: true }}
+            seedColor={colors.primary}
+            style={{ width: '100%' }}
+          >
+            <SettingsActionError onBack={() => router.replace('/')} store={store} />
+          </Host>
+        ) : null}
         {!store ? (
-          <Column spacing={12} style={{ width: '100%' }}>
-            <Text
-              textStyle={{
-                color: loadError ? colors.text : colors.textMuted,
-                fontSize: 15,
-              }}
-            >
+          <View style={{ gap: 12, width: '100%' }}>
+            <NativeText style={{ color: loadError ? colors.text : colors.textMuted, fontSize: 15 }}>
               {loadError ?? 'Loading settings...'}
-            </Text>
+            </NativeText>
             {loadError ? (
               <RecoveryActions
                 onRetry={load}
@@ -146,10 +155,10 @@ export default function SettingsScreen() {
                 testID="settings-load-recovery"
               />
             ) : null}
-          </Column>
+          </View>
         ) : null}
         <SettingsCategoryList router={router} />
-      </Column>
+      </View>
     </Screen>
   );
 }

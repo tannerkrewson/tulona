@@ -99,6 +99,13 @@ assert(
   'goal editing must reuse the tracker pencil style and expose a reachable busy/error/retry save'
 );
 assert(
+  goals.includes("typeof window.addEventListener !== 'function'") &&
+    goals.includes("typeof window.removeEventListener !== 'function'") &&
+    goals.indexOf("typeof window.addEventListener !== 'function'") <
+      goals.indexOf("window.addEventListener('tulona:dropbox-sync'"),
+  'the optional Dropbox sync event listener must be guarded on native runtimes'
+);
+assert(
   !goals.includes('goals-current-week') &&
     !goals.includes('Past weeks') &&
     !goals.includes('Update review') &&

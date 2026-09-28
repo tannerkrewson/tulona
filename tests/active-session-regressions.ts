@@ -13,7 +13,7 @@ const session = read('src/tracker/ActivitySessionScreen.tsx');
 const editor = read('src/tracker/HistoricalSessionEditor.tsx');
 const chooser = read('src/tracker/ActivitySessionActivityChooserScreen.tsx');
 const chooserRoute = read('app/activity-session/activity-chooser.tsx');
-const layout = read('src/diagnostics/NormalAppLayout.tsx');
+const layout = read('app/_layout.tsx');
 const trackerService = read('src/tracker/tracker-service.ts');
 const trackerStore = read('src/tracker/tracker-store.ts');
 

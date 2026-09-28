@@ -1,7 +1,7 @@
-import { Column, Picker, Row, Text } from '@expo/ui';
+import { Column, Host, Picker, Row, Text } from '@expo/ui';
 import { useIsFocused, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, Text as NativeText, View } from 'react-native';
 
 import type {
   AppSettings,
@@ -284,16 +284,16 @@ export function StatusBadge({
       }}
       testID="goal-current-status"
     >
-      <Text
+      <NativeText
         numberOfLines={1}
-        textStyle={{
+        style={{
           color: swatch?.foreground ?? colors.textMuted,
           fontSize: 12,
           fontWeight: '700',
         }}
       >
         {label}
-      </Text>
+      </NativeText>
     </View>
   );
 }
@@ -334,7 +334,7 @@ function StatusCircleHistory({
   settings: GoalSettings;
 }) {
   return (
-    <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+    <View style={{ alignItems: 'center', flexDirection: 'row', gap: 8, width: '100%' }}>
       <ScrollView
         contentContainerStyle={{ alignItems: 'center', gap: 6 }}
         horizontal
@@ -355,7 +355,7 @@ function StatusCircleHistory({
           );
         })}
       </ScrollView>
-    </Row>
+    </View>
   );
 }
 
@@ -401,12 +401,12 @@ function GoalRow({
     >
       <Row alignment="center" spacing={10} style={{ width: '100%' }}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text
+          <NativeText
             numberOfLines={2}
-            textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700', lineHeight: 24 }}
+            style={{ color: colors.text, fontSize: 19, fontWeight: '700', lineHeight: 24 }}
           >
             {goal.title}
-          </Text>
+          </NativeText>
         </View>
         <StatusBadge definition={definition} label={statusLabel} />
       </Row>
@@ -439,6 +439,16 @@ function GoalRow({
       ) : null}
     </Column>
   );
+  const hostedCardContent = (
+    <Host
+      colorScheme={colorScheme}
+      matchContents={{ vertical: true }}
+      seedColor={colors.primary}
+      style={{ width: '100%' }}
+    >
+      {cardContent}
+    </Host>
+  );
 
   const cardStyle = {
     ...getRowSurfaceStyle({
@@ -464,7 +474,7 @@ function GoalRow({
             opacity: pressed ? 0.72 : 1,
           })}
         >
-          {cardContent}
+          {hostedCardContent}
         </Pressable>
         <CatalogEditActions
           disabled={disabled}
@@ -485,7 +495,7 @@ function GoalRow({
       style={({ pressed }) => ({ ...cardStyle, opacity: pressed ? 0.78 : 1 })}
       testID={'goal-row-' + goal.id}
     >
-      {cardContent}
+      {hostedCardContent}
     </Pressable>
   );
 }
@@ -507,7 +517,7 @@ export function ReviewPanel({
   onCancel: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const { colors } = useAppTheme();
+  const { colorScheme, colors } = useAppTheme();
   const reviewGoals = goals.filter(
     (goal) => !goal.startWeek || currentWeek.weekStart >= goal.startWeek
   );
@@ -578,56 +588,67 @@ export function ReviewPanel({
                   }}
                 />
               ) : null}
-              <Column spacing={8} style={{ width: '100%' }} testID={'goal-review-item-' + goal.id}>
-                <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
-                  {goal.title}
-                </Text>
-                {goal.evaluationMode === 'automatic' ? (
-                  <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
-                    Calculated from its rules. Saving a status here will override the selected
-                    week’s result.
-                  </Text>
-                ) : null}
-                <AccessiblePicker
-                  enabled={!saving}
-                  label={goal.title + ' weekly status'}
-                  onValueChange={(value) =>
-                    setDrafts((current) => ({
-                      ...current,
-                      [goal.id]: { ...draft, statusId: String(value) },
-                    }))
-                  }
-                  selectedValue={draft.statusId}
-                  testID={'goal-review-status-' + goal.id}
+              <Host
+                colorScheme={colorScheme}
+                matchContents={{ vertical: true }}
+                seedColor={colors.primary}
+                style={{ width: '100%' }}
+              >
+                <Column
+                  spacing={8}
+                  style={{ width: '100%' }}
+                  testID={'goal-review-item-' + goal.id}
                 >
-                  {orderedStatusDefinitions(settings).map((definition) => (
-                    <Picker.Item
-                      key={definition.id}
-                      label={definition.name}
-                      value={definition.id}
-                    />
-                  ))}
-                </AccessiblePicker>
-                <View style={{ maxWidth: '100%', minWidth: 0, width: '100%' }}>
-                  <AccessibleTextInput
-                    defaultValue={draft.note}
-                    editable={!saving}
-                    label={goal.title + ' weekly note'}
-                    multiline
-                    numberOfLines={3}
-                    onChangeText={(note) =>
+                  <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
+                    {goal.title}
+                  </Text>
+                  {goal.evaluationMode === 'automatic' ? (
+                    <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
+                      Calculated from its rules. Saving a status here will override the selected
+                      week’s result.
+                    </Text>
+                  ) : null}
+                  <AccessiblePicker
+                    enabled={!saving}
+                    label={goal.title + ' weekly status'}
+                    onValueChange={(value) =>
                       setDrafts((current) => ({
                         ...current,
-                        [goal.id]: { ...draft, note },
+                        [goal.id]: { ...draft, statusId: String(value) },
                       }))
                     }
-                    placeholder="What helped, what got in the way, or what should change?"
-                    style={{ height: 72, width: '100%' }}
-                    testID={'goal-review-note-' + goal.id}
-                    textStyle={{ color: colors.text, fontSize: 15 }}
-                  />
-                </View>
-              </Column>
+                    selectedValue={draft.statusId}
+                    testID={'goal-review-status-' + goal.id}
+                  >
+                    {orderedStatusDefinitions(settings).map((definition) => (
+                      <Picker.Item
+                        key={definition.id}
+                        label={definition.name}
+                        value={definition.id}
+                      />
+                    ))}
+                  </AccessiblePicker>
+                  <View style={{ maxWidth: '100%', minWidth: 0, width: '100%' }}>
+                    <AccessibleTextInput
+                      defaultValue={draft.note}
+                      editable={!saving}
+                      label={goal.title + ' weekly note'}
+                      multiline
+                      numberOfLines={3}
+                      onChangeText={(note) =>
+                        setDrafts((current) => ({
+                          ...current,
+                          [goal.id]: { ...draft, note },
+                        }))
+                      }
+                      placeholder="What helped, what got in the way, or what should change?"
+                      style={{ height: 72, width: '100%' }}
+                      testID={'goal-review-note-' + goal.id}
+                      textStyle={{ color: colors.text, fontSize: 15 }}
+                    />
+                  </View>
+                </Column>
+              </Host>
             </View>
           );
         })
@@ -675,7 +696,7 @@ function RuleEditor({
   onChange: (rule: DraftRule) => void;
   onRemove: () => void;
 }) {
-  const { colors } = useAppTheme();
+  const { colorScheme, colors } = useAppTheme();
   const candidates =
     rule.kind === 'habit'
       ? habits
@@ -689,178 +710,187 @@ function RuleEditor({
           style={{ backgroundColor: colors.border, height: 1, marginBottom: 14, width: '100%' }}
         />
       ) : null}
-      <Column spacing={10} style={{ width: '100%' }}>
-        <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-          <View style={{ flex: 1 }}>
-            <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
-              {(rule.kind === 'weekly-status' ? 'Manual status' : 'Check') + ' ' + (index + 1)}
-            </Text>
-          </View>
-          <AppButton
-            disabled={disabled}
-            label="Remove"
-            onPress={onRemove}
-            testID={'goal-rule-remove-' + index}
-            variant="outlined"
-          />
-        </Row>
-        <Field label="Check type">
-          <AccessiblePicker
-            enabled={!disabled}
-            label="Check type"
-            onValueChange={(value) => {
-              const kind = String(value) as GoalEvaluationRule['kind'];
-              onChange(blankDraftRule(kind, settings, habits, catalog));
-            }}
-            selectedValue={rule.kind}
-            testID={'goal-rule-kind-' + index}
-          >
-            <Picker.Item label="Habit progress" value="habit" />
-            <Picker.Item label="Activity or routine time" value="activity-duration" />
-            <Picker.Item label="Weekly status (manual)" value="weekly-status" />
-          </AccessiblePicker>
-        </Field>
-        {rule.kind !== 'weekly-status' ? (
-          <Field label={rule.kind === 'habit' ? 'Habit' : 'Activity or routine'}>
+      <Host
+        colorScheme={colorScheme}
+        matchContents={{ vertical: true }}
+        seedColor={colors.primary}
+        style={{ width: '100%' }}
+      >
+        <Column spacing={10} style={{ width: '100%' }}>
+          <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+            <View style={{ flex: 1 }}>
+              <NativeText style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
+                {(rule.kind === 'weekly-status' ? 'Manual status' : 'Check') + ' ' + (index + 1)}
+              </NativeText>
+            </View>
+            <AppButton
+              disabled={disabled}
+              label="Remove"
+              onPress={onRemove}
+              testID={'goal-rule-remove-' + index}
+              variant="outlined"
+            />
+          </Row>
+          <Field label="Check type">
             <AccessiblePicker
               enabled={!disabled}
-              label={rule.kind === 'habit' ? 'Habit' : 'Activity or routine'}
-              onValueChange={(value) => onChange({ ...rule, sourceId: String(value) })}
-              selectedValue={rule.sourceId}
-              testID={'goal-rule-source-' + index}
+              label="Check type"
+              onValueChange={(value) => {
+                const kind = String(value) as GoalEvaluationRule['kind'];
+                onChange(blankDraftRule(kind, settings, habits, catalog));
+              }}
+              selectedValue={rule.kind}
+              testID={'goal-rule-kind-' + index}
             >
-              <Picker.Item
-                label={
-                  candidates.length === 0
-                    ? 'No ' +
-                      (rule.kind === 'habit' ? 'habits' : 'activities or routines') +
-                      ' available'
-                    : 'Choose ' + (rule.kind === 'habit' ? 'a habit' : 'an activity or routine')
-                }
-                value=""
-              />
-              {candidates.map((candidate) => (
-                <Picker.Item
-                  key={candidate.id}
-                  label={
-                    `${candidate.name}${'kind' in candidate && candidate.kind === 'routine' ? ' (routine)' : ''}` +
-                    ('archivedAt' in candidate && candidate.archivedAt ? ' (archived)' : '')
-                  }
-                  value={candidate.id}
-                />
-              ))}
+              <Picker.Item label="Habit progress" value="habit" />
+              <Picker.Item label="Activity or routine time" value="activity-duration" />
+              <Picker.Item label="Weekly status (manual)" value="weekly-status" />
             </AccessiblePicker>
           </Field>
-        ) : (
-          <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
-            Choose the result for each week on the goal review screen. This check does not need an
-            activity or habit.
-          </Text>
-        )}
-        {rule.kind === 'habit' ? (
-          <>
-            <Field label="Measure">
+          {rule.kind !== 'weekly-status' ? (
+            <Field label={rule.kind === 'habit' ? 'Habit' : 'Activity or routine'}>
               <AccessiblePicker
                 enabled={!disabled}
-                label="Habit measure"
-                onValueChange={(value) => {
-                  const measurement = String(value) as DraftRule['measurement'];
-                  onChange({
-                    ...rule,
-                    measurement,
-                    targetCount: measurement === 'completed-days' ? rule.targetCount || '1' : '',
-                  });
-                }}
-                selectedValue={rule.measurement}
-                testID={'goal-rule-measurement-' + index}
+                label={rule.kind === 'habit' ? 'Habit' : 'Activity or routine'}
+                onValueChange={(value) => onChange({ ...rule, sourceId: String(value) })}
+                selectedValue={rule.sourceId}
+                testID={'goal-rule-source-' + index}
               >
-                <Picker.Item label="Completed days" value="completed-days" />
-                <Picker.Item label="No skipped days" value="no-skipped" />
-                <Picker.Item label="Every scheduled day" value="every-day" />
+                <Picker.Item
+                  label={
+                    candidates.length === 0
+                      ? 'No ' +
+                        (rule.kind === 'habit' ? 'habits' : 'activities or routines') +
+                        ' available'
+                      : 'Choose ' + (rule.kind === 'habit' ? 'a habit' : 'an activity or routine')
+                  }
+                  value=""
+                />
+                {candidates.map((candidate) => (
+                  <Picker.Item
+                    key={candidate.id}
+                    label={
+                      `${candidate.name}${'kind' in candidate && candidate.kind === 'routine' ? ' (routine)' : ''}` +
+                      ('archivedAt' in candidate && candidate.archivedAt ? ' (archived)' : '')
+                    }
+                    value={candidate.id}
+                  />
+                ))}
               </AccessiblePicker>
             </Field>
-            {rule.measurement === 'completed-days' ? (
-              <Field label="Completed scheduled days target">
+          ) : (
+            <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
+              Choose the result for each week on the goal review screen. This check does not need an
+              activity or habit.
+            </Text>
+          )}
+          {rule.kind === 'habit' ? (
+            <>
+              <Field label="Measure">
+                <AccessiblePicker
+                  enabled={!disabled}
+                  label="Habit measure"
+                  onValueChange={(value) => {
+                    const measurement = String(value) as DraftRule['measurement'];
+                    onChange({
+                      ...rule,
+                      measurement,
+                      targetCount: measurement === 'completed-days' ? rule.targetCount || '1' : '',
+                    });
+                  }}
+                  selectedValue={rule.measurement}
+                  testID={'goal-rule-measurement-' + index}
+                >
+                  <Picker.Item label="Completed days" value="completed-days" />
+                  <Picker.Item label="No skipped days" value="no-skipped" />
+                  <Picker.Item label="Every scheduled day" value="every-day" />
+                </AccessiblePicker>
+              </Field>
+              {rule.measurement === 'completed-days' ? (
+                <Field label="Completed scheduled days target">
+                  <AccessibleTextInput
+                    defaultValue={rule.targetCount}
+                    editable={!disabled}
+                    keyboardType="numeric"
+                    label="Completed scheduled days target"
+                    onChangeText={(targetCount) => onChange({ ...rule, targetCount })}
+                    placeholder="1"
+                    testID={'goal-rule-target-count-' + index}
+                    textStyle={{ color: colors.text, fontSize: 16 }}
+                  />
+                </Field>
+              ) : null}
+            </>
+          ) : rule.kind === 'activity-duration' ? (
+            <>
+              <Field label="Time comparison">
+                <AccessiblePicker
+                  enabled={!disabled}
+                  label="Time comparison"
+                  onValueChange={(value) =>
+                    onChange({
+                      ...rule,
+                      comparison: String(value) as DraftRule['comparison'],
+                    })
+                  }
+                  selectedValue={rule.comparison}
+                  testID={'goal-rule-comparison-' + index}
+                >
+                  <Picker.Item label="At least this much time" value="at-least" />
+                  <Picker.Item label="At most this much time" value="at-most" />
+                </AccessiblePicker>
+              </Field>
+              <Field label="Target frequency">
+                <AccessiblePicker
+                  enabled={!disabled}
+                  label="Target frequency"
+                  onValueChange={(value) =>
+                    onChange({ ...rule, frequency: String(value) as GoalTargetFrequency })
+                  }
+                  selectedValue={rule.frequency}
+                  testID={'goal-rule-frequency-' + index}
+                >
+                  <Picker.Item label="Daily" value="daily" />
+                  <Picker.Item label="Weekly" value="weekly" />
+                </AccessiblePicker>
+              </Field>
+              <Field
+                label={(rule.frequency === 'daily' ? 'Daily' : 'Weekly') + ' target in minutes'}
+              >
                 <AccessibleTextInput
-                  defaultValue={rule.targetCount}
+                  defaultValue={rule.targetMinutes}
                   editable={!disabled}
                   keyboardType="numeric"
-                  label="Completed scheduled days target"
-                  onChangeText={(targetCount) => onChange({ ...rule, targetCount })}
-                  placeholder="1"
-                  testID={'goal-rule-target-count-' + index}
+                  label={(rule.frequency === 'daily' ? 'Daily' : 'Weekly') + ' target in minutes'}
+                  onChangeText={(targetMinutes) => onChange({ ...rule, targetMinutes })}
+                  placeholder="30"
+                  testID={'goal-rule-target-minutes-' + index}
                   textStyle={{ color: colors.text, fontSize: 16 }}
                 />
               </Field>
-            ) : null}
-          </>
-        ) : rule.kind === 'activity-duration' ? (
-          <>
-            <Field label="Time comparison">
-              <AccessiblePicker
-                enabled={!disabled}
-                label="Time comparison"
-                onValueChange={(value) =>
-                  onChange({
-                    ...rule,
-                    comparison: String(value) as DraftRule['comparison'],
-                  })
-                }
-                selectedValue={rule.comparison}
-                testID={'goal-rule-comparison-' + index}
-              >
-                <Picker.Item label="At least this much time" value="at-least" />
-                <Picker.Item label="At most this much time" value="at-most" />
-              </AccessiblePicker>
-            </Field>
-            <Field label="Target frequency">
-              <AccessiblePicker
-                enabled={!disabled}
-                label="Target frequency"
-                onValueChange={(value) =>
-                  onChange({ ...rule, frequency: String(value) as GoalTargetFrequency })
-                }
-                selectedValue={rule.frequency}
-                testID={'goal-rule-frequency-' + index}
-              >
-                <Picker.Item label="Daily" value="daily" />
-                <Picker.Item label="Weekly" value="weekly" />
-              </AccessiblePicker>
-            </Field>
-            <Field label={(rule.frequency === 'daily' ? 'Daily' : 'Weekly') + ' target in minutes'}>
-              <AccessibleTextInput
-                defaultValue={rule.targetMinutes}
-                editable={!disabled}
-                keyboardType="numeric"
-                label={(rule.frequency === 'daily' ? 'Daily' : 'Weekly') + ' target in minutes'}
-                onChangeText={(targetMinutes) => onChange({ ...rule, targetMinutes })}
-                placeholder="30"
-                testID={'goal-rule-target-minutes-' + index}
-                textStyle={{ color: colors.text, fontSize: 16 }}
-              />
-            </Field>
-            {rule.comparison === 'at-most' ? (
-              <Field label="Your usual time right now (optional, minutes)">
-                <Column spacing={6} style={{ width: '100%' }}>
-                  <AccessibleTextInput
-                    defaultValue={rule.baselineMinutes}
-                    editable={!disabled}
-                    keyboardType="numeric"
-                    label="Your usual time right now (optional, minutes)"
-                    onChangeText={(baselineMinutes) => onChange({ ...rule, baselineMinutes })}
-                    placeholder="For example, 300"
-                    testID={'goal-rule-baseline-minutes-' + index}
-                    textStyle={{ color: colors.text, fontSize: 16 }}
-                  />
-                  <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
-                    {`Enter your usual time for this activity per ${rule.frequency === 'daily' ? 'day' : 'week'} right now. A reduction from this baseline that stays above the target counts as Partial; meeting or going below the target counts as Good.`}
-                  </Text>
-                </Column>
-              </Field>
-            ) : null}
-          </>
-        ) : null}
-      </Column>
+              {rule.comparison === 'at-most' ? (
+                <Field label="Your usual time right now (optional, minutes)">
+                  <Column spacing={6} style={{ width: '100%' }}>
+                    <AccessibleTextInput
+                      defaultValue={rule.baselineMinutes}
+                      editable={!disabled}
+                      keyboardType="numeric"
+                      label="Your usual time right now (optional, minutes)"
+                      onChangeText={(baselineMinutes) => onChange({ ...rule, baselineMinutes })}
+                      placeholder="For example, 300"
+                      testID={'goal-rule-baseline-minutes-' + index}
+                      textStyle={{ color: colors.text, fontSize: 16 }}
+                    />
+                    <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
+                      {`Enter your usual time for this activity per ${rule.frequency === 'daily' ? 'day' : 'week'} right now. A reduction from this baseline that stays above the target counts as Partial; meeting or going below the target counts as Good.`}
+                    </Text>
+                  </Column>
+                </Field>
+              ) : null}
+            </>
+          ) : null}
+        </Column>
+      </Host>
     </View>
   );
 }
@@ -1355,7 +1385,13 @@ export default function GoalsScreen() {
   }, [focused, load]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (
+      typeof window === 'undefined' ||
+      typeof window.addEventListener !== 'function' ||
+      typeof window.removeEventListener !== 'function'
+    ) {
+      return;
+    }
     const onSynchronizedData = () => {
       if (focused) void load();
     };
@@ -1389,7 +1425,7 @@ export default function GoalsScreen() {
   };
 
   const header = (
-    <Row alignment="center" spacing={4}>
+    <View style={{ alignItems: 'center', flexDirection: 'row', gap: 4 }}>
       <PageFilterMenu
         accessibilityLabel="Choose goal view"
         onChange={setFilter}
@@ -1412,7 +1448,7 @@ export default function GoalsScreen() {
         testID="goal-create"
         variant="primary"
       />
-    </Row>
+    </View>
   );
 
   return (

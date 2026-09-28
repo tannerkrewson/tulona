@@ -1,6 +1,6 @@
-import { Column, Row, Text } from '@expo/ui';
+import { Column, Row } from '@expo/ui';
 import type { ChangeEvent } from 'react';
-import { View } from 'react-native';
+import { Text as NativeText, View } from 'react-native';
 
 import { useAppTheme } from '@theme';
 import type { GoalStartWeekPickerProps } from './GoalStartWeekPicker';
@@ -28,13 +28,13 @@ export function GoalStartWeekPicker({
     <Column spacing={8} style={{ width: '100%' }}>
       <Row alignment="center" spacing={8} style={{ width: '100%' }}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text
+          <NativeText
             numberOfLines={1}
-            textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}
+            style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}
             testID="goal-start-week-range"
           >
             {valueLabel}
-          </Text>
+          </NativeText>
         </View>
         <input
           aria-label="Starting week"

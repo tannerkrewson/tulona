@@ -11,7 +11,7 @@ const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const importer = read('src/habits/HabitImportScreen.tsx');
 const backupScreen = read('src/backup/BackupScreen.tsx');
-const layout = read('src/diagnostics/NormalAppLayout.tsx');
+const layout = read('app/_layout.tsx');
 const gitignore = read('.gitignore');
 
 assert(gitignore.includes('/Habits_*.xlsx'), 'TickTick exports must remain ignored');

@@ -1,7 +1,7 @@
-import { Column, Row, Text } from '@expo/ui';
+import { Column, Host, Row, Text } from '@expo/ui';
 import DateTimePickerComponent from '@expo/ui/community/datetime-picker';
 import { useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text as NativeText, View } from 'react-native';
 
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
@@ -33,13 +33,13 @@ export function GoalStartWeekPicker({
     <Column spacing={8} style={{ width: '100%' }}>
       <Row alignment="center" spacing={8} style={{ width: '100%' }}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text
+          <NativeText
             numberOfLines={1}
-            textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600', lineHeight: 18 }}
+            style={{ color: colors.text, fontSize: 14, fontWeight: '600', lineHeight: 18 }}
             testID="goal-start-week-range"
           >
             {valueLabel}
-          </Text>
+          </NativeText>
         </View>
         {Platform.OS !== 'web' ? (
           <Pressable
@@ -68,7 +68,9 @@ export function GoalStartWeekPicker({
             testID="goal-start-week-change"
           >
             <AppIcon color={colors.textMuted} name="calendar-days" size={16} />
-            <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>Change</Text>
+            <NativeText style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
+              Change
+            </NativeText>
           </Pressable>
         ) : null}
       </Row>
@@ -105,48 +107,54 @@ export function GoalStartWeekPicker({
               style={[styles.modalSurface, { backgroundColor: colors.surface }]}
               testID="goal-start-week-picker-modal"
             >
-              <Column spacing={12} style={{ width: '100%' }}>
-                <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>
-                  Starting week
-                </Text>
-                <View style={{ alignItems: 'center', overflow: 'hidden', width: '100%' }}>
-                  <DateTimePickerComponent
-                    accentColor={colors.primary}
-                    display="spinner"
-                    maximumDate={maximumDate}
-                    mode="date"
-                    onDismiss={() => setOpen(false)}
-                    onValueChange={(_event, date) => {
-                      if (Number.isFinite(date.getTime())) setDraft(date);
-                    }}
-                    style={{ width: '100%' }}
-                    testID="goal-start-week-native-picker"
-                    themeVariant={colorScheme}
-                    value={draft}
-                  />
-                </View>
-                <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-                  <AppButton
-                    onPress={() => setOpen(false)}
-                    style={{ height: 44, paddingHorizontal: 8, width: '48%' }}
-                    testID="goal-start-week-cancel"
-                    variant="outlined"
-                  >
-                    <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
-                      Cancel
-                    </Text>
-                  </AppButton>
-                  <AppButton
-                    onPress={confirm}
-                    style={{ height: 44, paddingHorizontal: 8, width: '48%' }}
-                    testID="goal-start-week-confirm"
-                  >
-                    <Text textStyle={{ color: colors.onPrimary, fontSize: 14, fontWeight: '600' }}>
-                      Select week
-                    </Text>
-                  </AppButton>
-                </Row>
-              </Column>
+              <Host colorScheme={colorScheme} seedColor={colors.primary} style={{ width: '100%' }}>
+                <Column spacing={12} style={{ width: '100%' }}>
+                  <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>
+                    Starting week
+                  </Text>
+                  <View style={{ alignItems: 'center', overflow: 'hidden', width: '100%' }}>
+                    <Host style={{ width: '100%' }}>
+                      <DateTimePickerComponent
+                        accentColor={colors.primary}
+                        display="spinner"
+                        maximumDate={maximumDate}
+                        mode="date"
+                        onDismiss={() => setOpen(false)}
+                        onValueChange={(_event, date) => {
+                          if (Number.isFinite(date.getTime())) setDraft(date);
+                        }}
+                        style={{ width: '100%' }}
+                        testID="goal-start-week-native-picker"
+                        themeVariant={colorScheme}
+                        value={draft}
+                      />
+                    </Host>
+                  </View>
+                  <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+                    <AppButton
+                      onPress={() => setOpen(false)}
+                      style={{ height: 44, paddingHorizontal: 8, width: '48%' }}
+                      testID="goal-start-week-cancel"
+                      variant="outlined"
+                    >
+                      <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
+                        Cancel
+                      </Text>
+                    </AppButton>
+                    <AppButton
+                      onPress={confirm}
+                      style={{ height: 44, paddingHorizontal: 8, width: '48%' }}
+                      testID="goal-start-week-confirm"
+                    >
+                      <Text
+                        textStyle={{ color: colors.onPrimary, fontSize: 14, fontWeight: '600' }}
+                      >
+                        Select week
+                      </Text>
+                    </AppButton>
+                  </Row>
+                </Column>
+              </Host>
             </View>
           </View>
         </Modal>

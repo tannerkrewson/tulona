@@ -1,7 +1,7 @@
 import { Column, Row, Text } from '@expo/ui';
 import { useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Text as NativeText, View } from 'react-native';
 
 import { useAppTheme } from '@theme';
 import { errorText, AppButton, IconButton, Screen } from '@ui';
@@ -214,70 +214,68 @@ function GoalReviewWeekNavigator({
   }
 
   return (
-    <View style={{ width: '100%' }} testID="goal-review-week-navigation">
-      <Column spacing={8} style={{ width: '100%' }}>
-        <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-          <IconButton
-            disabled={atOldest}
-            icon="chevron-left"
-            label={atOldest ? 'No previous week available' : 'Review previous week'}
-            onPress={() => onMove('previous')}
-            testID="goal-review-previous-week"
-            variant="muted"
-          />
-          <View
-            accessibilityLabel={`${
-              selectedIndex === snapshots.length - 1
-                ? 'Current week'
-                : `Previous week ${selectedIndex + 1} of ${previousWeekCount}`
-            }, ${formatGoalWeek(selectedSnapshot.week)}`}
-            accessible
-            style={{ flex: 1, minWidth: 0 }}
-            testID="goal-review-selected-week"
+    <Column spacing={8} style={{ width: '100%' }} testID="goal-review-week-navigation">
+      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+        <IconButton
+          disabled={atOldest}
+          icon="chevron-left"
+          label={atOldest ? 'No previous week available' : 'Review previous week'}
+          onPress={() => onMove('previous')}
+          testID="goal-review-previous-week"
+          variant="muted"
+        />
+        <View
+          accessibilityLabel={`${
+            selectedIndex === snapshots.length - 1
+              ? 'Current week'
+              : `Previous week ${selectedIndex + 1} of ${previousWeekCount}`
+          }, ${formatGoalWeek(selectedSnapshot.week)}`}
+          accessible
+          style={{ flex: 1, minWidth: 0 }}
+          testID="goal-review-selected-week"
+        >
+          <NativeText
+            numberOfLines={1}
+            style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}
           >
-            <Text
-              numberOfLines={1}
-              textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}
-            >
-              {selectedIndex === snapshots.length - 1
-                ? 'Current week'
-                : `Previous week ${selectedIndex + 1} of ${previousWeekCount}`}
-            </Text>
-            <Text
-              numberOfLines={1}
-              textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}
-              testID="goal-review-selected-week-range"
-            >
-              {formatGoalWeek(selectedSnapshot.week)}
-            </Text>
-          </View>
-          <IconButton
-            disabled={atCurrent}
-            icon="chevron-right"
-            label={atCurrent ? 'Already on current week' : 'Review next week'}
-            onPress={() => onMove('next')}
-            testID="goal-review-next-week"
-            variant="muted"
-          />
-        </Row>
-        {previousWeekCount === 0 ? (
-          <Text
-            textStyle={{ color: colors.textMuted, fontSize: 13 }}
-            testID="goal-review-no-previous-weeks"
+            {selectedIndex === snapshots.length - 1
+              ? 'Current week'
+              : `Previous week ${selectedIndex + 1} of ${previousWeekCount}`}
+          </NativeText>
+          <NativeText
+            numberOfLines={1}
+            style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}
+            testID="goal-review-selected-week-range"
           >
-            No previous weeks are available to review.
-          </Text>
-        ) : null}
-        {!atCurrent ? (
-          <AppButton
-            label="Return to current week"
-            onPress={() => onSelectIndex(snapshots.length - 1)}
-            style={{ width: '100%' }}
-            testID="goal-review-current-week"
-            variant="outlined"
-          />
-        ) : null}
-      </Column>
-    </View>
+            {formatGoalWeek(selectedSnapshot.week)}
+          </NativeText>
+        </View>
+        <IconButton
+          disabled={atCurrent}
+          icon="chevron-right"
+          label={atCurrent ? 'Already on current week' : 'Review next week'}
+          onPress={() => onMove('next')}
+          testID="goal-review-next-week"
+          variant="muted"
+        />
+      </Row>
+      {previousWeekCount === 0 ? (
+        <Text
+          textStyle={{ color: colors.textMuted, fontSize: 13 }}
+          testID="goal-review-no-previous-weeks"
+        >
+          No previous weeks are available to review.
+        </Text>
+      ) : null}
+      {!atCurrent ? (
+        <AppButton
+          label="Return to current week"
+          onPress={() => onSelectIndex(snapshots.length - 1)}
+          style={{ width: '100%' }}
+          testID="goal-review-current-week"
+          variant="outlined"
+        />
+      ) : null}
+    </Column>
   );
 }

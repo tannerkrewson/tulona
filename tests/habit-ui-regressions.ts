@@ -171,7 +171,9 @@ assert(
   'habit day pages must use a full-bleed clipped viewport with explicit per-page insets'
 );
 assert(
-  appScreen.includes('const screenBackground = backgroundColor ?? colors.background'),
+  appScreen.includes('const screenBackground = backgroundColor ?? colors.background') &&
+    appScreen.includes('matchContents={{ vertical: true }}') &&
+    appScreen.includes('colorScheme={colorScheme}'),
   'app screens must use the theme background so habit surfaces remain visibly distinct'
 );
 assert(

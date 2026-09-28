@@ -1,4 +1,4 @@
-import { Picker, type PickerItemValue, type PickerProps } from '@expo/ui';
+import { Host, Picker, type PickerItemValue, type PickerProps } from '@expo/ui';
 import { Children, isValidElement, type ReactNode } from 'react';
 import { Platform, View } from 'react-native';
 
@@ -71,7 +71,7 @@ export function AccessiblePicker<T extends PickerItemValue>({
   testID,
   ...pickerProps
 }: AccessiblePickerProps<T> & { children?: ReactNode }) {
-  const { colors } = useAppTheme();
+  const { colorScheme, colors } = useAppTheme();
   const pickerHeight = Platform.OS === 'ios' && pickerProps.appearance === 'wheel' ? 150 : 48;
   if (Platform.OS === 'web') {
     return (
@@ -99,9 +99,11 @@ export function AccessiblePicker<T extends PickerItemValue>({
         width: '100%',
       }}
     >
-      <Picker {...pickerProps} testID={testID}>
-        {children}
-      </Picker>
+      <Host colorScheme={colorScheme} seedColor={colors.primary} style={{ flex: 1, width: '100%' }}>
+        <Picker {...pickerProps} testID={testID}>
+          {children}
+        </Picker>
+      </Host>
     </View>
   );
 }

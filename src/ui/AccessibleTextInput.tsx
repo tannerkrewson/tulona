@@ -1,4 +1,4 @@
-import { TextInput, type TextInputProps } from '@expo/ui';
+import { Host, TextInput, type TextInputProps } from '@expo/ui';
 import { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 
@@ -15,7 +15,7 @@ export function AccessibleTextInput({
   textStyle,
   ...inputProps
 }: AccessibleTextInputProps) {
-  const { colors } = useAppTheme();
+  const { colorScheme, colors } = useAppTheme();
 
   useEffect(() => {
     if (typeof document === 'undefined' || !testID) return;
@@ -51,20 +51,27 @@ export function AccessibleTextInput({
 
   return (
     <View accessibilityLabel={Platform.OS === 'web' ? undefined : label} style={{ width: '100%' }}>
-      <TextInput
-        {...inputProps}
-        testID={testID}
-        style={{
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
-          borderRadius: 10,
-          borderWidth: 1,
-          height: 48,
-          width: '100%',
-          ...inputProps.style,
-        }}
-        textStyle={{ color: colors.text, ...textStyle }}
-      />
+      <Host
+        colorScheme={colorScheme}
+        matchContents={{ vertical: true }}
+        seedColor={colors.primary}
+        style={{ width: '100%' }}
+      >
+        <TextInput
+          {...inputProps}
+          testID={testID}
+          style={{
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderRadius: 10,
+            borderWidth: 1,
+            height: 48,
+            width: '100%',
+            ...inputProps.style,
+          }}
+          textStyle={{ color: colors.text, ...textStyle }}
+        />
+      </Host>
     </View>
   );
 }

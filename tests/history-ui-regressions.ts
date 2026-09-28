@@ -9,8 +9,9 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
-const tabs = read('src/navigation/AppTabs.tsx');
-const rootLayout = read('src/diagnostics/NormalAppLayout.tsx');
+const tabs = read('src/navigation/AppTabsJavaScript.tsx');
+const nativeTabs = read('src/navigation/AppTabs.native.tsx');
+const rootLayout = read('app/_layout.tsx');
 const historyRoute = read('app/history.tsx');
 const goalsRoute = read('app/(tabs)/goals.tsx');
 const goalsScreen = read('src/goals/GoalsScreen.tsx');
@@ -32,6 +33,13 @@ assert(
     tabs.includes('name="award"') &&
     !tabs.includes('name="history"'),
   'the third tab slot must present Goals and no longer expose History'
+);
+assert(
+  nativeTabs.includes('<NativeTabs') &&
+    nativeTabs.includes('name="goals"') &&
+    nativeTabs.includes('Goals</NativeTabs.Trigger.Label>') &&
+    !nativeTabs.includes('shouldUseExperimentalNativeTabs'),
+  'native platforms must use the system tab bar for every OS version'
 );
 assert(
   historyRoute.includes('../src/history/HistoryScreen') &&
