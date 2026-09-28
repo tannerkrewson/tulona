@@ -37,6 +37,7 @@ import {
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
+import { SwiftUIReactView } from '../ui/SwiftUIReactView';
 import { findLatestIncompleteHabitDay } from './habit-review';
 import {
   DEFAULT_HABIT_CATEGORY,
@@ -211,7 +212,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
 
   return (
     <>
-      <Screen scrollable={false} testID="habits-screen">
+      <Screen hostContent={false} scrollable={false} testID="habits-screen">
         <View
           onLayout={(event) => setContentWidth(event.nativeEvent.layout.width)}
           style={{ flex: 1, gap: 14, minHeight: 0, position: 'relative', width: '100%' }}
@@ -400,14 +401,15 @@ function HabitCategoryList({
           ) : (
             <Column spacing={8} style={{ width: '100%' }}>
               {habits.map((habit) => (
-                <HabitCategoryListItem
-                  category={category}
-                  editMode={editMode}
-                  habit={habit}
-                  key={habit.id}
-                  onDetails={() => onDetails(habit.id)}
-                  rolloverHour={rolloverHour}
-                />
+                <SwiftUIReactView key={habit.id}>
+                  <HabitCategoryListItem
+                    category={category}
+                    editMode={editMode}
+                    habit={habit}
+                    onDetails={() => onDetails(habit.id)}
+                    rolloverHour={rolloverHour}
+                  />
+                </SwiftUIReactView>
               ))}
             </Column>
           )}
@@ -969,23 +971,24 @@ function HabitDayList({
           ) : (
             <Column spacing={8} style={{ width: '100%' }}>
               {activeHabits.map((habit) => (
-                <HabitListItem
-                  editMode={editMode}
-                  habit={habit}
-                  key={habit.id}
-                  saving={saving}
-                  state={states.find(
-                    (candidate) => candidate.habitId === habit.id && candidate.logicalDay === day
-                  )}
-                  states={states.filter((candidate) => candidate.habitId === habit.id)}
-                  selectedDay={day}
-                  logicalDayRolloverHour={logicalDayRolloverHour}
-                  metricMode={metricMode}
-                  onDetails={() => onDetails(habit.id)}
-                  onCycle={() => onCycle(habit.id)}
-                  onOutcome={(outcome) => onOutcome(habit.id, outcome)}
-                  onToggleMetricDisplay={onToggleMetricDisplay}
-                />
+                <SwiftUIReactView key={habit.id}>
+                  <HabitListItem
+                    editMode={editMode}
+                    habit={habit}
+                    saving={saving}
+                    state={states.find(
+                      (candidate) => candidate.habitId === habit.id && candidate.logicalDay === day
+                    )}
+                    states={states.filter((candidate) => candidate.habitId === habit.id)}
+                    selectedDay={day}
+                    logicalDayRolloverHour={logicalDayRolloverHour}
+                    metricMode={metricMode}
+                    onDetails={() => onDetails(habit.id)}
+                    onCycle={() => onCycle(habit.id)}
+                    onOutcome={(outcome) => onOutcome(habit.id, outcome)}
+                    onToggleMetricDisplay={onToggleMetricDisplay}
+                  />
+                </SwiftUIReactView>
               ))}
             </Column>
           )}

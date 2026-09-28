@@ -1,4 +1,4 @@
-import { Column } from '@expo/ui';
+import { Column, Host } from '@expo/ui';
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
@@ -104,21 +104,23 @@ export function CatalogHeader({
               width: '100%',
             }}
           >
-            <Column spacing={2} style={{ width: '100%' }} testID="catalog-create-menu">
-              {createActions.map((action) => (
-                <AppButton
-                  key={action.label}
-                  label={action.label}
-                  onPress={() => {
-                    onToggleCreate();
-                    action.onPress();
-                  }}
-                  style={{ height: 44, width: '100%' }}
-                  testID={action.testID}
-                  variant="text"
-                />
-              ))}
-            </Column>
+            <Host matchContents={{ vertical: true }} style={{ width: '100%' }}>
+              <Column spacing={2} style={{ width: '100%' }} testID="catalog-create-menu">
+                {createActions.map((action) => (
+                  <AppButton
+                    key={action.label}
+                    label={action.label}
+                    onPress={() => {
+                      onToggleCreate();
+                      action.onPress();
+                    }}
+                    style={{ height: 44, width: '100%' }}
+                    testID={action.testID}
+                    variant="text"
+                  />
+                ))}
+              </Column>
+            </Host>
           </View>
         </View>
       ) : null}

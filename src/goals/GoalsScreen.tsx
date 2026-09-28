@@ -43,6 +43,7 @@ import {
 
 import { CatalogEditActions } from '../tracker/CatalogEditActions';
 import { CatalogIconButton } from '../tracker/CatalogIconButton';
+import { SwiftUIReactView } from '../ui/SwiftUIReactView';
 import { GoalStartWeekPicker } from './GoalStartWeekPicker';
 
 const OVERALL_STATUS_OPTIONS: readonly {
@@ -463,40 +464,44 @@ function GoalRow({
 
   if (editMode) {
     return (
-      <View style={{ ...cardStyle, flexDirection: 'row' }} testID={'goal-row-' + goal.id}>
-        <Pressable
-          accessibilityLabel={`Edit ${goal.title}`}
-          accessibilityRole="button"
-          onPress={onEdit}
-          style={({ pressed }) => ({
-            flex: 1,
-            minWidth: 0,
-            opacity: pressed ? 0.72 : 1,
-          })}
-        >
-          {hostedCardContent}
-        </Pressable>
-        <CatalogEditActions
-          disabled={disabled}
-          inline
-          onDown={onMoveDown}
-          onUp={onMoveUp}
-          testID={`goal-actions-${goal.id}`}
-        />
-      </View>
+      <SwiftUIReactView>
+        <View style={{ ...cardStyle, flexDirection: 'row' }} testID={'goal-row-' + goal.id}>
+          <Pressable
+            accessibilityLabel={`Edit ${goal.title}`}
+            accessibilityRole="button"
+            onPress={onEdit}
+            style={({ pressed }) => ({
+              flex: 1,
+              minWidth: 0,
+              opacity: pressed ? 0.72 : 1,
+            })}
+          >
+            {hostedCardContent}
+          </Pressable>
+          <CatalogEditActions
+            disabled={disabled}
+            inline
+            onDown={onMoveDown}
+            onUp={onMoveUp}
+            testID={`goal-actions-${goal.id}`}
+          />
+        </View>
+      </SwiftUIReactView>
     );
   }
 
   return (
-    <Pressable
-      accessibilityLabel={goal.title}
-      accessibilityRole="button"
-      onPress={onReview}
-      style={({ pressed }) => ({ ...cardStyle, opacity: pressed ? 0.78 : 1 })}
-      testID={'goal-row-' + goal.id}
-    >
-      {hostedCardContent}
-    </Pressable>
+    <SwiftUIReactView>
+      <Pressable
+        accessibilityLabel={goal.title}
+        accessibilityRole="button"
+        onPress={onReview}
+        style={({ pressed }) => ({ ...cardStyle, opacity: pressed ? 0.78 : 1 })}
+        testID={'goal-row-' + goal.id}
+      >
+        {hostedCardContent}
+      </Pressable>
+    </SwiftUIReactView>
   );
 }
 
@@ -1470,13 +1475,15 @@ export default function GoalsScreen() {
                 {formatWeek(resource.currentWeek)}
               </Text>
             </Column>
-            <PageFilterMenuSelection
-              defaultValue="in-progress"
-              onChange={setFilter}
-              options={OVERALL_STATUS_OPTIONS}
-              testID="goal-view-menu"
-              value={filter}
-            />
+            <SwiftUIReactView>
+              <PageFilterMenuSelection
+                defaultValue="in-progress"
+                onChange={setFilter}
+                options={OVERALL_STATUS_OPTIONS}
+                testID="goal-view-menu"
+                value={filter}
+              />
+            </SwiftUIReactView>
             {visibleGoals.length === 0 ? (
               <EmptyState
                 actionLabel={filter === 'in-progress' ? 'Create your first goal' : undefined}

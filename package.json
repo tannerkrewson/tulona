@@ -39,6 +39,7 @@
     "test:card-geometry": "tsx tests/card-geometry.ts",
     "test:pwa-ui": "tsx tests/pwa-ui-regressions.ts",
     "test:settings-ui": "tsx tests/settings-ui-regressions.ts",
+    "test:native-screen-layout": "tsx tests/native-screen-layout-regressions.ts",
     "test:active-session": "tsx tests/active-session-regressions.ts",
     "test:modal-ui": "tsx tests/modal-ui-regressions.ts",
     "test:indexed-db": "tsx tests/indexed-db-storage.ts",

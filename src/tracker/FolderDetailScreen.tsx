@@ -11,6 +11,7 @@ import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import { RoutineStartConflictModal } from '../routine/RoutineStartConflictModal';
+import { SwiftUIReactView } from '../ui/SwiftUIReactView';
 import { ACTIVE_ACTIVITY_BAR_HEIGHT } from './ActiveActivityBar';
 import { ActivityRow } from './ActivityRow';
 import { CatalogHeader } from './CatalogHeader';
@@ -222,30 +223,32 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
   return (
     <Screen testID="folder-detail-screen">
       <Column spacing={20} style={{ width: '100%' }}>
-        <CatalogHeader
-          backLabel="Activities"
-          createActions={[
-            {
-              label: 'Add activity',
-              onPress: () => router.push(`/activity/new?folderId=${folder.id}`),
-              testID: 'folder-add-activity',
-            },
-            {
-              label: 'Add routine',
-              onPress: () => router.push(`/routine-edit/new?folderId=${folder.id}`),
-              testID: 'folder-add-routine',
-            },
-          ]}
-          createOpen={createOpen}
-          editMode={editMode}
-          onBack={goBackToTracker}
-          onToggleCreate={() => setCreateOpen((open) => !open)}
-          onToggleEdit={() => {
-            setEditMode((open) => !open);
-            setCreateOpen(false);
-          }}
-          title={folder.name}
-        />
+        <SwiftUIReactView>
+          <CatalogHeader
+            backLabel="Activities"
+            createActions={[
+              {
+                label: 'Add activity',
+                onPress: () => router.push(`/activity/new?folderId=${folder.id}`),
+                testID: 'folder-add-activity',
+              },
+              {
+                label: 'Add routine',
+                onPress: () => router.push(`/routine-edit/new?folderId=${folder.id}`),
+                testID: 'folder-add-routine',
+              },
+            ]}
+            createOpen={createOpen}
+            editMode={editMode}
+            onBack={goBackToTracker}
+            onToggleCreate={() => setCreateOpen((open) => !open)}
+            onToggleEdit={() => {
+              setEditMode((open) => !open);
+              setCreateOpen(false);
+            }}
+            title={folder.name}
+          />
+        </SwiftUIReactView>
         {editMode ? (
           <View style={{ alignItems: 'flex-end', width: '100%' }}>
             <CatalogIconButton

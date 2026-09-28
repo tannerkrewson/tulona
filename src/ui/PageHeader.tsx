@@ -46,7 +46,7 @@ export function PageHeader({
         </View>
       ) : null}
       <View style={styles.spacer} />
-      {children}
+      <View style={styles.actions}>{children}</View>
     </View>
   );
 }
@@ -60,5 +60,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   spacer: { flex: 1 },
+  actions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexShrink: 0,
+    gap: 8,
+    minWidth: 0,
+  },
   title: { flexShrink: 1, minWidth: 0 },
 });

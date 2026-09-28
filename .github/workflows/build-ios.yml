@@ -49,6 +49,7 @@ jobs:
       - name: Test native Settings and Habits UI boundaries
         run: |
           npm run test:settings-ui
+          npm run test:native-screen-layout
           npm run test:habit-ui
 
       - name: Test restored root route wiring

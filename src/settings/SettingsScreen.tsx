@@ -112,7 +112,7 @@ function SettingsCategoryList({ router }: { router: ReturnType<typeof useRouter>
 }
 
 export default function SettingsScreen() {
-  const { colorScheme, colors } = useAppTheme();
+  const { colors } = useAppTheme();
   const focused = useIsFocused();
   const router = useRouter();
   const [store, setStore] = useState<SettingsStore | null>(null);
@@ -130,15 +130,10 @@ export default function SettingsScreen() {
   }, [focused, load]);
 
   return (
-    <Screen title="Settings">
+    <Screen hostContent={false} title="Settings">
       <View style={{ gap: 16, width: '100%' }}>
         {store ? (
-          <Host
-            colorScheme={colorScheme}
-            matchContents={{ vertical: true }}
-            seedColor={colors.primary}
-            style={{ width: '100%' }}
-          >
+          <Host matchContents={{ vertical: true }} style={{ width: '100%' }}>
             <SettingsActionError onBack={() => router.replace('/')} store={store} />
           </Host>
         ) : null}

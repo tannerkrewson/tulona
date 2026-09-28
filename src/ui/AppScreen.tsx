@@ -1,20 +1,13 @@
 import { Column, Host, ScrollView } from '@expo/ui';
-import type { ComponentProps, ReactNode } from 'react';
+import type { ComponentProps } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@theme';
 import { PageHeader } from './PageHeader';
+import type { AppScreenProps } from './AppScreen.types';
 
-export interface AppScreenProps {
-  onBack?: () => void;
-  children: ReactNode;
-  title?: string;
-  headerRight?: ReactNode;
-  scrollable?: boolean;
-  testID?: string;
-  backgroundColor?: string;
-}
+export type { AppScreenProps } from './AppScreen.types';
 
 const hostStyles = StyleSheet.create({
   host: {
@@ -47,6 +40,7 @@ export function AppScreen({
   scrollable = true,
   testID,
   backgroundColor,
+  hostContent = true,
 }: AppScreenProps) {
   const { colorScheme, colors } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -78,14 +72,18 @@ export function AppScreen({
                 {headerRight}
               </PageHeader>
             ) : null}
-            <Host
-              colorScheme={colorScheme}
-              matchContents={{ vertical: true }}
-              seedColor={colors.primary}
-              style={{ flex: 1, minHeight: 0, width: '100%' }}
-            >
-              {children}
-            </Host>
+            {hostContent ? (
+              <Host
+                colorScheme={colorScheme}
+                matchContents={{ vertical: true }}
+                seedColor={colors.primary}
+                style={{ flex: 1, minHeight: 0, width: '100%' }}
+              >
+                {children}
+              </Host>
+            ) : (
+              children
+            )}
           </View>
         </View>
       </Host>
@@ -109,14 +107,18 @@ export function AppScreen({
           {headerRight}
         </PageHeader>
       ) : null}
-      <Host
-        colorScheme={colorScheme}
-        matchContents={{ vertical: true }}
-        seedColor={colors.primary}
-        style={{ width: '100%' }}
-      >
-        {children}
-      </Host>
+      {hostContent ? (
+        <Host
+          colorScheme={colorScheme}
+          matchContents={{ vertical: true }}
+          seedColor={colors.primary}
+          style={{ width: '100%' }}
+        >
+          {children}
+        </Host>
+      ) : (
+        children
+      )}
     </Column>
   );
 
