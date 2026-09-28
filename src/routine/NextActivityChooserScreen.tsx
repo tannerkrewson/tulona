@@ -329,7 +329,7 @@ export function NextActivityChooserScreen() {
 
   if (!active || !catalog) {
     return (
-      <Screen onBack={() => router.replace('/')} title="Choose activity" scrollable={false}>
+      <Screen onBack={() => router.replace('/')} title="Choose activity">
         <Column alignment="center" spacing={16} style={{ width: '100%' }}>
           <ChooserError message={error ?? 'Restoring the next-activity chooser...'}>
             <RecoveryActions

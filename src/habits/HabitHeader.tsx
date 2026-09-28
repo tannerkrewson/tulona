@@ -1,4 +1,4 @@
-import { Column } from '@expo/ui';
+import { Column, Host } from '@expo/ui';
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
@@ -107,33 +107,35 @@ export function HabitHeader({
             width: 210,
           }}
         >
-          <Column
-            spacing={2}
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 16,
-              borderWidth: 1,
-              padding: 6,
-              width: '100%',
-            }}
-            testID="habit-edit-menu"
-          >
-            {editActions.map((action) => (
-              <AppButton
-                disabled={action.disabled}
-                key={action.label}
-                label={action.label}
-                onPress={() => {
-                  onToggleEdit?.();
-                  action.onPress();
-                }}
-                style={{ height: 44, width: '100%' }}
-                testID={action.testID}
-                variant="text"
-              />
-            ))}
-          </Column>
+          <Host matchContents={{ vertical: true }} style={{ width: '100%' }}>
+            <Column
+              spacing={2}
+              style={{
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: 16,
+                borderWidth: 1,
+                padding: 6,
+                width: '100%',
+              }}
+              testID="habit-edit-menu"
+            >
+              {editActions.map((action) => (
+                <AppButton
+                  disabled={action.disabled}
+                  key={action.label}
+                  label={action.label}
+                  onPress={() => {
+                    onToggleEdit?.();
+                    action.onPress();
+                  }}
+                  style={{ height: 44, width: '100%' }}
+                  testID={action.testID}
+                  variant="text"
+                />
+              ))}
+            </Column>
+          </Host>
         </View>
       ) : null}
     </View>

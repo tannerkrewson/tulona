@@ -1,13 +1,10 @@
-import { Text } from '@expo/ui';
-import type { ComponentProps } from 'react';
+import { Text, type TextStyle } from 'react-native';
 
 import { useAppTheme } from '@theme';
 
-type UniversalTextStyle = ComponentProps<typeof Text>['textStyle'];
-
 export interface DurationTextProps {
   durationMs: number;
-  textStyle?: UniversalTextStyle;
+  textStyle?: TextStyle;
   testID?: string;
 }
 
@@ -32,7 +29,7 @@ export function DurationText({ durationMs, textStyle, testID }: DurationTextProp
   return (
     <Text
       testID={testID}
-      textStyle={{ color: colors.text, fontSize: 16, fontWeight: '600', ...textStyle }}
+      style={{ color: colors.text, fontSize: 16, fontWeight: '600', ...textStyle }}
     >
       {formatDuration(durationMs)}
     </Text>

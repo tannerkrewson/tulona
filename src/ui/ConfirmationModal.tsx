@@ -1,4 +1,3 @@
-import { Column, Text } from '@expo/ui';
 import { useCallback, useEffect, useRef } from 'react';
 import {
   AccessibilityInfo,
@@ -8,14 +7,13 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  Text,
   View,
   findNodeHandle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@theme';
-
-import { AppButton } from './AppButton';
 
 export interface ConfirmationModalProps {
   visible: boolean;
@@ -108,41 +106,82 @@ export function ConfirmationModal({
           ]}
           testID={testID}
         >
-          <Column spacing={12} style={{ width: '100%' }}>
+          <View style={styles.content}>
             <View
               accessible
               accessibilityLabel={`${title}. ${message}`}
               accessibilityRole="header"
               ref={titleRef}
             >
-              <Text textStyle={{ color: toneColors.foreground, fontSize: 19, fontWeight: '700' }}>
+              <Text style={{ color: toneColors.foreground, fontSize: 19, fontWeight: '700' }}>
                 {title}
               </Text>
             </View>
-            <Text textStyle={{ color: toneColors.foreground, fontSize: 15, lineHeight: 21 }}>
+            <Text style={{ color: toneColors.foreground, fontSize: 15, lineHeight: 21 }}>
               {message}
             </Text>
-            <Column spacing={8} style={{ width: '100%' }}>
-              <AppButton
+            <View style={styles.actions}>
+              <ModalActionButton
                 disabled={busy}
                 label={confirmLabel}
                 onPress={onConfirm}
-                style={{ height: 48, width: '100%' }}
                 testID={confirmTestID}
               />
-              <AppButton
+              <ModalActionButton
                 disabled={busy}
                 label={cancelLabel}
                 onPress={dismiss}
-                style={{ height: 48, width: '100%' }}
                 testID={cancelTestID}
                 variant="outlined"
               />
-            </Column>
-          </Column>
+            </View>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+function ModalActionButton({
+  label,
+  onPress,
+  testID,
+  disabled,
+  variant = 'filled',
+}: {
+  label: string;
+  onPress: () => void;
+  testID: string;
+  disabled: boolean;
+  variant?: 'filled' | 'outlined';
+}) {
+  const { colors } = useAppTheme();
+  const filled = variant === 'filled';
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        alignItems: 'center',
+        backgroundColor: filled ? colors.primary : 'transparent',
+        borderColor: filled ? colors.primary : colors.border,
+        borderRadius: 12,
+        borderWidth: filled ? 0 : 1,
+        height: 48,
+        justifyContent: 'center',
+        opacity: disabled ? 0.45 : pressed ? 0.72 : 1,
+        paddingHorizontal: 16,
+        width: '100%',
+      })}
+      testID={testID}
+    >
+      <Text style={{ color: filled ? colors.onPrimary : colors.text, fontWeight: '600' }}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -168,4 +207,6 @@ const styles = StyleSheet.create({
     padding: 20,
     width: '100%',
   },
+  content: { gap: 12, width: '100%' },
+  actions: { gap: 8, width: '100%' },
 });

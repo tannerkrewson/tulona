@@ -1,5 +1,4 @@
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
-import { Text } from '@expo/ui';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { usePathname, useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 
@@ -389,7 +388,7 @@ function ActiveActivityBarContent({
               {displayContext ? (
                 <Text
                   numberOfLines={1}
-                  textStyle={{ color: colors.textMuted, fontSize: 11, fontWeight: '800' }}
+                  style={{ color: colors.textMuted, fontSize: 11, fontWeight: '800' }}
                 >
                   {displayContext}
                 </Text>
@@ -398,7 +397,7 @@ function ActiveActivityBarContent({
                 {routineInFocus ? <AppIcon color={accent} name="repeat" size={15} /> : null}
                 <Text
                   numberOfLines={1}
-                  textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}
+                  style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}
                 >
                   {routineInFocus && activeRoutine.status === 'paused'
                     ? `Paused · ${displayName}`
@@ -406,16 +405,13 @@ function ActiveActivityBarContent({
                 </Text>
               </View>
               {actionError ? (
-                <Text
-                  numberOfLines={1}
-                  textStyle={{ color: colors.danger.foreground, fontSize: 11 }}
-                >
+                <Text numberOfLines={1} style={{ color: colors.danger.foreground, fontSize: 11 }}>
                   {actionError}
                 </Text>
               ) : null}
             </View>
             {routineInFocus && routineTimer !== null ? (
-              <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>
+              <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>
                 {routineTimer}
               </Text>
             ) : (
@@ -447,11 +443,11 @@ function ActiveActivityBarContent({
             <View style={styles.resumeRoutineText}>
               <Text
                 numberOfLines={1}
-                textStyle={{ color: colors.text, fontSize: 11, fontWeight: '700' }}
+                style={{ color: colors.text, fontSize: 11, fontWeight: '700' }}
               >
                 {activeRoutine.routineSnapshot.name}
               </Text>
-              <Text numberOfLines={1} textStyle={{ color: colors.textMuted, fontSize: 11 }}>
+              <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 11 }}>
                 {`${pausedRoutineStepName} · ${pausedRoutineTimer}`}
               </Text>
             </View>

@@ -16,6 +16,10 @@ const appScreen = read('src/ui/AppScreen.tsx');
 const habitList = read('src/habits/HabitListScreen.tsx');
 const habitHeader = read('src/habits/HabitHeader.tsx');
 const habitStore = read('src/habits/habit-store.ts');
+const bootGate = read('src/orchestration/BootCoordinatorGate.tsx');
+const confirmationModal = read('src/ui/ConfirmationModal.tsx');
+const activeActivityBar = read('src/tracker/ActiveActivityBar.tsx');
+const habitReview = read('src/habits/HabitReviewScreen.tsx');
 const habitItemStart = habitList.indexOf('function HabitListItem(');
 const habitItemEnd = habitList.indexOf('function HabitAction(', habitItemStart);
 const habitItem = habitList.slice(habitItemStart, habitItemEnd);
@@ -61,7 +65,7 @@ assert(
   'habit card and status-button taps must expose the full outcome cycle accessibly'
 );
 assert(
-  /\{statusLabel\}\s*<\/Text>/.test(habitList) &&
+  /\{statusLabel\}\s*<\/(?:Native)?Text>/.test(habitList) &&
     !habitList.includes('{outcome ? (') &&
     habitList.includes("fontSize: 17, fontWeight: '600', lineHeight: 22") &&
     habitList.includes('fontSize: 12, lineHeight: 16'),
@@ -128,7 +132,8 @@ assert(
     metricTarget.includes("marginLeft: 'auto'") &&
     metricTarget.includes('minWidth: HABIT_ROW_STREAK_WIDTH') &&
     metricTarget.includes('width: HABIT_ROW_STREAK_WIDTH') &&
-    habitItem.includes("style={{ height: HABIT_ROW_MIN_HEIGHT, width: '100%' }}"),
+    habitItem.includes('height: HABIT_ROW_MIN_HEIGHT') &&
+    habitItem.includes("width: '100%'"),
   'the streak metric target must span its full row-height column without bubbling to the row'
 );
 assert(
@@ -169,7 +174,29 @@ assert(
   appScreen.includes('const screenBackground = backgroundColor ?? colors.background'),
   'app screens must use the theme background so habit surfaces remain visibly distinct'
 );
+assert(
+  !bootGate.includes('scrollable={false}') && bootGate.includes('<Screen testID="boot-hydrating">'),
+  'the boot overlay must keep its SwiftUI content directly under the AppScreen Host'
+);
+assert(
+  !confirmationModal.includes("from '@expo/ui'") &&
+    confirmationModal.includes('<ModalActionButton') &&
+    confirmationModal.includes('Text,') &&
+    activeActivityBar.includes('Text, View') &&
+    !activeActivityBar.includes("from '@expo/ui'") &&
+    !read('src/ui/DurationText.tsx').includes("from '@expo/ui'"),
+  'React Native modal and activity-bar subtrees must not mount SwiftUI controls below UIView parents'
+);
+assert(
+  habitList.includes('function HabitCategoryList(') &&
+    habitList.includes("<Host style={{ flex: 1, minHeight: 0, width: '100%' }}>") &&
+    habitList.includes('function HabitDayList(') &&
+    habitList.includes('<NativeText') &&
+    habitHeader.includes('matchContents={{ vertical: true }}') &&
+    habitReview.includes("<Host style={{ height: 54, width: '100%' }}>"),
+  'habit routes must host SwiftUI subtrees at React Native boundaries'
+);
 
 console.log(
-  'Validated habit metric toggling/counts, hit-target boundaries, outcome cycling, warning, typography, border, and pager regressions.'
+  'Validated habit interactions and layout plus Expo UI Host boundaries for startup, modals, tracking, and review flows.'
 );

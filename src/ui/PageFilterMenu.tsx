@@ -1,6 +1,5 @@
-import { Text } from '@expo/ui';
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { AppIcon, type IconValue } from '@icons';
 import { useAppTheme } from '@theme';
@@ -142,7 +141,7 @@ export function PageFilterMenu<T extends string = string>({
                   <View style={{ flex: 1, marginLeft: option.icon ? 10 : 0 }}>
                     <Text
                       numberOfLines={1}
-                      textStyle={{
+                      style={{
                         color: selected ? colors.text : colors.textMuted,
                         fontSize: 15,
                         fontWeight: selected ? '600' : '500',
@@ -176,7 +175,7 @@ export function PageFilterMenu<T extends string = string>({
                 <View style={{ flex: 1 }}>
                   <Text
                     numberOfLines={1}
-                    textStyle={{ color: colors.text, fontSize: 15, fontWeight: '500' }}
+                    style={{ color: colors.text, fontSize: 15, fontWeight: '500' }}
                   >
                     {toggle.label}
                   </Text>
@@ -231,7 +230,7 @@ export function PageFilterMenuSelection<T extends string = string>({
       testID={`${testID}-label`}
     >
       <View style={{ flexShrink: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
+        <Text numberOfLines={1} style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
           {`Showing ${currentOption.label}`}
         </Text>
       </View>

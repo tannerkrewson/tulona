@@ -1,4 +1,4 @@
-import { Column, Row, ScrollView, Text } from '@expo/ui';
+import { Column, Host, ScrollView, Text } from '@expo/ui';
 import { useIsFocused, useRouter, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -254,29 +254,31 @@ function HabitListContent({ store }: { store: HabitStore }) {
             {selectedCategory === 'active' ? (
               <>
                 {reviewGap ? (
-                  <Column
-                    spacing={8}
-                    style={{
-                      backgroundColor: colors.active.background,
-                      borderColor: colors.border,
-                      borderRadius: 14,
-                      borderWidth: 1,
-                      padding: 12,
-                      width: '100%',
-                    }}
-                    testID="incomplete-habit-day-reminder"
-                  >
-                    <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
-                      {`${reviewGap.count} ${reviewGap.count === 1 ? 'habit needs' : 'habits need'} a status for ${formatHabitDay(reviewGap.day)}.`}
-                    </Text>
-                    <AppButton
-                      label="Review this day"
-                      onPress={() => router.push(`/habit-review?day=${reviewGap.day}` as Href)}
-                      style={{ height: 46, width: '100%' }}
-                      testID="review-incomplete-habit-day"
-                      variant="outlined"
-                    />
-                  </Column>
+                  <Host matchContents={{ vertical: true }} style={{ width: '100%' }}>
+                    <Column
+                      spacing={8}
+                      style={{
+                        backgroundColor: colors.active.background,
+                        borderColor: colors.border,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        padding: 12,
+                        width: '100%',
+                      }}
+                      testID="incomplete-habit-day-reminder"
+                    >
+                      <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
+                        {`${reviewGap.count} ${reviewGap.count === 1 ? 'habit needs' : 'habits need'} a status for ${formatHabitDay(reviewGap.day)}.`}
+                      </Text>
+                      <AppButton
+                        label="Review this day"
+                        onPress={() => router.push(`/habit-review?day=${reviewGap.day}` as Href)}
+                        style={{ height: 46, width: '100%' }}
+                        testID="review-incomplete-habit-day"
+                        variant="outlined"
+                      />
+                    </Column>
+                  </Host>
                 ) : null}
                 <HabitWeekStrip
                   onSelectDay={selectDay}
@@ -335,9 +337,9 @@ function HabitListContent({ store }: { store: HabitStore }) {
             testID="start-habit-review"
           >
             <AppIcon color={colors.primary} name="sparkles" size={20} />
-            <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
+            <NativeText style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
               Start mindful review
-            </Text>
+            </NativeText>
           </Pressable>
         </View>
       </Screen>
@@ -381,35 +383,37 @@ function HabitCategoryList({
   const future = category === 'future';
 
   return (
-    <ScrollView style={{ height: '100%', width: '100%' }}>
-      <Column spacing={12} style={{ paddingBottom: 20, paddingTop: 12, width: '100%' }}>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-          {future
-            ? 'These habits will become active when their scheduled start date arrives.'
-            : 'Archived habits keep their history and can be restored from their details.'}
-        </Text>
-        {habits.length === 0 ? (
-          <EmptyState
-            iconName={future ? 'calendar-days' : 'archive'}
-            testID={`habits-${category}-empty`}
-            title={future ? 'No future habits' : 'No archived habits'}
-          />
-        ) : (
-          <Column spacing={8} style={{ width: '100%' }}>
-            {habits.map((habit) => (
-              <HabitCategoryListItem
-                category={category}
-                editMode={editMode}
-                habit={habit}
-                key={habit.id}
-                onDetails={() => onDetails(habit.id)}
-                rolloverHour={rolloverHour}
-              />
-            ))}
-          </Column>
-        )}
-      </Column>
-    </ScrollView>
+    <Host style={{ flex: 1, minHeight: 0, width: '100%' }}>
+      <ScrollView style={{ height: '100%', width: '100%' }}>
+        <Column spacing={12} style={{ paddingBottom: 20, paddingTop: 12, width: '100%' }}>
+          <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+            {future
+              ? 'These habits will become active when their scheduled start date arrives.'
+              : 'Archived habits keep their history and can be restored from their details.'}
+          </Text>
+          {habits.length === 0 ? (
+            <EmptyState
+              iconName={future ? 'calendar-days' : 'archive'}
+              testID={`habits-${category}-empty`}
+              title={future ? 'No future habits' : 'No archived habits'}
+            />
+          ) : (
+            <Column spacing={8} style={{ width: '100%' }}>
+              {habits.map((habit) => (
+                <HabitCategoryListItem
+                  category={category}
+                  editMode={editMode}
+                  habit={habit}
+                  key={habit.id}
+                  onDetails={() => onDetails(habit.id)}
+                  rolloverHour={rolloverHour}
+                />
+              ))}
+            </Column>
+          )}
+        </Column>
+      </ScrollView>
+    </Host>
   );
 }
 
@@ -883,7 +887,7 @@ function WeekDaysRow({
 }) {
   const { colors } = useAppTheme();
   return (
-    <Row alignment="center" spacing={4} style={{ width: '100%' }}>
+    <View style={{ alignItems: 'center', flexDirection: 'row', gap: 4, width: '100%' }}>
       {days.map((day, index) => {
         const selected = day === selectedDay;
         const future = day > today;
@@ -906,28 +910,28 @@ function WeekDaysRow({
             })}
             testID={`habit-day-${day}`}
           >
-            <Text
-              textStyle={{
+            <NativeText
+              style={{
                 color: selected ? colors.onPrimary : colors.textMuted,
                 fontSize: 11,
                 fontWeight: '600',
               }}
             >
               {sundayFirstWeekdayLabels[index]}
-            </Text>
-            <Text
-              textStyle={{
+            </NativeText>
+            <NativeText
+              style={{
                 color: selected ? colors.onPrimary : colors.text,
                 fontSize: 18,
                 fontWeight: selected ? '700' : '600',
               }}
             >
               {day.slice(8)}
-            </Text>
+            </NativeText>
           </Pressable>
         );
       })}
-    </Row>
+    </View>
   );
 }
 
@@ -957,35 +961,37 @@ function HabitDayList({
   states: HabitDayState[];
 }) {
   return (
-    <ScrollView style={{ height: '100%', width: '100%' }}>
-      <Column spacing={12} style={{ paddingBottom: 20, paddingTop: 12, width: '100%' }}>
-        {activeHabits.length === 0 ? (
-          <EmptyState iconName="heart" testID="habits-empty" title="No active habits yet" />
-        ) : (
-          <Column spacing={8} style={{ width: '100%' }}>
-            {activeHabits.map((habit) => (
-              <HabitListItem
-                editMode={editMode}
-                habit={habit}
-                key={habit.id}
-                saving={saving}
-                state={states.find(
-                  (candidate) => candidate.habitId === habit.id && candidate.logicalDay === day
-                )}
-                states={states.filter((candidate) => candidate.habitId === habit.id)}
-                selectedDay={day}
-                logicalDayRolloverHour={logicalDayRolloverHour}
-                metricMode={metricMode}
-                onDetails={() => onDetails(habit.id)}
-                onCycle={() => onCycle(habit.id)}
-                onOutcome={(outcome) => onOutcome(habit.id, outcome)}
-                onToggleMetricDisplay={onToggleMetricDisplay}
-              />
-            ))}
-          </Column>
-        )}
-      </Column>
-    </ScrollView>
+    <Host style={{ flex: 1, minHeight: 0, width: '100%' }}>
+      <ScrollView style={{ height: '100%', width: '100%' }}>
+        <Column spacing={12} style={{ paddingBottom: 20, paddingTop: 12, width: '100%' }}>
+          {activeHabits.length === 0 ? (
+            <EmptyState iconName="heart" testID="habits-empty" title="No active habits yet" />
+          ) : (
+            <Column spacing={8} style={{ width: '100%' }}>
+              {activeHabits.map((habit) => (
+                <HabitListItem
+                  editMode={editMode}
+                  habit={habit}
+                  key={habit.id}
+                  saving={saving}
+                  state={states.find(
+                    (candidate) => candidate.habitId === habit.id && candidate.logicalDay === day
+                  )}
+                  states={states.filter((candidate) => candidate.habitId === habit.id)}
+                  selectedDay={day}
+                  logicalDayRolloverHour={logicalDayRolloverHour}
+                  metricMode={metricMode}
+                  onDetails={() => onDetails(habit.id)}
+                  onCycle={() => onCycle(habit.id)}
+                  onOutcome={(outcome) => onOutcome(habit.id, outcome)}
+                  onToggleMetricDisplay={onToggleMetricDisplay}
+                />
+              ))}
+            </Column>
+          )}
+        </Column>
+      </ScrollView>
+    </Host>
   );
 }
 
@@ -1152,10 +1158,14 @@ function HabitListItem({
           }}
           testID={`toggle-habit-${habit.id}`}
         >
-          <Row
-            alignment="center"
-            spacing={ROW_SURFACE_CONTENT_GAP}
-            style={{ height: HABIT_ROW_MIN_HEIGHT, width: '100%' }}
+          <View
+            style={{
+              alignItems: 'center',
+              flexDirection: 'row',
+              gap: ROW_SURFACE_CONTENT_GAP,
+              height: HABIT_ROW_MIN_HEIGHT,
+              width: '100%',
+            }}
           >
             <Pressable
               accessibilityHint={
@@ -1202,18 +1212,18 @@ function HabitListItem({
                 minWidth: 0,
               }}
             >
-              <Text
+              <NativeText
                 numberOfLines={1}
-                textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
+                style={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
               >
                 {habit.name}
-              </Text>
-              <Text
+              </NativeText>
+              <NativeText
                 numberOfLines={1}
-                textStyle={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
+                style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
               >
                 {statusLabel}
-              </Text>
+              </NativeText>
             </View>
             <Pressable
               accessibilityHint="Toggles all visible habits between current streak and total days"
@@ -1237,20 +1247,20 @@ function HabitListItem({
               }}
               testID={`toggle-habit-metric-${habit.id}`}
             >
-              <Text
+              <NativeText
                 numberOfLines={1}
-                textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
+                style={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
               >
                 {String(metricValue)}
-              </Text>
-              <Text
+              </NativeText>
+              <NativeText
                 numberOfLines={1}
-                textStyle={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
+                style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
               >
                 {metricLabel}
-              </Text>
+              </NativeText>
             </Pressable>
-          </Row>
+          </View>
         </Pressable>
       </Animated.View>
       {menuAnchor ? (

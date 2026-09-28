@@ -318,7 +318,6 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     return (
       <Screen
         backgroundColor={BASE_RUNNER.background}
-        scrollable={false}
         testID="routine-runner-screen"
         title="Routine"
       >

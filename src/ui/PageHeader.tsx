@@ -1,6 +1,5 @@
-import { Text } from '@expo/ui';
 import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@theme';
 import { IconButton } from './IconButton';
@@ -40,7 +39,7 @@ export function PageHeader({
         <View style={styles.title}>
           <Text
             numberOfLines={1}
-            textStyle={{ color: colors.text, fontSize: 30, fontWeight: '700', lineHeight: 36 }}
+            style={{ color: colors.text, fontSize: 30, fontWeight: '700', lineHeight: 36 }}
           >
             {title}
           </Text>

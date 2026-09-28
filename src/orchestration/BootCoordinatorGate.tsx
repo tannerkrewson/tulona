@@ -91,7 +91,7 @@ export function BootCoordinatorGate() {
   if (state.kind === 'ready') return null;
   if (state.kind === 'hydrating') {
     return (
-      <Screen scrollable={false} testID="boot-hydrating">
+      <Screen testID="boot-hydrating">
         <Column alignment="center" spacing={12} style={{ width: '100%' }}>
           <Text textStyle={{ color: colors.primary, fontSize: 24, fontWeight: '800' }}>
             Restoring Tulona
@@ -107,7 +107,7 @@ export function BootCoordinatorGate() {
   const category = errorText(state.error);
   return (
     <>
-      <Screen scrollable={false} testID="boot-error">
+      <Screen testID="boot-error">
         <Column alignment="center" spacing={14} style={{ width: '100%' }}>
           <Text textStyle={{ color: colors.danger.foreground, fontSize: 24, fontWeight: '800' }}>
             Tulona needs recovery

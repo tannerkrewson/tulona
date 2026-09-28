@@ -1,8 +1,8 @@
 /* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 */
-import { Column, Row, Text } from '@expo/ui';
+import { Column, Host, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, Text as NativeText, View } from 'react-native';
 
 import { logicalDayKey, type HabitDayOutcome, type LogicalDayKey } from '@domain';
 import { AppIcon } from '@icons';
@@ -173,18 +173,18 @@ function HabitReviewContent({
       >
         {habit ? (
           <View style={{ flexGrow: 1, minHeight: 0, width: '100%' }}>
-            <Row alignment="center" spacing={10} style={{ width: '100%' }}>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>
+            <View style={{ alignItems: 'center', flexDirection: 'row', gap: 10, width: '100%' }}>
+              <NativeText style={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>
                 {formatHabitDay(day)}
-              </Text>
+              </NativeText>
               <View style={{ flex: 1 }} />
-              <Text
-                textStyle={{ color: colors.text, fontSize: 14, fontWeight: '700' }}
+              <NativeText
+                style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}
                 testID="habit-review-progress-label"
               >
                 {`${index + 1} of ${queue.length}`}
-              </Text>
-            </Row>
+              </NativeText>
+            </View>
             <View style={{ flexDirection: 'row', gap: 4, marginTop: 12, width: '100%' }}>
               {queue.map((candidate, position) => (
                 <View
@@ -200,19 +200,21 @@ function HabitReviewContent({
             </View>
 
             <View style={{ marginTop: 30, width: '100%' }}>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 17, fontWeight: '600' }}>
+              <NativeText style={{ color: colors.textMuted, fontSize: 17, fontWeight: '600' }}>
                 How did it go?
-              </Text>
+              </NativeText>
               <View style={{ marginTop: 10, width: '100%' }}>
-                <Row alignment="center" spacing={12} style={{ width: '100%' }}>
+                <View
+                  style={{ alignItems: 'center', flexDirection: 'row', gap: 12, width: '100%' }}
+                >
                   <View
                     style={{ backgroundColor: accent, borderRadius: 3, height: 42, width: 6 }}
                     testID="habit-review-accent"
                   />
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text
+                    <NativeText
                       numberOfLines={2}
-                      textStyle={{
+                      style={{
                         color: colors.text,
                         fontSize: 29,
                         fontWeight: '700',
@@ -221,24 +223,24 @@ function HabitReviewContent({
                       testID="habit-review-name"
                     >
                       {habit.name}
-                    </Text>
+                    </NativeText>
                   </View>
-                </Row>
+                </View>
               </View>
               {habitDayHasStatus(currentState) ? (
                 <View style={{ marginTop: 8 }}>
-                  <Text
-                    textStyle={{ color: colors.textMuted, fontSize: 14 }}
+                  <NativeText
+                    style={{ color: colors.textMuted, fontSize: 14 }}
                     testID="habit-review-current-status"
                   >
                     {`Saved as ${habitCompletionLabel(currentState ?? null)} · choose a new status to change it`}
-                  </Text>
+                  </NativeText>
                 </View>
               ) : null}
             </View>
 
             <View style={{ marginTop: 28, width: '100%' }}>
-              <Column spacing={8} style={{ width: '100%' }}>
+              <View style={{ gap: 8, width: '100%' }}>
                 {OUTCOMES.map((option) => {
                   const selected = outcome === option.value;
                   return (
@@ -285,32 +287,32 @@ function HabitReviewContent({
                         />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text
-                          textStyle={{
+                        <NativeText
+                          style={{
                             color: colors.text,
                             fontSize: 17,
                             fontWeight: selected ? '700' : '600',
                           }}
                         >
                           {option.label}
-                        </Text>
+                        </NativeText>
                       </View>
                     </Pressable>
                   );
                 })}
-              </Column>
+              </View>
             </View>
           </View>
         ) : (
           <View style={{ flex: 1, justifyContent: 'center', width: '100%' }}>
             <AppIcon color={colors.success.foreground} name="check-circle-2" size={34} />
             <View style={{ marginTop: 16 }}>
-              <Text
-                textStyle={{ color: colors.text, fontSize: 26, fontWeight: '700', lineHeight: 32 }}
+              <NativeText
+                style={{ color: colors.text, fontSize: 26, fontWeight: '700', lineHeight: 32 }}
                 testID="habit-review-complete"
               >
                 {day < today ? 'This day is all caught up.' : 'That’s every habit for today.'}
-              </Text>
+              </NativeText>
             </View>
           </View>
         )}
@@ -318,27 +320,31 @@ function HabitReviewContent({
         <View style={{ width: '100%' }}>
           {actionError ? (
             <View style={{ marginBottom: 10 }}>
-              <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>
+              <NativeText style={{ color: colors.danger.foreground, fontSize: 14 }}>
                 {actionError}
-              </Text>
+              </NativeText>
             </View>
           ) : null}
           {habit ? (
-            <AppButton
-              disabled={saving || outcome === null}
-              label={index + 1 === queue.length ? 'Finish review' : 'Next habit'}
-              onPress={() => void saveAndContinue()}
-              style={{ height: 54, width: '100%' }}
-              testID="habit-review-next"
-            />
+            <Host style={{ height: 54, width: '100%' }}>
+              <AppButton
+                disabled={saving || outcome === null}
+                label={index + 1 === queue.length ? 'Finish review' : 'Next habit'}
+                onPress={() => void saveAndContinue()}
+                style={{ height: 54, width: '100%' }}
+                testID="habit-review-next"
+              />
+            </Host>
           ) : (
-            <AppButton
-              label="Back to habits"
-              onPress={goBack}
-              style={{ height: 54, width: '100%' }}
-              testID="close-habit-review"
-              variant="outlined"
-            />
+            <Host style={{ height: 54, width: '100%' }}>
+              <AppButton
+                label="Back to habits"
+                onPress={goBack}
+                style={{ height: 54, width: '100%' }}
+                testID="close-habit-review"
+                variant="outlined"
+              />
+            </Host>
           )}
         </View>
       </View>
