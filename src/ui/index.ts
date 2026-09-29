@@ -3,6 +3,12 @@ export { AccessibleTextInput, type AccessibleTextInputProps } from './Accessible
 export { AppButton } from './AppButton';
 export { AppScreen, type AppScreenProps } from './AppScreen';
 export { PageHeader, type PageHeaderProps } from './PageHeader';
+export {
+  PopoverAction,
+  PopoverSurface,
+  type PopoverActionProps,
+  type PopoverSurfaceProps,
+} from './PopoverSurface';
 export { SlideUpSheet, type SlideUpSheetProps } from './SlideUpSheet';
 export { ConfirmationModal, type ConfirmationModalProps } from './ConfirmationModal';
 export {

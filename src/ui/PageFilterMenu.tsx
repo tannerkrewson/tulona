@@ -5,6 +5,7 @@ import { AppIcon, type IconValue } from '@icons';
 import { useAppTheme } from '@theme';
 
 import { IconButton } from './IconButton';
+import { PopoverSurface } from './PopoverSurface';
 
 export interface PageFilterMenuOption<T extends string = string> {
   value: T;
@@ -84,9 +85,8 @@ export function PageFilterMenu<T extends string = string>({
         variant="muted"
       />
       {open ? (
-        <View
+        <PopoverSurface
           style={{
-            boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
             position: 'absolute',
             right: 0,
             top: 48,
@@ -94,112 +94,98 @@ export function PageFilterMenu<T extends string = string>({
             elevation: 1001,
             zIndex: 1001,
           }}
+          testID={`${testID}-options`}
         >
-          <View
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 14,
-              borderWidth: 1,
-              elevation: 1001,
-              overflow: 'hidden',
-              width: '100%',
-            }}
-            testID={`${testID}-options`}
-          >
-            {options.map((option, index) => {
-              const selected = option.value === value;
-              return (
-                <Pressable
-                  accessibilityLabel={option.label}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  key={option.value}
-                  onPress={() => {
-                    onChange(option.value);
-                    setOpen(false);
-                  }}
-                  style={({ pressed }) => ({
-                    alignItems: 'center',
-                    backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
-                    borderBottomColor: colors.border,
-                    borderBottomWidth: index < options.length - 1 || toggles.length > 0 ? 1 : 0,
-                    flexDirection: 'row',
-                    minHeight: 48,
-                    paddingHorizontal: 14,
-                    opacity: pressed ? 0.8 : 1,
-                  })}
-                  testID={`${testID}-option-${option.value}`}
-                >
-                  {option.icon ? (
-                    <AppIcon
-                      color={selected ? colors.primary : colors.textMuted}
-                      name={option.icon}
-                      size={18}
-                    />
-                  ) : null}
-                  <View style={{ flex: 1, marginLeft: option.icon ? 10 : 0 }}>
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        color: selected ? colors.text : colors.textMuted,
-                        fontSize: 15,
-                        fontWeight: selected ? '600' : '500',
-                      }}
-                    >
-                      {option.label}
-                    </Text>
-                  </View>
-                  {selected ? <AppIcon color={colors.primary} name="check" size={18} /> : null}
-                </Pressable>
-              );
-            })}
-            {toggles.map((toggle, index) => (
+          {options.map((option, index) => {
+            const selected = option.value === value;
+            return (
               <Pressable
-                accessibilityLabel={toggle.label}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: toggle.value }}
-                key={toggle.testID ?? toggle.label}
-                onPress={() => toggle.onChange(!toggle.value)}
+                accessibilityLabel={option.label}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                key={option.value}
+                onPress={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
                 style={({ pressed }) => ({
                   alignItems: 'center',
                   backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                  borderBottomColor: colors.border,
+                  borderBottomWidth: index < options.length - 1 || toggles.length > 0 ? 1 : 0,
                   flexDirection: 'row',
                   minHeight: 48,
                   paddingHorizontal: 14,
                   opacity: pressed ? 0.8 : 1,
-                  ...(index > 0 ? { borderTopColor: colors.border, borderTopWidth: 1 } : {}),
                 })}
-                testID={toggle.testID ?? `${testID}-toggle-${index}`}
+                testID={`${testID}-option-${option.value}`}
               >
-                <View style={{ flex: 1 }}>
+                {option.icon ? (
+                  <AppIcon
+                    color={selected ? colors.primary : colors.textMuted}
+                    name={option.icon}
+                    size={18}
+                  />
+                ) : null}
+                <View style={{ flex: 1, marginLeft: option.icon ? 10 : 0 }}>
                   <Text
                     numberOfLines={1}
-                    style={{ color: colors.text, fontSize: 15, fontWeight: '500' }}
+                    style={{
+                      color: selected ? colors.text : colors.textMuted,
+                      fontSize: 15,
+                      fontWeight: selected ? '600' : '500',
+                    }}
                   >
-                    {toggle.label}
+                    {option.label}
                   </Text>
                 </View>
-                <View
-                  style={{
-                    alignItems: 'center',
-                    backgroundColor: toggle.value ? colors.primary : 'transparent',
-                    borderColor: toggle.value ? colors.primary : colors.border,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    height: 22,
-                    justifyContent: 'center',
-                    width: 22,
-                  }}
-                >
-                  {toggle.value ? (
-                    <AppIcon color={colors.onPrimary} name="check" size={16} />
-                  ) : null}
-                </View>
+                {selected ? <AppIcon color={colors.primary} name="check" size={18} /> : null}
               </Pressable>
-            ))}
-          </View>
-        </View>
+            );
+          })}
+          {toggles.map((toggle, index) => (
+            <Pressable
+              accessibilityLabel={toggle.label}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: toggle.value }}
+              key={toggle.testID ?? toggle.label}
+              onPress={() => toggle.onChange(!toggle.value)}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+                flexDirection: 'row',
+                minHeight: 48,
+                paddingHorizontal: 14,
+                opacity: pressed ? 0.8 : 1,
+                ...(index > 0 ? { borderTopColor: colors.border, borderTopWidth: 1 } : {}),
+              })}
+              testID={toggle.testID ?? `${testID}-toggle-${index}`}
+            >
+              <View style={{ flex: 1 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{ color: colors.text, fontSize: 15, fontWeight: '500' }}
+                >
+                  {toggle.label}
+                </Text>
+              </View>
+              <View
+                style={{
+                  alignItems: 'center',
+                  backgroundColor: toggle.value ? colors.primary : 'transparent',
+                  borderColor: toggle.value ? colors.primary : colors.border,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  height: 22,
+                  justifyContent: 'center',
+                  width: 22,
+                }}
+              >
+                {toggle.value ? <AppIcon color={colors.onPrimary} name="check" size={16} /> : null}
+              </View>
+            </Pressable>
+          ))}
+        </PopoverSurface>
       ) : null}
     </View>
   );

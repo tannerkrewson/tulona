@@ -3,25 +3,16 @@ import { Column, Text } from '@expo/ui';
 import { AppIcon, normalizeIconName, type IconName } from '@icons';
 import { useAppTheme } from '@theme';
 
-import { AppButton } from './AppButton';
 import { getRowSurfaceStyle } from './row-surface';
 
 export interface EmptyStateProps {
   title: string;
   iconName?: IconName | string | null;
-  actionLabel?: string;
-  onAction?: () => void;
   testID?: string;
 }
 
 /** A neutral, action-ready empty state for any feature collection. */
-export function EmptyState({
-  title,
-  iconName = 'inbox',
-  actionLabel,
-  onAction,
-  testID,
-}: EmptyStateProps) {
+export function EmptyState({ title, iconName = 'inbox', testID }: EmptyStateProps) {
   const { colors } = useAppTheme();
 
   return (
@@ -31,7 +22,7 @@ export function EmptyState({
       style={{
         ...getRowSurfaceStyle({ backgroundColor: colors.surface }),
         paddingHorizontal: 20,
-        paddingVertical: 24,
+        paddingVertical: 16,
         width: '100%',
       }}
       testID={testID}
@@ -42,13 +33,6 @@ export function EmptyState({
       >
         {title}
       </Text>
-      {actionLabel && onAction ? (
-        <AppButton
-          label={actionLabel}
-          onPress={onAction}
-          testID={testID ? `${testID}-action` : undefined}
-        />
-      ) : null}
     </Column>
   );
 }

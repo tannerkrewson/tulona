@@ -194,9 +194,10 @@ assert(
     habitList.includes("<Host style={{ flex: 1, minHeight: 0, width: '100%' }}>") &&
     habitList.includes('function HabitDayList(') &&
     habitList.includes('<NativeText') &&
-    habitHeader.includes('matchContents={{ vertical: true }}') &&
+    habitHeader.includes('<PopoverSurface') &&
+    !habitHeader.includes("from '@expo/ui'") &&
     habitReview.includes("<Host style={{ height: 54, width: '100%' }}>"),
-  'habit routes must host SwiftUI subtrees at React Native boundaries'
+  'habit routes must keep menu actions in a single React Native popover surface'
 );
 
 console.log(

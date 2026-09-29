@@ -105,11 +105,12 @@ assert(
   'the default safe-area token must be zero for non-iOS web targets'
 );
 assert(
-  html.includes('--tulona-safe-area-top: env(safe-area-inset-top, 0px)') &&
-    html.includes('body::before') &&
-    html.includes('height: var(--tulona-safe-area-top)') &&
-    html.includes('apple-mobile-web-app-status-bar-style" content="default"'),
-  'the iOS PWA status area must stay opaque above page scrims'
+  html.includes('apple-mobile-web-app-status-bar-style" content="default"') &&
+    html.includes('document.documentElement.style.backgroundColor = initialColor') &&
+    html.includes('--tulona-safe-area-bottom: env(safe-area-inset-bottom, 0px)') &&
+    !html.includes('body::before') &&
+    !html.includes('--tulona-safe-area-top'),
+  'the iOS PWA must use the default status bar without a pseudo-element overlay and retain bottom inset handling'
 );
 assert(
   tabs.includes('height: (isWeb ? `calc(64px + ${safeAreaBottom})`') &&

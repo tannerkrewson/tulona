@@ -1,9 +1,7 @@
-import { Column, Host } from '@expo/ui';
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { useAppTheme } from '@theme';
-import { AppButton, PageHeader } from '@ui';
+import { PageHeader, PopoverAction, PopoverSurface } from '@ui';
 
 import { CatalogIconButton } from './CatalogIconButton';
 
@@ -39,8 +37,6 @@ export function CatalogHeader({
   onToggleEdit,
   filterMenu,
 }: CatalogHeaderProps) {
-  const { colors } = useAppTheme();
-
   return (
     <View style={{ position: 'relative', width: '100%', zIndex: 10 }}>
       {createOpen ? (
@@ -84,45 +80,29 @@ export function CatalogHeader({
         />
       </PageHeader>
       {createOpen ? (
-        <View
+        <PopoverSurface
           style={{
-            boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
             position: 'absolute',
             right: 0,
             top: 56,
             width: 220,
           }}
+          testID="catalog-create-menu"
         >
-          <View
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 16,
-              borderWidth: 1,
-              overflow: 'hidden',
-              padding: 6,
-              width: '100%',
-            }}
-          >
-            <Host matchContents={{ vertical: true }} style={{ width: '100%' }}>
-              <Column spacing={2} style={{ width: '100%' }} testID="catalog-create-menu">
-                {createActions.map((action) => (
-                  <AppButton
-                    key={action.label}
-                    label={action.label}
-                    onPress={() => {
-                      onToggleCreate();
-                      action.onPress();
-                    }}
-                    style={{ height: 44, width: '100%' }}
-                    testID={action.testID}
-                    variant="text"
-                  />
-                ))}
-              </Column>
-            </Host>
+          <View style={{ gap: 2, padding: 6, width: '100%' }}>
+            {createActions.map((action) => (
+              <PopoverAction
+                key={action.label}
+                label={action.label}
+                onPress={() => {
+                  onToggleCreate();
+                  action.onPress();
+                }}
+                testID={action.testID}
+              />
+            ))}
           </View>
-        </View>
+        </PopoverSurface>
       ) : null}
     </View>
   );

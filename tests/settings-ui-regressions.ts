@@ -70,9 +70,10 @@ assert(
 assert(
   activityRow.includes('getRowSurfaceStyle') &&
     folderRow.includes('getRowSurfaceStyle') &&
-    folderRow.includes('variant="filled"') &&
+    folderRow.includes('<Pressable') &&
+    !folderRow.includes('AppButton') &&
     habitList.includes('getRowSurfaceStyle'),
-  'activity, folder, and habit rows must use the shared row surface treatment'
+  'activity, folder, and habit rows must use the shared surface with one pressable layer'
 );
 const rowSurface = getRowSurfaceStyle({ backgroundColor: '#FFFFFF' });
 assert(

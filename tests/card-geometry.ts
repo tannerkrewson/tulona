@@ -26,6 +26,11 @@ const read = (relativePath: string) => fs.readFileSync(path.join(root, relativeP
 const appScreen = read('src/ui/AppScreen.tsx');
 const activityRow = read('src/tracker/ActivityRow.tsx');
 const folderRow = read('src/tracker/FolderRow.tsx');
+const catalogHeader = read('src/tracker/CatalogHeader.tsx');
+const habitHeader = read('src/habits/HabitHeader.tsx');
+const filterMenu = read('src/ui/PageFilterMenu.tsx');
+const popoverSurface = read('src/ui/PopoverSurface.tsx');
+const iconPicker = read('src/ui/IconPicker.tsx');
 const habitList = read('src/habits/HabitListScreen.tsx');
 const settingsScreen = read('src/settings/SettingsScreen.tsx');
 const emptyState = read('src/ui/EmptyState.tsx');
@@ -75,11 +80,11 @@ assert(
 );
 assert(
   folderRow.includes("colorScheme === 'dark' ? colors.surfaceMuted : colors.surface") &&
-    folderRow.includes('variant="filled"') &&
-    !folderRow.includes('variant="outlined"') &&
+    folderRow.includes('<Pressable') &&
+    !folderRow.includes('AppButton') &&
     !folderRow.includes('borderColor: colors.border') &&
     !folderRow.includes('borderWidth: 0'),
-  'folder rows must use the same filled, borderless surface treatment as activities'
+  'folder rows must use a single pressable with the same filled, borderless surface treatment as activities'
 );
 assert(
   activityRow.includes('active ? accent : inactiveBackground') &&
@@ -89,10 +94,13 @@ assert(
   'activity active-state color semantics must remain intact'
 );
 assert(
-  activityRow.includes('variant="filled"') &&
+  activityRow.includes('<Pressable') &&
+    activityRow.includes('style={({ pressed }) => [rowStyle') &&
+    activityRow.includes('<SwiftUIReactView>') &&
+    !activityRow.includes('AppButton') &&
     !activityRow.includes('borderColor:') &&
     !activityRow.includes('borderWidth:'),
-  'activity rows must delegate their borderless treatment to the shared surface primitive'
+  'activity rows must apply the shared borderless surface to one native pressable'
 );
 assert(
   habitItem.includes('getRowSurfaceStyle') &&
@@ -135,6 +143,24 @@ assert(
 assert(
   emptyState.includes('getRowSurfaceStyle'),
   'collection empty states must reuse the shared surface treatment'
+);
+assert(
+  popoverSurface.includes('borderRadius: 16') &&
+    popoverSurface.includes('boxShadow:') &&
+    popoverSurface.includes("overflow: 'hidden'") &&
+    catalogHeader.includes('<PopoverSurface') &&
+    habitHeader.includes('<PopoverSurface') &&
+    filterMenu.includes('<PopoverSurface') &&
+    !catalogHeader.includes('boxShadow:') &&
+    !habitHeader.includes('boxShadow:') &&
+    !filterMenu.includes('boxShadow:'),
+  'all popovers must put their rounded clipping and shadow on one shared surface'
+);
+assert(
+  iconPicker.includes('accessibilityRole="tab"') &&
+    iconPicker.includes('flex: 1') &&
+    !iconPicker.includes("width: '48%'"),
+  'routine icon picker mode tabs must share the full available width'
 );
 assert(
   appScreen.includes('const screenBackground = backgroundColor ?? colors.background'),

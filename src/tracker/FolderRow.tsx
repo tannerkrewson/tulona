@@ -1,11 +1,9 @@
-import { Row, Spacer, Text } from '@expo/ui';
-import { Pressable, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import type { Folder } from '@domain';
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
 import {
-  AppButton,
   getRowSurfaceLayoutStyle,
   getRowSurfaceStyle,
   ROW_SURFACE_CONTENT_GAP,
@@ -47,7 +45,15 @@ export function FolderRow({
     ...getRowSurfaceLayoutStyle({ height: TRACKER_ROW_HEIGHT }),
   } as const;
   const rowContent = (
-    <Row alignment="center" spacing={ROW_SURFACE_CONTENT_GAP} style={{ width: '100%' }}>
+    <View
+      style={{
+        alignItems: 'center',
+        flex: 1,
+        flexDirection: 'row',
+        gap: ROW_SURFACE_CONTENT_GAP,
+        minWidth: 0,
+      }}
+    >
       <View
         style={{
           alignItems: 'center',
@@ -67,11 +73,10 @@ export function FolderRow({
       </View>
       <Text
         numberOfLines={1}
-        textStyle={{ color: colors.text, fontSize: TRACKER_ROW_FONT_SIZE, fontWeight: '600' }}
+        style={{ color: colors.text, flex: 1, fontSize: TRACKER_ROW_FONT_SIZE, fontWeight: '600' }}
       >
         {folder.name}
       </Text>
-      {!editMode ? <Spacer flexible /> : null}
       {!editMode ? (
         <View
           style={{
@@ -84,7 +89,7 @@ export function FolderRow({
           <AppIcon color={colors.textMuted} name="chevron-right" size={20} strokeWidth={2.5} />
         </View>
       ) : null}
-    </Row>
+    </View>
   );
 
   if (editMode) {
@@ -119,14 +124,17 @@ export function FolderRow({
   }
 
   return (
-    <AppButton
-      disabled={disabled}
-      onPress={onPress}
-      style={rowStyle}
-      testID={testID}
-      variant="filled"
-    >
-      {rowContent}
-    </AppButton>
+    <SwiftUIReactView>
+      <Pressable
+        accessibilityLabel={folder.name}
+        accessibilityRole="button"
+        disabled={disabled}
+        onPress={onPress}
+        style={({ pressed }) => [rowStyle, { opacity: disabled ? 0.45 : pressed ? 0.72 : 1 }]}
+        testID={testID}
+      >
+        {rowContent}
+      </Pressable>
+    </SwiftUIReactView>
   );
 }

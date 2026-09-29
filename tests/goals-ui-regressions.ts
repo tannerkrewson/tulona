@@ -15,6 +15,10 @@ const goalEditor = read('src/goals/GoalEditorScreen.tsx');
 const goalReview = read('src/goals/GoalReviewScreen.tsx');
 const goalReviewNavigation = read('src/goals/goal-review-navigation.ts');
 const catalogHeader = read('src/tracker/CatalogHeader.tsx');
+const pageHeader = read('src/ui/PageHeader.tsx');
+const headerStart = goals.indexOf('const header = (');
+const headerEnd = goals.indexOf('\n\n  return (\n    <Screen', headerStart);
+const goalsHeader = goals.slice(headerStart, headerEnd);
 const goalRowStart = goals.indexOf('function GoalRow(');
 const goalRowEnd = goals.indexOf('export function ReviewPanel', goalRowStart);
 const goalRow = goals.slice(goalRowStart, goalRowEnd);
@@ -86,6 +90,14 @@ assert(
     goals.includes("router.push('/goal-edit/new' as Href)") &&
     goalEditor.includes('GoalEditor'),
   'Goals must use a top-level edit mode and dedicated goal editor pages'
+);
+assert(
+  goalsHeader.includes('<>') &&
+    !goalsHeader.includes('gap: 4') &&
+    pageHeader.includes('gap: 8') &&
+    !goals.includes('Create your first goal') &&
+    !goals.includes('actionLabel='),
+  'Goals header controls must use the shared action spacing and the empty state must not add a duplicate create action'
 );
 assert(
   catalogHeader.includes("icon={editMode ? 'check' : 'pencil'}") &&

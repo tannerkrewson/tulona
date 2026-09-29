@@ -1,9 +1,7 @@
-import { Column, Host } from '@expo/ui';
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { useAppTheme } from '@theme';
-import { AppButton, IconButton, PageHeader } from '@ui';
+import { IconButton, PageHeader, PopoverAction, PopoverSurface } from '@ui';
 
 export interface HabitHeaderAction {
   label: string;
@@ -40,8 +38,6 @@ export function HabitHeader({
   editTestID = 'edit-habit',
   testID,
 }: HabitHeaderProps) {
-  const { colors } = useAppTheme();
-
   return (
     <View
       style={{
@@ -98,45 +94,30 @@ export function HabitHeader({
         />
       ) : null}
       {editOpen && editActions.length > 0 ? (
-        <View
+        <PopoverSurface
           style={{
-            boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
             position: 'absolute',
             right: 0,
             top: 54,
             width: 210,
           }}
+          testID="habit-edit-menu"
         >
-          <Host matchContents={{ vertical: true }} style={{ width: '100%' }}>
-            <Column
-              spacing={2}
-              style={{
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: 16,
-                borderWidth: 1,
-                padding: 6,
-                width: '100%',
-              }}
-              testID="habit-edit-menu"
-            >
-              {editActions.map((action) => (
-                <AppButton
-                  disabled={action.disabled}
-                  key={action.label}
-                  label={action.label}
-                  onPress={() => {
-                    onToggleEdit?.();
-                    action.onPress();
-                  }}
-                  style={{ height: 44, width: '100%' }}
-                  testID={action.testID}
-                  variant="text"
-                />
-              ))}
-            </Column>
-          </Host>
-        </View>
+          <View style={{ gap: 2, padding: 6, width: '100%' }}>
+            {editActions.map((action) => (
+              <PopoverAction
+                disabled={action.disabled}
+                key={action.label}
+                label={action.label}
+                onPress={() => {
+                  onToggleEdit?.();
+                  action.onPress();
+                }}
+                testID={action.testID}
+              />
+            ))}
+          </View>
+        </PopoverSurface>
       ) : null}
     </View>
   );

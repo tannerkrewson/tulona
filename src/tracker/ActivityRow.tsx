@@ -1,10 +1,8 @@
-import { Row, Text } from '@expo/ui';
-import { Pressable, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import type { TrackableItem } from '@domain';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 import {
-  AppButton,
   getRowSurfaceBackground,
   getRowSurfaceLayoutStyle,
   getRowSurfaceStyle,
@@ -79,7 +77,15 @@ export function ActivityRow({
     ...getRowSurfaceLayoutStyle({ height: TRACKER_ROW_HEIGHT }),
   } as const;
   const rowContent = (
-    <Row alignment="center" spacing={ROW_SURFACE_CONTENT_GAP} style={{ width: '100%' }}>
+    <View
+      style={{
+        alignItems: 'center',
+        flex: 1,
+        flexDirection: 'row',
+        gap: ROW_SURFACE_CONTENT_GAP,
+        minWidth: 0,
+      }}
+    >
       <View
         style={{
           alignItems: 'center',
@@ -119,15 +125,16 @@ export function ActivityRow({
       </View>
       <Text
         numberOfLines={1}
-        textStyle={{
+        style={{
           color: active ? activeForeground : colors.text,
+          flex: 1,
           fontSize: TRACKER_ROW_FONT_SIZE,
           fontWeight: active ? '700' : '600',
         }}
       >
         {item.name}
       </Text>
-    </Row>
+    </View>
   );
 
   if (editMode) {
@@ -162,14 +169,17 @@ export function ActivityRow({
   }
 
   return (
-    <AppButton
-      disabled={disabled}
-      onPress={onPress}
-      style={rowStyle}
-      testID={testID}
-      variant="filled"
-    >
-      {rowContent}
-    </AppButton>
+    <SwiftUIReactView>
+      <Pressable
+        accessibilityLabel={item.name}
+        accessibilityRole="button"
+        disabled={disabled}
+        onPress={onPress}
+        style={({ pressed }) => [rowStyle, { opacity: disabled ? 0.45 : pressed ? 0.72 : 1 }]}
+        testID={testID}
+      >
+        {rowContent}
+      </Pressable>
+    </SwiftUIReactView>
   );
 }

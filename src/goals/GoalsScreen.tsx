@@ -1430,7 +1430,7 @@ export default function GoalsScreen() {
   };
 
   const header = (
-    <View style={{ alignItems: 'center', flexDirection: 'row', gap: 4 }}>
+    <>
       <PageFilterMenu
         accessibilityLabel="Choose goal view"
         onChange={setFilter}
@@ -1453,7 +1453,7 @@ export default function GoalsScreen() {
         testID="goal-create"
         variant="primary"
       />
-    </View>
+    </>
   );
 
   return (
@@ -1486,11 +1486,7 @@ export default function GoalsScreen() {
             </SwiftUIReactView>
             {visibleGoals.length === 0 ? (
               <EmptyState
-                actionLabel={filter === 'in-progress' ? 'Create your first goal' : undefined}
                 iconName="award"
-                onAction={
-                  filter === 'in-progress' ? () => router.push('/goal-edit/new' as Href) : undefined
-                }
                 testID="goals-empty"
                 title={filter === 'in-progress' ? 'No goals yet' : 'No matching goals'}
               />
