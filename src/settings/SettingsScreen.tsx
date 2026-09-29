@@ -111,6 +111,17 @@ function SettingsCategoryList({ router }: { router: ReturnType<typeof useRouter>
   );
 }
 
+function SettingsActionErrorHost({ onBack, store }: { onBack: () => void; store: SettingsStore }) {
+  const error = store((state) => state.persistenceError);
+  if (!error) return null;
+
+  return (
+    <Host matchContents={{ vertical: true }} style={{ width: '100%' }}>
+      <SettingsActionError onBack={onBack} store={store} />
+    </Host>
+  );
+}
+
 export default function SettingsScreen() {
   const { colors } = useAppTheme();
   const focused = useIsFocused();
@@ -133,9 +144,7 @@ export default function SettingsScreen() {
     <Screen hostContent={false} title="Settings">
       <View style={{ gap: 16, width: '100%' }}>
         {store ? (
-          <Host matchContents={{ vertical: true }} style={{ width: '100%' }}>
-            <SettingsActionError onBack={() => router.replace('/')} store={store} />
-          </Host>
+          <SettingsActionErrorHost onBack={() => router.replace('/')} store={store} />
         ) : null}
         {!store ? (
           <View style={{ gap: 12, width: '100%' }}>

@@ -396,7 +396,9 @@ function GoalRow({
     <Column
       spacing={12}
       style={{
-        padding: 16,
+        paddingBottom: 8,
+        paddingHorizontal: 16,
+        paddingTop: 16,
         width: '100%',
       }}
     >

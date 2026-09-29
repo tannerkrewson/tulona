@@ -49,6 +49,12 @@ assert(
   'goal rows must use the shared borderless row surface without an outline'
 );
 assert(
+  goalRow.includes('paddingBottom: 8') &&
+    goalRow.includes('paddingHorizontal: 16') &&
+    goalRow.includes('paddingTop: 16'),
+  'goal rows must reduce only the empty space below their content while preserving top and side insets'
+);
+assert(
   reviewPanel.includes("style={{ width: '100%' }}") &&
     !reviewPanel.includes('borderColor: colors.primary') &&
     !reviewPanel.includes('Record how each manual goal went for') &&

@@ -19,6 +19,12 @@ function assert(condition: unknown, message: string): asserts condition {
 const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const settingsScreen = read('src/settings/SettingsScreen.tsx');
+const settingsErrorHostStart = settingsScreen.indexOf('function SettingsActionErrorHost(');
+const settingsErrorHostEnd = settingsScreen.indexOf(
+  'export default function SettingsScreen',
+  settingsErrorHostStart
+);
+const settingsErrorHost = settingsScreen.slice(settingsErrorHostStart, settingsErrorHostEnd);
 const recoveryActions = read('src/orchestration/RecoveryActions.tsx');
 const settingsListStart = settingsScreen.indexOf('function SettingsCategoryRow(');
 const settingsListEnd = settingsScreen.indexOf(
@@ -66,6 +72,15 @@ assert(
     !recoveryActions.includes("from '@expo/ui'") &&
     recoveryActions.includes('<NativeText'),
   'the Settings menu and shared recovery controls must avoid unhosted SwiftUI text in native layouts'
+);
+assert(
+  settingsErrorHost.includes('const error = store((state) => state.persistenceError)') &&
+    settingsErrorHost.indexOf('if (!error) return null;') < settingsErrorHost.indexOf('<Host') &&
+    settingsScreen.includes('<SettingsActionErrorHost') &&
+    !settingsScreen.includes(
+      "<Host matchContents={{ vertical: true }} style={{ width: '100%' }}>\n            <SettingsActionError"
+    ),
+  'Settings must not mount an empty SwiftUI Host that adds a blank gap above the category list'
 );
 assert(
   activityRow.includes('getRowSurfaceStyle') &&

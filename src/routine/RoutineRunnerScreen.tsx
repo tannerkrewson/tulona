@@ -326,12 +326,18 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           <Text textStyle={{ color: BASE_RUNNER.text, fontSize: 24, fontWeight: '700' }}>
             Routine runner
           </Text>
-          <RunnerError
-            message={loadError ?? 'Restoring the persisted routine...'}
-            palette={BASE_RUNNER}
-          >
-            <RecoveryActions onClose={goBack} onRetry={restore} testID="routine-recovery" />
-          </RunnerError>
+          {loadError ? (
+            <RunnerError message={loadError} palette={BASE_RUNNER}>
+              <RecoveryActions onClose={goBack} onRetry={restore} testID="routine-recovery" />
+            </RunnerError>
+          ) : (
+            <Text
+              testID="routine-runner-restoring"
+              textStyle={{ color: BASE_RUNNER.muted, fontSize: 15 }}
+            >
+              Restoring routine…
+            </Text>
+          )}
         </Column>
       </Screen>
     );
@@ -362,14 +368,14 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             disabled={busy}
             label="Choose next activity"
             onPress={() => void runAction(finalizeCompletion)}
-            style={{ height: 52, width: '100%' }}
+            style={{ height: 56, width: '100%' }}
             testID="routine-completion-continue"
           />
           <AppButton
             disabled={busy}
             label="Review steps"
             onPress={() => setRoutineMenuOpen(true)}
-            style={{ height: 48, width: '100%' }}
+            style={{ height: 52, width: '100%' }}
             variant="outlined"
             testID="routine-completion-review-steps"
           />
@@ -377,7 +383,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             disabled={busy}
             label="Back"
             onPress={goBack}
-            style={{ height: 48, width: '100%' }}
+            style={{ height: 52, width: '100%' }}
             variant="outlined"
             testID="routine-back-to-tracker"
           />
@@ -475,6 +481,10 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const nextIconColor = isStepTracked
     ? (validHexColor(nextVisual?.color) ?? colors.primary)
     : RUNNER.accent;
+  const controlSizes =
+    width < 380
+      ? { stop: 50, addTime: 52, complete: 74, pause: 52, skip: 52 }
+      : { stop: 54, addTime: 56, complete: 80, pause: 56, skip: 56 };
 
   return (
     <Screen
@@ -510,13 +520,14 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           >
             {!isPaused ? (
               <>
-                <View style={styles.currentStepName}>
+                <View style={[styles.currentStepName, { maxWidth: circleSize - 88 }]}>
                   <Text
                     numberOfLines={2}
                     textStyle={{
                       color: RUNNER.text,
-                      fontSize: 20,
+                      fontSize: 22,
                       fontWeight: '700',
+                      lineHeight: 26,
                       textAlign: 'center',
                     }}
                     testID="routine-current-step-name"
@@ -524,7 +535,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
                     {currentVisual.name || 'Current step'}
                   </Text>
                 </View>
-                <AppIcon name={currentIcon} color={RUNNER.accent} size={70} />
+                <AppIcon name={currentIcon} color={RUNNER.accent} size={62} />
                 <Text
                   textStyle={{
                     color: timing.isOvertime ? RUNNER.danger : RUNNER.text,
@@ -542,17 +553,20 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           </View>
           {isPaused ? (
             <View style={styles.pausedOverlay} testID="routine-paused-state">
-              <Text
-                numberOfLines={2}
-                textStyle={{
-                  color: RUNNER.text,
-                  fontSize: 19,
-                  fontWeight: '700',
-                  textAlign: 'center',
-                }}
-              >
-                {currentVisual.name || 'Current step'}
-              </Text>
+              <View style={{ maxWidth: circleSize - 88 }}>
+                <Text
+                  numberOfLines={2}
+                  textStyle={{
+                    color: RUNNER.text,
+                    fontSize: 21,
+                    fontWeight: '700',
+                    lineHeight: 25,
+                    textAlign: 'center',
+                  }}
+                >
+                  {currentVisual.name || 'Current step'}
+                </Text>
+              </View>
               <Text textStyle={{ color: RUNNER.muted, fontSize: 14, fontWeight: '700' }}>
                 Paused for
               </Text>
@@ -619,7 +633,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             label="Stop routine"
             onPress={() => setStopOpen(true)}
             palette={RUNNER}
-            size={46}
+            size={controlSizes.stop}
             testID="stop-routine"
           />
           <RoundControl
@@ -628,7 +642,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             label="Add time"
             onPress={() => setAddTimeOpen(true)}
             palette={RUNNER}
-            size={48}
+            size={controlSizes.addTime}
             testID="open-add-time"
           />
           <RoundControl
@@ -638,7 +652,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             label="Complete current step"
             onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.done())}
             palette={RUNNER}
-            size={68}
+            size={controlSizes.complete}
             testID="routine-done"
           />
           <RoundControl
@@ -647,7 +661,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             label="Pause routine"
             onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.pause())}
             palette={RUNNER}
-            size={48}
+            size={controlSizes.pause}
             testID="routine-pause"
           />
           <RoundControl
@@ -656,7 +670,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             label="Skip or move current step"
             onPress={() => setSkipOpen(true)}
             palette={RUNNER}
-            size={48}
+            size={controlSizes.skip}
             testID="routine-skip"
           />
         </Row>
@@ -665,10 +679,17 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           accessibilityLabel={`Open routine steps, step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
           accessibilityRole="button"
           onPress={() => setRoutineMenuOpen(true)}
-          style={({ pressed }) => [styles.stepCounter, { opacity: pressed ? 0.68 : 1 }]}
+          style={({ pressed }) => [
+            styles.stepCounter,
+            {
+              backgroundColor: RUNNER.surface,
+              borderColor: RUNNER.border,
+              opacity: pressed ? 0.68 : 1,
+            },
+          ]}
           testID="open-routine-steps"
         >
-          <AppIcon name="list-checks" color={RUNNER.accent} size={19} />
+          <AppIcon name="list-checks" color={RUNNER.accent} size={18} />
           <Text textStyle={{ color: RUNNER.text, fontSize: 16, fontWeight: '700' }}>
             {`Step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
           </Text>
@@ -875,7 +896,7 @@ function RoundControl({
       <AppIcon
         color={emphasis ? palette.accentText : palette.text}
         name={icon}
-        size={emphasis ? 30 : 22}
+        size={emphasis ? 32 : 24}
         strokeWidth={2.6}
       />
     </Pressable>
@@ -1080,19 +1101,19 @@ function SkipModal({
     <RunnerModal onClose={onClose} palette={palette} title="Next step" visible={visible}>
       <ModalAction
         disabled={busy}
-        icon="chevron-down"
-        label="Move step to end"
-        onPress={onMoveToEnd}
-        palette={palette}
-        testID="routine-move-step-to-end"
-      />
-      <ModalAction
-        disabled={busy}
         icon="skip-forward"
         label="Skip step"
         onPress={onSkip}
         palette={palette}
         testID="routine-skip-step"
+      />
+      <ModalAction
+        disabled={busy}
+        icon="chevron-down"
+        label="Move step to end"
+        onPress={onMoveToEnd}
+        palette={palette}
+        testID="routine-move-step-to-end"
       />
       <ModalAction
         disabled={busy}
@@ -1327,15 +1348,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     gap: 12,
-    minHeight: 54,
+    minHeight: 58,
     paddingHorizontal: 16,
     width: '100%',
   },
   modalClose: {
     alignItems: 'center',
-    height: 44,
+    height: 48,
     justifyContent: 'center',
-    width: 44,
+    width: 48,
   },
   modalHeader: {
     justifyContent: 'space-between',
@@ -1374,7 +1395,7 @@ const styles = StyleSheet.create({
     maxHeight: '85%',
     gap: 12,
     paddingHorizontal: 20,
-    paddingTop: 4,
+    paddingTop: 16,
     width: '100%',
   },
   nextRow: {
@@ -1389,7 +1410,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexBasis: '20%',
     flexGrow: 1,
-    minHeight: 50,
+    minHeight: 54,
     minWidth: 58,
     justifyContent: 'center',
   },
@@ -1417,11 +1438,13 @@ const styles = StyleSheet.create({
   stepCounter: {
     alignItems: 'center',
     alignSelf: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
     flexDirection: 'row',
     gap: 9,
     justifyContent: 'center',
-    minHeight: 34,
-    paddingHorizontal: 12,
+    minHeight: 46,
+    paddingHorizontal: 16,
   },
   currentStepName: { alignItems: 'center', width: '100%' },
   stepText: {
@@ -1473,8 +1496,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: 18,
+    minHeight: 50,
+    paddingHorizontal: 20,
   },
   timerCircle: {
     alignItems: 'center',

@@ -54,9 +54,41 @@ assert(
     runner.includes('animationType="fade"') &&
     !runner.includes('styles.modalHandleArea') &&
     runner.includes('paddingBottom: Math.max(insets.bottom, 18) + 16') &&
-    runner.includes('height: 44') &&
+    runner.includes('height: 48') &&
+    runner.includes('paddingTop: 16') &&
     runner.includes('const strokeWidth = 8'),
   'the routine runner is full screen with a stop-menu back action, right-arrow control, subtle menus, and a thicker timer ring'
+);
+const restoringStart = runner.indexOf('testID="routine-runner-restoring"');
+const restoringEnd = runner.indexOf('</Text>', restoringStart);
+const restoringStatus = runner.slice(restoringStart, restoringEnd);
+assert(
+  restoringStart >= 0 &&
+    restoringStatus.includes('Restoring routine…') &&
+    !restoringStatus.includes('RunnerError') &&
+    runner.includes('{loadError ? (') &&
+    runner.includes('size={62}') &&
+    runner.includes('fontSize: 22') &&
+    runner.includes('maxWidth: circleSize - 88') &&
+    runner.includes('numberOfLines={2}'),
+  'routine restore must be neutral, and larger two-line step titles must stay inside the timer circle'
+);
+assert(
+  runner.includes('? { stop: 50, addTime: 52, complete: 74, pause: 52, skip: 52 }') &&
+    runner.includes(': { stop: 54, addTime: 56, complete: 80, pause: 56, skip: 56 }') &&
+    runner.includes('borderWidth: 1') &&
+    runner.includes('minHeight: 46') &&
+    runner.includes('minHeight: 58') &&
+    runner.includes("style={{ height: 56, width: '100%' }}") &&
+    runner.includes("style={{ height: 52, width: '100%' }}"),
+  'active routine controls and the step selector must have larger, touch-friendly bordered targets'
+);
+const nextStepModalStart = runner.indexOf('function SkipModal(');
+const nextStepModalEnd = runner.indexOf('function RoutineStepsModal(', nextStepModalStart);
+const nextStepModal = runner.slice(nextStepModalStart, nextStepModalEnd);
+assert(
+  nextStepModal.indexOf('label="Skip step"') < nextStepModal.indexOf('label="Move step to end"'),
+  'Skip step must be the first action in the Next step menu'
 );
 const controlRowStart = runner.indexOf('<Row alignment="center" style={styles.controlRow}>');
 const controlRowEnd = runner.indexOf('</Row>', controlRowStart);
