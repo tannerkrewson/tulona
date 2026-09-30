@@ -211,7 +211,7 @@ export function ActivitySessionActivityChooserScreen({
             ? `Choose an activity to replace the time logged in ${currentName}.`
             : returnToTracker
               ? 'Choose what to track next.'
-              : `Choose a replacement for ${currentName}. Activities and routines are both available.`}
+              : `Reassign the entire ${currentName} session, including its recorded time. To split the session at a missed switch, cancel and use Switch activity.`}
         </Text>
 
         {folderId === null && !routineId && !returnToTracker ? (

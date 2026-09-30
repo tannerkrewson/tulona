@@ -111,6 +111,12 @@ export interface TrackerServiceApi {
     options: SwitchActivityOptions,
     companionChanges: readonly TrackerCompanionChange[]
   ): Promise<TimeTransition>;
+  switchActiveSession(
+    id: UUID,
+    activityId: UUID | null,
+    timestamp: TimestampInput,
+    expectedStart: TimestampInput
+  ): Promise<TimeTransition>;
   adjustLatestStart(timestamp: TimestampInput): Promise<TimeTransition>;
   adjustLatest(timestamp: TimestampInput): Promise<TimeTransition>;
   query(range: TrackerRange, nowMs?: number): Promise<TrackerQuery>;
@@ -428,6 +434,25 @@ export class TrackerService implements TrackerServiceApi {
     );
   }
 
+  /** Records a missed switch/stop without relabeling or discarding the time before it. */
+  async switchActiveSession(
+    id: UUID,
+    activityId: UUID | null,
+    timestamp: TimestampInput,
+    expectedStart: TimestampInput
+  ): Promise<TimeTransition> {
+    assertUuid(id, 'Transition ID');
+    return this.insertTransitionWithCompanion(
+      {
+        activityId,
+        timestamp: normalizeTimestamp(timestamp, 'Switch timestamp'),
+        source: 'manual',
+      },
+      [],
+      { id, start: normalizeTimestamp(expectedStart, 'Expected session start') }
+    );
+  }
+
   async adjustLatestStart(timestamp: TimestampInput): Promise<TimeTransition> {
     const now = normalizeNow(this.now());
     const nextTimestamp = normalizeTimestamp(timestamp, 'Adjusted start');
@@ -561,7 +586,8 @@ export class TrackerService implements TrackerServiceApi {
 
   private async insertTransitionWithCompanion(
     input: TransitionInput,
-    companionChanges: readonly TrackerCompanionChange[]
+    companionChanges: readonly TrackerCompanionChange[],
+    expectedActive?: { id: UUID; start: IsoTimestamp }
   ): Promise<TimeTransition> {
     const now = normalizeNow(this.now());
     const createdAt = normalizeTimestamp(now, 'Created at');
@@ -571,6 +597,26 @@ export class TrackerService implements TrackerServiceApi {
     );
     assertNotFuture(transition.timestamp, now);
     const existing = await this.readHistory(now);
+    if (expectedActive) {
+      const active = latestValidTransition(existing, now);
+      if (
+        !active ||
+        active.id !== expectedActive.id ||
+        active.activityId === null ||
+        active.timestamp !== expectedActive.start
+      ) {
+        validation(
+          'This session changed or is no longer running. Reopen it before saving a switch.'
+        );
+      }
+      if (timestampMs(transition.timestamp) <= timestampMs(active.timestamp)) {
+        validation(
+          'Choose a switch time after this session started. To change the whole session, use Reassign session.'
+        );
+      }
+      if (transition.activityId === active.activityId)
+        validation('Choose a different activity to switch to.');
+    }
     const existingWithId = existing.find((candidate) => candidate.id === transition.id);
     if (
       existingWithId &&

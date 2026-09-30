@@ -1,107 +1,142 @@
-import { useEffect, useRef, type ChangeEvent } from 'react';
-import { View } from 'react-native';
+import { useState } from 'react';
+import { Modal, Pressable, Text, View } from 'react-native';
 
+import { useAppTheme } from '@theme';
+import { AppButton } from '@ui';
 import { localDateTimeInputValue, parseLocalDateTimeInput } from './session-time';
 import type { SessionDateTimePickerProps } from './SessionDateTimePicker';
 
-/**
- * @expo/ui intentionally renders no web picker. Keep the same accessible
- * section targets and open the browser's native datetime-local picker from a
- * visually hidden input so web users never lose time editing silently.
- */
-export function SessionDateTimePicker({
+/** Browser values remain drafts until Done, matching the native wheel picker. */
+export function SessionDateTimePicker(props: SessionDateTimePickerProps) {
+  if (!props.target) return null;
+  return <WebPicker key={props.target} {...props} />;
+}
+
+function WebPicker({
   target,
+  title,
   value,
   minimumDate,
   maximumDate,
   onValueChange,
   onDismiss,
-  onError,
 }: SessionDateTimePickerProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const onErrorRef = useRef(onError);
-  const valueMs = value.getTime();
-  const minimumMs = minimumDate?.getTime();
-  const maximumMs = maximumDate?.getTime();
-
-  useEffect(() => {
-    onErrorRef.current = onError;
-  }, [onError]);
-
-  useEffect(() => {
-    const input = inputRef.current;
-    if (!target || !input) return;
-    input.value = localDateTimeInputValue(valueMs);
-    input.focus({ preventScroll: true });
-    const browserInput = input as HTMLInputElement & { showPicker?: () => void };
-    try {
-      if (typeof browserInput.showPicker === 'function') {
-        browserInput.showPicker();
-      } else {
-        input.click();
-      }
-    } catch {
-      try {
-        input.click();
-      } catch {
-        onErrorRef.current('This browser could not open its native date and time picker.');
-      }
-    }
-  }, [target, valueMs]);
-
-  useEffect(() => {
-    const input = inputRef.current;
-    if (!input) return;
-    input.min = minimumMs === undefined ? '' : localDateTimeInputValue(minimumMs);
-    input.max = maximumMs === undefined ? '' : localDateTimeInputValue(maximumMs);
-  }, [maximumMs, minimumMs]);
-
-  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    if (!target) return;
-    const date = parseLocalDateTimeInput(event.currentTarget.value);
-    if (!date) {
-      onError('The selected date and time is invalid.');
+  const { colors, colorScheme } = useAppTheme();
+  const [initialDate] = useState(value);
+  const [draft, setDraft] = useState(() => localDateTimeInputValue(value.getTime()));
+  const [error, setError] = useState<string | null>(null);
+  const label = title ?? `${target === 'start' ? 'Start' : 'End'} date and time`;
+  const commit = () => {
+    const date =
+      draft === localDateTimeInputValue(initialDate.getTime())
+        ? initialDate
+        : parseLocalDateTimeInput(draft);
+    if (
+      !target ||
+      !date ||
+      (minimumDate && date < minimumDate) ||
+      (maximumDate && date > maximumDate)
+    ) {
+      setError('Choose a valid date and time within this session’s available range.');
       return;
     }
     onValueChange(date, target);
-    onDismiss();
   };
-
   return (
-    <View pointerEvents="none" style={styles.host}>
-      <input
-        aria-hidden="true"
-        max={maximumMs === undefined ? undefined : localDateTimeInputValue(maximumMs)}
-        min={minimumMs === undefined ? undefined : localDateTimeInputValue(minimumMs)}
-        onBlur={() => {
-          if (target) onDismiss();
-        }}
-        onChange={handleChange}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') onDismiss();
-        }}
-        ref={inputRef}
-        style={styles.input}
-        tabIndex={-1}
-        type="datetime-local"
-      />
-    </View>
+    <Modal transparent animationType="fade" visible onRequestClose={onDismiss}>
+      <View style={{ flex: 1, justifyContent: 'center', padding: 20 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Cancel date and time picker"
+          onPress={onDismiss}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: colors.background,
+            opacity: 0.75,
+          }}
+        />
+        <View
+          accessibilityViewIsModal
+          style={{
+            alignSelf: 'center',
+            maxWidth: 420,
+            width: '100%',
+            backgroundColor: colors.surface,
+            borderRadius: 18,
+            padding: 20,
+            gap: 16,
+          }}
+          testID="activity-session-web-picker-modal"
+        >
+          <Text
+            accessibilityRole="header"
+            style={{ color: colors.text, fontSize: 20, fontWeight: '600' }}
+          >
+            {label}
+          </Text>
+          <input
+            aria-label={label}
+            autoFocus
+            type="datetime-local"
+            value={draft}
+            step={60}
+            min={minimumDate ? localDateTimeInputValue(minimumDate.getTime()) : undefined}
+            max={maximumDate ? localDateTimeInputValue(maximumDate.getTime()) : undefined}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? 'session-picker-error' : undefined}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setError(null);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') onDismiss();
+              if (event.key === 'Enter') commit();
+            }}
+            style={{
+              boxSizing: 'border-box',
+              width: '100%',
+              minWidth: 0,
+              height: 48,
+              borderRadius: 10,
+              border: `1px solid ${colors.border}`,
+              padding: 12,
+              background: colors.surfaceMuted,
+              color: colors.text,
+              font: 'inherit',
+              colorScheme,
+            }}
+          />
+          {error ? (
+            <Text
+              nativeID="session-picker-error"
+              accessibilityRole="alert"
+              style={{ color: colors.danger.foreground, fontSize: 14 }}
+            >
+              {error}
+            </Text>
+          ) : null}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <AppButton
+                label="Cancel"
+                variant="outlined"
+                onPress={onDismiss}
+                style={{ width: '100%', height: 48 }}
+                testID="activity-session-picker-cancel"
+              />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <AppButton
+                label="Done"
+                onPress={commit}
+                style={{ width: '100%', height: 48 }}
+                testID="activity-session-picker-done"
+              />
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
-
-const styles = {
-  host: {
-    height: 1,
-    left: 0,
-    position: 'absolute' as const,
-    top: 0,
-    width: 1,
-  },
-  input: {
-    height: 1,
-    opacity: 0,
-    padding: 0,
-    position: 'absolute' as const,
-    width: 1,
-  },
-};

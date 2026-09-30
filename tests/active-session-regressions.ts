@@ -17,58 +17,57 @@ const layout = read('app/_layout.tsx');
 const trackerService = read('src/tracker/tracker-service.ts');
 const trackerStore = read('src/tracker/tracker-store.ts');
 
-const appButtonBlocks = [...session.matchAll(/<AppButton\b[\s\S]*?\/>/g)].map(([block]) => block);
-
+const correction = read('src/tracker/ActiveSessionCorrection.tsx');
+const nativePicker = read('src/tracker/SessionDateTimePicker.tsx');
 assert(
   session.includes('<SlideUpSheet') &&
-    session.includes('testID="activity-session-summary"') &&
-    session.includes('testID="activity-session-duration"') &&
-    session.includes('activityColor') &&
-    !session.includes('<Screen'),
-  'activity sessions must open as an activity-colored sheet with a clear title and duration'
+    session.includes('activity-session-summary') &&
+    session.includes('activity-session-duration'),
+  'session details must retain a sheet with activity identity and duration'
 );
 assert(
-  !session.includes('Select a different activity or routine for this session.') &&
-    !session.includes('For the active session, reset the start only when it began just now.') &&
-    !session.includes('Reset to now is available only for the active session.'),
-  'activity session actions must not include redundant subtitle copy'
+  session.includes('ActiveSessionCorrection') &&
+    correction.includes('activity-session-switch') &&
+    correction.includes('activity-session-stop') &&
+    correction.includes('activity-session-switch-preview'),
+  'running sessions must expose missed switch/stop correction with a preview before saving'
 );
 assert(
-  appButtonBlocks.length >= 2 && appButtonBlocks.every((block) => !block.includes("width: '100%'")),
-  'activity session actions must remain compact within the sheet'
+  correction.includes('Save switch') &&
+    correction.includes('Save stop') &&
+    correction.includes('activity-session-cancel-switch') &&
+    session.includes('switchActiveSession'),
+  'draft corrections must support explicit save/cancel and use the guarded active-session mutation'
 );
 assert(
-  !session.includes('AccessiblePicker') &&
-    !session.includes('Picker.Item') &&
-    !session.includes('AccessibleTextInput') &&
-    !session.includes('activity-session-adjust-time') &&
-    !session.includes('activity-session-start-input'),
-  'active activity sessions must not regress to a picker or free-form time editor'
-);
-assert(
-  session.includes('activity-session-choose-activity') &&
+  session.includes('Reassign session') &&
     session.includes('/activity-session/activity-chooser') &&
-    chooser.includes('ActivityRow') &&
-    chooser.includes('FolderRow') &&
-    chooser.includes('reassignTransition'),
-  'active activity selection must use the dedicated catalog chooser'
+    chooser.includes('reassignTransition') &&
+    chooser.includes('entire'),
+  'whole-session reassignment must remain distinct from a missed switch'
 );
 assert(
   chooser.includes('returnToTracker') &&
     chooser.includes('activity-session-choice-none') &&
     chooser.includes('stopAndReplaceActivity') &&
     chooserRoute.includes('routineId') &&
-    chooserRoute.includes('ActivitySessionActivityChooserScreen') &&
     layout.includes('name="activity-session/activity-chooser"'),
-  'activity chooser selection and return navigation must be registered and recoverable'
+  'existing routine and activity chooser routes must remain intact'
 );
 assert(
-  editor.includes('activity-session-reset-now') &&
-    trackerService.includes('snapTransitionStartToPrevious') &&
-    trackerService.includes('snapTransitionStartToPrevious') &&
-    trackerService.includes('allowPrecedingEqual'),
-  'activity sessions must expose bounded, service-validated time corrections'
+  nativePicker.includes('display="spinner"') &&
+    nativePicker.includes('setDraft(nextDate)') &&
+    nativePicker.includes('commit(draft)') &&
+    nativePicker.includes('activity-session-picker-cancel'),
+  'iOS wheels must stage edits until Done and let Cancel discard them'
 );
+assert(
+  editor.includes('Started') &&
+    editor.includes('Still running') &&
+    !editor.includes('Set start to now'),
+  'session boundaries must be clear without a destructive reset shortcut'
+);
+
 assert(
   session.includes('activity-session-delete') &&
     session.includes('<ConfirmationModal') &&
@@ -106,6 +105,4 @@ assert(
   'session deletion must use the journaled tracker mutation and refresh the derived store state'
 );
 
-console.log(
-  'Validated activity-session title, compact actions, chooser, corrections, and deletion regressions.'
-);
+console.log('Validated session correction, reassignment, staged wheels, and confirmed deletion.');

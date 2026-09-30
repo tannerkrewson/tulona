@@ -133,7 +133,112 @@ function range(startMs: number, endMs: number) {
   return { startMs, endMs };
 }
 
+async function missedSwitchCorrections(): Promise<void> {
+  const a = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const b = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const at = Date.parse('2026-09-01T14:00:00.000Z');
+  const start = at - 60 * 60_000;
+  const switchedAt = start + 30 * 60_000;
+  const repository = new MemoryTrackerRepository();
+  const service = createTrackerService(repository, {
+    now: () => at,
+    minimumActivityDurationMs: 60 * 60_000,
+  });
+  const original = await service.switchActivity(a, start);
+  const store = createTrackerStore(service, { initialRange: range(start, at), now: () => at });
+  await store.getState().hydrate();
+  for (const [activityId, time] of [
+    [b, start - 1],
+    [b, start],
+    [b, at + 1],
+    [a, switchedAt],
+  ] as const) {
+    await rejects(
+      () => store.getState().switchActiveSession(original.id, activityId, time, original.timestamp),
+      'invalid corrections must fail without changing history'
+    );
+  }
+  assert(
+    (await service.getActiveTransition())?.id === original.id,
+    'invalid correction must retain A'
+  );
+  const switched = await store
+    .getState()
+    .switchActiveSession(original.id, b, switchedAt, original.timestamp);
+  const intervals = store.getState().intervals;
+  assert(
+    intervals.length === 2 &&
+      intervals[0]?.activityId === a &&
+      intervals[0]?.startMs === start &&
+      intervals[0]?.endMs === switchedAt &&
+      intervals[1]?.activityId === b &&
+      intervals[1]?.startMs === switchedAt &&
+      intervals[1]?.endMs === at,
+    'missed switch must keep A from 1:00 to 1:30 and B from 1:30 to 2:00'
+  );
+  assert(
+    store.getState().activeTransition?.id === switched.id,
+    'B must become the active session after durable save'
+  );
+  const context = await service.getTransitionContext(original.id);
+  assert(
+    context.transition?.timestamp === original.timestamp && context.following?.id === switched.id,
+    'A original start must remain intact'
+  );
+  await rejects(
+    () => service.switchActiveSession(original.id, null, at, original.timestamp),
+    'stale sheet must not stop a newer active session'
+  );
+  await service.editTransition(switched.id, { timestamp: switchedAt + 60_000 });
+  await rejects(
+    () => service.switchActiveSession(switched.id, null, at, switched.timestamp),
+    'a changed start must invalidate the correction draft'
+  );
+  const fresh = (await service.getActiveTransition())!;
+  repository.failWrites = true;
+  await rejects(
+    () => store.getState().switchActiveSession(fresh.id, null, at, fresh.timestamp),
+    'failed correction writes must retain the running session'
+  );
+  assert(
+    (await service.getActiveTransition())?.activityId === b,
+    'failed correction must not lose B'
+  );
+  repository.failWrites = false;
+  await store.getState().switchActiveSession(fresh.id, null, at - 10 * 60_000, fresh.timestamp);
+  assert(
+    store.getState().activeTransition?.activityId === null,
+    'backdated stop must leave the tracker idle'
+  );
+  assert(
+    (await service.getTransitionContext(original.id)).transition?.status === 'recorded',
+    'explicit corrections must preserve sessions shorter than the automatic discard threshold'
+  );
+
+  const midnightRepository = new MemoryTrackerRepository();
+  const midnightNow = Date.parse('2026-09-01T00:30:00.000Z');
+  const midnightService = createTrackerService(midnightRepository, { now: () => midnightNow });
+  const overnight = await midnightService.switchActivity(a, midnightNow - 60 * 60_000);
+  await midnightService.switchActiveSession(
+    overnight.id,
+    b,
+    midnightNow - 15 * 60_000,
+    overnight.timestamp
+  );
+  const overnightQuery = await midnightService.query(
+    range(midnightNow - 60 * 60_000, midnightNow),
+    midnightNow
+  );
+  assert(
+    overnightQuery.intervals.length === 2 &&
+      overnightQuery.intervals[0]?.activityId === a &&
+      overnightQuery.intervals[1]?.activityId === b,
+    'missed switches must preserve sessions across month boundaries'
+  );
+}
+
 async function run(): Promise<void> {
+  await missedSwitchCorrections();
   const raw = [
     transition(ids.july, '2026-07-20T10:00:00.000Z', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
     transition(ids.august, '2026-08-02T10:00:00.000Z', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),

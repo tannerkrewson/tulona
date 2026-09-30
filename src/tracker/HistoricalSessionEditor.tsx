@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { timestampMs, type TimeTransition } from '@domain';
 import { useAppTheme } from '@theme';
-import { AppButton } from '@ui';
+import { AppIcon } from '@icons';
 
 import { SessionDateTimePicker, type SessionDateTimePickerTarget } from './SessionDateTimePicker';
 import { formatSessionDate, formatSessionTime } from './session-time';
@@ -21,7 +21,6 @@ export interface HistoricalSessionEditorProps {
   busy: boolean;
   onSaveStart: (timestamp: number) => Promise<void>;
   onSaveEnd: (timestamp: number) => Promise<void>;
-  onResetStart?: () => Promise<void>;
 }
 
 /**
@@ -33,7 +32,6 @@ export function HistoricalSessionEditor({
   transition,
   previous,
   following,
-  activityLabel,
   previousLabel,
   followingLabel,
   isActive,
@@ -41,7 +39,6 @@ export function HistoricalSessionEditor({
   busy,
   onSaveStart,
   onSaveEnd,
-  onResetStart,
 }: HistoricalSessionEditorProps) {
   const { colors } = useAppTheme();
   const [pickerTarget, setPickerTarget] = useState<SessionDateTimePickerTarget | null>(null);
@@ -51,11 +48,15 @@ export function HistoricalSessionEditor({
 
   const startMs = timestampMs(transition.timestamp);
   const endMs = following ? timestampMs(following.timestamp) : null;
-  const canEditEnd = following !== null || isActive;
+  const canEditEnd = following !== null;
   const pickerValue = pickerValueMs ?? startMs;
   const pickerMinimumMs =
-    pickerTarget === 'start' ? (previous ? timestampMs(previous.timestamp) : undefined) : startMs;
-  const pickerMaximumMs = pickerTarget === 'start' ? (endMs ?? nowMs) : nowMs;
+    pickerTarget === 'start'
+      ? previous
+        ? timestampMs(previous.timestamp) + 1
+        : undefined
+      : startMs + 1;
+  const pickerMaximumMs = pickerTarget === 'start' ? (endMs === null ? nowMs : endMs - 1) : nowMs;
   const toValue = following
     ? formatSessionTime(timestampMs(following.timestamp))
     : isActive
@@ -93,24 +94,6 @@ export function HistoricalSessionEditor({
     void (target === 'start' ? onSaveStart(nextTimestamp) : onSaveEnd(nextTimestamp));
   };
 
-  const startLabel = previous ? `Switch to ${activityLabel}` : `Start ${activityLabel}`;
-  const endLabel = followingLabel
-    ? `Switch to ${followingLabel}`
-    : isActive
-      ? 'Stop tracking'
-      : 'No end recorded';
-  const startBoundaryLabel =
-    previous && previousLabel
-      ? `${previousLabel} ends and ${activityLabel} starts`
-      : `Start ${activityLabel}`;
-  const fromAccessibilityLabel = `${startBoundaryLabel}, ${formatSessionDate(startMs)}, ${formatSessionTime(startMs)}`;
-  const toAccessibilityLabel = following
-    ? `${activityLabel} ends and ${followingLabel ?? 'the next session'} starts at ${formatSessionDate(timestampMs(following.timestamp))}, ${formatSessionTime(timestampMs(following.timestamp))}`
-    : isActive
-      ? `${endLabel}, Now, ${formatSessionDate(nowMs)}`
-      : `${endLabel}, no recorded time`;
-  const dateContext = `Starts ${formatSessionDate(startMs)} · Ends ${toDateContext}`;
-
   return (
     <Column spacing={8} style={{ width: '100%' }} testID="activity-session-edit-times">
       <View
@@ -121,8 +104,8 @@ export function HistoricalSessionEditor({
         testID="activity-session-time-control"
       >
         <Pressable
-          accessibilityHint="Opens the native date and time picker for the session start"
-          accessibilityLabel={fromAccessibilityLabel}
+          accessibilityHint="Choose the session start date and time"
+          accessibilityLabel={`Started ${formatSessionDate(startMs)}, ${formatSessionTime(startMs)}`}
           accessibilityRole="button"
           accessibilityState={{ disabled: busy }}
           disabled={busy}
@@ -133,18 +116,16 @@ export function HistoricalSessionEditor({
           ]}
           testID="activity-session-from"
         >
-          <Text
-            numberOfLines={2}
-            textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}
-          >
-            {startLabel}
-          </Text>
-          <Text
-            numberOfLines={1}
-            textStyle={{ color: colors.text, fontSize: 24, fontWeight: '700' }}
-          >
-            {formatSessionTime(startMs)}
-          </Text>
+          <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>Started</Text>
+          <View style={styles.value}>
+            <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>
+              {formatSessionTime(startMs)}
+            </Text>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 12 }}>
+              {formatSessionDate(startMs)}
+            </Text>
+          </View>
+          <AppIcon name="pencil" color={colors.textMuted} size={16} />
         </Pressable>
         <View
           style={[styles.timeDivider, { backgroundColor: colors.border }]}
@@ -153,62 +134,51 @@ export function HistoricalSessionEditor({
         <Pressable
           accessibilityHint={
             canEditEnd
-              ? 'Opens the native date and time picker for the session end'
-              : 'This session has no recorded end to edit'
+              ? 'Choose the session end date and time'
+              : isActive
+                ? 'Use Stop tracking above to record an end'
+                : 'No end has been recorded'
           }
-          accessibilityLabel={toAccessibilityLabel}
+          accessibilityLabel={
+            following
+              ? `Ended ${toDateContext}, ${toValue}`
+              : isActive
+                ? 'Still running'
+                : 'No end recorded'
+          }
           accessibilityRole="button"
           accessibilityState={{ disabled: busy || !canEditEnd }}
           disabled={busy || !canEditEnd}
           onPress={() => openPicker('end')}
           style={({ pressed }) => [
             styles.timeSection,
-            { opacity: busy || !canEditEnd ? 0.45 : pressed ? 0.72 : 1 },
+            { opacity: busy ? 0.45 : pressed ? 0.72 : 1 },
           ]}
           testID="activity-session-to"
         >
-          <Text
-            numberOfLines={2}
-            textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}
-          >
-            {endLabel}
+          <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
+            {following ? 'Ended' : 'End'}
           </Text>
-          <Text
-            numberOfLines={1}
-            textStyle={{ color: colors.text, fontSize: 24, fontWeight: '700' }}
-          >
-            {toValue}
-          </Text>
+          <View style={styles.value}>
+            <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>
+              {isActive && !following ? 'Still running' : toValue}
+            </Text>
+            {following ? (
+              <Text textStyle={{ color: colors.textMuted, fontSize: 12 }}>{toDateContext}</Text>
+            ) : null}
+          </View>
+          <AppIcon name={canEditEnd ? 'pencil' : 'clock'} color={colors.textMuted} size={16} />
         </Pressable>
       </View>
-      <Text
-        numberOfLines={2}
-        testID="activity-session-time-context"
-        textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}
-      >
-        {dateContext}
-      </Text>
       {previous && previousLabel ? (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
-          {`This time also sets when ${previousLabel} ends.`}
-        </Text>
+        <Text
+          textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}
+        >{`Changing the start also changes when ${previousLabel} ends.`}</Text>
       ) : null}
       {following && followingLabel ? (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
-          {`This time also sets when ${followingLabel} starts.`}
-        </Text>
-      ) : null}
-      {isActive && onResetStart ? (
-        <View style={{ alignItems: 'flex-start', width: '100%' }}>
-          <AppButton
-            disabled={busy}
-            label="Set start to now"
-            onPress={() => void onResetStart()}
-            style={{ height: 40 }}
-            testID="activity-session-reset-now"
-            variant="outlined"
-          />
-        </View>
+        <Text
+          textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}
+        >{`Changing the end also changes when ${followingLabel} starts.`}</Text>
       ) : null}
       {pickerError ? (
         <Text
@@ -237,25 +207,8 @@ export function HistoricalSessionEditor({
 }
 
 const styles = StyleSheet.create({
-  timeControl: {
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: 'row',
-    minHeight: 88,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  timeSection: {
-    alignItems: 'flex-start',
-    flex: 1,
-    justifyContent: 'center',
-    minWidth: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  timeDivider: {
-    alignSelf: 'stretch',
-    marginVertical: 16,
-    width: 1,
-  },
+  timeControl: { borderRadius: 12, borderWidth: 1, width: '100%' },
+  timeSection: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72, padding: 14 },
+  value: { flex: 1, minWidth: 0, gap: 3, alignItems: 'flex-end' },
+  timeDivider: { height: 1, marginHorizontal: 14 },
 });

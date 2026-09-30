@@ -1,7 +1,8 @@
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 · Session sheet, utilitarian; existing theme tokens. */
 import { Column, Text } from '@expo/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { formatDuration, timestampMs, type TimeTransition } from '@domain';
 import { AppIcon } from '@icons';
@@ -12,6 +13,7 @@ import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { goBackInAppStack } from '../navigation/app-back';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
+import { ActiveSessionCorrection } from './ActiveSessionCorrection';
 import { HistoricalSessionEditor } from './HistoricalSessionEditor';
 import { formatSessionDate, formatSessionTime } from './session-time';
 import type { TransitionContext } from './tracker-service';
@@ -141,6 +143,7 @@ function ActivitySessionContent({
     transitions.find((candidate) => candidate.id === transitionId) ??
     (activeTransition?.id === transitionId ? activeTransition : null);
   const [transitionContext, setTransitionContext] = useState<TransitionContext | null>(null);
+  const [contextLoading, setContextLoading] = useState(true);
   const [contextError, setContextError] = useState<string | null>(null);
   const contextRequest = useRef(0);
   const transition: TimeTransition | null =
@@ -149,11 +152,13 @@ function ActivitySessionContent({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
 
   const loadTransitionContext = useCallback(() => {
     const requestId = contextRequest.current + 1;
     contextRequest.current = requestId;
+    setContextLoading(true);
     setTransitionContext(null);
     setContextError(null);
     void runtime.trackerService
@@ -161,10 +166,12 @@ function ActivitySessionContent({
       .then((nextContext) => {
         if (contextRequest.current !== requestId) return;
         setTransitionContext(nextContext);
+        setContextLoading(false);
       })
       .catch((error: unknown) => {
         if (contextRequest.current !== requestId) return;
         setContextError(errorText(error));
+        setContextLoading(false);
       });
   }, [runtime, transitionId]);
 
@@ -186,18 +193,22 @@ function ActivitySessionContent({
   if (!catalog || !transition) {
     return (
       <SlideUpSheet onClose={() => goBackInAppStack(router, '/')} testID="activity-session-sheet">
-        <SessionError
-          message={
-            persistenceError
-              ? errorText(persistenceError)
-              : (contextError ?? 'This activity session is no longer available.')
-          }
-          onClose={() => goBackInAppStack(router, '/')}
-          onRetry={() => {
-            void store.getState().hydrate();
-            loadTransitionContext();
-          }}
-        />
+        {contextLoading && !persistenceError && !contextError ? (
+          <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>Loading session...</Text>
+        ) : (
+          <SessionError
+            message={
+              persistenceError
+                ? errorText(persistenceError)
+                : (contextError ?? 'This activity session is no longer available.')
+            }
+            onClose={() => goBackInAppStack(router, '/')}
+            onRetry={() => {
+              void store.getState().hydrate();
+              loadTransitionContext();
+            }}
+          />
+        )}
       </SlideUpSheet>
     );
   }
@@ -228,7 +239,7 @@ function ActivitySessionContent({
     ? (previous.activitySnapshot?.name ??
       resolveCatalogItem(catalog, previous.activityId, colors.primary)?.item.name ??
       'previous activity')
-    : 'previous state';
+    : 'idle time';
   const followingName = following?.activityId
     ? (following.activitySnapshot?.name ??
       resolveCatalogItem(catalog, following.activityId, colors.primary)?.item.name ??
@@ -238,43 +249,44 @@ function ActivitySessionContent({
       : null;
 
   const runAction = async (action: () => Promise<void>) => {
-    if (busy) return;
+    if (busy) return false;
     setBusy(true);
     setActionError(null);
+    setNotice(null);
     try {
       await action();
+      return true;
     } catch (error) {
       setActionError(errorText(error));
+      return false;
     } finally {
       setBusy(false);
     }
   };
 
-  const resetToNow = () =>
-    runAction(async () => {
-      await store.getState().resetActiveStartToNow(transition.id);
-      loadTransitionContext();
-    });
-
-  const saveHistoricalStart = (nextTimestamp: number) =>
-    runAction(async () => {
+  const saveHistoricalStart = async (nextTimestamp: number) => {
+    const saved = await runAction(async () => {
       await store.getState().editTransition(transition.id, { timestamp: nextTimestamp });
       loadTransitionContext();
     });
+    if (saved) setNotice('Start time updated.');
+  };
 
-  const saveHistoricalEnd = (nextTimestamp: number) =>
-    runAction(async () => {
+  const saveHistoricalEnd = async (nextTimestamp: number) => {
+    const saved = await runAction(async () => {
       if (following) {
         await store.getState().editTransition(following.id, { timestamp: nextTimestamp });
       } else if (isActive) {
-        // An active session has no end boundary. A concrete To selection
-        // explicitly records an idle boundary; untouched Now stays open-ended.
-        await store.getState().insertTransition({ activityId: null, timestamp: nextTimestamp });
+        await store
+          .getState()
+          .switchActiveSession(transition.id, null, nextTimestamp, transition.timestamp);
       } else {
         throw new Error('This session has no recorded end to edit.');
       }
       loadTransitionContext();
     });
+    if (saved) setNotice('End time updated.');
+  };
 
   const openDeleteConfirmation = () => {
     if (busy) return;
@@ -296,98 +308,74 @@ function ActivitySessionContent({
         onClose={() => goBackInAppStack(router, '/')}
         testID="activity-session-sheet"
       >
-        <Column spacing={18} style={{ width: '100%' }}>
-          <View
-            style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            testID="activity-session-summary"
-          >
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>
+              {isActive ? 'Currently tracking' : 'Recorded session'}
+            </Text>
+            <Pressable
+              accessibilityLabel="Close session"
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => goBackInAppStack(router, '/')}
+              style={({ pressed }) => [styles.close, { opacity: busy ? 0.5 : pressed ? 0.7 : 1 }]}
+              testID="activity-session-close"
+            >
+              <AppIcon name="x" color={colors.textMuted} size={22} />
+            </Pressable>
+          </View>
+          <View style={styles.hero} testID="activity-session-summary">
             <View style={[styles.activityIcon, { backgroundColor: activityColor }]}>
               <AppIcon color={iconForeground} name={activityIcon} size={24} />
             </View>
             <View style={styles.heroText}>
               <Text
-                numberOfLines={1}
-                textStyle={{ color: colors.text, fontSize: 25, fontWeight: '700' }}
+                numberOfLines={2}
+                textStyle={{ color: colors.text, fontSize: 25, fontWeight: '600' }}
               >
                 {activityName}
               </Text>
               <Text
-                numberOfLines={1}
-                testID="activity-session-duration"
-                textStyle={{ color: activityColor, fontSize: 19, fontWeight: '700' }}
-              >
-                {endMs === null ? 'In progress' : formatDuration(durationMs)}
-              </Text>
+                textStyle={{ color: colors.textMuted, fontSize: 13 }}
+              >{`${formatSessionDate(startMs)} · Started ${formatSessionTime(startMs)}`}</Text>
             </View>
           </View>
-
-          <View style={[styles.timeSummary, { backgroundColor: colors.surfaceMuted }]}>
-            <View style={styles.timePoint}>
-              <Text
-                numberOfLines={1}
-                textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}
-              >
-                {formatSessionDate(startMs)}
-              </Text>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                {formatSessionTime(startMs)}
-              </Text>
-            </View>
-            <AppIcon color={colors.textMuted} name="chevron-right" size={18} />
-            <View style={[styles.timePoint, { alignItems: 'flex-end' }]}>
-              <Text
-                numberOfLines={1}
-                textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}
-              >
-                {isActive ? 'Now' : endMs === null ? 'Open' : formatSessionDate(endMs)}
-              </Text>
-              {endMs !== null ? (
-                <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                  {formatSessionTime(endMs)}
-                </Text>
-              ) : null}
-            </View>
+          <View style={styles.duration}>
+            <Text
+              numberOfLines={1}
+              testID="activity-session-duration"
+              textStyle={{ color: colors.text, fontSize: 40, fontWeight: '600' }}
+            >
+              {endMs === null ? 'Open-ended' : formatDuration(durationMs)}
+            </Text>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
+              {isActive ? 'Elapsed · still running' : 'Time recorded'}
+            </Text>
           </View>
-
-          <View style={styles.actionRow} testID="activity-session-actions">
-            <AppButton
-              disabled={busy}
-              label="Change activity"
-              onPress={() =>
-                router.push(
-                  `/activity-session/activity-chooser?transitionId=${encodeURIComponent(transition.id)}`
-                )
-              }
-              style={{ height: 48, width: '66%' }}
-              testID="activity-session-choose-activity"
-              variant="outlined"
+          {isActive ? (
+            <ActiveSessionCorrection
+              key={`${transition.id}-${transition.timestamp}`}
+              transition={transition}
+              activityName={activityName}
+              catalog={catalog}
+              nowMs={nowMs}
+              busy={busy}
+              onSave={async (nextActivityId, timestamp) => {
+                const saved = await runAction(async () => {
+                  await store
+                    .getState()
+                    .switchActiveSession(
+                      transition.id,
+                      nextActivityId,
+                      timestamp,
+                      transition.timestamp
+                    );
+                });
+                if (saved) goBackInAppStack(router, '/');
+                return saved;
+              }}
             />
-            <AppButton
-              disabled={busy}
-              label="Delete"
-              onPress={openDeleteConfirmation}
-              style={{ height: 48, width: '29%' }}
-              testID="activity-session-delete"
-              variant="outlined"
-            />
-          </View>
-
-          <HistoricalSessionEditor
-            key={`${transition.id}-${transition.timestamp}-${following?.timestamp ?? 'open'}`}
-            activityLabel={activityName}
-            busy={busy}
-            following={following}
-            followingLabel={followingName}
-            isActive={isActive}
-            nowMs={nowMs}
-            onResetStart={resetToNow}
-            onSaveEnd={saveHistoricalEnd}
-            onSaveStart={saveHistoricalStart}
-            previous={previous}
-            previousLabel={previousName}
-            transition={transition}
-          />
-
+          ) : null}
           {actionError ? (
             <Text
               testID="activity-session-action-error"
@@ -396,15 +384,79 @@ function ActivitySessionContent({
               {actionError}
             </Text>
           ) : null}
-        </Column>
+          {notice ? (
+            <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>{notice}</Text>
+          ) : null}
+          <View style={[styles.details, { borderColor: colors.border }]}>
+            <Text textStyle={{ color: colors.text, fontSize: 20, fontWeight: '600' }}>
+              Session details
+            </Text>
+            <HistoricalSessionEditor
+              key={`${transition.id}-${transition.timestamp}-${following?.timestamp ?? 'open'}`}
+              activityLabel={activityName}
+              busy={busy}
+              following={following}
+              followingLabel={followingName}
+              isActive={isActive}
+              nowMs={nowMs}
+              onSaveEnd={saveHistoricalEnd}
+              onSaveStart={saveHistoricalStart}
+              previous={previous}
+              previousLabel={previousName}
+              transition={transition}
+            />
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 21 }}>
+              Wrong activity for the whole session? Reassign all of its recorded time.
+            </Text>
+            <AppButton
+              disabled={busy}
+              label="Reassign session"
+              variant="outlined"
+              onPress={() =>
+                router.push(
+                  `/activity-session/activity-chooser?transitionId=${encodeURIComponent(transition.id)}`
+                )
+              }
+              style={{ width: '100%', height: 48 }}
+              testID="activity-session-choose-activity"
+            />
+          </View>
+          <View
+            style={[styles.deleteArea, { borderColor: colors.border }]}
+            testID="activity-session-actions"
+          >
+            <Pressable
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Delete session"
+              onPress={openDeleteConfirmation}
+              style={({ pressed }) => [
+                styles.deleteButton,
+                { opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
+              ]}
+              testID="activity-session-delete"
+            >
+              <AppIcon name="trash-2" color={colors.danger.foreground} size={18} />
+              <Text
+                textStyle={{ color: colors.danger.foreground, fontSize: 14, fontWeight: '600' }}
+              >
+                Delete session
+              </Text>
+            </Pressable>
+          </View>
+        </View>
       </SlideUpSheet>
       <ConfirmationModal
         busy={busy}
         cancelLabel="Cancel"
         cancelTestID="activity-session-cancel-delete"
-        confirmLabel={busy ? 'Deleting...' : 'Delete session'}
+        confirmLabel={busy ? 'Deleting…' : 'Delete session'}
         confirmTestID="activity-session-confirm-delete"
-        message="This removes the recorded session from history and cannot be undone."
+        message={
+          previous
+            ? `This removes the start of ${activityName}. ${previousName} will continue through this time${isActive ? (previous.activityId ? ' and become the current activity' : ', leaving the tracker stopped') : ''}. This cannot be undone.`
+            : `This removes ${activityName} from recorded history${isActive ? ' and stops tracking it' : ''}. This cannot be undone.`
+        }
         onCancel={() => setDeleteConfirmationOpen(false)}
         onConfirm={confirmDeleteSession}
         testID="activity-session-delete-confirmation"
@@ -417,34 +469,31 @@ function ActivitySessionContent({
 }
 
 const styles = StyleSheet.create({
-  hero: {
-    alignItems: 'center',
-    borderRadius: 20,
-    borderWidth: 1,
+  content: { gap: 22, width: '100%', maxWidth: 620 },
+  header: {
     flexDirection: 'row',
-    gap: 14,
-    minHeight: 100,
-    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'space-between',
     width: '100%',
   },
+  close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  hero: { alignItems: 'center', flexDirection: 'row', gap: 14, width: '100%' },
   activityIcon: {
     alignItems: 'center',
-    borderRadius: 18,
-    height: 56,
+    borderRadius: 14,
+    height: 48,
     justifyContent: 'center',
-    width: 56,
+    width: 48,
   },
-  heroText: { flex: 1, gap: 4, minWidth: 0 },
-  timeSummary: {
-    alignItems: 'center',
-    borderRadius: 16,
+  heroText: { flex: 1, gap: 5, minWidth: 0 },
+  duration: { gap: 4, width: '100%' },
+  details: { gap: 14, borderTopWidth: 1, paddingTop: 22, width: '100%' },
+  deleteArea: { borderTopWidth: 1, paddingTop: 8, width: '100%' },
+  deleteButton: {
+    minHeight: 48,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 72,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    width: '100%',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
   },
-  timePoint: { flex: 1, gap: 3, minWidth: 0 },
-  actionRow: { flexDirection: 'row', gap: 10, width: '100%' },
 });

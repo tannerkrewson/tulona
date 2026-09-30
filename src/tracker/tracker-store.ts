@@ -39,6 +39,7 @@ export interface TrackerStoreState {
     activityId: string | null,
     options?: SwitchActivityOptions
   ): Promise<TimeTransition>;
+  switchActiveSession: TrackerServiceApi['switchActiveSession'];
   adjustLatestStart(timestamp: TimestampInput): Promise<TimeTransition>;
   adjustLatest(timestamp: TimestampInput): Promise<TimeTransition>;
   insertTransition(
@@ -160,6 +161,8 @@ export function createTrackerStore(service: TrackerServiceApi, options: TrackerS
       },
       switchActivity: (activityId, switchOptions) =>
         runMutation(() => service.switchActivity(activityId, switchOptions)),
+      switchActiveSession: (id, activityId, timestamp, expectedStart) =>
+        runMutation(() => service.switchActiveSession(id, activityId, timestamp, expectedStart)),
       adjustLatestStart: (timestamp) => runMutation(() => service.adjustLatestStart(timestamp)),
       adjustLatest: (timestamp) => runMutation(() => service.adjustLatest(timestamp)),
       insertTransition: (input) => runMutation(() => service.insertTransition(input)),

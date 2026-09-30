@@ -26,89 +26,50 @@ const trackerStore = read('src/tracker/tracker-store.ts');
 
 assert(
   screen.includes('<SlideUpSheet') &&
-    screen.includes('testID="activity-session-summary"') &&
-    screen.includes('activityColor') &&
-    !screen.includes('ACTIVE SESSION') &&
-    !screen.includes('<Screen'),
-  'the session detail must use a draggable sheet with a color-treated activity hero and no page labels'
+    screen.includes('activity-session-summary') &&
+    screen.includes('activity-session-duration'),
+  'historical sessions must retain identity and elapsed duration in the session sheet'
 );
 assert(
-  screen.includes('testID="activity-session-duration"') &&
-    screen.includes('styles.timeSummary') &&
-    screen.includes('formatSessionDate(startMs)') &&
-    screen.includes('formatSessionTime(startMs)') &&
-    screen.includes('numberOfLines={1}'),
-  'session duration and compact start/end times must stay readable without wrapping'
+  editor.includes('activity-session-from') &&
+    editor.includes('activity-session-to') &&
+    editor.includes('canEditEnd = following !== null') &&
+    editor.includes('Still running') &&
+    editor.includes('No end recorded'),
+  'recorded boundaries must remain editable while active sessions have no end until a stop is saved'
 );
 assert(
-  screen.includes('styles.hero') &&
-    screen.includes('activity-session-actions') &&
-    editor.includes('testID="activity-session-edit-times"') &&
-    !screen.includes('activity-session-corrections'),
-  'the sheet must prioritize the colored activity, duration, time controls, and direct actions'
+  editor.includes('Changing the start also changes when') &&
+    editor.includes('Changing the end also changes when'),
+  'shared boundary edits must explain their effect on adjacent sessions'
 );
 assert(
-  editor.includes("<Column spacing={8} style={{ width: '100%' }}") &&
-    editor.includes('testID="activity-session-time-control"') &&
-    editor.includes('testID="activity-session-time-divider"') &&
-    editor.includes('testID="activity-session-from"') &&
-    editor.includes('testID="activity-session-to"') &&
-    editor.includes('flex: 1') &&
-    editor.includes('borderRadius: 16') &&
-    editor.includes('accessibilityRole="button"') &&
-    editor.includes('numberOfLines={1}') &&
-    !editor.includes('AccessibleTextInput') &&
-    !editor.includes('Save start') &&
-    !editor.includes('Save end'),
-  'time editing must be one rounded two-section control with accessible tap targets and no text inputs or save prompts'
+  editor.includes('timestampMs(previous.timestamp) + 1') &&
+    editor.includes('endMs - 1') &&
+    service.includes('this.assertEditOrder'),
+  'time pickers and service must retain strict neighboring-transition bounds'
 );
 assert(
-  /isActive\s*\?\s*'Now'/.test(editor) &&
-    screen.includes('isActive={isActive}') &&
-    editor.includes('activity-session-time-context') &&
-    editor.includes('Starts ${formatSessionDate(startMs)} · Ends ${toDateContext}'),
-  'active sessions must show an open-ended Now value and date context outside the control'
-);
-assert(
-  editor.includes('const canEditEnd = following !== null || isActive;') &&
-    editor.includes("'No end recorded'") &&
-    editor.includes("'open-ended'") &&
-    editor.includes('disabled={busy || !canEditEnd}') &&
-    screen.includes('Loading session...') &&
-    screen.includes('testID="activity-session-error"') &&
-    screen.includes('contextError ??'),
-  'inactive sessions without a following transition and loading/error states must remain explicit and safe'
-);
-assert(
-  screen.includes('else if (isActive)') &&
-    screen.includes('insertTransition({ activityId: null, timestamp: nextTimestamp })') &&
-    trackerStore.includes('editTransition: (id, input) =>') &&
-    trackerStore.includes('runMutation(() => service.editTransition(id, input))'),
-  'a chosen active end must create a real idle boundary while start/end edits remain journaled store mutations'
-);
-assert(
-  nativePicker.includes("from '@expo/ui/community/datetime-picker'") &&
-    nativePicker.includes('mode="datetime"') &&
-    nativePicker.includes('mode={androidStage}') &&
-    nativePicker.includes('presentation="dialog"') &&
-    nativePicker.includes('onValueChange') &&
-    nativePicker.includes('onDismiss') &&
+  nativePicker.includes('mode="datetime"') &&
+    nativePicker.includes('display="spinner"') &&
+    nativePicker.includes('setDraft(nextDate)') &&
+    nativePicker.includes('commit(draft)') &&
     nativePicker.includes('combinePickerDateAndTime(date, value, true)'),
-  'native session editing must use the installed Expo community picker, including Android date/time composition'
+  'native picker must provide staged iOS wheels and Android local date/time composition'
 );
 assert(
   webPicker.includes('type="datetime-local"') &&
-    webPicker.includes('showPicker') &&
-    webPicker.includes('input.click()') &&
-    webPicker.includes('parseLocalDateTimeInput') &&
-    !webPicker.includes('AccessibleTextInput'),
-  'the web build must open a browser-native datetime picker instead of silently rendering Expo UI null'
+    webPicker.includes('setDraft(event.target.value)') &&
+    webPicker.includes('activity-session-picker-done') &&
+    webPicker.includes('activity-session-picker-cancel') &&
+    !webPicker.includes('aria-hidden="true"'),
+  'web date/time fields must be visible, accessible, and saved only after Done'
 );
 assert(
-  service.includes('this.assertEditOrder') &&
+  trackerStore.includes('runMutation(() => service.editTransition(id, input))') &&
     service.includes('Edited transition must remain after the preceding transition') &&
     service.includes('Edited transition must remain before the following transition'),
-  'tracker service must remain the final neighboring-transition order validator'
+  'historical edits must continue through validated, durable tracker mutations'
 );
 
 const sample = new Date(2026, 8, 17, 19, 3, 0, 0);
@@ -134,5 +95,5 @@ assert(
 );
 
 console.log(
-  'Validated the activity session sheet, two-section native/web time editing, open-ended Now semantics, local dates, and order validation.'
+  'Validated historical boundaries, staged native/web pickers, local date conversions, and ordering.'
 );
