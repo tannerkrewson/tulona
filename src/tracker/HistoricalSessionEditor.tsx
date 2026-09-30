@@ -42,6 +42,7 @@ export function HistoricalSessionEditor({
 }: HistoricalSessionEditorProps) {
   const { colors } = useAppTheme();
   const [pickerTarget, setPickerTarget] = useState<SessionDateTimePickerTarget | null>(null);
+  const [pickerMode, setPickerMode] = useState<'time' | 'datetime'>('time');
   const [pickerValueMs, setPickerValueMs] = useState<number | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const pickerTargetRef = useRef<SessionDateTimePickerTarget | null>(null);
@@ -62,19 +63,14 @@ export function HistoricalSessionEditor({
     : isActive
       ? 'Now'
       : 'No end recorded';
-  const toDateContext = following
-    ? formatSessionDate(timestampMs(following.timestamp))
-    : isActive
-      ? formatSessionDate(nowMs)
-      : 'open-ended';
-
   const closePicker = () => {
     pickerTargetRef.current = null;
     setPickerTarget(null);
     setPickerValueMs(null);
   };
 
-  const openPicker = (target: SessionDateTimePickerTarget) => {
+  const openPicker = (target: SessionDateTimePickerTarget, mode: 'time' | 'datetime' = 'time') => {
+    setPickerMode(mode);
     if (busy || (target === 'end' && !canEditEnd)) return;
     const selectedValue = target === 'start' ? startMs : (endMs ?? (isActive ? nowMs : startMs));
     pickerTargetRef.current = target;
@@ -97,85 +93,75 @@ export function HistoricalSessionEditor({
   return (
     <Column spacing={8} style={{ width: '100%' }} testID="activity-session-edit-times">
       <View
-        style={[
-          styles.timeControl,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
+        style={[styles.timeControl, { backgroundColor: colors.surfaceMuted }]}
         testID="activity-session-time-control"
       >
-        <Pressable
-          accessibilityHint="Choose the session start date and time"
-          accessibilityLabel={`Started ${formatSessionDate(startMs)}, ${formatSessionTime(startMs)}`}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: busy }}
-          disabled={busy}
-          onPress={() => openPicker('start')}
-          style={({ pressed }) => [
-            styles.timeSection,
-            { opacity: busy ? 0.45 : pressed ? 0.72 : 1 },
-          ]}
-          testID="activity-session-from"
-        >
-          <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>Started</Text>
-          <View style={styles.value}>
-            <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>
-              {formatSessionTime(startMs)}
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 12 }}>
-              {formatSessionDate(startMs)}
-            </Text>
-          </View>
-          <AppIcon name="pencil" color={colors.textMuted} size={16} />
-        </Pressable>
-        <View
-          style={[styles.timeDivider, { backgroundColor: colors.border }]}
-          testID="activity-session-time-divider"
-        />
-        <Pressable
-          accessibilityHint={
-            canEditEnd
-              ? 'Choose the session end date and time'
-              : isActive
-                ? 'Use Stop tracking above to record an end'
-                : 'No end has been recorded'
-          }
-          accessibilityLabel={
-            following
-              ? `Ended ${toDateContext}, ${toValue}`
-              : isActive
-                ? 'Still running'
-                : 'No end recorded'
-          }
-          accessibilityRole="button"
-          accessibilityState={{ disabled: busy || !canEditEnd }}
-          disabled={busy || !canEditEnd}
-          onPress={() => openPicker('end')}
-          style={({ pressed }) => [
-            styles.timeSection,
-            { opacity: busy ? 0.45 : pressed ? 0.72 : 1 },
-          ]}
-          testID="activity-session-to"
-        >
-          <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-            {following ? 'Ended' : 'End'}
-          </Text>
-          <View style={styles.value}>
-            <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>
-              {isActive && !following ? 'Still running' : toValue}
-            </Text>
-            {following ? (
-              <Text textStyle={{ color: colors.textMuted, fontSize: 12 }}>{toDateContext}</Text>
-            ) : null}
-          </View>
-          <AppIcon name={canEditEnd ? 'pencil' : 'clock'} color={colors.textMuted} size={16} />
-        </Pressable>
+        {(['start', 'end'] as const).map((target) => {
+          const editable = !busy && (target === 'start' || canEditEnd);
+          const ms = target === 'start' ? startMs : endMs;
+          const text =
+            target === 'start'
+              ? formatSessionTime(startMs)
+              : following
+                ? toValue
+                : isActive
+                  ? 'Now'
+                  : 'No end recorded';
+          return (
+            <View
+              key={target}
+              style={[
+                styles.timeSection,
+                target === 'end'
+                  ? { borderLeftWidth: 1, borderLeftColor: colors.background }
+                  : null,
+              ]}
+            >
+              <Text textStyle={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>
+                {target === 'start' ? 'FROM' : 'TO'}
+              </Text>
+              <Pressable
+                disabled={!editable}
+                accessibilityRole="button"
+                accessibilityLabel={`Edit ${target} time, ${text}`}
+                onPress={() => openPicker(target, 'time')}
+                style={{ minHeight: 44, justifyContent: 'center' }}
+                testID={target === 'start' ? 'activity-session-from' : 'activity-session-to'}
+              >
+                <Text
+                  numberOfLines={1}
+                  textStyle={{
+                    color: ms === null ? colors.textMuted : colors.text,
+                    fontSize: 23,
+                    fontWeight: '600',
+                  }}
+                >
+                  {text}
+                </Text>
+              </Pressable>
+              <Pressable
+                disabled={!editable}
+                accessibilityRole="button"
+                accessibilityLabel={`Edit ${target} date and time`}
+                onPress={() => openPicker(target, 'datetime')}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 }}
+                testID={`activity-session-${target}-date`}
+              >
+                <AppIcon name="calendar-days" size={14} color={colors.textMuted} />
+                <Text numberOfLines={1} textStyle={{ color: colors.textMuted, fontSize: 11 }}>
+                  {ms === null ? 'Still running' : formatSessionDate(ms)}
+                </Text>
+              </Pressable>
+            </View>
+          );
+        })}
       </View>
-      {previous && previousLabel ? (
+      {pickerTarget === 'start' && previous && previousLabel ? (
         <Text
           textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}
         >{`Changing the start also changes when ${previousLabel} ends.`}</Text>
       ) : null}
-      {following && followingLabel ? (
+      {pickerTarget === 'end' && following && followingLabel ? (
         <Text
           textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}
         >{`Changing the end also changes when ${followingLabel} starts.`}</Text>
@@ -189,6 +175,7 @@ export function HistoricalSessionEditor({
         </Text>
       ) : null}
       <SessionDateTimePicker
+        mode={pickerMode}
         maximumDate={pickerTarget ? new Date(pickerMaximumMs) : undefined}
         minimumDate={
           pickerTarget && pickerMinimumMs !== undefined ? new Date(pickerMinimumMs) : undefined
@@ -207,8 +194,6 @@ export function HistoricalSessionEditor({
 }
 
 const styles = StyleSheet.create({
-  timeControl: { borderRadius: 12, borderWidth: 1, width: '100%' },
-  timeSection: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72, padding: 14 },
-  value: { flex: 1, minWidth: 0, gap: 3, alignItems: 'flex-end' },
-  timeDivider: { height: 1, marginHorizontal: 14 },
+  timeControl: { borderRadius: 18, width: '100%', flexDirection: 'row', overflow: 'hidden' },
+  timeSection: { flex: 1, minWidth: 0, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
 });

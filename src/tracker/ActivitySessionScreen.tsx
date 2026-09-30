@@ -2,12 +2,19 @@
 import { Column, Text } from '@expo/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import {
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text as NativeText,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
-import { formatDuration, timestampMs, type TimeTransition } from '@domain';
+import { timestampMs, type TimeTransition } from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { AppButton, ConfirmationModal, errorText, SlideUpSheet } from '@ui';
+import { ConfirmationModal, errorText, SlideUpSheet } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -15,7 +22,7 @@ import { goBackInAppStack } from '../navigation/app-back';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import { ActiveSessionCorrection } from './ActiveSessionCorrection';
 import { HistoricalSessionEditor } from './HistoricalSessionEditor';
-import { formatSessionDate, formatSessionTime } from './session-time';
+import { SessionActivityChoices } from './SessionActivityChoices';
 import type { TransitionContext } from './tracker-service';
 import { orderTransitions } from './tracker-engine';
 
@@ -134,6 +141,8 @@ function ActivitySessionContent({
 }) {
   const { colors } = useAppTheme();
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  const [choosingActivity, setChoosingActivity] = useState(false);
   const store = runtime.trackerStore;
   const catalog = store((state) => state.catalog);
   const transitions = store((state) => state.transitions);
@@ -229,11 +238,15 @@ function ActivitySessionContent({
       : visibleAdjacentTransition(transitions, transition, 'following');
   const endMs = following ? timestampMs(following.timestamp) : isActive ? nowMs : null;
   const durationMs = endMs === null ? 0 : Math.max(0, endMs - timestampMs(transition.timestamp));
-  const startMs = timestampMs(transition.timestamp);
+  const totalSeconds = Math.floor(durationMs / 1000);
+  const timerMain = `${Math.floor(totalSeconds / 3600)
+    .toString()
+    .padStart(2, '0')}:${Math.floor((totalSeconds / 60) % 60)
+    .toString()
+    .padStart(2, '0')}`;
+  const timerSeconds = (totalSeconds % 60).toString().padStart(2, '0');
   const activityColor =
     transition.activitySnapshot?.color ?? resolved?.displayColor ?? colors.primary;
-  const activityIcon =
-    transition.activitySnapshot?.iconName ?? resolved?.item.iconName ?? 'activity';
   const iconForeground = getAccessibleTextColor(activityColor);
   const previousName = previous?.activityId
     ? (previous.activitySnapshot?.name ??
@@ -309,118 +322,139 @@ function ActivitySessionContent({
         testID="activity-session-sheet"
       >
         <View style={styles.content}>
-          <View style={styles.header}>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>
-              {isActive ? 'Currently tracking' : 'Recorded session'}
-            </Text>
-            <Pressable
-              accessibilityLabel="Close session"
-              accessibilityRole="button"
-              disabled={busy}
-              onPress={() => goBackInAppStack(router, '/')}
-              style={({ pressed }) => [styles.close, { opacity: busy ? 0.5 : pressed ? 0.7 : 1 }]}
-              testID="activity-session-close"
-            >
-              <AppIcon name="x" color={colors.textMuted} size={22} />
-            </Pressable>
-          </View>
-          <View style={styles.hero} testID="activity-session-summary">
-            <View style={[styles.activityIcon, { backgroundColor: activityColor }]}>
-              <AppIcon color={iconForeground} name={activityIcon} size={24} />
-            </View>
-            <View style={styles.heroText}>
-              <Text
-                numberOfLines={2}
-                textStyle={{ color: colors.text, fontSize: 25, fontWeight: '600' }}
-              >
-                {activityName}
-              </Text>
-              <Text
-                textStyle={{ color: colors.textMuted, fontSize: 13 }}
-              >{`${formatSessionDate(startMs)} · Started ${formatSessionTime(startMs)}`}</Text>
-            </View>
-          </View>
-          <View style={styles.duration}>
-            <Text
+          <View
+            style={[styles.timer, height < 740 ? { paddingTop: 28, paddingBottom: 28 } : null]}
+            testID="activity-session-summary"
+          >
+            <NativeText
+              adjustsFontSizeToFit
+              minimumFontScale={0.5}
               numberOfLines={1}
+              accessibilityLabel={
+                endMs === null ? 'Open-ended session' : `${timerMain}:${timerSeconds} elapsed`
+              }
               testID="activity-session-duration"
-              textStyle={{ color: colors.text, fontSize: 40, fontWeight: '600' }}
-            >
-              {endMs === null ? 'Open-ended' : formatDuration(durationMs)}
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-              {isActive ? 'Elapsed · still running' : 'Time recorded'}
-            </Text>
-          </View>
-          {isActive ? (
-            <ActiveSessionCorrection
-              key={`${transition.id}-${transition.timestamp}`}
-              transition={transition}
-              activityName={activityName}
-              catalog={catalog}
-              nowMs={nowMs}
-              busy={busy}
-              onSave={async (nextActivityId, timestamp) => {
-                const saved = await runAction(async () => {
-                  await store
-                    .getState()
-                    .switchActiveSession(
-                      transition.id,
-                      nextActivityId,
-                      timestamp,
-                      transition.timestamp
-                    );
-                });
-                if (saved) goBackInAppStack(router, '/');
-                return saved;
+              style={{
+                color: colors.text,
+                fontSize: Math.min(88, (width - 44) / 4.9),
+                fontWeight: '300',
+                fontVariant: ['tabular-nums'],
+                textAlign: 'center',
               }}
-            />
-          ) : null}
+            >
+              {endMs === null ? (
+                '—'
+              ) : (
+                <>
+                  {timerMain}
+                  <NativeText style={{ color: colors.textMuted }}>:{timerSeconds}</NativeText>
+                </>
+              )}
+            </NativeText>
+          </View>
+          <HistoricalSessionEditor
+            key={`${transition.id}-${transition.timestamp}-${following?.timestamp ?? 'open'}`}
+            activityLabel={activityName}
+            busy={busy}
+            following={following}
+            followingLabel={followingName}
+            isActive={isActive}
+            nowMs={nowMs}
+            onSaveEnd={saveHistoricalEnd}
+            onSaveStart={saveHistoricalStart}
+            previous={previous}
+            previousLabel={previousName}
+            transition={transition}
+          />
+          <Pressable
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel={`Reassign session, ${activityName}`}
+            onPress={() => setChoosingActivity(true)}
+            style={({ pressed }) => [
+              styles.activityRow,
+              { backgroundColor: colors.surfaceMuted, opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
+            ]}
+            testID="activity-session-choose-activity"
+          >
+            <NativeText
+              numberOfLines={1}
+              style={{ color: colors.text, fontSize: 23, fontWeight: '600', flex: 1 }}
+            >
+              {activityName}
+            </NativeText>
+            <AppIcon name="chevron-right" size={18} color={colors.textMuted} />
+          </Pressable>
           {actionError ? (
-            <Text
+            <NativeText
+              accessibilityRole="alert"
               testID="activity-session-action-error"
-              textStyle={{ color: colors.danger.foreground, fontSize: 14 }}
+              style={{ color: colors.danger.foreground, fontSize: 14 }}
             >
               {actionError}
-            </Text>
+            </NativeText>
           ) : null}
           {notice ? (
-            <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>{notice}</Text>
+            <NativeText style={{ color: colors.success.foreground, fontSize: 14 }}>
+              {notice}
+            </NativeText>
           ) : null}
-          <View style={[styles.details, { borderColor: colors.border }]}>
-            <Text textStyle={{ color: colors.text, fontSize: 20, fontWeight: '600' }}>
-              Session details
-            </Text>
-            <HistoricalSessionEditor
-              key={`${transition.id}-${transition.timestamp}-${following?.timestamp ?? 'open'}`}
-              activityLabel={activityName}
-              busy={busy}
-              following={following}
-              followingLabel={followingName}
-              isActive={isActive}
-              nowMs={nowMs}
-              onSaveEnd={saveHistoricalEnd}
-              onSaveStart={saveHistoricalStart}
-              previous={previous}
-              previousLabel={previousName}
-              transition={transition}
-            />
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 21 }}>
-              Wrong activity for the whole session? Reassign all of its recorded time.
-            </Text>
-            <AppButton
-              disabled={busy}
-              label="Reassign session"
-              variant="outlined"
-              onPress={() =>
-                router.push(
-                  `/activity-session/activity-chooser?transitionId=${encodeURIComponent(transition.id)}`
-                )
-              }
-              style={{ width: '100%', height: 48 }}
-              testID="activity-session-choose-activity"
-            />
-          </View>
+          {isActive ? (
+            <>
+              <View style={styles.playback}>
+                <View style={[styles.playbackRing, { backgroundColor: colors.surfaceMuted }]}>
+                  <Pressable
+                    disabled={busy}
+                    accessibilityRole="button"
+                    accessibilityLabel="Stop tracking now"
+                    onPress={() =>
+                      void runAction(async () => {
+                        await store
+                          .getState()
+                          .switchActiveSession(
+                            transition.id,
+                            null,
+                            Date.now(),
+                            transition.timestamp
+                          );
+                        goBackInAppStack(router, '/');
+                      })
+                    }
+                    style={({ pressed }) => [
+                      styles.pause,
+                      { backgroundColor: activityColor, opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
+                    ]}
+                    testID="activity-session-stop-now"
+                  >
+                    <AppIcon name="pause" size={46} color={iconForeground} />
+                  </Pressable>
+                </View>
+              </View>
+              <ActiveSessionCorrection
+                key={`${transition.id}-${transition.timestamp}`}
+                transition={transition}
+                activityName={activityName}
+                catalog={catalog}
+                nowMs={nowMs}
+                busy={busy}
+                error={actionError}
+                onSave={async (nextActivityId, timestamp) => {
+                  const saved = await runAction(async () => {
+                    await store
+                      .getState()
+                      .switchActiveSession(
+                        transition.id,
+                        nextActivityId,
+                        timestamp,
+                        transition.timestamp
+                      );
+                  });
+                  if (saved) goBackInAppStack(router, '/');
+                  return saved;
+                }}
+              />
+            </>
+          ) : null}
           <View
             style={[styles.deleteArea, { borderColor: colors.border }]}
             testID="activity-session-actions"
@@ -446,6 +480,49 @@ function ActivitySessionContent({
           </View>
         </View>
       </SlideUpSheet>
+      <Modal
+        visible={choosingActivity}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          if (!busy) setChoosingActivity(false);
+        }}
+      >
+        <SlideUpSheet
+          onClose={() => {
+            if (!busy) setChoosingActivity(false);
+          }}
+          testID="activity-session-reassign-sheet"
+        >
+          <View style={{ width: '100%', maxWidth: 620, gap: 20, paddingTop: 16 }}>
+            <NativeText style={{ color: colors.text, fontSize: 24, fontWeight: '600' }}>
+              Reassign session
+            </NativeText>
+            <NativeText style={{ color: colors.textMuted, fontSize: 15, lineHeight: 22 }}>
+              This changes the activity for the entire session. To record a missed switch, use
+              Switch activity instead.
+            </NativeText>
+            <SessionActivityChoices
+              catalog={catalog}
+              selectedId={transition.activityId}
+              allowNone
+              busy={busy}
+              onChoose={(id) =>
+                void runAction(async () => {
+                  await store.getState().reassignTransition(transition.id, id);
+                  loadTransitionContext();
+                  setChoosingActivity(false);
+                })
+              }
+            />
+            {actionError ? (
+              <NativeText accessibilityRole="alert" style={{ color: colors.danger.foreground }}>
+                {actionError}
+              </NativeText>
+            ) : null}
+          </View>
+        </SlideUpSheet>
+      </Modal>
       <ConfirmationModal
         busy={busy}
         cancelLabel="Cancel"
@@ -469,31 +546,38 @@ function ActivitySessionContent({
 }
 
 const styles = StyleSheet.create({
-  content: { gap: 22, width: '100%', maxWidth: 620 },
-  header: {
+  content: { gap: 14, width: '100%', maxWidth: 620 },
+  timer: { paddingTop: 64, paddingBottom: 60, width: '100%', alignItems: 'center' },
+  activityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
+    gap: 12,
+    minHeight: 78,
+    padding: 20,
+    borderRadius: 18,
   },
-  close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  hero: { alignItems: 'center', flexDirection: 'row', gap: 14, width: '100%' },
-  activityIcon: {
+  playback: { alignItems: 'center', paddingTop: 24, paddingBottom: 10 },
+  playbackRing: {
+    height: 156,
+    width: 156,
+    borderRadius: 78,
     alignItems: 'center',
-    borderRadius: 14,
-    height: 48,
     justifyContent: 'center',
-    width: 48,
   },
-  heroText: { flex: 1, gap: 5, minWidth: 0 },
-  duration: { gap: 4, width: '100%' },
-  details: { gap: 14, borderTopWidth: 1, paddingTop: 22, width: '100%' },
-  deleteArea: { borderTopWidth: 1, paddingTop: 8, width: '100%' },
+  pause: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteArea: { paddingTop: 8, width: '100%' },
   deleteButton: {
     minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
   },
 });

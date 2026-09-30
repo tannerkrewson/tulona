@@ -50,7 +50,7 @@ assert(
   'time pickers and service must retain strict neighboring-transition bounds'
 );
 assert(
-  nativePicker.includes('mode="datetime"') &&
+  nativePicker.includes('mode={mode}') &&
     nativePicker.includes('display="spinner"') &&
     nativePicker.includes('setDraft(nextDate)') &&
     nativePicker.includes('commit(draft)') &&
@@ -58,12 +58,12 @@ assert(
   'native picker must provide staged iOS wheels and Android local date/time composition'
 );
 assert(
-  webPicker.includes('type="datetime-local"') &&
-    webPicker.includes('setDraft(event.target.value)') &&
+  webPicker.includes("type={mode === 'time' ? 'time' : 'datetime-local'}") &&
+    webPicker.includes('initialDate.getTime()') &&
     webPicker.includes('activity-session-picker-done') &&
     webPicker.includes('activity-session-picker-cancel') &&
     !webPicker.includes('aria-hidden="true"'),
-  'web date/time fields must be visible, accessible, and saved only after Done'
+  'web time and date/time fields must preserve the selected day and save only after Done'
 );
 assert(
   trackerStore.includes('runMutation(() => service.editTransition(id, input))') &&

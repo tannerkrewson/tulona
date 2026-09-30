@@ -2,32 +2,15 @@ import { Column, Text } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
-import type { CatalogCollection, Folder, TimeTransition, TrackableItem, UUID } from '@domain';
+import type { CatalogCollection, TimeTransition, UUID } from '@domain';
 import { useAppTheme } from '@theme';
-import { AppButton, errorText, ROW_SURFACE_LIST_GAP, Screen } from '@ui';
+import { errorText, ROW_SURFACE_LIST_GAP, Screen } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import { goBackInAppStack } from '../navigation/app-back';
-import { ActivityRow } from './ActivityRow';
-import { FolderRow } from './FolderRow';
-
-function sortItems(left: TrackableItem, right: TrackableItem): number {
-  return left.sortOrder - right.sortOrder || left.name.localeCompare(right.name);
-}
-
-function sortFolders(left: Folder, right: Folder): number {
-  return left.sortOrder - right.sortOrder || left.name.localeCompare(right.name);
-}
-
-function displayItem(item: TrackableItem): TrackableItem {
-  return item.archivedAt === null ? item : { ...item, name: `${item.name} (archived)` };
-}
-
-function displayFolder(folder: Folder): Folder {
-  return folder.archivedAt === null ? folder : { ...folder, name: `${folder.name} (archived)` };
-}
+import { SessionActivityChoices } from './SessionActivityChoices';
 
 function ChooserError({ message, children }: { message: string; children: ReactNode }) {
   const { colors } = useAppTheme();
@@ -69,7 +52,6 @@ export function ActivitySessionActivityChooserScreen({
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [catalog, setCatalog] = useState<CatalogCollection | null>(null);
   const [transition, setTransition] = useState<TimeTransition | null>(null);
-  const [folderId, setFolderId] = useState<UUID | null>(null);
   const [routineName, setRoutineName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -158,7 +140,6 @@ export function ActivitySessionActivityChooserScreen({
     setRuntime(null);
     setCatalog(null);
     setTransition(null);
-    setFolderId(null);
     setReloadToken((value) => value + 1);
   };
 
@@ -182,13 +163,6 @@ export function ActivitySessionActivityChooserScreen({
     );
   }
 
-  const items = (
-    routineId ? catalog.activities : [...catalog.activities, ...catalog.routines]
-  ).sort(sortItems);
-  const folders = [...catalog.folders].sort(sortFolders);
-  const visibleFolders = folderId === null ? folders : [];
-  const visibleItems = items.filter((item) => item.folderId === folderId);
-  const currentFolder = folderId === null ? null : folders.find((folder) => folder.id === folderId);
   const currentName = routineId
     ? (routineName ?? 'routine')
     : transition?.activityId
@@ -197,10 +171,7 @@ export function ActivitySessionActivityChooserScreen({
       : 'No activity';
 
   return (
-    <Screen
-      onBack={() => (folderId === null ? returnToSession() : setFolderId(null))}
-      title={currentFolder?.name ?? 'Choose activity'}
-    >
+    <Screen onBack={returnToSession} title="Choose activity">
       <Column
         spacing={ROW_SURFACE_LIST_GAP}
         style={{ width: '100%' }}
@@ -214,59 +185,14 @@ export function ActivitySessionActivityChooserScreen({
               : `Reassign the entire ${currentName} session, including its recorded time. To split the session at a missed switch, cancel and use Switch activity.`}
         </Text>
 
-        {folderId === null && !routineId && !returnToTracker ? (
-          <AppButton
-            disabled={busy}
-            label={transition?.activityId === null ? 'No activity (selected)' : 'No activity'}
-            onPress={() => void choose(null)}
-            style={{ height: 54, width: '100%' }}
-            testID="activity-session-choice-none"
-            variant="outlined"
-          />
-        ) : null}
-
-        {visibleFolders.map((folder) => (
-          <FolderRow
-            key={folder.id}
-            disabled={busy}
-            folder={displayFolder(folder)}
-            onPress={() => setFolderId(folder.id)}
-            testID={`activity-session-folder-${folder.id}`}
-          />
-        ))}
-
-        {visibleItems.map((item) => (
-          <ActivityRow
-            key={item.id}
-            active={transition?.activityId === item.id}
-            color={resolveCatalogItem(catalog, item.id, colors.primary)?.displayColor}
-            disabled={busy}
-            item={displayItem(item)}
-            onPress={() => void choose(item.id)}
-            testID={`activity-session-choice-${item.id}`}
-          />
-        ))}
-
-        {visibleFolders.length === 0 && visibleItems.length === 0 ? (
-          <Column
-            spacing={6}
-            style={{
-              backgroundColor: colors.surfaceMuted,
-              borderColor: colors.border,
-              borderRadius: 14,
-              borderWidth: 1,
-              padding: 16,
-              width: '100%',
-            }}
-          >
-            <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
-              Nothing available here
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              Add an activity or routine to the catalog before choosing it.
-            </Text>
-          </Column>
-        ) : null}
+        <SessionActivityChoices
+          catalog={catalog}
+          selectedId={transition?.activityId}
+          activitiesOnly={Boolean(routineId)}
+          allowNone={!routineId && !returnToTracker}
+          busy={busy}
+          onChoose={(id) => void choose(id)}
+        />
 
         {error ? (
           <ChooserError message={error}>

@@ -12,6 +12,7 @@ const read = (relativePath: string) => fs.readFileSync(path.join(root, relativeP
 const session = read('src/tracker/ActivitySessionScreen.tsx');
 const editor = read('src/tracker/HistoricalSessionEditor.tsx');
 const chooser = read('src/tracker/ActivitySessionActivityChooserScreen.tsx');
+const choices = read('src/tracker/SessionActivityChoices.tsx');
 const chooserRoute = read('app/activity-session/activity-chooser.tsx');
 const layout = read('app/_layout.tsx');
 const trackerService = read('src/tracker/tracker-service.ts');
@@ -41,14 +42,14 @@ assert(
 );
 assert(
   session.includes('Reassign session') &&
-    session.includes('/activity-session/activity-chooser') &&
+    session.includes('activity-session-reassign-sheet') &&
     chooser.includes('reassignTransition') &&
     chooser.includes('entire'),
   'whole-session reassignment must remain distinct from a missed switch'
 );
 assert(
   chooser.includes('returnToTracker') &&
-    chooser.includes('activity-session-choice-none') &&
+    choices.includes('activity-session-choice-none') &&
     chooser.includes('stopAndReplaceActivity') &&
     chooserRoute.includes('routineId') &&
     layout.includes('name="activity-session/activity-chooser"'),
@@ -62,10 +63,35 @@ assert(
   'iOS wheels must stage edits until Done and let Cancel discard them'
 );
 assert(
-  editor.includes('Started') &&
-    editor.includes('Still running') &&
-    !editor.includes('Set start to now'),
+  editor.includes('FROM') && editor.includes('TO') && !editor.includes('Set start to now'),
   'session boundaries must be clear without a destructive reset shortcut'
+);
+
+assert(
+  !session.includes('activity-session-close') &&
+    !session.includes('Currently tracking') &&
+    !session.includes('Session details') &&
+    session.includes('activity-session-stop-now'),
+  'timer sheet must avoid redundant close controls and headings while preserving immediate stop'
+);
+assert(
+  correction.includes('activity-session-correction-sheet') &&
+    correction.includes('activity-session-next-activity-sheet') &&
+    correction.includes('SessionActivityChoices') &&
+    chooser.includes('SessionActivityChoices') &&
+    session.includes('SessionActivityChoices') &&
+    choices.includes('<ActivityRow') &&
+    choices.includes('<FolderRow') &&
+    !correction.includes('TextInput'),
+  'correction and selection must use layered sheets and the existing catalog rows, not custom inline menus'
+);
+assert(
+  !nativePicker.includes('<Modal') &&
+    nativePicker.includes("mode = 'datetime'") &&
+    nativePicker.includes('combinePickerDateAndTime(value, date)') &&
+    editor.includes("openPicker(target, 'time')") &&
+    editor.includes("openPicker(target, 'datetime')"),
+  'separate time and date-time controls must preserve the date and avoid an extra picker modal'
 );
 
 assert(
