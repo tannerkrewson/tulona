@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "esModuleInterop": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@domain": ["../src/domain/index.ts"],
+      "zod": ["./node_modules/zod"],
+      "luxon": ["./node_modules/@types/luxon"]
+    }
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

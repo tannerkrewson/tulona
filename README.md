@@ -145,6 +145,14 @@ reported in the Dropbox panel. For tracker timestamp collisions, the local
 projection uses a deterministic winner to satisfy the domain's timestamp
 uniqueness constraint while keeping both transitions in the sync document.
 
+## Read-only MCP server
+
+Tulona includes a stdio MCP server that reads its Dropbox backup from another
+machine using independent read-only Dropbox authorization. It shares the app's
+backup validation and tracked-time calculations. You can launch it directly
+from this GitHub repository using `npx`, or run the included Node.js bundle
+without installing the Expo dependencies. See [MCP setup and tools](mcp/README.md).
+
 ## Universal UI Convention
 
 Feature screens should render through `Screen` from `@ui`. `Screen` owns the

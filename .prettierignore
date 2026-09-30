@@ -2,6 +2,8 @@
 dist
 node_modules
 web-build
+mcp/bin
+mcp/.test-build
 .beads
 .agents
 .claude

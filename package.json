@@ -2,12 +2,22 @@
   "name": "tulona",
   "version": "0.1.0",
   "private": true,
+  "bin": {
+    "tulona-mcp": "mcp/bin/tulona-mcp.cjs"
+  },
+  "files": [
+    "mcp/bin",
+    "mcp/README.md"
+  ],
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "web": "TULONA_WEB_BUILD=1 expo start --web",
     "typecheck": "tsc --noEmit",
+    "mcp:build": "npm --prefix mcp run build",
+    "mcp:typecheck": "npm --prefix mcp run typecheck",
+    "test:mcp": "npm --prefix mcp test",
     "lint": "eslint .",
     "format": "prettier --check .",
     "test:widget": "tsx tests/active-activity-widget.ts",
