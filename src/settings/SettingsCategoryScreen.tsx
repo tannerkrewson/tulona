@@ -1,5 +1,6 @@
-import { Column, Picker, Row, Slider, Switch, Text } from '@expo/ui';
+import { Column, Picker, Slider, Switch, Text } from '@expo/ui';
 import { useIsFocused, useRouter } from 'expo-router';
+import { View } from 'react-native';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import type { AppSettings } from '@domain';
@@ -52,7 +53,7 @@ function CategoryControls({ category, store }: Pick<CategoryContentProps, 'categ
   switch (category.id) {
     case 'appearance':
       return (
-        <Row alignment="center" spacing={8} style={{ width: '100%' }}>
+        <View style={{ width: '100%', flexDirection: 'row', gap: 8 }}>
           {(
             [
               { id: 'system', label: 'System' },
@@ -60,22 +61,23 @@ function CategoryControls({ category, store }: Pick<CategoryContentProps, 'categ
               { id: 'dark', label: 'Dark' },
             ] as const
           ).map((option) => (
-            <AppButton
-              key={option.id}
-              disabled={saving}
-              label={option.label}
-              onPress={() =>
-                run(
-                  () => store.getState().setAppearance(option.id),
-                  (nextSettings) => setThemeAppearance(nextSettings.appearance)
-                )
-              }
-              style={{ height: 44, width: '32%' }}
-              testID={`settings-appearance-${option.id}`}
-              variant={settings.appearance === option.id ? 'filled' : 'outlined'}
-            />
+            <View key={option.id} style={{ flex: 1, minWidth: 0 }}>
+              <AppButton
+                disabled={saving}
+                label={option.label}
+                onPress={() =>
+                  run(
+                    () => store.getState().setAppearance(option.id),
+                    (nextSettings) => setThemeAppearance(nextSettings.appearance)
+                  )
+                }
+                style={{ height: 44, width: '100%' }}
+                testID={`settings-appearance-${option.id}`}
+                variant={settings.appearance === option.id ? 'filled' : 'outlined'}
+              />
+            </View>
           ))}
-        </Row>
+        </View>
       );
     case 'time-and-activity':
       return (
