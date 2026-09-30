@@ -149,6 +149,57 @@ async function run(): Promise<void> {
     assert(error instanceof TimematorImportError, 'invalid CSV must use the import error type');
   }
 
+  const fullHeader =
+    'unix_begin;unix_end;date;begin;end;folder;task;duration;duration_decimal;rounding_to;rounding_method;hourly_rate;revenue;billing_status;notes';
+  const expanded = [
+    fullHeader,
+    `${csvRow(base, base + 60, 'Projects', 'Existing')};0;nearest;75;1.25;unbilled;"Notes; with a ""quote"" and
+new line"`,
+    `${csvRow(base + 60, base + 120, '', 'Other')};0;nearest;0;0;unbilled;""`,
+  ].join('\n');
+  const fullParsed = parseTimematorCsv(expanded);
+  assert(
+    fullParsed.length === 2 &&
+      fullParsed[0]?.folderName === 'Projects' &&
+      fullParsed[1]?.taskName === 'Other',
+    '15-column export must parse without importing billing or notes as tracker fields'
+  );
+  assert(
+    fullParsed[0]?.beginMs === base * 1000 && fullParsed[0]?.endMs === (base + 60) * 1000,
+    'extra columns must preserve exact tracker timestamps'
+  );
+
+  const reordered = parseTimematorCsv(
+    [
+      'notes;task;unix_end;date;folder;unix_begin',
+      `"Ignored; note";Existing;${base + 60};2023-11-14;Projects;${base}`,
+    ].join('\n')
+  );
+  assert(
+    reordered[0]?.beginMs === base * 1000 &&
+      reordered[0]?.taskName === 'Existing' &&
+      reordered[0]?.folderName === 'Projects',
+    'required fields must be mapped by name when reordered and unused columns omitted'
+  );
+
+  for (const [input, expected] of [
+    ['unix_begin;unix_end;date;folder\n1;2;2023-11-14;Projects', 'Missing Timemator columns: task'],
+    [
+      `unix_begin;unix_end;date;folder;task;unix_begin\n${base};${base + 60};2023-11-14;;Existing;${base}`,
+      'Duplicate Timemator column: unix_begin',
+    ],
+    [fullHeader + '\n' + csvRow(base, base + 60, '', 'Existing'), 'expected 15 columns'],
+    [expanded.replace(String(base + 60), String(base - 1)), 'unix_end must be after unix_begin'],
+  ]) {
+    let rejected = false;
+    try {
+      parseTimematorCsv(input!);
+    } catch (error) {
+      rejected = error instanceof TimematorImportError && error.message.includes(expected!);
+    }
+    assert(rejected, `malformed export must fail clearly: ${expected}`);
+  }
+
   const catalogRepository = new MemoryCatalogRepository();
   const catalogService = new CatalogService(catalogRepository, {
     now: () => '2023-11-14T00:00:00.000Z',

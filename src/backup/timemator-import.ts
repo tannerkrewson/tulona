@@ -171,20 +171,32 @@ function parseUnixSeconds(
   return milliseconds;
 }
 
-function parseHeader(rows: string[][]): void {
+const REQUIRED_TIMEMATOR_COLUMNS = ['unix_begin', 'unix_end', 'date', 'folder', 'task'] as const;
+type TimematorColumn = (typeof REQUIRED_TIMEMATOR_COLUMNS)[number];
+interface TimematorCsvHeader {
+  columnCount: number;
+  indexes: Record<TimematorColumn, number>;
+}
+
+function parseHeader(rows: string[][]): TimematorCsvHeader {
   const header = rows.shift();
   if (!header) throw new TimematorImportError('format', 'CSV is empty');
   const normalized = header.map((field) => field.trim());
   if (normalized[0]?.startsWith('\uFEFF')) normalized[0] = normalized[0].slice(1);
-  if (
-    normalized.length !== TIMEMATOR_CSV_HEADERS.length ||
-    normalized.some((value, index) => value !== TIMEMATOR_CSV_HEADERS[index])
-  ) {
-    throw new TimematorImportError(
-      'format',
-      `Expected Timemator columns: ${TIMEMATOR_CSV_HEADERS.join(';')}`
-    );
+  const missing = REQUIRED_TIMEMATOR_COLUMNS.filter((column) => !normalized.includes(column));
+  if (missing.length > 0) {
+    throw new TimematorImportError('format', `Missing Timemator columns: ${missing.join(';')}`);
   }
+  const duplicate = normalized.find((column, index) => normalized.indexOf(column) !== index);
+  if (duplicate !== undefined) {
+    throw new TimematorImportError('format', `Duplicate Timemator column: ${duplicate}`);
+  }
+  return {
+    columnCount: normalized.length,
+    indexes: Object.fromEntries(
+      REQUIRED_TIMEMATOR_COLUMNS.map((column) => [column, normalized.indexOf(column)])
+    ) as Record<TimematorColumn, number>,
+  };
 }
 
 function parseDate(value: string, rowNumber: number): string {
@@ -199,19 +211,24 @@ function parseDate(value: string, rowNumber: number): string {
   return normalized;
 }
 
-function parseRow(fields: string[], rowNumber: number): TimematorCsvRow {
-  if (fields.length !== TIMEMATOR_CSV_HEADERS.length) {
-    throw rowError(rowNumber, `expected ${TIMEMATOR_CSV_HEADERS.length} columns`);
+function parseRow(
+  fields: string[],
+  rowNumber: number,
+  header: TimematorCsvHeader
+): TimematorCsvRow {
+  if (fields.length !== header.columnCount) {
+    throw rowError(rowNumber, `expected ${header.columnCount} columns from the CSV header`);
   }
-  const beginMs = parseUnixSeconds(fields[0] ?? '', rowNumber, 'unix_begin', false);
-  const endSeconds = parseUnixSeconds(fields[1] ?? '', rowNumber, 'unix_end', true);
+  const field = (column: TimematorColumn) => fields[header.indexes[column]] ?? '';
+  const beginMs = parseUnixSeconds(field('unix_begin'), rowNumber, 'unix_begin', false);
+  const endSeconds = parseUnixSeconds(field('unix_end'), rowNumber, 'unix_end', true);
   const endMs = endSeconds === 0 ? null : endSeconds;
   if (endMs !== null && endMs <= beginMs) {
     throw rowError(rowNumber, 'unix_end must be after unix_begin');
   }
-  const date = parseDate(fields[2] ?? '', rowNumber);
-  const folderName = normalizeName(fields[5] ?? '');
-  const taskName = normalizeName(fields[6] ?? '');
+  const date = parseDate(field('date'), rowNumber);
+  const folderName = normalizeName(field('folder'));
+  const taskName = normalizeName(field('task'));
   if (!taskName) throw rowError(rowNumber, 'task must not be empty');
   return {
     rowNumber,
@@ -229,10 +246,10 @@ export function parseTimematorCsv(input: string): TimematorCsvRow[] {
     throw new TimematorImportError('format', 'CSV file is empty');
   }
   const rows = parseDelimitedRows(input.replace(/^\uFEFF/, ''));
-  parseHeader(rows);
+  const header = parseHeader(rows);
   if (rows.length === 0) throw new TimematorImportError('format', 'CSV contains no tracker rows');
 
-  const parsed = rows.map((fields, index) => parseRow(fields, index + 2));
+  const parsed = rows.map((fields, index) => parseRow(fields, index + 2, header));
   for (let index = 0; index < parsed.length; index += 1) {
     const current = parsed[index];
     const previous = parsed[index - 1];
