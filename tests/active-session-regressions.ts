@@ -9,6 +9,7 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8');
+const sheet = read('src/ui/SlideUpSheet.tsx');
 const session = read('src/tracker/ActivitySessionScreen.tsx');
 const editor = read('src/tracker/HistoricalSessionEditor.tsx');
 const chooser = read('src/tracker/ActivitySessionActivityChooserScreen.tsx');
@@ -67,6 +68,16 @@ assert(
   'session boundaries must be clear without a destructive reset shortcut'
 );
 
+assert(
+  session.includes('scrollable={false}') &&
+    sheet.includes('styles.fixedContent') &&
+    sheet.includes("!scrollable && Platform.OS !== 'web' ? panResponder.panHandlers") &&
+    session.includes('cancelable={false}') &&
+    editor.includes('cancelable={false}') &&
+    session.includes('onEditingChange={setEditingTime}') &&
+    session.includes('!editingTime'),
+  'timer sheets must fill the available frame, drag from their background, protect buttons, and make space for inline editing'
+);
 assert(
   !session.includes('activity-session-close') &&
     !session.includes('Currently tracking') &&

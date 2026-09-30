@@ -16,6 +16,7 @@ interface Props {
   nowMs: number;
   busy: boolean;
   error: string | null;
+  onDelete?: () => void;
   onSave: (activityId: string | null, timestamp: number) => Promise<boolean>;
 }
 /** A separate sheet keeps corrections out of the simple timer surface. */
@@ -27,6 +28,7 @@ export function ActiveSessionCorrection({
   busy,
   error,
   onSave,
+  onDelete,
 }: Props) {
   const { colors } = useAppTheme();
   const [intent, setIntent] = useState<'switch' | 'stop' | null>(null);
@@ -62,27 +64,44 @@ export function ActiveSessionCorrection({
   };
   return (
     <>
-      <View style={{ flexDirection: 'row', gap: 12, justifyContent: 'center' }}>
+      <View
+        style={{ flexDirection: 'row', gap: 4, justifyContent: 'center', alignItems: 'center' }}
+      >
         <Pressable
+          cancelable={false}
           disabled={busy}
           accessibilityRole="button"
           onPress={() => begin('switch')}
-          style={{ minHeight: 48, paddingHorizontal: 12, justifyContent: 'center' }}
+          style={{ minHeight: 48, paddingHorizontal: 6, justifyContent: 'center' }}
           testID="activity-session-switch"
         >
-          <Text style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
+          <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
             Switch activity
           </Text>
         </Pressable>
         <Pressable
+          cancelable={false}
           disabled={busy}
           accessibilityRole="button"
           onPress={() => begin('stop')}
-          style={{ minHeight: 48, paddingHorizontal: 12, justifyContent: 'center' }}
+          style={{ minHeight: 48, paddingHorizontal: 6, justifyContent: 'center' }}
           testID="activity-session-stop"
         >
-          <Text style={{ color: colors.textMuted, fontSize: 15 }}>Stop earlier</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 14 }}>Stop earlier</Text>
         </Pressable>
+        {onDelete ? (
+          <Pressable
+            cancelable={false}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel="Delete session"
+            onPress={onDelete}
+            style={{ width: 44, height: 48, alignItems: 'center', justifyContent: 'center' }}
+            testID="activity-session-delete"
+          >
+            <AppIcon name="trash-2" color={colors.textMuted} size={18} />
+          </Pressable>
+        ) : null}
       </View>
       <Modal visible={intent !== null} transparent animationType="slide" onRequestClose={close}>
         <SlideUpSheet onClose={close} testID="activity-session-correction-sheet">
@@ -95,6 +114,7 @@ export function ActiveSessionCorrection({
             </Text>
             {intent === 'switch' ? (
               <Pressable
+                cancelable={false}
                 disabled={busy}
                 accessibilityRole="button"
                 accessibilityLabel="Choose next activity"
@@ -114,6 +134,7 @@ export function ActiveSessionCorrection({
             ) : null}
             <View style={field}>
               <Pressable
+                cancelable={false}
                 disabled={busy}
                 accessibilityRole="button"
                 accessibilityLabel="Choose switch or stop time"
@@ -126,6 +147,7 @@ export function ActiveSessionCorrection({
                 </Text>
               </Pressable>
               <Pressable
+                cancelable={false}
                 disabled={busy}
                 accessibilityRole="button"
                 accessibilityLabel="Choose switch or stop date and time"
@@ -225,6 +247,7 @@ export function ActiveSessionCorrection({
               testID="activity-session-save-switch"
             />
             <Pressable
+              cancelable={false}
               disabled={busy}
               accessibilityRole="button"
               onPress={close}

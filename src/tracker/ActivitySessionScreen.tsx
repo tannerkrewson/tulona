@@ -142,6 +142,7 @@ function ActivitySessionContent({
   const { colors } = useAppTheme();
   const router = useRouter();
   const { width, height } = useWindowDimensions();
+  const [editingTime, setEditingTime] = useState(false);
   const [choosingActivity, setChoosingActivity] = useState(false);
   const store = runtime.trackerStore;
   const catalog = store((state) => state.catalog);
@@ -317,43 +318,44 @@ function ActivitySessionContent({
   return (
     <>
       <SlideUpSheet
+        scrollable={false}
         contentTestID="activity-session-screen"
         onClose={() => goBackInAppStack(router, '/')}
         testID="activity-session-sheet"
       >
-        <View style={styles.content}>
-          <View
-            style={[styles.timer, height < 740 ? { paddingTop: 28, paddingBottom: 28 } : null]}
-            testID="activity-session-summary"
-          >
-            <NativeText
-              adjustsFontSizeToFit
-              minimumFontScale={0.5}
-              numberOfLines={1}
-              accessibilityLabel={
-                endMs === null ? 'Open-ended session' : `${timerMain}:${timerSeconds} elapsed`
-              }
-              testID="activity-session-duration"
-              style={{
-                color: colors.text,
-                fontSize: Math.min(88, (width - 44) / 4.9),
-                fontWeight: '300',
-                fontVariant: ['tabular-nums'],
-                textAlign: 'center',
-              }}
-            >
-              {endMs === null ? (
-                '—'
-              ) : (
-                <>
-                  {timerMain}
-                  <NativeText style={{ color: colors.textMuted }}>:{timerSeconds}</NativeText>
-                </>
-              )}
-            </NativeText>
-          </View>
+        <View style={[styles.content, height < 740 ? { gap: 8 } : null]}>
+          {!editingTime ? (
+            <View style={styles.timer} testID="activity-session-summary">
+              <NativeText
+                adjustsFontSizeToFit
+                minimumFontScale={0.5}
+                numberOfLines={1}
+                accessibilityLabel={
+                  endMs === null ? 'Open-ended session' : `${timerMain}:${timerSeconds} elapsed`
+                }
+                testID="activity-session-duration"
+                style={{
+                  color: colors.text,
+                  fontSize: Math.min(88, (width - 44) / 4.9),
+                  fontWeight: '300',
+                  fontVariant: ['tabular-nums'],
+                  textAlign: 'center',
+                }}
+              >
+                {endMs === null ? (
+                  '—'
+                ) : (
+                  <>
+                    {timerMain}
+                    <NativeText style={{ color: colors.textMuted }}>:{timerSeconds}</NativeText>
+                  </>
+                )}
+              </NativeText>
+            </View>
+          ) : null}
           <HistoricalSessionEditor
             key={`${transition.id}-${transition.timestamp}-${following?.timestamp ?? 'open'}`}
+            onEditingChange={setEditingTime}
             activityLabel={activityName}
             busy={busy}
             following={following}
@@ -366,25 +368,28 @@ function ActivitySessionContent({
             previousLabel={previousName}
             transition={transition}
           />
-          <Pressable
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel={`Reassign session, ${activityName}`}
-            onPress={() => setChoosingActivity(true)}
-            style={({ pressed }) => [
-              styles.activityRow,
-              { backgroundColor: colors.surfaceMuted, opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
-            ]}
-            testID="activity-session-choose-activity"
-          >
-            <NativeText
-              numberOfLines={1}
-              style={{ color: colors.text, fontSize: 23, fontWeight: '600', flex: 1 }}
+          {!editingTime ? (
+            <Pressable
+              cancelable={false}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel={`Reassign session, ${activityName}`}
+              onPress={() => setChoosingActivity(true)}
+              style={({ pressed }) => [
+                styles.activityRow,
+                { backgroundColor: colors.surfaceMuted, opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
+              ]}
+              testID="activity-session-choose-activity"
             >
-              {activityName}
-            </NativeText>
-            <AppIcon name="chevron-right" size={18} color={colors.textMuted} />
-          </Pressable>
+              <NativeText
+                numberOfLines={1}
+                style={{ color: colors.text, fontSize: 23, fontWeight: '600', flex: 1 }}
+              >
+                {activityName}
+              </NativeText>
+              <AppIcon name="chevron-right" size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
           {actionError ? (
             <NativeText
               accessibilityRole="alert"
@@ -399,11 +404,20 @@ function ActivitySessionContent({
               {notice}
             </NativeText>
           ) : null}
-          {isActive ? (
+          {isActive && !editingTime ? (
             <>
-              <View style={styles.playback}>
-                <View style={[styles.playbackRing, { backgroundColor: colors.surfaceMuted }]}>
+              <View
+                style={[styles.playback, height < 740 ? { paddingTop: 8, paddingBottom: 4 } : null]}
+              >
+                <View
+                  style={[
+                    styles.playbackRing,
+                    { backgroundColor: colors.surfaceMuted },
+                    height < 740 ? { width: 112, height: 112, borderRadius: 56 } : null,
+                  ]}
+                >
                   <Pressable
+                    cancelable={false}
                     disabled={busy}
                     accessibilityRole="button"
                     accessibilityLabel="Stop tracking now"
@@ -422,11 +436,18 @@ function ActivitySessionContent({
                     }
                     style={({ pressed }) => [
                       styles.pause,
+                      height < 740 ? { width: 84, height: 84, borderRadius: 42 } : null,
                       { backgroundColor: activityColor, opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
                     ]}
                     testID="activity-session-stop-now"
                   >
-                    <AppIcon name="pause" size={46} color={iconForeground} />
+                    <AppIcon
+                      name="pause"
+                      size={46}
+                      color={iconForeground}
+                      fill={iconForeground}
+                      strokeWidth={0}
+                    />
                   </Pressable>
                 </View>
               </View>
@@ -438,6 +459,7 @@ function ActivitySessionContent({
                 nowMs={nowMs}
                 busy={busy}
                 error={actionError}
+                onDelete={openDeleteConfirmation}
                 onSave={async (nextActivityId, timestamp) => {
                   const saved = await runAction(async () => {
                     await store
@@ -455,29 +477,32 @@ function ActivitySessionContent({
               />
             </>
           ) : null}
-          <View
-            style={[styles.deleteArea, { borderColor: colors.border }]}
-            testID="activity-session-actions"
-          >
-            <Pressable
-              disabled={busy}
-              accessibilityRole="button"
-              accessibilityLabel="Delete session"
-              onPress={openDeleteConfirmation}
-              style={({ pressed }) => [
-                styles.deleteButton,
-                { opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
-              ]}
-              testID="activity-session-delete"
+          {!isActive && !editingTime ? (
+            <View
+              style={[styles.deleteArea, { borderColor: colors.border }]}
+              testID="activity-session-actions"
             >
-              <AppIcon name="trash-2" color={colors.danger.foreground} size={18} />
-              <Text
-                textStyle={{ color: colors.danger.foreground, fontSize: 14, fontWeight: '600' }}
+              <Pressable
+                cancelable={false}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel="Delete session"
+                onPress={openDeleteConfirmation}
+                style={({ pressed }) => [
+                  styles.deleteButton,
+                  { opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
+                ]}
+                testID="activity-session-delete"
               >
-                Delete session
-              </Text>
-            </Pressable>
-          </View>
+                <AppIcon name="trash-2" color={colors.danger.foreground} size={18} />
+                <Text
+                  textStyle={{ color: colors.danger.foreground, fontSize: 14, fontWeight: '600' }}
+                >
+                  Delete session
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       </SlideUpSheet>
       <Modal
@@ -546,8 +571,8 @@ function ActivitySessionContent({
 }
 
 const styles = StyleSheet.create({
-  content: { gap: 14, width: '100%', maxWidth: 620 },
-  timer: { paddingTop: 64, paddingBottom: 60, width: '100%', alignItems: 'center' },
+  content: { flex: 1, minHeight: 0, gap: 14, width: '100%', maxWidth: 620 },
+  timer: { flex: 1, minHeight: 48, width: '100%', alignItems: 'center', justifyContent: 'center' },
   activityRow: {
     flexDirection: 'row',
     alignItems: 'center',

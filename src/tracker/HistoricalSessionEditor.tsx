@@ -19,6 +19,7 @@ export interface HistoricalSessionEditorProps {
   isActive: boolean;
   nowMs: number;
   busy: boolean;
+  onEditingChange?: (editing: boolean) => void;
   onSaveStart: (timestamp: number) => Promise<void>;
   onSaveEnd: (timestamp: number) => Promise<void>;
 }
@@ -37,6 +38,7 @@ export function HistoricalSessionEditor({
   isActive,
   nowMs,
   busy,
+  onEditingChange,
   onSaveStart,
   onSaveEnd,
 }: HistoricalSessionEditorProps) {
@@ -64,6 +66,7 @@ export function HistoricalSessionEditor({
       ? 'Now'
       : 'No end recorded';
   const closePicker = () => {
+    onEditingChange?.(false);
     pickerTargetRef.current = null;
     setPickerTarget(null);
     setPickerValueMs(null);
@@ -72,6 +75,7 @@ export function HistoricalSessionEditor({
   const openPicker = (target: SessionDateTimePickerTarget, mode: 'time' | 'datetime' = 'time') => {
     setPickerMode(mode);
     if (busy || (target === 'end' && !canEditEnd)) return;
+    onEditingChange?.(true);
     const selectedValue = target === 'start' ? startMs : (endMs ?? (isActive ? nowMs : startMs));
     pickerTargetRef.current = target;
     setPickerError(null);
@@ -121,6 +125,7 @@ export function HistoricalSessionEditor({
                 {target === 'start' ? 'FROM' : 'TO'}
               </Text>
               <Pressable
+                cancelable={false}
                 disabled={!editable}
                 accessibilityRole="button"
                 accessibilityLabel={`Edit ${target} time, ${text}`}
@@ -140,6 +145,7 @@ export function HistoricalSessionEditor({
                 </Text>
               </Pressable>
               <Pressable
+                cancelable={false}
                 disabled={!editable}
                 accessibilityRole="button"
                 accessibilityLabel={`Edit ${target} date and time`}
