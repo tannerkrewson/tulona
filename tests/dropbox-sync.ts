@@ -491,11 +491,13 @@ class FakeDropbox {
   readonly files = new Map<string, RemoteFile>();
   readonly uploads: UploadArguments[] = [];
   beforeNextUpload: ((upload: UploadArguments) => void | Promise<void>) | null = null;
+  downloadError: Error | null = null;
   downloadGate: Promise<void> | null = null;
   releaseDownload: (() => void) | null = null;
   private revision = 0;
 
   async filesDownload(args: { path: string }): Promise<unknown> {
+    if (this.downloadError) throw this.downloadError;
     if (this.downloadGate) await this.downloadGate;
     const file = this.files.get(args.path);
     if (!file) throw this.error(409, 'not_found');
@@ -582,6 +584,10 @@ class FakeBackupService {
     return clone(this.backup);
   }
 
+  corruptSyncState(key: string): void {
+    this.entries.set(key, 'broken history');
+  }
+
   readSyncState(key: string): string | null {
     return this.entries.get(key) ?? null;
   }
@@ -666,7 +672,10 @@ async function migrationAndCorruptRemote(): Promise<void> {
   const legacyJson = serializeBackup(legacyBackup);
   harness.dropbox.files.set('/tulona-backup.json', { rev: 'legacy-rev', contents: legacyJson });
 
-  await harness.service.syncNow();
+  await expectSetup(harness.service);
+  const review = (await harness.service.getStatus()).setupReview!;
+  assert(harness.dropbox.uploads.length === 0, 'legacy backup must require review before writes');
+  await harness.service.resolveSetup(review.token, 'merge');
   const migrated = harness.dropbox.files.get(DROPBOX_SYNC_PATH);
   assert(migrated, 'first migration must create the new Automerge Dropbox file');
   const document = decodeRemoteDocument(migrated.contents);
@@ -864,7 +873,288 @@ async function localMigrationHistoryAndCrossTabNotifications(): Promise<void> {
   tabB.close();
 }
 
+async function expectSetup(service: DropboxBackupService): Promise<void> {
+  let rejected = false;
+  try {
+    await service.syncNow();
+  } catch {
+    rejected = true;
+  }
+  assert(
+    rejected && (await service.getStatus()).syncPhase === 'setup-required',
+    'setup must pause for an explicit choice'
+  );
+}
+
+async function setupChoicesAndSafety(): Promise<void> {
+  const localBackup = baseBackup();
+  addActivity(localBackup, IDs.activityB, 'Local only', 1);
+  const cloudBackup = baseBackup();
+  addActivity(cloudBackup, IDs.activityC, 'Cloud only', 2);
+  for (const choice of ['cloud', 'local', 'merge'] as const) {
+    const harness = await makeServiceHarness(localBackup);
+    const cloud = createSyncDocument(
+      cloudBackup,
+      actorId(`cloud-${choice}`),
+      '99999999-9999-4999-8999-999999999999'
+    );
+    const originalCloud = remoteDocument(cloud);
+    harness.dropbox.files.set(DROPBOX_SYNC_PATH, { rev: 'original', contents: originalCloud });
+    await expectSetup(harness.service);
+    const status = await harness.service.getStatus();
+    assert(
+      status.setupReview?.local.activities === 2 && status.setupReview.cloud?.activities === 2,
+      'setup must show both datasets without modifying them'
+    );
+    assert(
+      harness.dropbox.uploads.length === 0 &&
+        JSON.stringify(harness.local.currentBackup()) === JSON.stringify(localBackup),
+      'review must be read-only'
+    );
+    await harness.service.resolveSetup(status.setupReview!.token, choice);
+    const result = harness.local.currentBackup();
+    assert(
+      result.catalog.activities.some((a) => a.id === IDs.activityB) === (choice !== 'cloud'),
+      'cloud choice replaces all local records'
+    );
+    assert(
+      result.catalog.activities.some((a) => a.id === IDs.activityC) === (choice !== 'local'),
+      'local choice replaces all cloud records'
+    );
+    assert(
+      (await harness.service.exportRecoveryJson()).includes('Local only'),
+      'local recovery must be exportable'
+    );
+    assert(
+      [...harness.dropbox.files].some(
+        ([path, file]) => path.includes('recovery-') && file.contents === originalCloud
+      ),
+      'cloud recovery must retain original CRDT bytes'
+    );
+    assert(
+      [...harness.dropbox.files].some(
+        ([path, file]) => path.endsWith('-cloud.json') && file.contents.includes('Cloud only')
+      ),
+      'valid cloud data must also have a JSON recovery copy that users can import'
+    );
+    const edited = harness.local.currentBackup();
+    edited.catalog.activities[0]!.name = 'After setup';
+    harness.local.setBackup(edited);
+    await harness.service.syncNow();
+    assert(
+      (await harness.service.getStatus()).setupReview === null,
+      'adopted cloud identity must continue syncing'
+    );
+    assert(
+      projectSyncDocument(
+        decodeRemoteDocument(harness.dropbox.files.get(DROPBOX_SYNC_PATH)!.contents)
+      ).backup.catalog.activities[0]!.name === 'After setup',
+      'edits after adopting cloud must reach Dropbox'
+    );
+    harness.database.close();
+  }
+
+  for (const change of ['local', 'remote'] as const) {
+    const harness = await makeServiceHarness(localBackup);
+    harness.dropbox.files.set(DROPBOX_SYNC_PATH, {
+      rev: 'original',
+      contents: remoteDocument(
+        createSyncDocument(cloudBackup, actorId('stale'), '99999999-9999-4999-8999-999999999999')
+      ),
+    });
+    await expectSetup(harness.service);
+    const review = (await harness.service.getStatus()).setupReview!;
+    if (change === 'local') {
+      const updated = harness.local.currentBackup();
+      updated.settings.weekStartsOn = 5;
+      harness.local.setBackup(updated);
+    } else
+      harness.dropbox.files.set(DROPBOX_SYNC_PATH, {
+        ...harness.dropbox.files.get(DROPBOX_SYNC_PATH)!,
+        rev: 'changed',
+      });
+    let rejected = false;
+    try {
+      await harness.service.resolveSetup(review.token, 'cloud');
+    } catch {
+      rejected = true;
+    }
+    assert(
+      rejected && harness.dropbox.uploads.length === 0,
+      'stale choices must fail before recovery or replacement writes'
+    );
+    harness.database.close();
+  }
+
+  const missing = await makeServiceHarness(localBackup);
+  await missing.service.syncNow();
+  missing.dropbox.files.delete(DROPBOX_SYNC_PATH);
+  missing.dropbox.files.delete('/tulona-backup.json');
+  const uploadCount = missing.dropbox.uploads.length;
+  await expectSetup(missing.service);
+  assert(
+    missing.dropbox.uploads.length === uploadCount,
+    'deleted cloud files must not be silently recreated'
+  );
+  await missing.service.resolveSetup(
+    (await missing.service.getStatus()).setupReview!.token,
+    'local'
+  );
+  assert(
+    missing.dropbox.files.has(DROPBOX_SYNC_PATH),
+    'explicit local choice may recreate missing sync file'
+  );
+  missing.database.close();
+
+  const corrupt = await makeServiceHarness(localBackup);
+  corrupt.dropbox.files.set(DROPBOX_SYNC_PATH, { rev: 'bad', contents: 'unreadable bytes' });
+  corrupt.dropbox.files.set('/tulona-backup.json', {
+    rev: 'backup',
+    contents: serializeBackup(cloudBackup),
+  });
+  await expectSetup(corrupt.service);
+  assert(
+    (await corrupt.service.getStatus()).setupReview?.cloud,
+    'valid JSON backup must be offered for cloud recovery'
+  );
+  await corrupt.service.resolveSetup(
+    (await corrupt.service.getStatus()).setupReview!.token,
+    'cloud'
+  );
+  assert(
+    [...corrupt.dropbox.files].some(
+      ([path, file]) => path.includes('recovery-') && file.contents === 'unreadable bytes'
+    ),
+    'unreadable originals must be archived before replacement'
+  );
+  corrupt.database.close();
+
+  const history = await makeServiceHarness(localBackup);
+  await history.service.syncNow();
+  history.local.corruptSyncState(dropboxSyncStorageKey(DATASET_ID));
+  await expectSetup(history.service);
+  assert(
+    (await history.service.getStatus()).setupReview!.reason.includes('history'),
+    'invalid local history must offer recovery'
+  );
+  await history.service.resolveSetup(
+    (await history.service.getStatus()).setupReview!.token,
+    'cloud'
+  );
+  await history.service.syncNow();
+  history.database.close();
+
+  const lateRace = await makeServiceHarness(localBackup);
+  lateRace.dropbox.files.set(DROPBOX_SYNC_PATH, {
+    rev: 'original',
+    contents: remoteDocument(createSyncDocument(cloudBackup, actorId('late-race'), DATASET_ID)),
+  });
+  // A missing local history with the same cloud ID normally merges; damage history to require review.
+  lateRace.local.corruptSyncState(dropboxSyncStorageKey(DATASET_ID));
+  await expectSetup(lateRace.service);
+  lateRace.dropbox.beforeNextUpload = () => {
+    lateRace.dropbox.files.set(DROPBOX_SYNC_PATH, {
+      rev: 'raced',
+      contents: remoteDocument(createSyncDocument(cloudBackup, actorId('race-winner'), DATASET_ID)),
+    });
+  };
+  let raceRejected = false;
+  try {
+    await lateRace.service.resolveSetup(
+      (await lateRace.service.getStatus()).setupReview!.token,
+      'local'
+    );
+  } catch {
+    raceRejected = true;
+  }
+  assert(
+    raceRejected && lateRace.dropbox.files.get(DROPBOX_SYNC_PATH)!.rev === 'raced',
+    'late cloud changes must not be overwritten'
+  );
+  const reloaded = new DropboxBackupService(lateRace.local, lateRace.database, {
+    appKey: 'test-app-key',
+    authFactory: () => ({}) as DropboxAuth,
+    clientFactory: () => lateRace.dropbox as unknown as Dropbox,
+  });
+  await expectSetup(reloaded);
+  assert(
+    (await reloaded.getStatus()).setupReview!.reason.includes('did not finish'),
+    'interrupted replacement must stay paused across reloads'
+  );
+  lateRace.database.close();
+
+  for (const [failure, phase, message] of [
+    [Object.assign(new Error('expired'), { status: 401 }), 'authentication-required', 'Reconnect'],
+    [Object.assign(new Error('rate limit'), { status: 429 }), 'error', 'wait'],
+    [Object.assign(new Error('quota'), { status: 507 }), 'error', 'storage is full'],
+    [new TypeError('Failed to fetch'), 'offline', 'fetch'],
+  ] as const) {
+    const harness = await makeServiceHarness(localBackup);
+    harness.dropbox.downloadError = failure;
+    try {
+      await harness.service.syncNow();
+    } catch {
+      /* expected */
+    }
+    const status = await harness.service.getStatus();
+    assert(
+      status.syncPhase === phase && status.lastError?.includes(message),
+      'connection failures must show actionable status'
+    );
+    assert(
+      harness.dropbox.uploads.length === 0 &&
+        JSON.stringify(harness.local.currentBackup()) === JSON.stringify(localBackup),
+      'connection failures must preserve local data'
+    );
+    harness.database.close();
+  }
+
+  const changedAccount = await makeServiceHarness(localBackup);
+  changedAccount.dropbox.files.set(DROPBOX_SYNC_PATH, {
+    rev: 'account-review',
+    contents: 'broken',
+  });
+  await expectSetup(changedAccount.service);
+  const accountReview = (await changedAccount.service.getStatus()).setupReview!;
+  const record = JSON.parse((await changedAccount.database.read('tulona:dropbox-backup'))!);
+  record.refreshToken = 'new-account-refresh-token';
+  await changedAccount.database.write('tulona:dropbox-backup', JSON.stringify(record));
+  let accountRejected = false;
+  try {
+    await changedAccount.service.resolveSetup(accountReview.token, 'local');
+  } catch {
+    accountRejected = true;
+  }
+  assert(
+    accountRejected && changedAccount.dropbox.uploads.length === 0,
+    'a choice for another account must not be applied'
+  );
+  changedAccount.database.close();
+
+  const failedArchive = await makeServiceHarness(localBackup);
+  failedArchive.dropbox.files.set(DROPBOX_SYNC_PATH, { rev: 'bad', contents: 'broken' });
+  await expectSetup(failedArchive.service);
+  failedArchive.dropbox.beforeNextUpload = () => {
+    throw new Error('Archive failed');
+  };
+  try {
+    await failedArchive.service.resolveSetup(
+      (await failedArchive.service.getStatus()).setupReview!.token,
+      'local'
+    );
+  } catch {
+    /* expected */
+  }
+  assert(
+    failedArchive.dropbox.files.get(DROPBOX_SYNC_PATH)!.contents === 'broken' &&
+      JSON.stringify(failedArchive.local.currentBackup()) === JSON.stringify(localBackup),
+    'archive failure must prevent any replacement'
+  );
+  failedArchive.database.close();
+}
+
 async function run(): Promise<void> {
+  await setupChoicesAndSafety();
   await automergeSemantics();
   await migrationAndCorruptRemote();
   await revisionAndCreationRaces();

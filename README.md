@@ -123,7 +123,7 @@ merged dataset, and updates the file only against that exact revision. Initial
 creation also uses a conditional add; a competing creator triggers a fresh
 download and merge. A bounded retry handles later revision conflicts.
 
-Automatic synchronization runs after startup and debounced local writes, and
+When enabled, automatic synchronization runs after startup and debounced local writes, and
 when the app regains visibility or network connectivity. The existing manual
 action now synchronizes immediately. The Automerge history and its projected
 dataset are stored locally so a reload does not rebuild synchronization state
@@ -134,9 +134,32 @@ checks and Automerge provide correctness.
 `/tulona-backup.json` remains the human-readable backup and restore format. It
 is not repurposed as the CRDT file. After a successful sync, Tulona conditionally
 updates this JSON projection too. When `/tulona-sync.am` does not exist, Tulona
-bootstraps from the legacy JSON and combines independent local and remote
-records before updating the JSON projection. The regular Backup & restore
+asks which data to use before migrating the legacy JSON and updating the JSON
+projection. The regular Backup & restore
 export/import actions continue to use JSON.
+
+When Dropbox contains a different dataset, an older backup, a missing previously
+synced file, or unreadable sync history, synchronization pauses for a setup review.
+The review shows local and cloud record counts and offers **Use Dropbox data**
+(replace all current local records and settings), **Use this device’s data**
+(replace the cloud dataset), or **Combine both datasets** when cloud data is valid.
+Combining treats matching IDs as the same record; different IDs remain separate.
+Settings and running timers can conflict. Canceling the confirmation changes
+nothing; Disconnect keeps both sources separate. Reconnect can change accounts.
+A readable JSON backup can also recover an unreadable sync document.
+
+Before a confirmed setup changes data, Tulona saves the local JSON recovery copy
+and uploads unique `/tulona-recovery-<id>-*` files containing the original local
+JSON, cloud document/backup, and local sync history. If recovery uploads fail,
+replacement stops. Export the last local recovery copy from the Dropbox panel
+and restore it through Backup & restore; older JSON copies are in Dropbox.
+Original `.am` recovery files retain cloud synchronization history. Recovery
+files are retained until you delete them yourself. The local recovery copy stays
+after disconnecting. Confirmation is bound to the reviewed local snapshot and
+cloud revisions: changes during review require a fresh choice. Interrupted setup
+also requires review before another sync can run, including after a reload.
+Replacing the cloud dataset starts new sync history so other devices must review
+it instead of automatically merging the replaced data back in.
 
 Concurrent edits to separate records or fields merge automatically. Incompatible
 edits, delete-versus-edit, routine ordering collisions, and tracker transitions

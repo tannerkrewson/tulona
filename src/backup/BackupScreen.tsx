@@ -19,7 +19,11 @@ import {
   type TimematorImportResult,
 } from './timemator-import';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
-import type { DropboxBackupService, DropboxBackupStatus } from './dropbox-backup';
+import type {
+  DropboxBackupService,
+  DropboxBackupStatus,
+  DropboxSetupChoice,
+} from './dropbox-backup';
 
 function Summary({ result }: { result: BackupImportResult }) {
   const { colors } = useAppTheme();
@@ -184,10 +188,20 @@ function formatDropboxTimestamp(value: string | null): string {
   }).format(timestamp)}`;
 }
 
+function syncSummary(summary: BackupImportResult['summary']): string {
+  return `${summary.activities} activities, ${summary.folders} folders, ${summary.routines} routines, ${summary.transitions} transitions, ${summary.routineRuns} routine runs, ${summary.habits} habits, ${summary.habitDayStates} habit days, ${summary.goals} goals, ${summary.goalWeeklyStatuses} goal statuses`;
+}
+
 function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
   const { colors } = useAppTheme();
   const [status, setStatus] = useState<DropboxBackupStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [choice, setChoice] = useState<DropboxSetupChoice>('cloud');
+  const [confirmSetup, setConfirmSetup] = useState(false);
+  const chooseSetup = (next: DropboxSetupChoice) => {
+    setChoice(next);
+    setConfirmSetup(true);
+  };
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
@@ -211,7 +225,8 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
       await action();
       refresh();
     } catch (actionError) {
-      setError(errorText(actionError));
+      const nextStatus = await service.getStatus().catch(() => null);
+      if (!nextStatus?.setupReview) setError(errorText(actionError));
       refresh();
     } finally {
       setBusy(false);
@@ -262,7 +277,7 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
           {status?.syncSupported ? (
             <>
               <Switch
-                disabled={busy}
+                disabled={busy || Boolean(status.setupReview)}
                 label="Sync automatically after changes"
                 onValueChange={(value) => void run(() => service.setEnabled(value))}
                 testID="dropbox-auto-backup-enabled"
@@ -295,7 +310,7 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
                   {`${status.unresolvedConflictCount} sync conflict${status.unresolvedConflictCount === 1 ? '' : 's'} need review. Both values are retained in synchronization history.`}
                 </Text>
               ) : null}
-              {status.lastError ? (
+              {status.lastError && !status.setupReview ? (
                 <Text
                   textStyle={{ color: colors.danger.foreground, fontSize: 13 }}
                   testID="dropbox-last-error"
@@ -305,6 +320,96 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
               ) : null}
             </>
           ) : null}
+          {status?.setupReview ? (
+            <Column spacing={10} style={{ width: '100%' }} testID="dropbox-setup-review">
+              <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
+                Choose data for synchronization
+              </Text>
+              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
+                {status.setupReview.reason}
+              </Text>
+              <Text textStyle={{ color: colors.text, fontSize: 13 }}>
+                {`On this device: ${syncSummary(status.setupReview.local)}`}
+              </Text>
+              <Text textStyle={{ color: colors.text, fontSize: 13 }}>
+                {status.setupReview.cloud
+                  ? `In Dropbox: ${syncSummary(status.setupReview.cloud)}`
+                  : 'No readable cloud dataset is available. You can retry, disconnect, or use local data.'}
+              </Text>
+              {status.setupReview.cloud ? (
+                <>
+                  <AppButton
+                    disabled={busy}
+                    label="Use Dropbox data"
+                    onPress={() => chooseSetup('cloud')}
+                    testID="dropbox-use-cloud"
+                    style={{ width: '100%' }}
+                  />
+                  <AppButton
+                    disabled={busy}
+                    label="Combine both datasets"
+                    onPress={() => chooseSetup('merge')}
+                    testID="dropbox-merge"
+                    style={{ width: '100%' }}
+                    variant="outlined"
+                  />
+                </>
+              ) : null}
+              <AppButton
+                disabled={busy}
+                label="Use this device’s data"
+                onPress={() => chooseSetup('local')}
+                testID="dropbox-use-local"
+                style={{ width: '100%' }}
+                variant="outlined"
+              />
+              <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
+                No replacement happens until you confirm. Recovery copies of both sources are saved
+                before changes. Disconnect to keep both datasets separate, or reconnect to another
+                account.
+              </Text>
+            </Column>
+          ) : null}
+          <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
+            Disconnect stops synchronization and keeps your local data and Dropbox files.
+          </Text>
+          <ConfirmationModal
+            visible={confirmSetup && Boolean(status?.setupReview)}
+            title={
+              choice === 'cloud'
+                ? 'Replace this device’s data?'
+                : choice === 'local'
+                  ? 'Replace Dropbox data?'
+                  : 'Combine both datasets?'
+            }
+            message={
+              choice === 'cloud'
+                ? 'All current activities, history, habits, goals, settings and running timers on this device will be replaced by Dropbox data. Other devices continue using the cloud dataset. A recovery copy of your current data will be saved.'
+                : choice === 'local'
+                  ? 'Dropbox will use this device’s complete dataset, including settings and running timers. Existing Dropbox data will be saved in recovery files. Other connected devices may need to choose this new dataset before syncing.'
+                  : 'Records from both datasets will be combined. Matching IDs are treated as the same record; different IDs remain separate. Conflicting settings, timers or edits may need review. Recovery copies preserve the original datasets.'
+            }
+            confirmLabel={choice === 'merge' ? 'Combine and sync' : 'Replace and sync'}
+            cancelLabel="Cancel"
+            busy={busy}
+            tone="danger"
+            onCancel={() => setConfirmSetup(false)}
+            onConfirm={() => {
+              const review = status?.setupReview;
+              const selected = choice;
+              if (!review || !selected) return;
+              void run(async () => {
+                try {
+                  await service.resolveSetup(review.token, selected);
+                } finally {
+                  setConfirmSetup(false);
+                }
+              });
+            }}
+            testID="dropbox-setup-confirmation"
+            confirmTestID="dropbox-setup-confirm"
+            cancelTestID="dropbox-setup-cancel"
+          />
           <Row spacing={8} style={{ width: '100%' }}>
             {status?.syncSupported ? (
               <AppButton
@@ -324,10 +429,10 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
               variant="outlined"
             />
           </Row>
-          {status?.syncSupported && status.syncPhase === 'authentication-required' ? (
+          {status?.syncSupported ? (
             <AppButton
               disabled={busy}
-              label="Reconnect to Dropbox"
+              label="Reconnect or change Dropbox account"
               onPress={() =>
                 void run(async () => {
                   const { url } = await service.beginAuthorization();
@@ -352,6 +457,24 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
           }
           style={{ height: 50, width: '100%' }}
           testID="dropbox-connect"
+        />
+      ) : null}
+      {status?.recoveryAvailable ? (
+        <AppButton
+          disabled={busy}
+          label="Export data from before last sync setup"
+          onPress={() =>
+            void run(async () => {
+              if (!downloadBackupJson(await service.exportRecoveryJson())) {
+                throw new Error(
+                  'Recovery download is available in Tulona on the web. Cloud recovery files are also available in Dropbox.'
+                );
+              }
+            })
+          }
+          testID="dropbox-export-recovery"
+          style={{ width: '100%' }}
+          variant="outlined"
         />
       ) : null}
       {error ? (

@@ -4,6 +4,7 @@ import { createId } from '@domain';
 import type { KeyValueDatabase } from '@data';
 
 import { basePath } from '../pwa/basePath';
+import type { BackupImportResult } from './backup-import';
 import type { BackupService } from './backup-service';
 import type { LifeTrackerBackup } from './backup-schema';
 import { serializeBackup } from './backup-export';
@@ -91,8 +92,36 @@ interface DropboxSyncStateRecord {
   updatedAt: string;
 }
 
+export type DropboxSetupChoice = 'cloud' | 'local' | 'merge';
+export interface DropboxSetupReview {
+  token: string;
+  reason: string;
+  local: BackupImportResult['summary'];
+  cloud: BackupImportResult['summary'] | null;
+}
+interface PendingSetup {
+  review: DropboxSetupReview;
+  datasetId: string;
+  localBackup: LifeTrackerBackup;
+  localStateRaw: string | null;
+  remoteRevision: string | null;
+  legacyRevision: string | null;
+  refreshToken: string;
+}
+class SetupRequiredError extends Error {}
+
+export const DROPBOX_RECOVERY_KEY = 'tulona:dropbox-recovery';
+const DROPBOX_SETUP_PENDING_KEY = 'tulona:dropbox-setup-pending';
+
 export type DropboxSyncPhase =
-  'idle' | 'syncing' | 'synced' | 'offline' | 'error' | 'authentication-required' | 'conflict';
+  | 'idle'
+  | 'syncing'
+  | 'synced'
+  | 'offline'
+  | 'error'
+  | 'authentication-required'
+  | 'conflict'
+  | 'setup-required';
 
 export interface DropboxBackupStatus {
   appKeyConfigured: boolean;
@@ -104,6 +133,8 @@ export interface DropboxBackupStatus {
   lastError: string | null;
   syncPhase: DropboxSyncPhase;
   unresolvedConflictCount: number;
+  setupReview: DropboxSetupReview | null;
+  recoveryAvailable: boolean;
 }
 
 export interface DropboxAuthorizationStart {
@@ -154,6 +185,8 @@ function isAuthenticationError(error: unknown): boolean {
     status === 401 ||
     status === 403 ||
     message.includes('invalid_access_token') ||
+    message.includes('invalid_grant') ||
+    message.includes('expired_access_token') ||
     message.includes('missing_scope') ||
     message.includes('insufficient_scope')
   );
@@ -357,6 +390,7 @@ export class DropboxBackupService {
   private lastSyncAt: string | null = null;
   private lastError: string | null = null;
   private syncPhase: DropboxSyncPhase = 'idle';
+  private pendingSetup: PendingSetup | null = null;
   private unresolvedConflictCount = 0;
   private readonly statusListeners = new Set<(status: DropboxBackupStatus) => void>();
   private readonly actorId: string;
@@ -396,6 +430,8 @@ export class DropboxBackupService {
       lastError: this.lastError,
       syncPhase: this.syncPhase,
       unresolvedConflictCount: this.unresolvedConflictCount,
+      setupReview: this.pendingSetup?.review ?? null,
+      recoveryAvailable: (await this.database.read(DROPBOX_RECOVERY_KEY)) !== null,
     };
   }
 
@@ -493,6 +529,7 @@ export class DropboxBackupService {
     this.lastError = null;
     this.syncPhase = 'idle';
     this.unresolvedConflictCount = 0;
+    this.pendingSetup = null;
     void this.publishStatus();
   }
 
@@ -508,6 +545,32 @@ export class DropboxBackupService {
     const task = this.syncQueue.then(() => this.withCrossTabLock(() => this.synchronize()));
     this.syncQueue = task.catch(() => undefined);
     return task;
+  }
+
+  /** A choice is bound to the exact local snapshot and cloud revisions shown in the review. */
+  resolveSetup(token: string, choice: DropboxSetupChoice): Promise<void> {
+    const pending = this.pendingSetup;
+    if (!pending || pending.review.token !== token) {
+      return Promise.reject(new Error('Refresh the Dropbox setup review before continuing.'));
+    }
+    if (
+      !['cloud', 'local', 'merge'].includes(choice) ||
+      (choice !== 'local' && !pending.review.cloud)
+    ) {
+      return Promise.reject(new Error('That setup choice is unavailable for this cloud file.'));
+    }
+    this.cancelAutomaticTimer();
+    const task = this.syncQueue.then(() =>
+      this.withCrossTabLock(() => this.synchronize({ pending, choice }))
+    );
+    this.syncQueue = task.catch(() => undefined);
+    return task;
+  }
+
+  async exportRecoveryJson(): Promise<string> {
+    const saved = await this.database.read(DROPBOX_RECOVERY_KEY);
+    if (!saved) throw new Error('No Dropbox recovery copy is available.');
+    return serializeBackup(this.backupService.inspectImport(saved).backup);
   }
 
   /** Existing lifecycle entry point retained for boot-coordinator compatibility. */
@@ -540,7 +603,8 @@ export class DropboxBackupService {
     if (typeof window !== 'undefined') window.addEventListener('online', this.onOnline);
     void this.getStatus()
       .then((status) => {
-        if (status.connected && status.syncSupported) void this.syncNow().catch(() => undefined);
+        if (status.connected && status.syncSupported && status.enabled)
+          void this.syncNow().catch(() => undefined);
       })
       .catch((error: unknown) => this.setFailure(error));
     return () => this.stopAutomaticSynchronization();
@@ -584,7 +648,7 @@ export class DropboxBackupService {
     this.automaticDirty = false;
     try {
       const status = await this.getStatus();
-      if (!status.connected || !status.enabled) return;
+      if (!status.connected || !status.enabled || status.setupReview) return;
       await this.syncNow();
     } catch {
       // Keep local data and CRDT history; the next local write, focus, or manual action retries.
@@ -605,7 +669,10 @@ export class DropboxBackupService {
     await locks.request(SYNC_LOCK_NAME, { mode: 'exclusive' }, operation);
   }
 
-  private async synchronize(): Promise<void> {
+  private async synchronize(resolution?: {
+    pending: PendingSetup;
+    choice: DropboxSetupChoice;
+  }): Promise<void> {
     this.syncPhase = 'syncing';
     this.lastError = null;
     void this.publishStatus();
@@ -631,58 +698,178 @@ export class DropboxBackupService {
         const local = await this.backupService.exportSynchronizationSnapshot();
         const syncStateKey = dropboxSyncStorageKey(local.datasetId);
         const localStateRaw = local.entries.get(syncStateKey) ?? null;
-        const localState = parseSyncState(localStateRaw);
-        if (localState && localState.datasetId !== local.datasetId) {
-          throw new Error(
-            'Local Dropbox synchronization history belongs to a different Tulona dataset'
-          );
-        }
-        let localDocument = localState
-          ? syncDocument.loadSyncDocument(decodeBase64(localState.document), this.actorId)
-          : syncDocument.createSyncDocument(local.backup, this.actorId, local.datasetId);
-        if (localState && !sameDataset(localState.projection, local.backup)) {
-          localDocument = syncDocument.updateSyncDocumentFromBackup(
-            localDocument,
-            localState.projection,
-            local.backup
-          );
+        let localState: DropboxSyncStateRecord | null = null;
+        let localDocument: SyncDocument | null = null;
+        let historyError = false;
+        try {
+          localState = parseSyncState(localStateRaw);
+          if (localState && localState.datasetId !== local.datasetId)
+            throw new Error('Invalid history');
+          localDocument = localState
+            ? syncDocument.loadSyncDocument(decodeBase64(localState.document), this.actorId)
+            : syncDocument.createSyncDocument(local.backup, this.actorId, local.datasetId);
+          if (localState && !sameDataset(localState.projection, local.backup)) {
+            localDocument = syncDocument.updateSyncDocumentFromBackup(
+              localDocument,
+              localState.projection,
+              local.backup
+            );
+          }
+        } catch {
+          historyError = true;
         }
 
         const remoteFile = await this.downloadFile(client, DROPBOX_SYNC_PATH);
+        let legacyFile = remoteFile ? null : await this.downloadFile(client, DROPBOX_BACKUP_PATH);
         let remoteDocument: SyncDocument | null = null;
-        let legacyBackup: LifeTrackerBackup | null = null;
-        if (remoteFile) {
-          remoteDocument = decodeRemoteDocument(remoteFile.contents, this.actorId, syncDocument);
-        } else {
-          const legacyFile = await this.downloadFile(client, DROPBOX_BACKUP_PATH);
-          if (legacyFile)
-            legacyBackup = this.backupService.inspectImport(legacyFile.contents).backup;
+        let cloudBackup: LifeTrackerBackup | null = null;
+        let cloudError = false;
+        try {
+          if (remoteFile) {
+            remoteDocument = decodeRemoteDocument(remoteFile.contents, this.actorId, syncDocument);
+            cloudBackup = this.backupService.inspectImport(
+              syncDocument.projectSyncDocument(remoteDocument).backup
+            ).backup;
+          } else if (legacyFile) {
+            cloudBackup = this.backupService.inspectImport(legacyFile.contents).backup;
+          }
+        } catch {
+          cloudError = true;
+          if (remoteFile) {
+            // A readable JSON snapshot can recover a damaged Automerge file, by explicit choice.
+            remoteDocument = null;
+            legacyFile = await this.downloadFile(client, DROPBOX_BACKUP_PATH);
+            if (legacyFile) {
+              try {
+                cloudBackup = this.backupService.inspectImport(legacyFile.contents).backup;
+              } catch {
+                cloudBackup = null;
+              }
+            }
+          }
         }
         if (generation !== this.uploadGeneration) return;
 
-        let merged = localDocument;
-        if (remoteDocument) {
+        const interruptedSetup =
+          (await this.database.read(DROPBOX_SETUP_PENDING_KEY)) === local.datasetId;
+        const reason = interruptedSetup
+          ? 'A previous sync setup did not finish. Recovery copies were saved. Review both datasets before continuing.'
+          : cloudError
+            ? cloudBackup
+              ? 'The Dropbox sync file is unreadable. A valid JSON backup is available for recovery. Choose which data to use.'
+              : 'The Dropbox file is unreadable or uses an unsupported format. It will not be overwritten without your approval.'
+            : historyError
+              ? 'Local sync history is unreadable. Choose which data to use to rebuild synchronization.'
+              : remoteDocument && remoteDocument.datasetId !== localDocument?.datasetId
+                ? 'Dropbox contains a different Tulona dataset. Choose what to keep before syncing.'
+                : legacyFile && !remoteFile
+                  ? 'Dropbox contains an older JSON backup. Choose how to set up synchronization.'
+                  : !remoteFile && localState
+                    ? 'The Dropbox sync file is missing. It may have been deleted or you may have connected a different account.'
+                    : null;
+
+        if (resolution) {
+          const expected = resolution.pending;
+          if (
+            attempt > 0 ||
+            authRecord.refreshToken !== expected.refreshToken ||
+            local.datasetId !== expected.datasetId ||
+            !sameDataset(local.backup, expected.localBackup) ||
+            localStateRaw !== expected.localStateRaw ||
+            (remoteFile?.rev ?? null) !== expected.remoteRevision ||
+            (legacyFile?.rev ?? null) !== expected.legacyRevision
+          ) {
+            resolution = undefined;
+            this.pendingSetup = null;
+            throw new SetupRequiredError(
+              'Data changed while you reviewed setup. Refresh with Sync now and choose again.'
+            );
+          }
+          // Preserve both sources before applying a replacement, including unreadable cloud bytes.
+          const recoveryJson = serializeBackup(local.backup);
+          await this.database.write(DROPBOX_RECOVERY_KEY, recoveryJson);
+          await this.database.verify(DROPBOX_RECOVERY_KEY, recoveryJson);
+          const recoveryId = createId();
+          const copies = [
+            { suffix: 'local.json', contents: serializeBackup(local.backup) },
+            ...(remoteFile ? [{ suffix: 'cloud.am', contents: remoteFile.contents }] : []),
+            ...(cloudBackup
+              ? [{ suffix: 'cloud.json', contents: serializeBackup(cloudBackup) }]
+              : []),
+            ...(legacyFile
+              ? [{ suffix: 'original-cloud.json', contents: legacyFile.contents }]
+              : []),
+            ...(localStateRaw ? [{ suffix: 'history.json', contents: localStateRaw }] : []),
+          ];
+          for (const copy of copies) {
+            if (generation !== this.uploadGeneration) return;
+            await client.filesUpload({
+              path: `/tulona-recovery-${recoveryId}-${copy.suffix}`,
+              contents: copy.contents,
+              mode: { '.tag': 'add' },
+              autorename: false,
+              strict_conflict: true,
+              mute: true,
+            });
+          }
+        } else if (reason) {
+          this.pendingSetup = {
+            review: {
+              token: createId(),
+              reason,
+              local: this.backupService.inspectImport(local.backup).summary,
+              cloud: cloudBackup ? this.backupService.inspectImport(cloudBackup).summary : null,
+            },
+            datasetId: local.datasetId,
+            localBackup: local.backup,
+            localStateRaw,
+            remoteRevision: remoteFile?.rev ?? null,
+            legacyRevision: legacyFile?.rev ?? null,
+            refreshToken: authRecord.refreshToken,
+          };
+          throw new SetupRequiredError(reason);
+        }
+
+        if (generation !== this.uploadGeneration) return;
+        if (resolution) {
+          await this.database.write(DROPBOX_SETUP_PENDING_KEY, local.datasetId);
+          await this.database.verify(DROPBOX_SETUP_PENDING_KEY, local.datasetId);
+        }
+
+        let merged: SyncDocument;
+        if (resolution?.choice === 'cloud') {
+          if (!cloudBackup) throw new Error('Dropbox data is unavailable. Refresh setup.');
+          merged =
+            remoteDocument ??
+            syncDocument.createSyncDocument(cloudBackup, this.actorId, createId());
+        } else if (resolution?.choice === 'local') {
+          merged = syncDocument.createSyncDocument(local.backup, this.actorId, createId());
+        } else if (resolution?.choice === 'merge') {
+          if (!cloudBackup) throw new Error('Dropbox data is unavailable. Refresh setup.');
+          const cloudDocument =
+            remoteDocument ??
+            syncDocument.createSyncDocument(cloudBackup, syncDocument.randomActorId(), createId());
           merged = syncDocument.mergeSyncDocuments(
-            localDocument,
-            remoteDocument,
-            localState?.projection
+            syncDocument.createSyncDocument(local.backup, this.actorId, cloudDocument.datasetId),
+            cloudDocument
           );
-        } else if (legacyBackup) {
-          merged = syncDocument.mergeSyncDocuments(
-            localDocument,
-            syncDocument.createSyncDocument(
-              legacyBackup,
-              syncDocument.randomActorId(),
-              local.datasetId
-            ),
-            localState?.projection
-          );
+        } else {
+          if (!localDocument) throw new Error('Local sync history is unavailable.');
+          merged = remoteDocument
+            ? syncDocument.mergeSyncDocuments(localDocument, remoteDocument, localState?.projection)
+            : localDocument;
         }
 
         let latestLocal = await this.backupService.exportSynchronizationSnapshot();
+        if (generation !== this.uploadGeneration) return;
         if (latestLocal.datasetId !== local.datasetId) {
           throw new Error(
             'The active Tulona dataset changed during synchronization; synchronize again for the active dataset.'
+          );
+        }
+        if (resolution && !sameDataset(local.backup, latestLocal.backup)) {
+          throw new SetupRequiredError(
+            'Local data changed during setup. Refresh with Sync now and choose again.'
           );
         }
         if (!sameDataset(local.backup, latestLocal.backup)) {
@@ -709,6 +896,7 @@ export class DropboxBackupService {
           [...latestLocal.entries].filter(([key]) => key.startsWith(`ds:${latestLocal.datasetId}:`))
         );
         const expectedSyncState = latestLocal.entries.get(syncStateKey) ?? null;
+        if (generation !== this.uploadGeneration) return;
         const applied = await this.backupService.applySynchronizationProjection(
           projection.backup,
           latestLocal.datasetId,
@@ -718,6 +906,10 @@ export class DropboxBackupService {
           stateValue
         );
         if (!applied) {
+          if (resolution)
+            throw new SetupRequiredError(
+              'Local data changed during setup. Refresh with Sync now and choose again.'
+            );
           await delay(retryDelay(attempt));
           continue;
         }
@@ -728,7 +920,7 @@ export class DropboxBackupService {
         if (remoteDocument && sameHeads(merged, remoteDocument, syncDocument)) {
           await this.uploadHumanReadableBackup(client, projection.backup, generation);
           if (generation !== this.uploadGeneration) return;
-          this.markSynchronized();
+          await this.markSynchronized();
           return;
         }
 
@@ -749,6 +941,12 @@ export class DropboxBackupService {
           );
         } catch (error) {
           if (!isDropboxConflict(error)) throw error;
+          if (resolution) {
+            this.pendingSetup = null;
+            throw new SetupRequiredError(
+              'Dropbox changed during setup. Recovery copies were saved. Refresh with Sync now and choose again.'
+            );
+          }
           if (attempt + 1 === this.maxRetries) {
             this.syncPhase = 'conflict';
             throw new Error(
@@ -763,7 +961,7 @@ export class DropboxBackupService {
         if (generation !== this.uploadGeneration) return;
         await this.uploadHumanReadableBackup(client, projection.backup, generation);
         if (generation !== this.uploadGeneration) return;
-        this.markSynchronized();
+        await this.markSynchronized();
         return;
       }
       this.syncPhase = 'conflict';
@@ -836,7 +1034,9 @@ export class DropboxBackupService {
     }
   }
 
-  private markSynchronized(): void {
+  private async markSynchronized(): Promise<void> {
+    await this.database.remove(DROPBOX_SETUP_PENDING_KEY);
+    this.pendingSetup = null;
     this.lastSyncAt = new Date(this.now()).toISOString();
     this.lastError = null;
     this.syncPhase = this.unresolvedConflictCount > 0 ? 'conflict' : 'synced';
@@ -846,14 +1046,22 @@ export class DropboxBackupService {
   private setFailure(error: unknown): void {
     this.lastError = isAuthenticationError(error)
       ? 'Dropbox access needs attention. Reconnect and approve the requested content read/write and metadata read scopes.'
-      : errorMessage(error);
-    this.syncPhase = isAuthenticationError(error)
-      ? 'authentication-required'
-      : errorMessage(error).includes('active Tulona dataset')
-        ? 'conflict'
-        : errorStatus(error) === null
-          ? 'offline'
-          : 'error';
+      : errorStatus(error) === 429
+        ? 'Dropbox is receiving too many requests. Your local data is saved; wait a moment and retry.'
+        : errorStatus(error) === 507
+          ? 'Dropbox storage is full. Free some space, then retry. Your local data is saved.'
+          : errorMessage(error);
+    this.syncPhase =
+      error instanceof SetupRequiredError
+        ? 'setup-required'
+        : isAuthenticationError(error)
+          ? 'authentication-required'
+          : errorMessage(error).includes('active Tulona dataset')
+            ? 'conflict'
+            : errorStatus(error) === 0 ||
+                (error instanceof TypeError && /fetch|network|offline/i.test(errorMessage(error)))
+              ? 'offline'
+              : 'error';
     void this.publishStatus();
   }
 
