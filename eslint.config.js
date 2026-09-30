@@ -11,6 +11,7 @@ module.exports = [
       'web-build/**',
       'mcp/bin/**',
       'mcp/.test-build/**',
+      'mcp/.package/**',
     ],
   },
   {

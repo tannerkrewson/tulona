@@ -11,6 +11,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
+    "package": "node package.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node build.mjs --test"
   },

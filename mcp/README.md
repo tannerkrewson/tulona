@@ -23,7 +23,7 @@ app's local storage or modify the Automerge file.
 Run this in a terminal on the machine where your MCP client runs:
 
 ```bash
-npx --yes --allow-git=all --ignore-scripts --legacy-peer-deps github:tannerkrewson/tulona#main login --app-key YOUR_DROPBOX_APP_KEY
+npx --yes --allow-git=all github:tannerkrewson/tulona#mcp login --app-key YOUR_DROPBOX_APP_KEY
 ```
 
 Open the printed URL in a browser, approve read access, and paste the code
@@ -54,13 +54,7 @@ For Claude Desktop or Cursor, add this server to the client's MCP JSON config
   "mcpServers": {
     "tulona": {
       "command": "npx",
-      "args": [
-        "--yes",
-        "--allow-git=all",
-        "--ignore-scripts",
-        "--legacy-peer-deps",
-        "github:tannerkrewson/tulona#main"
-      ]
+      "args": ["--yes", "--allow-git=all", "github:tannerkrewson/tulona#mcp"]
     }
   }
 }
@@ -72,15 +66,19 @@ accept a command and arguments can use these same values. Restart or reconnect
 the client after adding the server. If a desktop app cannot find `npx`, use
 its absolute path; on Windows it may need `npx.cmd`.
 
-For a reproducible installation, replace `#main` with a full commit SHA in both
-the login command and client config. Update the SHA when you want a new build.
-`--allow-git=all` permits the GitHub package source on recent npm versions;
-`--ignore-scripts` skips install hooks because the MCP is already bundled;
-`--legacy-peer-deps` accommodates the Expo app's peer dependencies.
+For a reproducible installation, replace `#mcp` with a full **distribution-branch**
+commit SHA in both the login command and client config. Update the SHA when you
+want a new build.
+`--allow-git=all` permits the GitHub package source on recent npm versions.
+The `mcp` branch contains the bundled executable, documentation, and licenses.
+Its package has no dependencies or install hooks, so it needs neither
+`--legacy-peer-deps` nor `--ignore-scripts`. CI updates that branch after the
+MCP checks pass on `main`; all source and shared app code live on `main`.
 
-**GitHub `npx` installs the repository's root package**, including its app
-dependencies. That makes the initial download larger than the MCP itself.
-For a smaller installation, clone the repo and run the included bundle directly:
+Use `#mcp` for MCP installation, rather than `#main`: the source branch's root
+package is the Expo app and still has its beta React Native peer requirements.
+If you prefer a local source checkout, clone the repo and run the included
+bundle directly:
 
 ```bash
 git clone https://github.com/tannerkrewson/tulona.git
@@ -159,14 +157,17 @@ is complete. All CLI messages go to stderr; stdout is reserved for MCP.
 Only the MCP package's dependencies are needed to rebuild it:
 
 ```bash
-npm ci --prefix mcp --ignore-scripts
+npm ci --prefix mcp --ignore-scripts --legacy-peer-deps=false
 npm --prefix mcp run typecheck
 npm --prefix mcp test
 npm --prefix mcp run build
+npm --prefix mcp run package
 ```
 
 The committed `mcp/bin/tulona-mcp.cjs` bundles its runtime dependencies and the
 shared app code. Rebuild it whenever shared backup or domain logic changes.
 `Check read-only MCP` CI verifies the tests, independent typecheck, and that
-the committed bundle matches the source. Dependency licenses are generated in
-`mcp/bin/THIRD_PARTY_LICENSES.txt`.
+the committed bundle matches the source, then updates the `mcp` distribution
+branch on a successful `main` build. `package.mjs` creates that branch's
+dependency-free package in `mcp/.package` by default, or in a supplied directory.
+Dependency licenses are generated in `mcp/bin/THIRD_PARTY_LICENSES.txt`.

@@ -4,6 +4,7 @@ node_modules
 web-build
 mcp/bin
 mcp/.test-build
+mcp/.package
 .beads
 .agents
 .claude

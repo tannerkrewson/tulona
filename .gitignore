@@ -4,6 +4,7 @@ node_modules/
 dist/
 web-build/
 mcp/.test-build/
+mcp/.package/
 expo-env.d.ts
 
 # Generated native projects
