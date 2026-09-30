@@ -1,5 +1,5 @@
 import { Host } from '@expo/ui';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -9,10 +9,18 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@theme';
+
+// React Native's style type excludes browser gesture and scroll properties.
+// Keep the explicit web extension behind Platform.OS guards.
+const webDragStyle: ViewStyle & Pick<CSSProperties, 'touchAction' | 'overscrollBehavior'> = {
+  touchAction: 'none',
+  overscrollBehavior: 'none',
+};
 
 export interface SlideUpSheetProps {
   children: ReactNode;
@@ -176,9 +184,7 @@ export function SlideUpSheet({
             {
               backgroundColor: backgroundColor ?? colors.background,
               paddingBottom: Math.max(insets.bottom, 16),
-              ...(!scrollable && Platform.OS === 'web'
-                ? { touchAction: 'none', overscrollBehavior: 'none' }
-                : {}),
+              ...(!scrollable && Platform.OS === 'web' ? webDragStyle : {}),
             },
             { transform: [{ translateY }] },
           ]}
@@ -194,7 +200,7 @@ export function SlideUpSheet({
             onAccessibilityAction={({ nativeEvent }) => {
               if (nativeEvent.actionName === 'activate') onClose();
             }}
-            style={[styles.handleArea, Platform.OS === 'web' ? { touchAction: 'none' } : null]}
+            style={[styles.handleArea, Platform.OS === 'web' ? webDragStyle : null]}
           >
             <View style={[styles.handle, { backgroundColor: colors.textMuted }]} />
           </View>
