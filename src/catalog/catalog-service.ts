@@ -394,7 +394,7 @@ export function resolveCatalogColor(
 ): string | null {
   const folder =
     item.folderId === null ? null : folders.find((candidate) => candidate.id === item.folderId);
-  return folder ? folder.color : item.color;
+  return folder?.color ?? item.color;
 }
 
 export function resolveDisplayColor(

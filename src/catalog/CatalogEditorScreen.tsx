@@ -260,9 +260,7 @@ function ActivityEditor({
   const originalFolderId = activity?.folderId ?? null;
   const selectedFolder =
     folderId === ROOT_VALUE ? null : folders.find((folder) => folder.id === folderId);
-  const previewColor = selectedFolder
-    ? (selectedFolder.color ?? colors.primary)
-    : color || colors.primary;
+  const previewColor = selectedFolder?.color ?? (color || colors.primary);
 
   const run = async (action: () => Promise<void>, returnToPrevious = false) => {
     lastAction.current = action;

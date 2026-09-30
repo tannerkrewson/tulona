@@ -382,6 +382,19 @@ async function run(): Promise<void> {
     reorderHabits(habits, habits[1].id, 'up')[0]?.sortOrder === 0,
     'habit ordering must be pure and normalized'
   );
+  const uncoloredFolder = { ...folder, color: null };
+  const coloredChild = { folderId: folder.id, color: '#176B87' };
+  assert(
+    resolveCatalogColor(coloredChild, [uncoloredFolder]) === coloredChild.color &&
+      resolveDisplayColor(coloredChild, [uncoloredFolder], '#FFFFFF') === coloredChild.color,
+    'an uncolored folder must retain its child activity color, including imported folder placement'
+  );
+  assert(
+    resolveCatalogColor({ ...coloredChild, color: null }, [uncoloredFolder]) === null &&
+      resolveDisplayColor({ ...coloredChild, color: null }, [uncoloredFolder], '#FFFFFF') ===
+        '#FFFFFF',
+    'uncolored children and folders must still use the active theme base'
+  );
   const legacyColor = { folderId: null, color: '#176B87' } as const;
   assert(
     resolveCatalogColor(legacyColor, []) === legacyColor.color &&
