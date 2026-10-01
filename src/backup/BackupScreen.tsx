@@ -234,7 +234,7 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
   };
 
   const connected = status?.connected ?? false;
-  const appKeyConfigured = status?.appKeyConfigured ?? false;
+  const dropboxAvailable = Boolean(status?.appKeyConfigured && status.syncSupported);
 
   return (
     <Column
@@ -256,20 +256,13 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
         Keep this dataset synchronized across Tulona tabs and devices. Local data remains available
         if Dropbox is offline.
       </Text>
-      {!appKeyConfigured ? (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 13 }} testID="dropbox-app-key-help">
-          Dropbox is not configured for this build. Set EXPO_PUBLIC_DROPBOX_APP_KEY and register the
-          /dropbox-auth redirect URI in the Dropbox app.
-        </Text>
-      ) : null}
-      {status && !status.syncSupported ? (
+      {status && !dropboxAvailable ? (
         <Text
           textStyle={{ color: colors.textMuted, fontSize: 13 }}
           testID="dropbox-sync-unsupported"
         >
-          Dropbox synchronization is unavailable in this app runtime because it does not support
-          WebAssembly. Your local data is safe; use backup export/import or sync with Tulona on the
-          web.
+          Dropbox sync isn’t available in this version of Tulona. Use Export JSON below to keep a
+          backup.
         </Text>
       ) : null}
       {connected ? (
@@ -445,9 +438,9 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
             />
           ) : null}
         </>
-      ) : status?.syncSupported ? (
+      ) : dropboxAvailable ? (
         <AppButton
-          disabled={busy || !appKeyConfigured}
+          disabled={busy}
           label="Connect Dropbox"
           onPress={() =>
             void run(async () => {

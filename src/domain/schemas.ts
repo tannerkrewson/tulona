@@ -62,6 +62,7 @@ export const historicalActivitySnapshotSchema = z
     iconName: z.string().nullable(),
     folderId: uuid.nullable(),
     folderName: z.string().nullable(),
+    folderColor: z.string().nullable().optional(),
     capturedAt: isoTimestamp.optional(),
   })
   .passthrough();

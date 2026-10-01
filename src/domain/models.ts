@@ -126,6 +126,8 @@ export interface HistoricalActivitySnapshot {
   iconName: string | null;
   folderId: UUID | null;
   folderName: string | null;
+  /** The folder's color when captured; absent on snapshots recorded before it existed. */
+  folderColor?: string | null;
   capturedAt?: IsoTimestamp;
 }
 

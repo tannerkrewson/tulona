@@ -10,6 +10,7 @@ import {
   defaultGoalSettings,
   currentHistoryPeriod,
   historicalActivitySnapshotForCatalogItem,
+  historicalSnapshotColor,
   historyDayPeriod,
   logicalDayBounds,
   historyMonthPeriod,
@@ -493,6 +494,46 @@ assertEqual(
   'daily grouping clips a cross-day session to day one'
 );
 assertEqual(weekDays[1].totalMs, 0, 'daily grouping leaves the following day empty after clipping');
+
+const coloredFolder: Folder = { ...folder(ids.folder, 'Work'), color: '#2563eb' };
+const folderedActivity = activity(ids.first, 'Deep work', ids.folder, '#111111');
+const coloredFolderSnapshot = createHistoricalActivitySnapshot(folderedActivity, coloredFolder);
+assertEqual(
+  historicalSnapshotColor(coloredFolderSnapshot),
+  '#2563eb',
+  'colored folders lend their color to captured activity snapshots'
+);
+assertEqual(
+  historicalSnapshotColor(
+    createHistoricalActivitySnapshot(folderedActivity, folder(ids.folder, 'Work'))
+  ),
+  '#111111',
+  'uncolored folders keep the activity color'
+);
+const { folderColor: _folderColor, ...legacyFolderSnapshot } = coloredFolderSnapshot;
+assertEqual(
+  historicalSnapshotColor(legacyFolderSnapshot, [coloredFolder]),
+  '#2563eb',
+  'snapshots captured before folder colors follow the current folder color'
+);
+assertEqual(
+  aggregateHistory(
+    [session(ids.transitionA, ids.first, 0, 60_000, legacyFolderSnapshot)],
+    undefined,
+    catalog({ folders: [coloredFolder] })
+  ).activities[0].color,
+  '#2563eb',
+  'history totals show folder colors like the tracker'
+);
+assertEqual(
+  aggregateHistory(
+    [session(ids.transitionA, ids.first, 0, 60_000)],
+    undefined,
+    catalog({ folders: [coloredFolder], activities: [folderedActivity] })
+  ).activities[0].color,
+  '#2563eb',
+  'catalog-resolved history totals show folder colors'
+);
 
 async function run(): Promise<void> {
   // New writes snapshot catalog metadata; timestamp edits preserve it, reassignment refreshes it.

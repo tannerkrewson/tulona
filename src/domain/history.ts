@@ -441,7 +441,7 @@ export function materializeHistorySessions(
 
 export function createHistoricalActivitySnapshot(
   item: Pick<TrackableItem, 'id' | 'kind' | 'name' | 'color' | 'iconName' | 'folderId'>,
-  folder?: Pick<Folder, 'id' | 'name'> | null,
+  folder?: Pick<Folder, 'id' | 'name' | 'color'> | null,
   capturedAt?: IsoTimestamp
 ): HistoricalActivitySnapshot {
   return {
@@ -452,6 +452,7 @@ export function createHistoricalActivitySnapshot(
     iconName: item.iconName,
     folderId: item.folderId,
     folderName: folder?.name ?? null,
+    folderColor: folder?.color ?? null,
     ...(capturedAt === undefined ? {} : { capturedAt: toTimestamp(capturedAt) }),
   };
 }
@@ -504,11 +505,33 @@ export function backfillHistoricalActivitySnapshots(
   return { transitions: next, updatedCount };
 }
 
+/**
+ * A folder's color wins over its activities' colors, as in the tracker. Snapshots
+ * recorded before folder colors were captured follow the folder's current color.
+ */
+export function historicalSnapshotColor(
+  snapshot: HistoricalActivitySnapshot,
+  folders: readonly Pick<Folder, 'id' | 'color'>[] = []
+): string | null {
+  const folderColor =
+    snapshot.folderColor !== undefined
+      ? snapshot.folderColor
+      : snapshot.folderId === null
+        ? null
+        : (folders.find((folder) => folder.id === snapshot.folderId)?.color ?? null);
+  return folderColor ?? snapshot.color;
+}
+
 function historyMetadata(
   session: Pick<HistorySession, 'activityId' | 'activitySnapshot'>,
   catalog?: CatalogCollection
 ): HistoryActivityMetadata {
-  if (session.activitySnapshot) return { ...session.activitySnapshot };
+  if (session.activitySnapshot) {
+    return {
+      ...session.activitySnapshot,
+      color: historicalSnapshotColor(session.activitySnapshot, catalog?.folders),
+    };
+  }
   const item =
     catalog?.activities.find((candidate) => candidate.id === session.activityId) ??
     catalog?.routines.find((candidate) => candidate.id === session.activityId);
@@ -530,7 +553,7 @@ function historyMetadata(
     id: item.id,
     kind: item.kind,
     name: item.name,
-    color: item.color,
+    color: folder?.color ?? item.color,
     iconName: item.iconName,
     folderId: item.folderId,
     folderName: folder?.name ?? null,
