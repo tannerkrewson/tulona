@@ -378,12 +378,15 @@ export function FormIconRow({
   value,
   onChange,
   color,
+  filled = false,
   testID,
 }: {
   label?: string;
   value: IconValue | null;
   onChange: (value: IconValue | null) => void;
   color?: string;
+  /** Matches solid catalog icons, such as folders. */
+  filled?: boolean;
   testID?: string;
 }) {
   const { colors } = useFormColors();
@@ -397,7 +400,13 @@ export function FormIconRow({
         testID={testID ? `${testID}-row` : undefined}
         trailing={
           value ? (
-            <AppIcon color={color ?? colors.text} name={value} size={22} />
+            <AppIcon
+              color={color ?? colors.text}
+              fill={filled ? (color ?? colors.text) : undefined}
+              name={value}
+              size={22}
+              strokeWidth={filled ? 0 : undefined}
+            />
           ) : (
             <Text style={[styles.rowValue, { color: colors.textMuted }]}>None</Text>
           )

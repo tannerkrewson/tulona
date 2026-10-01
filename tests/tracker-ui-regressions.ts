@@ -54,8 +54,8 @@ assert(
     activityRow.includes('size={solidIcon ? TRACKER_PLAYBACK_ICON_SIZE : 20}') &&
     activeBar.includes('fill={isActive ? onAccent : accent}') &&
     activeBar.includes('strokeWidth={0}') &&
-    folderEditor.includes('fill={color || colors.primary}') &&
-    folderEditor.includes('strokeWidth={0}'),
+    folderEditor.includes('<FormIconRow') &&
+    folderEditor.includes('filled'),
   'tracker labels and playback controls must use the requested sizing and solid icon treatment'
 );
 assert(

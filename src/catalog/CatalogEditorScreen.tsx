@@ -1,21 +1,21 @@
 import { Picker } from '@expo/ui';
-import { Column, Row, Text } from '@ui/primitives';
+import { Column, Text } from '@ui/primitives';
 import { useRouter, type Href } from 'expo-router';
-import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import type { Activity, CatalogCollection, Folder, UUID } from '@domain';
-import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
 import {
-  AccessiblePicker,
-  AccessibleTextInput,
-  AppButton,
-  ColorPicker,
   ConfirmationModal,
   errorText,
-  IconPicker,
-  ReorderControls,
+  Form,
+  FormColorRow,
+  FormIconRow,
+  FormPickerRow,
+  FormRow,
+  FormSection,
+  FormTextField,
+  HeaderTextButton,
   Screen,
 } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -189,17 +189,7 @@ function ActionError({
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  const { colors } = useAppTheme();
-  return (
-    <Column spacing={6} style={{ width: '100%' }}>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>{label}</Text>
-      {children}
-    </Column>
-  );
-}
-
-function FolderPicker({
+function FolderPickerRow({
   folders,
   currentFolderId,
   value,
@@ -210,25 +200,24 @@ function FolderPicker({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const availableFolders = folders.filter(
-    (folder) => folder.archivedAt === null || folder.id === currentFolderId
-  );
   return (
-    <AccessiblePicker
-      label="Parent folder"
-      selectedValue={value}
+    <FormPickerRow
+      label="Folder"
       onValueChange={(next) => onChange(String(next))}
+      selectedValue={value}
       testID="folder-picker"
     >
-      <Picker.Item label="Root" value={ROOT_VALUE} />
-      {availableFolders.map((folder) => (
-        <Picker.Item
-          key={folder.id}
-          label={folder.archivedAt ? `${folder.name} (archived)` : folder.name}
-          value={folder.id}
-        />
-      ))}
-    </AccessiblePicker>
+      <Picker.Item label="None" value={ROOT_VALUE} />
+      {folders
+        .filter((folder) => folder.archivedAt === null || folder.id === currentFolderId)
+        .map((folder) => (
+          <Picker.Item
+            key={folder.id}
+            label={folder.archivedAt ? `${folder.name} (archived)` : folder.name}
+            value={folder.id}
+          />
+        ))}
+    </FormPickerRow>
   );
 }
 
@@ -249,7 +238,6 @@ function ActivityEditor({
   onChanged: () => void;
   onBack: () => void;
 }) {
-  const { colors } = useAppTheme();
   const [name, setName] = useState(activity?.name ?? '');
   const [color, setColor] = useState(activity?.color ?? '');
   const [folderId, setFolderId] = useState(activity?.folderId ?? initialFolderId ?? ROOT_VALUE);
@@ -261,7 +249,6 @@ function ActivityEditor({
   const originalFolderId = activity?.folderId ?? null;
   const selectedFolder =
     folderId === ROOT_VALUE ? null : folders.find((folder) => folder.id === folderId);
-  const previewColor = selectedFolder?.color ?? (color || colors.primary);
 
   const run = async (action: () => Promise<void>, returnToPrevious = false) => {
     lastAction.current = action;
@@ -321,59 +308,20 @@ function ActivityEditor({
 
   return (
     <>
-      <Screen onBack={onBack} title={activity ? 'Edit activity' : 'New activity'}>
-        <Column
-          spacing={18}
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderRadius: 18,
-            borderWidth: 1,
-            padding: 18,
-            width: '100%',
-          }}
-        >
-          <Row alignment="center" spacing={12}>
-            <AppIcon name="activity" color={previewColor} size={28} />
-            <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
-              {activity?.name ?? 'New activity'}
-            </Text>
-          </Row>
-          <Field label="Name">
-            <AccessibleTextInput
-              defaultValue={name}
-              label="Activity name"
-              onChangeText={setName}
-              placeholder="Activity name"
-              returnKeyType="done"
-              placeholderTextColor={colors.textMuted}
-              testID="activity-name"
-              style={{
-                borderColor: colors.border,
-                borderRadius: 10,
-                borderWidth: 1,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                width: '100%',
-              }}
-              textStyle={{ color: colors.text, fontSize: 16 }}
-            />
-          </Field>
-          <Field label="Standalone color">
-            <ColorPicker
-              onChange={(next) => setColor(next ?? '')}
-              testID="activity-color"
-              value={color || null}
-            />
-          </Field>
-          <Field label="Placement">
-            <FolderPicker
-              folders={folders}
-              currentFolderId={activity?.folderId ?? null}
-              value={folderId}
-              onChange={setFolderId}
-            />
-          </Field>
+      <Screen
+        headerRight={
+          <HeaderTextButton
+            disabled={busy}
+            emphasized
+            label={activity ? 'Save' : 'Add'}
+            onPress={save}
+            testID="save-activity"
+          />
+        }
+        onBack={onBack}
+        title={activity ? 'Edit Activity' : 'New Activity'}
+      >
+        <Form>
           <ActionError
             message={error}
             onBack={onBack}
@@ -381,38 +329,54 @@ function ActivityEditor({
               if (lastAction.current) void run(lastAction.current);
             }}
           />
-          <AppButton
-            disabled={busy}
-            label={busy ? 'Saving...' : 'Save activity'}
-            onPress={save}
-            style={{ height: 52, width: '100%' }}
-            testID="save-activity"
-          />
+          <FormSection
+            footer={selectedFolder ? "Uses its folder's color while it's in a folder." : undefined}
+          >
+            <FormTextField
+              autoFocus={!activity}
+              label="Activity name"
+              onChangeText={setName}
+              placeholder="Name"
+              testID="activity-name"
+              value={name}
+            />
+            <FormColorRow
+              onChange={(next) => setColor(next ?? '')}
+              testID="activity-color"
+              value={color || null}
+            />
+            <FolderPickerRow
+              currentFolderId={activity?.folderId ?? null}
+              folders={folders}
+              onChange={setFolderId}
+              value={folderId}
+            />
+          </FormSection>
           {activity ? (
-            <>
-              <AppButton
+            <FormSection footer="Turn this activity into a routine with timed steps. Its history stays connected.">
+              <FormRow
                 disabled={busy}
-                label="Convert to routine"
+                icon="repeat"
+                kind="action"
+                label="Convert to Routine"
                 onPress={() => setConfirmingConversion(true)}
-                style={{ height: 48, width: '100%' }}
                 testID="convert-activity-to-routine"
-                variant="outlined"
               />
-              <ReorderControls
-                canMoveUp
-                canMoveDown
-                disabled={busy || activity.archivedAt !== null}
-                onMoveUp={() =>
-                  run(async () => void (await service.reorderItem(activity.id, 'up')))
-                }
-                onMoveDown={() =>
-                  run(async () => void (await service.reorderItem(activity.id, 'down')))
-                }
-                testID="activity-reorder"
-              />
-              <AppButton
+            </FormSection>
+          ) : null}
+          {activity ? (
+            <FormSection
+              footer={
+                activity.archivedAt === null
+                  ? 'Archived activities are hidden but keep their history.'
+                  : undefined
+              }
+            >
+              <FormRow
                 disabled={busy}
-                label={activity.archivedAt === null ? 'Archive activity' : 'Restore activity'}
+                icon={activity.archivedAt === null ? 'archive' : 'upload'}
+                kind={activity.archivedAt === null ? 'destructive' : 'action'}
+                label={activity.archivedAt === null ? 'Archive Activity' : 'Restore Activity'}
                 onPress={() => {
                   if (activity.archivedAt === null) setConfirmingArchive(true);
                   else
@@ -420,12 +384,11 @@ function ActivityEditor({
                       await service.restoreActivity(activity.id);
                     });
                 }}
-                style={{ height: 48, width: '100%' }}
-                variant="outlined"
+                testID="archive-activity"
               />
-            </>
+            </FormSection>
           ) : null}
-        </Column>
+        </Form>
       </Screen>
       {activity ? (
         <>
@@ -523,60 +486,20 @@ function FolderEditor({
 
   return (
     <>
-      <Screen onBack={onBack} title={folder ? 'Edit folder' : 'New folder'}>
-        <Column
-          spacing={18}
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderRadius: 18,
-            borderWidth: 1,
-            padding: 18,
-            width: '100%',
-          }}
-        >
-          <Row alignment="center" spacing={12}>
-            <AppIcon
-              color={color || colors.primary}
-              fill={color || colors.primary}
-              name={iconName || 'folder'}
-              size={28}
-              strokeWidth={0}
-            />
-            <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
-              {folder?.name ?? 'New folder'}
-            </Text>
-          </Row>
-          <Field label="Name">
-            <AccessibleTextInput
-              defaultValue={name}
-              label="Folder name"
-              onChangeText={setName}
-              placeholder="Folder name"
-              returnKeyType="done"
-              placeholderTextColor={colors.textMuted}
-              testID="folder-name"
-              style={{
-                borderColor: colors.border,
-                borderRadius: 10,
-                borderWidth: 1,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                width: '100%',
-              }}
-              textStyle={{ color: colors.text, fontSize: 16 }}
-            />
-          </Field>
-          <Field label="Folder color">
-            <ColorPicker
-              onChange={(next) => setColor(next ?? '')}
-              testID="folder-color"
-              value={color || null}
-            />
-          </Field>
-          <Field label="Icon">
-            <IconPicker value={iconName || null} onChange={(next) => setIconName(next ?? '')} />
-          </Field>
+      <Screen
+        headerRight={
+          <HeaderTextButton
+            disabled={busy}
+            emphasized
+            label={folder ? 'Save' : 'Add'}
+            onPress={() => void save()}
+            testID="save-folder"
+          />
+        }
+        onBack={onBack}
+        title={folder ? 'Edit Folder' : 'New Folder'}
+      >
+        <Form>
           <ActionError
             message={error}
             onBack={onBack}
@@ -584,28 +507,41 @@ function FolderEditor({
               if (lastAction.current) void run(lastAction.current);
             }}
           />
-          <AppButton
-            disabled={busy}
-            label={busy ? 'Saving...' : 'Save folder'}
-            onPress={save}
-            style={{ height: 52, width: '100%' }}
-            testID="save-folder"
-          />
+          <FormSection footer="Items in this folder use its color.">
+            <FormTextField
+              autoFocus={!folder}
+              label="Folder name"
+              onChangeText={setName}
+              placeholder="Name"
+              testID="folder-name"
+              value={name}
+            />
+            <FormIconRow
+              color={color || colors.primary}
+              filled
+              onChange={(next) => setIconName(next ?? '')}
+              testID="folder-icon"
+              value={iconName || null}
+            />
+            <FormColorRow
+              onChange={(next) => setColor(next ?? '')}
+              testID="folder-color"
+              value={color || null}
+            />
+          </FormSection>
           {folder ? (
-            <>
-              <ReorderControls
-                canMoveUp
-                canMoveDown
-                disabled={busy || folder.archivedAt !== null}
-                onMoveUp={() => run(async () => void (await service.reorderItem(folder.id, 'up')))}
-                onMoveDown={() =>
-                  run(async () => void (await service.reorderItem(folder.id, 'down')))
-                }
-                testID="folder-reorder"
-              />
-              <AppButton
+            <FormSection
+              footer={
+                folder.archivedAt === null
+                  ? 'Archived folders are hidden but keep their history.'
+                  : undefined
+              }
+            >
+              <FormRow
                 disabled={busy}
-                label={folder.archivedAt === null ? 'Archive folder' : 'Restore folder'}
+                icon={folder.archivedAt === null ? 'archive' : 'upload'}
+                kind={folder.archivedAt === null ? 'destructive' : 'action'}
+                label={folder.archivedAt === null ? 'Archive Folder' : 'Restore Folder'}
                 onPress={() => {
                   if (folder.archivedAt === null) setConfirmingArchive(true);
                   else
@@ -613,12 +549,11 @@ function FolderEditor({
                       await service.restoreFolder(folder.id);
                     });
                 }}
-                style={{ height: 48, width: '100%' }}
-                variant="outlined"
+                testID="archive-folder"
               />
-            </>
+            </FormSection>
           ) : null}
-        </Column>
+        </Form>
       </Screen>
       {folder ? (
         <ConfirmationModal
