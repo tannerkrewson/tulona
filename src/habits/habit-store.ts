@@ -120,6 +120,21 @@ export function createHabitStore(service: HabitServiceApi, options: HabitStoreOp
       }
     };
 
+    const outcomeVersions = new Map<string, number>();
+    let outcomeWrites: Promise<unknown> = Promise.resolve();
+    const replaceState = (next: HabitDayState) => {
+      const states = get().states;
+      const index = states.findIndex(
+        (state) => state.habitId === next.habitId && state.logicalDay === next.logicalDay
+      );
+      set({
+        states:
+          index === -1
+            ? [...states, next]
+            : states.map((state, stateIndex) => (stateIndex === index ? next : state)),
+      });
+    };
+
     return {
       habits: [],
       states: [],
@@ -179,8 +194,40 @@ export function createHabitStore(service: HabitServiceApi, options: HabitStoreOp
       },
       setManualCompletion: (habitId, logicalDay, completed) =>
         runMutation(() => service.setManualCompletion(habitId, logicalDay, completed)),
-      setOutcome: (habitId, logicalDay, outcome) =>
-        runMutation(() => service.setOutcome(habitId, logicalDay, outcome)),
+      setOutcome: (habitId, logicalDay, outcome) => {
+        const key = `${habitId}:${logicalDay}`;
+        const version = (outcomeVersions.get(key) ?? 0) + 1;
+        outcomeVersions.set(key, version);
+        const existing = get().states.find(
+          (state) => state.habitId === habitId && state.logicalDay === logicalDay
+        );
+        replaceState({
+          habitId,
+          logicalDay,
+          manual: existing?.manual ?? null,
+          automatic: existing?.automatic ?? null,
+          outcome,
+          updatedAt: existing?.updatedAt ?? new Date(now()).toISOString(),
+        });
+        set({ persistenceError: null });
+        const write = outcomeWrites
+          .catch(() => undefined)
+          .then(() => service.setOutcome(habitId, logicalDay, outcome));
+        outcomeWrites = write;
+        return write.then(
+          (saved) => {
+            if (outcomeVersions.get(key) === version) replaceState(saved);
+            return saved;
+          },
+          async (error: unknown) => {
+            set({ persistenceError: errorFrom(error) });
+            await get()
+              .refresh()
+              .catch(() => undefined);
+            throw error;
+          }
+        );
+      },
       selectDay: async (logicalDay) => {
         dayFor(logicalDay, logicalDayRolloverHour);
         set({ selectedDay: logicalDay });
