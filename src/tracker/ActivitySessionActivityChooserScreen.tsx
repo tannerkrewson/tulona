@@ -182,7 +182,7 @@ export function ActivitySessionActivityChooserScreen({
             ? `Choose an activity to replace the time logged in ${currentName}.`
             : returnToTracker
               ? 'Choose what to track next.'
-              : `Reassign the entire ${currentName} session, including its recorded time. To split the session at a missed switch, cancel and use Switch activity.`}
+              : `Log the entire ${currentName} session as a different activity. To keep this time and start something new, use Switch instead.`}
         </Text>
 
         <SessionActivityChoices

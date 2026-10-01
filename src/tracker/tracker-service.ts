@@ -611,7 +611,7 @@ export class TrackerService implements TrackerServiceApi {
       }
       if (timestampMs(transition.timestamp) <= timestampMs(active.timestamp)) {
         validation(
-          'Choose a switch time after this session started. To change the whole session, use Reassign session.'
+          'Choose a switch time after this session started. To change the whole session, use Change Activity.'
         );
       }
       if (transition.activityId === active.activityId)

@@ -1,26 +1,51 @@
-/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 · Layered native correction sheet. */
+import { Picker } from '@expo/ui';
 import { useState } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { timestampMs, type CatalogCollection, type TimeTransition } from '@domain';
-import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
-import { AppButton, SlideUpSheet } from '@ui';
+import { FormContent, FormPickerRow, FormRow, FormSection, FormSheet } from '@ui';
 import { SessionActivityChoices } from './SessionActivityChoices';
 import { SessionDateTimePicker } from './SessionDateTimePicker';
 import { formatSessionDate, formatSessionTime } from './session-time';
 
+export type SessionCorrectionIntent = 'switch' | 'stop';
+
+const MINUTES_AGO = [5, 15, 30, 60] as const;
+type WhenChoice = 'now' | 'custom' | `${(typeof MINUTES_AGO)[number]}`;
+
+function minutesAgoLabel(minutes: number): string {
+  return minutes === 60 ? '1 hour ago' : `${minutes} minutes ago`;
+}
+
+function shortDuration(durationMs: number): string {
+  const totalMinutes = Math.floor(Math.max(0, durationMs) / 60_000);
+  if (totalMinutes < 1) return 'under a minute';
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes}m`;
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
 interface Props {
+  intent: SessionCorrectionIntent | null;
+  onClose: () => void;
   transition: TimeTransition;
   activityName: string;
   catalog: CatalogCollection;
   nowMs: number;
   busy: boolean;
   error: string | null;
-  onDelete?: () => void;
   onSave: (activityId: string | null, timestamp: number) => Promise<boolean>;
 }
-/** A separate sheet keeps corrections out of the simple timer surface. */
+
+/**
+ * Ends the running session at a chosen time, either switching to another
+ * activity or stopping. "Now" is the default, so the same sheet covers both a
+ * live switch and one the user forgot to record.
+ */
 export function ActiveSessionCorrection({
+  intent,
+  onClose,
   transition,
   activityName,
   catalog,
@@ -28,265 +53,160 @@ export function ActiveSessionCorrection({
   busy,
   error,
   onSave,
-  onDelete,
 }: Props) {
   const { colors } = useAppTheme();
-  const [intent, setIntent] = useState<'switch' | 'stop' | null>(null);
+  const [openIntent, setOpenIntent] = useState<SessionCorrectionIntent | null>(intent);
+  const [shownIntent, setShownIntent] = useState<SessionCorrectionIntent>(intent ?? 'switch');
   const [activityId, setActivityId] = useState<string | null>(null);
-  const [choosing, setChoosing] = useState(false);
-  const [timeMs, setTimeMs] = useState<number | null>(null);
-  const [pickerMode, setPickerMode] = useState<'time' | 'datetime' | null>(null);
+  const [when, setWhen] = useState<WhenChoice>('now');
+  const [customMs, setCustomMs] = useState<number | null>(null);
+  const [picking, setPicking] = useState(false);
   const [pickerError, setPickerError] = useState<string | null>(null);
+  if (intent !== openIntent) {
+    setOpenIntent(intent);
+    if (intent) {
+      setShownIntent(intent);
+      setActivityId(null);
+      setWhen('now');
+      setCustomMs(null);
+      setPicking(false);
+      setPickerError(null);
+    }
+  }
+
+  const stopping = shownIntent === 'stop';
   const startMs = timestampMs(transition.timestamp);
-  const boundaryMs = timeMs ?? nowMs;
+  const minuteFloor = (ms: number) => Math.floor(ms / 60_000) * 60_000;
+  const boundaryMs =
+    when === 'now'
+      ? nowMs
+      : when === 'custom'
+        ? (customMs ?? nowMs)
+        : minuteFloor(nowMs - Number(when) * 60_000);
+  const quickChoices = MINUTES_AGO.filter(
+    (minutes) => minuteFloor(nowMs - minutes * 60_000) > startMs
+  );
   const nextActivity = catalog.activities.find(
     (item) => item.id === activityId && item.archivedAt === null
   );
   const validTime = boundaryMs > startMs && boundaryMs <= nowMs;
-  const begin = (next: 'switch' | 'stop') => {
-    setIntent(next);
-    setTimeMs(null);
-    setPickerMode(null);
+  const endLabel = when === 'now' ? 'now' : formatSessionTime(boundaryMs);
+  const summary = `${activityName} will be logged from ${formatSessionTime(startMs)} to ${endLabel} (${shortDuration(boundaryMs - startMs)}).${
+    stopping
+      ? ''
+      : nextActivity
+        ? ` ${nextActivity.name} starts ${when === 'now' ? 'now' : `at ${endLabel}`}.`
+        : ''
+  }`;
+  const message =
+    pickerError ??
+    error ??
+    (validTime ? null : `Choose a time after ${formatSessionTime(startMs)}.`);
+
+  const chooseWhen = (next: WhenChoice) => {
     setPickerError(null);
-    setActivityId(null);
+    if (next === 'custom') {
+      setPicking(true);
+      return;
+    }
+    setPicking(false);
+    setWhen(next);
   };
-  const close = () => {
-    if (!busy) setIntent(null);
-  };
-  const field = {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    minHeight: 64,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 12,
-  };
+
+  const save = () =>
+    void onSave(stopping ? null : activityId, when === 'now' ? Date.now() : boundaryMs).then(
+      (saved) => {
+        if (saved) onClose();
+      }
+    );
+
   return (
-    <>
-      <View
-        style={{ flexDirection: 'row', gap: 4, justifyContent: 'center', alignItems: 'center' }}
+    <FormSheet
+      confirmDisabled={busy || picking || !validTime || (!stopping && !nextActivity)}
+      confirmLabel={busy ? 'Saving…' : stopping ? 'Stop' : 'Switch'}
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+      onConfirm={save}
+      testID="activity-session-correction-sheet"
+      title={stopping ? `Stop ${activityName}` : 'Switch Activity'}
+      visible={intent !== null}
+    >
+      <FormSection
+        footer={message ?? summary}
+        footerTestID="activity-session-switch-preview"
+        footerTone={message ? 'danger' : 'muted'}
       >
-        <Pressable
-          cancelable={false}
-          disabled={busy}
-          accessibilityRole="button"
-          onPress={() => begin('switch')}
-          style={{ minHeight: 48, paddingHorizontal: 6, justifyContent: 'center' }}
-          testID="activity-session-switch"
+        <FormPickerRow
+          enabled={!busy}
+          label={stopping ? 'Stopped' : 'Switched'}
+          onValueChange={(next) => chooseWhen(next as WhenChoice)}
+          selectedValue={picking ? 'custom' : when}
+          testID="activity-session-switch-time"
         >
-          <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
-            Switch activity
-          </Text>
-        </Pressable>
-        <Pressable
-          cancelable={false}
-          disabled={busy}
-          accessibilityRole="button"
-          onPress={() => begin('stop')}
-          style={{ minHeight: 48, paddingHorizontal: 6, justifyContent: 'center' }}
-          testID="activity-session-stop"
-        >
-          <Text style={{ color: colors.textMuted, fontSize: 14 }}>Stop earlier</Text>
-        </Pressable>
-        {onDelete ? (
-          <Pressable
-            cancelable={false}
+          <Picker.Item label="Now" value="now" />
+          {quickChoices.map((minutes) => (
+            <Picker.Item key={minutes} label={minutesAgoLabel(minutes)} value={`${minutes}`} />
+          ))}
+          <Picker.Item label="Other time" value="custom" />
+        </FormPickerRow>
+        {when === 'custom' && customMs !== null && !picking ? (
+          <FormRow
             disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel="Delete session"
-            onPress={onDelete}
-            style={{ width: 44, height: 48, alignItems: 'center', justifyContent: 'center' }}
-            testID="activity-session-delete"
-          >
-            <AppIcon name="trash-2" color={colors.textMuted} size={18} />
-          </Pressable>
+            label="Time"
+            onPress={() => setPicking(true)}
+            testID="activity-session-switch-date"
+            value={
+              formatSessionDate(customMs) === formatSessionDate(nowMs)
+                ? formatSessionTime(customMs)
+                : `${formatSessionDate(customMs)}, ${formatSessionTime(customMs)}`
+            }
+          />
         ) : null}
-      </View>
-      <Modal visible={intent !== null} transparent animationType="slide" onRequestClose={close}>
-        <SlideUpSheet onClose={close} testID="activity-session-correction-sheet">
-          <View style={{ width: '100%', maxWidth: 620, gap: 20, paddingTop: 16 }}>
-            <Text style={{ color: colors.text, fontSize: 24, fontWeight: '600' }}>
-              {intent === 'stop' ? 'Stop earlier' : 'Switch activity'}
-            </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 15, lineHeight: 22 }}>
-              When did {activityName} {intent === 'stop' ? 'end' : 'change to another activity'}?
-            </Text>
-            {intent === 'switch' ? (
-              <Pressable
-                cancelable={false}
-                disabled={busy}
-                accessibilityRole="button"
-                accessibilityLabel="Choose next activity"
-                onPress={() => setChoosing(true)}
-                style={field}
-                testID="activity-session-next-activity"
-              >
-                <AppIcon name="activity" size={20} color={colors.textMuted} />
-                <Text
-                  numberOfLines={1}
-                  style={{ flex: 1, color: colors.text, fontSize: 18, fontWeight: '600' }}
-                >
-                  {nextActivity?.name ?? 'Choose activity'}
-                </Text>
-                <AppIcon name="chevron-right" size={20} color={colors.textMuted} />
-              </Pressable>
-            ) : null}
-            <View style={field}>
-              <Pressable
-                cancelable={false}
-                disabled={busy}
-                accessibilityRole="button"
-                accessibilityLabel="Choose switch or stop time"
-                onPress={() => setPickerMode('time')}
-                style={{ flex: 1, minHeight: 64, justifyContent: 'center' }}
-                testID="activity-session-switch-time"
-              >
-                <Text style={{ color: colors.text, fontSize: 24, fontWeight: '600' }}>
-                  {timeMs === null ? 'Now' : formatSessionTime(boundaryMs)}
-                </Text>
-              </Pressable>
-              <Pressable
-                cancelable={false}
-                disabled={busy}
-                accessibilityRole="button"
-                accessibilityLabel="Choose switch or stop date and time"
-                onPress={() => setPickerMode('datetime')}
-                style={{ minHeight: 64, justifyContent: 'center', alignItems: 'center', gap: 4 }}
-                testID="activity-session-switch-date"
-              >
-                <AppIcon name="calendar-days" size={20} color={colors.textMuted} />
-                <Text style={{ color: colors.textMuted, fontSize: 11 }}>
-                  {formatSessionDate(boundaryMs)}
-                </Text>
-              </Pressable>
-            </View>
-            <SessionDateTimePicker
-              target={pickerMode ? 'end' : null}
-              mode={pickerMode ?? 'time'}
-              value={new Date(boundaryMs)}
-              minimumDate={new Date(startMs + 1)}
-              maximumDate={new Date(nowMs)}
-              onDismiss={() => setPickerMode(null)}
-              onError={setPickerError}
-              onValueChange={(date) => {
-                setTimeMs(date.getTime());
-                setPickerMode(null);
-                setPickerError(null);
-              }}
-            />
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {[0, 15, 30].map((minutes) => {
-                const next =
-                  minutes === 0 ? null : Math.floor((nowMs - minutes * 60_000) / 60_000) * 60_000;
-                return (
-                  <View key={minutes} style={{ flex: 1, minWidth: 0 }}>
-                    <AppButton
-                      disabled={busy || (next !== null && next <= startMs)}
-                      label={minutes === 0 ? 'Now' : `${minutes}m ago`}
-                      variant="outlined"
-                      onPress={() => {
-                        setTimeMs(next);
-                        setPickerMode(null);
-                        setPickerError(null);
-                      }}
-                      style={{ width: '100%', height: 44, paddingHorizontal: 8 }}
-                      testID={`activity-session-switch-quick-${minutes}`}
-                    />
-                  </View>
-                );
-              })}
-            </View>
-            <View style={{ gap: 14, paddingVertical: 12 }} testID="activity-session-switch-preview">
-              <View style={{ gap: 4 }}>
-                <Text
-                  numberOfLines={2}
-                  style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}
-                >
-                  {activityName}
-                </Text>
-                <Text style={{ color: colors.textMuted, fontSize: 14 }}>
-                  {formatSessionTime(startMs)} → {formatSessionTime(boundaryMs)}
-                </Text>
-              </View>
-              <View style={{ gap: 4 }}>
-                <Text
-                  numberOfLines={2}
-                  style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}
-                >
-                  {intent === 'stop' ? 'Not tracking' : (nextActivity?.name ?? 'Next activity')}
-                </Text>
-                <Text style={{ color: colors.textMuted, fontSize: 14 }}>
-                  {formatSessionTime(boundaryMs)} → {intent === 'stop' ? 'Stopped' : 'Now'}
-                </Text>
-              </View>
-            </View>
-            {!validTime || pickerError || error ? (
-              <Text
-                accessibilityRole="alert"
-                style={{ color: colors.danger.foreground, fontSize: 14 }}
-              >
-                {pickerError ??
-                  error ??
-                  'Choose a time after this session started and no later than now.'}
-              </Text>
-            ) : null}
-            <AppButton
-              disabled={
-                busy || pickerMode !== null || !validTime || (intent === 'switch' && !nextActivity)
-              }
-              label={busy ? 'Saving…' : intent === 'stop' ? 'Save stop' : 'Save switch'}
-              onPress={() =>
-                void onSave(intent === 'stop' ? null : activityId, timeMs ?? Date.now()).then(
-                  (saved) => {
-                    if (saved) setIntent(null);
-                  }
-                )
-              }
-              style={{ width: '100%', height: 52 }}
-              testID="activity-session-save-switch"
-            />
-            <Pressable
-              cancelable={false}
-              disabled={busy}
-              accessibilityRole="button"
-              onPress={close}
-              style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
-              testID="activity-session-cancel-switch"
-            >
-              <Text style={{ color: colors.textMuted, fontSize: 15 }}>Cancel</Text>
-            </Pressable>
-          </View>
-          <Modal
-            visible={choosing}
-            transparent
-            animationType="slide"
-            onRequestClose={() => setChoosing(false)}
-          >
-            <SlideUpSheet
-              onClose={() => setChoosing(false)}
-              testID="activity-session-next-activity-sheet"
-            >
-              <View style={{ width: '100%', maxWidth: 620, gap: 20, paddingTop: 16 }}>
-                <Text style={{ color: colors.text, fontSize: 24, fontWeight: '600' }}>
-                  Switch to
-                </Text>
-                <SessionActivityChoices
-                  catalog={catalog}
-                  selectedId={activityId}
-                  excludeId={transition.activityId}
-                  activeOnly
-                  activitiesOnly
-                  onChoose={(id) => {
-                    setActivityId(id);
-                    setChoosing(false);
-                  }}
-                />
-              </View>
-            </SlideUpSheet>
-          </Modal>
-        </SlideUpSheet>
-      </Modal>
-    </>
+      </FormSection>
+      {picking ? (
+        <FormContent>
+          <SessionDateTimePicker
+            target="end"
+            mode="datetime"
+            value={new Date(customMs ?? minuteFloor(nowMs))}
+            minimumDate={new Date(startMs + 1)}
+            maximumDate={new Date(nowMs)}
+            onDismiss={() => setPicking(false)}
+            onError={setPickerError}
+            onValueChange={(date) => {
+              setCustomMs(date.getTime());
+              setWhen('custom');
+              setPicking(false);
+              setPickerError(null);
+            }}
+          />
+        </FormContent>
+      ) : null}
+      {stopping ? null : (
+        <View style={styles.choices}>
+          <Text style={[styles.choicesTitle, { color: colors.textMuted }]}>Switch to</Text>
+          <SessionActivityChoices
+            catalog={catalog}
+            selectedId={activityId}
+            excludeId={transition.activityId}
+            activeOnly
+            activitiesOnly
+            busy={busy}
+            onChoose={setActivityId}
+          />
+        </View>
+      )}
+    </FormSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  choices: { gap: 8, width: '100%' },
+  choicesTitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    paddingHorizontal: 16,
+    textTransform: 'uppercase',
+  },
+});

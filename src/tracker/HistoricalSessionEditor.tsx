@@ -22,6 +22,8 @@ export interface HistoricalSessionEditorProps {
   onEditingChange?: (editing: boolean) => void;
   onSaveStart: (timestamp: number) => Promise<void>;
   onSaveEnd: (timestamp: number) => Promise<void>;
+  /** A running session has no end to edit; this lets the To field stop it instead. */
+  onEditRunningEnd?: () => void;
 }
 
 /**
@@ -41,6 +43,7 @@ export function HistoricalSessionEditor({
   onEditingChange,
   onSaveStart,
   onSaveEnd,
+  onEditRunningEnd,
 }: HistoricalSessionEditorProps) {
   const { colors } = useAppTheme();
   const [pickerTarget, setPickerTarget] = useState<SessionDateTimePickerTarget | null>(null);
@@ -73,6 +76,10 @@ export function HistoricalSessionEditor({
   };
 
   const openPicker = (target: SessionDateTimePickerTarget, mode: 'time' | 'datetime' = 'time') => {
+    if (target === 'end' && !canEditEnd && isActive && onEditRunningEnd) {
+      if (!busy) onEditRunningEnd();
+      return;
+    }
     setPickerMode(mode);
     if (busy || (target === 'end' && !canEditEnd)) return;
     onEditingChange?.(true);
@@ -101,7 +108,8 @@ export function HistoricalSessionEditor({
         testID="activity-session-time-control"
       >
         {(['start', 'end'] as const).map((target) => {
-          const editable = !busy && (target === 'start' || canEditEnd);
+          const editable =
+            !busy && (target === 'start' || canEditEnd || (isActive && Boolean(onEditRunningEnd)));
           const ms = target === 'start' ? startMs : endMs;
           const text =
             target === 'start'

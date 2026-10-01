@@ -29,20 +29,20 @@ assert(
 );
 assert(
   session.includes('ActiveSessionCorrection') &&
-    correction.includes('activity-session-switch') &&
-    correction.includes('activity-session-stop') &&
+    session.includes('activity-session-switch') &&
+    session.includes('activity-session-stop') &&
+    session.includes("onEditRunningEnd={() => setCorrection('stop')}") &&
     correction.includes('activity-session-switch-preview'),
   'running sessions must expose missed switch/stop correction with a preview before saving'
 );
 assert(
-  correction.includes('Save switch') &&
-    correction.includes('Save stop') &&
-    correction.includes('activity-session-cancel-switch') &&
+  correction.includes("stopping ? 'Stop' : 'Switch'") &&
+    correction.includes('<FormSheet') &&
     session.includes('switchActiveSession'),
   'draft corrections must support explicit save/cancel and use the guarded active-session mutation'
 );
 assert(
-  session.includes('Reassign session') &&
+  session.includes('Change Activity') &&
     session.includes('activity-session-reassign-sheet') &&
     chooser.includes('reassignTransition') &&
     chooser.includes('entire'),
@@ -87,7 +87,6 @@ assert(
 );
 assert(
   correction.includes('activity-session-correction-sheet') &&
-    correction.includes('activity-session-next-activity-sheet') &&
     correction.includes('SessionActivityChoices') &&
     chooser.includes('SessionActivityChoices') &&
     session.includes('SessionActivityChoices') &&

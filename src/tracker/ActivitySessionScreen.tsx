@@ -2,25 +2,18 @@
 import { Column, Text } from '@ui/primitives';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text as NativeText,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text as NativeText, useWindowDimensions, View } from 'react-native';
 
 import { timestampMs, type TimeTransition } from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { ConfirmationModal, errorText, SlideUpSheet } from '@ui';
+import { ConfirmationModal, errorText, FormSheet, SlideUpSheet } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { goBackInAppStack } from '../navigation/app-back';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
-import { ActiveSessionCorrection } from './ActiveSessionCorrection';
+import { ActiveSessionCorrection, type SessionCorrectionIntent } from './ActiveSessionCorrection';
 import { HistoricalSessionEditor } from './HistoricalSessionEditor';
 import { SessionActivityChoices } from './SessionActivityChoices';
 import type { TransitionContext } from './tracker-service';
@@ -47,6 +40,40 @@ function visibleAdjacentTransition(
   return (
     ordered.slice(index + 1).find((candidate) => timestampMs(candidate.timestamp) > transitionMs) ??
     null
+  );
+}
+
+function SideControl({
+  busy,
+  icon,
+  label,
+  onPress,
+  testID,
+}: {
+  busy: boolean;
+  icon: string;
+  label: string;
+  onPress: () => void;
+  testID: string;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <Pressable
+      cancelable={false}
+      disabled={busy}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.sideControl, { opacity: busy ? 0.5 : pressed ? 0.6 : 1 }]}
+      testID={testID}
+    >
+      <View style={[styles.sideControlCircle, { backgroundColor: colors.surfaceMuted }]}>
+        <AppIcon name={icon} size={24} color={colors.text} />
+      </View>
+      <NativeText style={{ color: colors.text, fontSize: 13, fontWeight: '500' }}>
+        {label}
+      </NativeText>
+    </Pressable>
   );
 }
 
@@ -144,6 +171,7 @@ function ActivitySessionContent({
   const { width, height } = useWindowDimensions();
   const [editingTime, setEditingTime] = useState(false);
   const [choosingActivity, setChoosingActivity] = useState(false);
+  const [correction, setCorrection] = useState<SessionCorrectionIntent | null>(null);
   const store = runtime.trackerStore;
   const catalog = store((state) => state.catalog);
   const transitions = store((state) => state.transitions);
@@ -367,13 +395,14 @@ function ActivitySessionContent({
             previous={previous}
             previousLabel={previousName}
             transition={transition}
+            onEditRunningEnd={() => setCorrection('stop')}
           />
           {!editingTime ? (
             <Pressable
               cancelable={false}
               disabled={busy}
               accessibilityRole="button"
-              accessibilityLabel={`Reassign session, ${activityName}`}
+              accessibilityLabel={`Change activity, ${activityName}`}
               onPress={() => setChoosingActivity(true)}
               style={({ pressed }) => [
                 styles.activityRow,
@@ -405,79 +434,63 @@ function ActivitySessionContent({
             </NativeText>
           ) : null}
           {isActive && !editingTime ? (
-            <>
-              <View
-                style={[styles.playback, height < 740 ? { paddingTop: 8, paddingBottom: 4 } : null]}
-              >
-                <View
-                  style={[
-                    styles.playbackRing,
-                    { backgroundColor: colors.surfaceMuted },
-                    height < 740 ? { width: 112, height: 112, borderRadius: 56 } : null,
-                  ]}
-                >
-                  <Pressable
-                    cancelable={false}
-                    disabled={busy}
-                    accessibilityRole="button"
-                    accessibilityLabel="Stop tracking now"
-                    onPress={() =>
-                      void runAction(async () => {
-                        await store
-                          .getState()
-                          .switchActiveSession(
-                            transition.id,
-                            null,
-                            Date.now(),
-                            transition.timestamp
-                          );
-                        goBackInAppStack(router, '/');
-                      })
-                    }
-                    style={({ pressed }) => [
-                      styles.pause,
-                      height < 740 ? { width: 84, height: 84, borderRadius: 42 } : null,
-                      { backgroundColor: activityColor, opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
-                    ]}
-                    testID="activity-session-stop-now"
-                  >
-                    <AppIcon
-                      name="pause"
-                      size={46}
-                      color={iconForeground}
-                      fill={iconForeground}
-                      strokeWidth={0}
-                    />
-                  </Pressable>
-                </View>
-              </View>
-              <ActiveSessionCorrection
-                key={`${transition.id}-${transition.timestamp}`}
-                transition={transition}
-                activityName={activityName}
-                catalog={catalog}
-                nowMs={nowMs}
+            <View
+              style={[styles.controls, height < 740 ? { paddingTop: 4 } : null]}
+              testID="activity-session-controls"
+            >
+              <SideControl
                 busy={busy}
-                error={actionError}
-                onDelete={openDeleteConfirmation}
-                onSave={async (nextActivityId, timestamp) => {
-                  const saved = await runAction(async () => {
-                    await store
-                      .getState()
-                      .switchActiveSession(
-                        transition.id,
-                        nextActivityId,
-                        timestamp,
-                        transition.timestamp
-                      );
-                  });
-                  if (saved) goBackInAppStack(router, '/');
-                  return saved;
-                }}
+                icon="arrow-right"
+                label="Switch"
+                onPress={() => setCorrection('switch')}
+                testID="activity-session-switch"
               />
-            </>
+              <View
+                style={[
+                  styles.playbackRing,
+                  { backgroundColor: colors.surfaceMuted },
+                  height < 740 ? { width: 112, height: 112, borderRadius: 56 } : null,
+                ]}
+              >
+                <Pressable
+                  cancelable={false}
+                  disabled={busy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Stop now"
+                  onPress={() =>
+                    void runAction(async () => {
+                      await store
+                        .getState()
+                        .switchActiveSession(transition.id, null, Date.now(), transition.timestamp);
+                      goBackInAppStack(router, '/');
+                    })
+                  }
+                  style={({ pressed }) => [
+                    styles.pause,
+                    height < 740 ? { width: 84, height: 84, borderRadius: 42 } : null,
+                    { backgroundColor: activityColor, opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
+                  ]}
+                  testID="activity-session-stop-now"
+                >
+                  <AppIcon
+                    name="pause"
+                    size={46}
+                    color={iconForeground}
+                    fill={iconForeground}
+                    strokeWidth={0}
+                  />
+                </Pressable>
+              </View>
+              <SideControl
+                busy={busy}
+                icon="clock"
+                label="Stop at…"
+                onPress={() => setCorrection('stop')}
+                testID="activity-session-stop"
+              />
+            </View>
           ) : null}
-          {!isActive && !editingTime ? (
+          {!editingTime ? (
             <View
               style={[styles.deleteArea, { borderColor: colors.border }]}
               testID="activity-session-actions"
@@ -498,61 +511,76 @@ function ActivitySessionContent({
                 <Text
                   textStyle={{ color: colors.danger.foreground, fontSize: 14, fontWeight: '600' }}
                 >
-                  Delete session
+                  Delete Session
                 </Text>
               </Pressable>
             </View>
           ) : null}
         </View>
       </SlideUpSheet>
-      <Modal
-        visible={choosingActivity}
-        transparent
-        animationType="slide"
-        onRequestClose={() => {
+      {isActive ? (
+        <ActiveSessionCorrection
+          intent={correction}
+          onClose={() => setCorrection(null)}
+          transition={transition}
+          activityName={activityName}
+          catalog={catalog}
+          nowMs={nowMs}
+          busy={busy}
+          error={actionError}
+          onSave={async (nextActivityId, timestamp) => {
+            const saved = await runAction(async () => {
+              await store
+                .getState()
+                .switchActiveSession(
+                  transition.id,
+                  nextActivityId,
+                  timestamp,
+                  transition.timestamp
+                );
+            });
+            if (saved) goBackInAppStack(router, '/');
+            return saved;
+          }}
+        />
+      ) : null}
+      <FormSheet
+        onClose={() => {
           if (!busy) setChoosingActivity(false);
         }}
+        testID="activity-session-reassign-sheet"
+        title="Change Activity"
+        visible={choosingActivity}
       >
-        <SlideUpSheet
-          onClose={() => {
-            if (!busy) setChoosingActivity(false);
-          }}
-          testID="activity-session-reassign-sheet"
+        <NativeText
+          style={{ color: colors.textMuted, fontSize: 15, lineHeight: 21, paddingHorizontal: 16 }}
         >
-          <View style={{ width: '100%', maxWidth: 620, gap: 20, paddingTop: 16 }}>
-            <NativeText style={{ color: colors.text, fontSize: 24, fontWeight: '600' }}>
-              Reassign session
-            </NativeText>
-            <NativeText style={{ color: colors.textMuted, fontSize: 15, lineHeight: 22 }}>
-              This changes the activity for the entire session. To record a missed switch, use
-              Switch activity instead.
-            </NativeText>
-            <SessionActivityChoices
-              catalog={catalog}
-              selectedId={transition.activityId}
-              allowNone
-              busy={busy}
-              onChoose={(id) =>
-                void runAction(async () => {
-                  await store.getState().reassignTransition(transition.id, id);
-                  loadTransitionContext();
-                  setChoosingActivity(false);
-                })
-              }
-            />
-            {actionError ? (
-              <NativeText accessibilityRole="alert" style={{ color: colors.danger.foreground }}>
-                {actionError}
-              </NativeText>
-            ) : null}
-          </View>
-        </SlideUpSheet>
-      </Modal>
+          {`Log this whole session as something other than ${activityName}.${isActive ? ' To keep this time and start something new, use Switch instead.' : ''}`}
+        </NativeText>
+        <SessionActivityChoices
+          catalog={catalog}
+          selectedId={transition.activityId}
+          allowNone
+          busy={busy}
+          onChoose={(id) =>
+            void runAction(async () => {
+              await store.getState().reassignTransition(transition.id, id);
+              loadTransitionContext();
+              setChoosingActivity(false);
+            })
+          }
+        />
+        {actionError ? (
+          <NativeText accessibilityRole="alert" style={{ color: colors.danger.foreground }}>
+            {actionError}
+          </NativeText>
+        ) : null}
+      </FormSheet>
       <ConfirmationModal
         busy={busy}
         cancelLabel="Cancel"
         cancelTestID="activity-session-cancel-delete"
-        confirmLabel={busy ? 'Deleting…' : 'Delete session'}
+        confirmLabel={busy ? 'Deleting…' : 'Delete Session'}
         confirmTestID="activity-session-confirm-delete"
         message={
           previous
@@ -581,7 +609,21 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 18,
   },
-  playback: { alignItems: 'center', paddingTop: 24, paddingBottom: 10 },
+  controls: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    paddingTop: 16,
+    paddingBottom: 4,
+  },
+  sideControl: { alignItems: 'center', gap: 8, width: 84 },
+  sideControlCircle: {
+    alignItems: 'center',
+    borderRadius: 32,
+    height: 64,
+    justifyContent: 'center',
+    width: 64,
+  },
   playbackRing: {
     height: 156,
     width: 156,
