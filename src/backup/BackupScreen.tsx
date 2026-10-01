@@ -1,12 +1,20 @@
-import { Column, Row, Text } from '@ui/primitives';
+import { Column, Text } from '@ui/primitives';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Linking from 'expo-linking';
 import { useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
-import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
-import { AppButton, AppSwitch, ConfirmationModal, errorText, Screen } from '@ui';
+import {
+  ConfirmationModal,
+  errorText,
+  Form,
+  FormContent,
+  FormRow,
+  FormSection,
+  FormSwitchRow,
+  Screen,
+} from '@ui';
 import { bootCoordinator } from '../orchestration';
 import { goBackInAppStack } from '../navigation/app-back';
 
@@ -25,49 +33,36 @@ import type {
   DropboxSetupChoice,
 } from './dropbox-backup';
 
-function Summary({ result }: { result: BackupImportResult }) {
-  const { colors } = useAppTheme();
+function BackupFileSection({
+  result,
+  busy,
+  onRestore,
+}: {
+  result: BackupImportResult;
+  busy: boolean;
+  onRestore: () => void;
+}) {
   const { summary } = result;
   return (
-    <Column
-      spacing={6}
-      style={{
-        backgroundColor: colors.success.background,
-        borderColor: colors.success.foreground,
-        borderRadius: 14,
-        borderWidth: 1,
-        padding: 14,
-        width: '100%',
-      }}
+    <FormSection
+      footer="Restoring replaces everything on this device with this backup."
       testID="backup-import-summary"
+      title="Selected Backup"
     >
-      <Row alignment="center" spacing={8}>
-        <AppIcon
-          accessibilityLabel="Backup ready"
-          color={colors.success.foreground}
-          name="check-circle-2"
-          size={20}
-        />
-        <Text textStyle={{ color: colors.success.foreground, fontSize: 15, fontWeight: '700' }}>
-          Valid backup
-        </Text>
-      </Row>
-      <Text textStyle={{ color: colors.success.foreground, fontSize: 15, fontWeight: '700' }}>
-        Backup is valid and ready to restore
-      </Text>
-      <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>
-        {`${summary.activities} activities, ${summary.routines} routines, ${summary.folders} folders`}
-      </Text>
-      <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>
-        {`${summary.transitions} transitions, ${summary.routineRuns} routine runs, ${summary.habits} habits, ${summary.habitDayStates} habit day states`}
-      </Text>
-      <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>
-        {`${summary.goals} goals, ${summary.goalWeeklyStatuses} weekly goal statuses`}
-      </Text>
-      <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>
-        {`${summary.archivedRecords} archived records retained`}
-      </Text>
-    </Column>
+      <FormRow label="Activities" value={`${summary.activities}`} />
+      <FormRow label="Folders" value={`${summary.folders}`} />
+      <FormRow label="Routines" value={`${summary.routines}`} />
+      <FormRow label="Tracker entries" value={summary.transitions.toLocaleString()} />
+      <FormRow label="Habits" value={`${summary.habits}`} />
+      <FormRow label="Goals" value={`${summary.goals}`} />
+      <FormRow
+        disabled={busy}
+        kind="destructive"
+        label="Restore This Backup"
+        onPress={onRestore}
+        testID="replace-current-data"
+      />
+    </FormSection>
   );
 }
 
@@ -95,17 +90,9 @@ function ErrorPanel({
       }}
       testID="backup-error"
     >
-      <Row alignment="center" spacing={8}>
-        <AppIcon
-          accessibilityLabel="Backup error"
-          color={colors.danger.foreground}
-          name="circle"
-          size={18}
-        />
-        <Text textStyle={{ color: colors.danger.foreground, fontSize: 15, fontWeight: '700' }}>
-          Data action failed
-        </Text>
-      </Row>
+      <Text textStyle={{ color: colors.danger.foreground, fontSize: 15, fontWeight: '700' }}>
+        That didn’t work
+      </Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{message}</Text>
       <Text textStyle={{ color: colors.danger.foreground, fontSize: 13 }}>
         Your current data was not changed.
@@ -122,44 +109,68 @@ function formatPreviewTimestamp(value: string): string {
   }).format(new Date(value));
 }
 
-function TimematorPreview({ preview }: { preview: TimematorCsvPreview }) {
-  const { colors } = useAppTheme();
+function TimematorFileSection({
+  preview,
+  busy,
+  onImport,
+}: {
+  preview: TimematorCsvPreview;
+  busy: boolean;
+  onImport: () => void;
+}) {
   return (
-    <Column spacing={5} style={{ width: '100%' }} testID="timemator-import-preview">
-      <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>
-        Timemator export ready
-      </Text>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-        {`${preview.rowCount.toLocaleString()} rows · ${preview.activityCount} activities · ${preview.folderCount} folders`}
-      </Text>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-        {`${preview.gapCount} idle gaps will be preserved${preview.runningRowCount ? ` · ${preview.runningRowCount} running session` : ''}`}
-      </Text>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-        {`${formatPreviewTimestamp(preview.firstTimestamp)} – ${formatPreviewTimestamp(preview.lastTimestamp)}`}
-      </Text>
-    </Column>
+    <FormSection
+      footer={`${formatPreviewTimestamp(preview.firstTimestamp)} – ${formatPreviewTimestamp(preview.lastTimestamp)}`}
+      testID="timemator-import-preview"
+      title="Timemator File"
+    >
+      <FormRow label="Entries" value={preview.rowCount.toLocaleString()} />
+      <FormRow label="Activities" value={`${preview.activityCount}`} />
+      <FormRow label="Folders" value={`${preview.folderCount}`} />
+      {preview.runningRowCount ? (
+        <FormRow label="Running" value={`${preview.runningRowCount}`} />
+      ) : null}
+      <FormRow
+        disabled={busy}
+        kind="action"
+        label="Add to Tracker"
+        onPress={onImport}
+        testID="review-timemator-import"
+      />
+    </FormSection>
   );
 }
 
 function TimematorImportSummary({ result }: { result: TimematorImportResult }) {
-  const { colors } = useAppTheme();
   const { summary } = result;
   return (
-    <Column spacing={5} style={{ width: '100%' }} testID="timemator-import-summary">
-      <Text textStyle={{ color: colors.success.foreground, fontSize: 15, fontWeight: '700' }}>
-        Timemator data imported
-      </Text>
-      <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>
-        {`${summary.insertedTransitions} tracker transitions added · ${summary.skippedTransitions} already present`}
-      </Text>
-      <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>
-        {`${summary.createdActivities} activities created · ${summary.matchedActivities} existing activities matched`}
-      </Text>
-      <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>
-        {`${summary.createdFolders} folders created · ${summary.matchedFolders} existing folders matched`}
-      </Text>
-    </Column>
+    <FormSection testID="timemator-import-summary" title="Imported from Timemator">
+      <FormRow
+        label="Entries added"
+        subtitle={
+          summary.skippedTransitions
+            ? `${summary.skippedTransitions} were already in your tracker`
+            : undefined
+        }
+        value={`${summary.insertedTransitions}`}
+      />
+      <FormRow
+        label="New activities"
+        subtitle={
+          summary.matchedActivities
+            ? `${summary.matchedActivities} matched existing activities`
+            : undefined
+        }
+        value={`${summary.createdActivities}`}
+      />
+      <FormRow
+        label="New folders"
+        subtitle={
+          summary.matchedFolders ? `${summary.matchedFolders} matched existing folders` : undefined
+        }
+        value={`${summary.createdFolders}`}
+      />
+    </FormSection>
   );
 }
 
@@ -179,17 +190,17 @@ function importErrorMessage(actionError: unknown): string {
 }
 
 function formatDropboxTimestamp(value: string | null): string {
-  if (!value) return 'Not synchronized yet';
+  if (!value) return 'Never';
   const timestamp = new Date(value);
-  if (Number.isNaN(timestamp.getTime())) return 'Not synchronized yet';
-  return `Last synchronized · ${new Intl.DateTimeFormat(undefined, {
+  if (Number.isNaN(timestamp.getTime())) return 'Never';
+  return new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short',
-  }).format(timestamp)}`;
+  }).format(timestamp);
 }
 
 function syncSummary(summary: BackupImportResult['summary']): string {
-  return `${summary.activities} activities, ${summary.folders} folders, ${summary.routines} routines, ${summary.transitions} transitions, ${summary.routineRuns} routine runs, ${summary.habits} habits, ${summary.habitDayStates} habit days, ${summary.goals} goals, ${summary.goalWeeklyStatuses} goal statuses`;
+  return `${summary.activities} activities, ${summary.habits} habits, ${summary.goals} goals, ${summary.transitions.toLocaleString()} tracker entries`;
 }
 
 function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
@@ -235,231 +246,209 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
 
   const connected = status?.connected ?? false;
   const dropboxAvailable = Boolean(status?.appKeyConfigured);
+  const authorize = () =>
+    void run(async () => {
+      const { url } = await service.beginAuthorization();
+      await Linking.openURL(url);
+    });
+  const review = status?.setupReview ?? null;
+  const syncFooter = error
+    ? error
+    : status?.lastError && !review
+      ? `Sync needs attention: ${status.lastError}`
+      : status?.syncPhase === 'offline'
+        ? 'Dropbox can’t be reached. Changes are saved here and will sync when you’re back online.'
+        : 'Disconnecting stops syncing. Your data stays on this device and in Dropbox.';
 
-  return (
-    <Column
-      spacing={10}
-      style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 16,
-        borderWidth: 1,
-        padding: 16,
-        width: '100%',
-      }}
-      testID="dropbox-backup-actions"
-    >
-      <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-        Dropbox synchronization
-      </Text>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-        Keep this dataset synchronized across Tulona tabs and devices. Local data remains available
-        if Dropbox is offline.
-      </Text>
-      {status && !dropboxAvailable ? (
-        <Text
-          textStyle={{ color: colors.textMuted, fontSize: 13 }}
-          testID="dropbox-sync-unsupported"
-        >
-          Dropbox sync isn’t available in this version of Tulona. Use Export JSON below to keep a
-          backup.
-        </Text>
-      ) : null}
-      {connected ? (
-        <>
-          {status ? (
-            <>
-              <AppSwitch
-                disabled={busy || Boolean(status.setupReview)}
-                label="Sync automatically after changes"
-                onValueChange={(value) => void run(() => service.setEnabled(value))}
-                testID="dropbox-auto-backup-enabled"
-                value={status.enabled}
-              />
-              <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-                {formatDropboxTimestamp(status.lastSyncAt ?? status.lastBackupAt)}
-              </Text>
-              {status.syncPhase === 'syncing' ? (
-                <Text
-                  textStyle={{ color: colors.textMuted, fontSize: 13 }}
-                  testID="dropbox-sync-state"
-                >
-                  Synchronizing changes…
-                </Text>
-              ) : null}
-              {status.syncPhase === 'offline' ? (
-                <Text
-                  textStyle={{ color: colors.textMuted, fontSize: 13 }}
-                  testID="dropbox-sync-state"
-                >
-                  Dropbox is unavailable. Local changes are saved and will sync when you reconnect.
-                </Text>
-              ) : null}
-              {status.lastError && !status.setupReview ? (
-                <Text
-                  textStyle={{ color: colors.danger.foreground, fontSize: 13 }}
-                  testID="dropbox-last-error"
-                >
-                  {`Synchronization needs attention: ${status.lastError}`}
-                </Text>
-              ) : null}
-            </>
-          ) : null}
-          {status?.setupReview ? (
-            <Column spacing={10} style={{ width: '100%' }} testID="dropbox-setup-review">
-              <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
-                Choose data for synchronization
-              </Text>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                {status.setupReview.reason}
-              </Text>
-              <Text textStyle={{ color: colors.text, fontSize: 13 }}>
-                {`On this device: ${syncSummary(status.setupReview.local)}`}
-              </Text>
-              <Text textStyle={{ color: colors.text, fontSize: 13 }}>
-                {status.setupReview.cloud
-                  ? `In Dropbox: ${syncSummary(status.setupReview.cloud)}`
-                  : 'No readable cloud dataset is available. You can retry, disconnect, or use local data.'}
-              </Text>
-              {status.setupReview.cloud ? (
-                <>
-                  <AppButton
-                    disabled={busy}
-                    label="Use Dropbox data"
-                    onPress={() => chooseSetup('cloud')}
-                    testID="dropbox-use-cloud"
-                    style={{ width: '100%' }}
-                  />
-                  <AppButton
-                    disabled={busy}
-                    label="Combine both datasets"
-                    onPress={() => chooseSetup('merge')}
-                    testID="dropbox-merge"
-                    style={{ width: '100%' }}
-                    variant="outlined"
-                  />
-                </>
-              ) : null}
-              <AppButton
-                disabled={busy}
-                label="Use this device’s data"
-                onPress={() => chooseSetup('local')}
-                testID="dropbox-use-local"
-                style={{ width: '100%' }}
-                variant="outlined"
-              />
-              <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-                No replacement happens until you confirm. Recovery copies of both sources are saved
-                before changes. Disconnect to keep both datasets separate, or reconnect to another
-                account.
-              </Text>
-            </Column>
-          ) : null}
-          <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>
-            Disconnect stops synchronization and keeps your local data and Dropbox files.
-          </Text>
-          <ConfirmationModal
-            visible={confirmSetup && Boolean(status?.setupReview)}
-            title={
-              choice === 'cloud'
-                ? 'Replace this device’s data?'
-                : choice === 'local'
-                  ? 'Replace Dropbox data?'
-                  : 'Combine both datasets?'
-            }
-            message={
-              choice === 'cloud'
-                ? 'All current activities, history, habits, goals, settings and running timers on this device will be replaced by Dropbox data. Other devices continue using the cloud dataset. A recovery copy of your current data will be saved.'
-                : choice === 'local'
-                  ? 'Dropbox will use this device’s complete dataset, including settings and running timers. Existing Dropbox data will be saved in recovery files. Other connected devices may need to choose this new dataset before syncing.'
-                  : 'Records from both datasets will be combined. Matching IDs are treated as the same record, and the Dropbox version of a matching record is kept; different IDs remain separate. Recovery copies preserve the original datasets.'
-            }
-            confirmLabel={choice === 'merge' ? 'Combine and sync' : 'Replace and sync'}
-            cancelLabel="Cancel"
-            busy={busy}
-            tone="danger"
-            onCancel={() => setConfirmSetup(false)}
-            onConfirm={() => {
-              const review = status?.setupReview;
-              const selected = choice;
-              if (!review || !selected) return;
-              void run(async () => {
-                try {
-                  await service.resolveSetup(review.token, selected);
-                } finally {
-                  setConfirmSetup(false);
-                }
-              });
-            }}
-            testID="dropbox-setup-confirmation"
-            confirmTestID="dropbox-setup-confirm"
-            cancelTestID="dropbox-setup-cancel"
-          />
-          <Row spacing={8} style={{ width: '100%' }}>
-            <AppButton
-              disabled={busy}
-              label="Sync now"
-              onPress={() => void run(() => service.syncNow())}
-              style={{ height: 48, width: '48%' }}
-              testID="dropbox-backup-now"
-            />
-            <AppButton
-              disabled={busy}
-              label="Disconnect"
-              onPress={() => void run(() => service.disconnect())}
-              style={{ height: 48, width: '48%' }}
-              testID="dropbox-disconnect"
-              variant="outlined"
-            />
-          </Row>
-          <AppButton
-            disabled={busy}
-            label="Reconnect or change Dropbox account"
-            onPress={() =>
-              void run(async () => {
-                const { url } = await service.beginAuthorization();
-                await Linking.openURL(url);
-              })
-            }
-            style={{ height: 48, width: '100%' }}
-            testID="dropbox-reconnect"
-            variant="outlined"
-          />
-        </>
-      ) : dropboxAvailable ? (
-        <AppButton
+  if (!status) {
+    return <FormSection testID="dropbox-backup-actions" title="Dropbox" />;
+  }
+
+  if (!dropboxAvailable && !connected) {
+    return (
+      <FormSection
+        footer="Dropbox sync isn’t available in this version of Tulona. Export a backup below to keep a copy."
+        footerTestID="dropbox-sync-unsupported"
+        testID="dropbox-backup-actions"
+        title="Dropbox"
+      >
+        <FormRow label="Sync" muted value="Unavailable" />
+      </FormSection>
+    );
+  }
+
+  if (!connected) {
+    return (
+      <FormSection
+        footer={error ?? 'Keep your data in sync across devices. Everything still works offline.'}
+        footerTone={error ? 'danger' : 'muted'}
+        testID="dropbox-backup-actions"
+        title="Dropbox"
+      >
+        <FormRow
           disabled={busy}
+          kind="action"
           label="Connect Dropbox"
-          onPress={() =>
-            void run(async () => {
-              const { url } = await service.beginAuthorization();
-              await Linking.openURL(url);
-            })
-          }
-          style={{ height: 50, width: '100%' }}
+          onPress={authorize}
           testID="dropbox-connect"
         />
+        {status.recoveryAvailable ? (
+          <FormRow
+            disabled={busy}
+            kind="action"
+            label="Export Data From Before Sync"
+            onPress={() =>
+              void run(async () => {
+                await exportBackupJson(await service.exportRecoveryJson());
+              })
+            }
+            testID="dropbox-export-recovery"
+          />
+        ) : null}
+      </FormSection>
+    );
+  }
+
+  return (
+    <>
+      {review ? (
+        <FormSection
+          footer="Nothing is replaced until you confirm, and a copy of both is saved first."
+          testID="dropbox-setup-review"
+          title="Choose Data to Sync"
+        >
+          <FormContent>
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+              {review.reason}
+            </Text>
+          </FormContent>
+          {review.cloud ? (
+            <FormRow
+              disabled={busy}
+              kind="action"
+              label="Use Dropbox Data"
+              onPress={() => chooseSetup('cloud')}
+              subtitle={syncSummary(review.cloud)}
+              testID="dropbox-use-cloud"
+            />
+          ) : null}
+          <FormRow
+            disabled={busy}
+            kind="action"
+            label="Use This Device’s Data"
+            onPress={() => chooseSetup('local')}
+            subtitle={syncSummary(review.local)}
+            testID="dropbox-use-local"
+          />
+          {review.cloud ? (
+            <FormRow
+              disabled={busy}
+              kind="action"
+              label="Combine Both"
+              onPress={() => chooseSetup('merge')}
+              subtitle="Keeps records from each. Matching records use the Dropbox version."
+              testID="dropbox-merge"
+            />
+          ) : null}
+        </FormSection>
       ) : null}
-      {status?.recoveryAvailable ? (
-        <AppButton
-          disabled={busy}
-          label="Export data from before last sync setup"
-          onPress={() =>
-            void run(async () => {
-              await exportBackupJson(await service.exportRecoveryJson());
-            })
-          }
-          testID="dropbox-export-recovery"
-          style={{ width: '100%' }}
-          variant="outlined"
+      <FormSection
+        footer={syncFooter}
+        footerTestID={error ? 'dropbox-error' : status.lastError ? 'dropbox-last-error' : undefined}
+        footerTone={error || (status.lastError && !review) ? 'danger' : 'muted'}
+        testID="dropbox-backup-actions"
+        title="Dropbox"
+      >
+        <FormSwitchRow
+          disabled={busy || Boolean(review)}
+          label="Sync Automatically"
+          onValueChange={(value) => void run(() => service.setEnabled(value))}
+          testID="dropbox-auto-backup-enabled"
+          value={status.enabled}
         />
-      ) : null}
-      {error ? (
-        <Text textStyle={{ color: colors.danger.foreground, fontSize: 13 }} testID="dropbox-error">
-          {error}
-        </Text>
-      ) : null}
-    </Column>
+        <FormRow
+          label="Last Synced"
+          testID="dropbox-sync-state"
+          value={
+            status.syncPhase === 'syncing'
+              ? 'Syncing…'
+              : status.syncPhase === 'offline'
+                ? 'Offline'
+                : formatDropboxTimestamp(status.lastSyncAt ?? status.lastBackupAt)
+          }
+        />
+        <FormRow
+          disabled={busy || Boolean(review)}
+          kind="action"
+          label="Sync Now"
+          onPress={() => void run(() => service.syncNow())}
+          testID="dropbox-backup-now"
+        />
+        <FormRow
+          disabled={busy}
+          kind="action"
+          label="Change Account"
+          onPress={authorize}
+          testID="dropbox-reconnect"
+        />
+        {status.recoveryAvailable ? (
+          <FormRow
+            disabled={busy}
+            kind="action"
+            label="Export Data From Before Sync"
+            onPress={() =>
+              void run(async () => {
+                await exportBackupJson(await service.exportRecoveryJson());
+              })
+            }
+            testID="dropbox-export-recovery"
+          />
+        ) : null}
+        <FormRow
+          disabled={busy}
+          kind="destructive"
+          label="Disconnect"
+          onPress={() => void run(() => service.disconnect())}
+          testID="dropbox-disconnect"
+        />
+      </FormSection>
+      <ConfirmationModal
+        visible={confirmSetup && Boolean(review)}
+        title={
+          choice === 'cloud'
+            ? 'Replace this device’s data?'
+            : choice === 'local'
+              ? 'Replace Dropbox data?'
+              : 'Combine both?'
+        }
+        message={
+          choice === 'cloud'
+            ? 'Everything on this device, including settings and running timers, will be replaced with your Dropbox data. A copy of this device’s data is saved first.'
+            : choice === 'local'
+              ? 'Dropbox will be replaced with this device’s data. A copy of the Dropbox data is saved first. Your other devices may ask which data to use.'
+              : 'Records from both are kept. When the same record exists in both, the Dropbox version wins. Copies of both are saved first.'
+        }
+        confirmLabel={choice === 'merge' ? 'Combine' : 'Replace'}
+        cancelLabel="Cancel"
+        busy={busy}
+        tone="danger"
+        onCancel={() => setConfirmSetup(false)}
+        onConfirm={() => {
+          const selected = choice;
+          if (!review || !selected) return;
+          void run(async () => {
+            try {
+              await service.resolveSetup(review.token, selected);
+            } finally {
+              setConfirmSetup(false);
+            }
+          });
+        }}
+        testID="dropbox-setup-confirmation"
+        confirmTestID="dropbox-setup-confirm"
+        cancelTestID="dropbox-setup-cancel"
+      />
+    </>
   );
 }
 
@@ -486,6 +475,7 @@ function BackupContent({
   const [timematorResult, setTimematorResult] = useState<TimematorImportResult | null>(null);
   const [timematorConfirming, setTimematorConfirming] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const [restored, setRestored] = useState(false);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
 
   const exportJson = async () => {
@@ -495,7 +485,7 @@ function BackupContent({
     setSuccess(null);
     try {
       const content = await runtime.backupService.exportJson();
-      if ((await exportBackupJson(content)) === 'exported') setSuccess('JSON backup exported.');
+      if ((await exportBackupJson(content)) === 'exported') setSuccess('Backup exported.');
     } catch (actionError) {
       setError(errorText(actionError));
     } finally {
@@ -511,7 +501,7 @@ function BackupContent({
     try {
       const content = await runtime.backupService.exportCsv();
       if ((await exportIntervalsCsv(content)) === 'exported') {
-        setSuccess('CSV interval export saved.');
+        setSuccess('CSV exported.');
       }
     } catch (actionError) {
       setError(errorText(actionError));
@@ -554,7 +544,9 @@ function BackupContent({
     setConfirming(false);
     try {
       const result = await runtime.backupService.replaceCurrentData(importText);
-      setSuccess(`Data replaced safely in dataset ${result.datasetId}.`);
+      setSuccess('Backup restored.');
+      setRestored(true);
+      void result;
       setImportText(null);
       setImportResult(null);
       bootCoordinator.reset();
@@ -602,7 +594,8 @@ function BackupContent({
       setTimematorResult(result);
       setTimematorText(null);
       setTimematorPreview(null);
-      setSuccess('Timemator tracker data was added. Reload the tracker to see it.');
+      setSuccess('Timemator data added.');
+      setRestored(true);
       bootCoordinator.reset();
     } catch (actionError) {
       setError(importErrorMessage(actionError));
@@ -614,205 +607,133 @@ function BackupContent({
   return (
     <>
       <Screen onBack={onBack} title={title}>
-        <Column spacing={14} style={{ width: '100%' }}>
+        <Form>
           <DropboxBackupPanel service={runtime.dropboxBackupService} />
-          <Column
-            spacing={10}
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 16,
-              borderWidth: 1,
-              padding: 16,
-              width: '100%',
-            }}
+          {error ? (
+            <ErrorPanel
+              message={error}
+              onBack={onBack}
+              onRetry={() => {
+                const action = lastAction.current;
+                if (action) void action();
+              }}
+            />
+          ) : null}
+          {success ? (
+            <FormSection testID="backup-success">
+              <FormRow
+                icon="check-circle-2"
+                iconColor={colors.success.foreground}
+                label={success}
+              />
+              {restored ? (
+                <FormRow
+                  kind="action"
+                  label="Open Tracker"
+                  onPress={() => router.replace('/')}
+                  testID={
+                    success.startsWith('Timemator')
+                      ? 'reload-after-timemator-import'
+                      : 'reload-after-restore'
+                  }
+                />
+              ) : null}
+            </FormSection>
+          ) : null}
+          <FormSection
+            footer={
+              busy
+                ? 'Working…'
+                : 'A backup file has everything and can be restored later. CSV lists your tracked time for spreadsheets.'
+            }
+            footerTestID={busy ? 'backup-progress' : undefined}
             testID="backup-actions"
+            title="Backup"
           >
-            <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-              On-device backup
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              JSON restores the complete dataset. CSV is a read-only analysis export of derived
-              intervals.
-            </Text>
-            <Column spacing={8} style={{ width: '100%' }}>
-              <AppButton
-                disabled={busy}
-                label="Export JSON"
-                onPress={() => void exportJson()}
-                style={{ height: 50, width: '100%' }}
-                testID="export-json"
-              />
-              <AppButton
-                disabled={busy}
-                label="Export CSV"
-                onPress={() => void exportCsv()}
-                style={{ height: 50, width: '100%' }}
-                testID="export-csv"
-              />
-            </Column>
-            <AppButton
+            <FormRow
               disabled={busy}
-              label="Choose JSON backup"
+              kind="action"
+              label="Export Backup"
+              onPress={() => void exportJson()}
+              testID="export-json"
+            />
+            <FormRow
+              disabled={busy}
+              kind="action"
+              label="Export Tracked Time as CSV"
+              onPress={() => void exportCsv()}
+              testID="export-csv"
+            />
+            <FormRow
+              disabled={busy}
+              kind="action"
+              label="Restore From Backup…"
               onPress={() => void importFile()}
-              style={{ height: 50, width: '100%' }}
               testID="import-json"
             />
-          </Column>
-          {busy ? (
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }} testID="backup-progress">
-              Working...
-            </Text>
-          ) : null}
-          <ErrorPanel
-            message={error}
-            onBack={onBack}
-            onRetry={() => {
-              const action = lastAction.current;
-              if (action) void action();
-            }}
-          />
-          {success ? (
-            <Column
-              spacing={6}
-              style={{
-                backgroundColor: colors.success.background,
-                borderColor: colors.success.foreground,
-                borderRadius: 14,
-                borderWidth: 1,
-                padding: 14,
-                width: '100%',
-              }}
-              testID="backup-success"
-            >
-              <Row alignment="center" spacing={8}>
-                <AppIcon
-                  accessibilityLabel="Backup completed"
-                  color={colors.success.foreground}
-                  name="check-circle-2"
-                  size={18}
-                />
-                <Text textStyle={{ color: colors.success.foreground, fontSize: 15 }}>
-                  {success}
-                </Text>
-              </Row>
-            </Column>
-          ) : null}
-          {importResult ? <Summary result={importResult} /> : null}
+          </FormSection>
           {importResult && importText ? (
-            <AppButton
-              disabled={busy}
-              label="Replace current data"
-              onPress={() => setConfirming(true)}
-              style={{ height: 52, width: '100%' }}
-              testID="replace-current-data"
+            <BackupFileSection
+              busy={busy}
+              onRestore={() => setConfirming(true)}
+              result={importResult}
             />
           ) : null}
-          {success?.startsWith('Data replaced') ? (
-            <AppButton
-              label="Reload active dataset"
-              onPress={() => router.replace('/')}
-              testID="reload-after-restore"
-            />
-          ) : null}
-          {success?.startsWith('Timemator tracker data') ? (
-            <AppButton
-              label="Reload tracker"
-              onPress={() => router.replace('/')}
-              testID="reload-after-timemator-import"
-            />
-          ) : null}
-          <Column
-            spacing={10}
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 16,
-              borderWidth: 1,
-              padding: 16,
-              width: '100%',
-            }}
-            testID="ticktick-import-actions"
+          <FormSection
+            footer="Imports add to your data and never replace it. Timemator activities are matched by name."
+            testID="import-actions"
+            title="Import"
           >
-            <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-              Import TickTick habits
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              Choose which habits and history to add. Your existing Tulona data stays in place.
-            </Text>
-            <AppButton
+            <FormRow
+              accessibilityLabel="Import TickTick habits"
               disabled={busy}
-              label="Choose TickTick export"
+              label="TickTick Habits"
               onPress={() => router.push('/habit-import' as Href)}
-              style={{ height: 50, width: '100%' }}
               testID="import-ticktick-habits"
             />
-          </Column>
-          <Column
-            spacing={10}
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 16,
-              borderWidth: 1,
-              padding: 16,
-              width: '100%',
-            }}
-            testID="timemator-import-actions"
-          >
-            <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-              Import Timemator tracker data
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              Add Timemator&apos;s semicolon-delimited export to your tracker. Existing activities
-              are matched by name; missing activities are created automatically.
-            </Text>
-            <AppButton
+            <FormRow
+              accessibilityLabel="Import Timemator tracker data"
               disabled={busy}
-              label="Choose Timemator CSV"
+              label="Timemator Tracker Data"
               onPress={() => void inspectTimematorFile()}
-              style={{ height: 50, width: '100%' }}
               testID="import-timemator-csv"
             />
-            {timematorPreview ? <TimematorPreview preview={timematorPreview} /> : null}
-            {timematorPreview && timematorText ? (
-              <AppButton
-                disabled={busy}
-                label="Review and import"
-                onPress={() => setTimematorConfirming(true)}
-                style={{ height: 52, width: '100%' }}
-                testID="review-timemator-import"
-              />
-            ) : null}
-            {timematorResult ? <TimematorImportSummary result={timematorResult} /> : null}
-          </Column>
+          </FormSection>
+          {timematorPreview && timematorText ? (
+            <TimematorFileSection
+              busy={busy}
+              onImport={() => setTimematorConfirming(true)}
+              preview={timematorPreview}
+            />
+          ) : null}
+          {timematorResult ? <TimematorImportSummary result={timematorResult} /> : null}
           {footer}
-        </Column>
+        </Form>
       </Screen>
       <ConfirmationModal
         busy={busy}
         cancelLabel="Cancel"
         cancelTestID="cancel-timemator-import"
-        confirmLabel="Yes, import tracker data"
+        confirmLabel="Add"
         confirmTestID="confirm-timemator-import"
-        message="This adds the imported sessions to the current dataset and keeps your existing tracker data."
+        message="These entries are added to your tracker. Nothing you already have is changed."
         onCancel={() => setTimematorConfirming(false)}
         onConfirm={() => void importTimemator()}
         testID="timemator-import-confirmation"
-        title="Add this tracker history?"
+        title="Add Timemator history?"
         visible={timematorConfirming && timematorPreview !== null && timematorText !== null}
       />
       <ConfirmationModal
         busy={busy}
         cancelLabel="Cancel"
         cancelTestID="cancel-replace"
-        confirmLabel="Yes, replace current data"
+        confirmLabel="Restore"
         confirmTestID="confirm-replace"
-        message="This switches this device to the selected backup after it is verified. Your current dataset will be retained, but this action changes which data is active."
+        message="Everything on this device will be replaced with this backup. Your current data is kept as a separate copy."
         onCancel={() => setConfirming(false)}
         onConfirm={() => void replace()}
         testID="backup-replace-confirmation"
-        title="Replace all current data?"
+        title="Restore this backup?"
         visible={confirming && importResult !== null && importText !== null}
       />
     </>

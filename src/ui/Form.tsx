@@ -53,13 +53,23 @@ export interface FormSectionProps {
   /** Trailing control in the section header, such as an Edit toggle. */
   headerAction?: ReactNode;
   footer?: string;
-  children: ReactNode;
+  footerTone?: 'muted' | 'danger';
+  footerTestID?: string;
+  children?: ReactNode;
   testID?: string;
 }
 
 /** An inset grouped list section: optional header, rows with hairline separators, and footer. */
-export function FormSection({ title, headerAction, footer, children, testID }: FormSectionProps) {
-  const { colors, group } = useFormColors();
+export function FormSection({
+  title,
+  headerAction,
+  footer,
+  footerTone = 'muted',
+  footerTestID,
+  children,
+  testID,
+}: FormSectionProps) {
+  const { colors, destructive, group } = useFormColors();
   const rows = Children.toArray(children).filter(isValidElement);
   return (
     <View style={styles.section} testID={testID}>
@@ -82,7 +92,15 @@ export function FormSection({ title, headerAction, footer, children, testID }: F
         </View>
       ) : null}
       {footer ? (
-        <Text style={[styles.sectionFooter, { color: colors.textMuted }]}>{footer}</Text>
+        <Text
+          style={[
+            styles.sectionFooter,
+            { color: footerTone === 'danger' ? destructive : colors.textMuted },
+          ]}
+          testID={footerTestID}
+        >
+          {footer}
+        </Text>
       ) : null}
     </View>
   );

@@ -217,10 +217,10 @@ function SettingsCategoryContent({ category, goBack, router, store }: CategoryCo
     return (
       <BackupScreen
         footer={
-          <Column spacing={16} style={{ width: '100%' }}>
+          <>
             <SettingsActionError onBack={goBack} store={store} />
             <PrototypeDataReset onCleared={() => router.replace('/')} />
-          </Column>
+          </>
         }
         onBack={goBack}
         title="Data"
