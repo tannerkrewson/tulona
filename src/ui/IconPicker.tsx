@@ -23,6 +23,8 @@ export interface IconPickerProps {
   columns?: number;
   allowClear?: boolean;
   searchPlaceholder?: string;
+  /** Lets the grid grow with its container, such as a sheet, instead of scrolling inside it. */
+  expanded?: boolean;
   testID?: string;
 }
 
@@ -59,11 +61,13 @@ function LucideIconGrid({
   onChange,
   rootTestID,
   searchPlaceholder,
+  expanded,
 }: {
   value: IconValue | null;
   onChange: (value: IconValue) => void;
   rootTestID: string;
   searchPlaceholder: string;
+  expanded: boolean;
 }) {
   const { colors } = useAppTheme();
   const [query, setQuery] = useState('');
@@ -84,7 +88,7 @@ function LucideIconGrid({
         textStyle={{ color: colors.text, fontSize: 16 }}
       />
       {matchingIcons.length > 0 ? (
-        <ScrollView style={{ height: 264, width: '100%' }}>
+        <ScrollView style={expanded ? { width: '100%' } : { height: 264, width: '100%' }}>
           <View
             style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, width: '100%' }}
             testID={`${rootTestID}-grid`}
@@ -243,6 +247,7 @@ export function IconPicker({
   onChange,
   allowClear = true,
   searchPlaceholder = 'Search icons',
+  expanded = false,
   testID,
 }: IconPickerProps) {
   const [mode, setMode] = useState<PickerMode>(() => (isEmoji(value) ? 'emoji' : 'lucide'));
@@ -260,6 +265,7 @@ export function IconPicker({
         </Column>
       ) : (
         <LucideIconGrid
+          expanded={expanded}
           onChange={onChange}
           rootTestID={rootTestID}
           searchPlaceholder={searchPlaceholder}

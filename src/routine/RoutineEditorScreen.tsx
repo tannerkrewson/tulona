@@ -1,5 +1,5 @@
 import { Picker } from '@expo/ui';
-import { Column, Row, Text } from '@ui/primitives';
+import { Column, Text } from '@ui/primitives';
 import { useRouter } from 'expo-router';
 import { Fragment, type ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -17,17 +17,23 @@ import type {
   UUID,
 } from '@domain';
 import { createId } from '@domain';
-import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
 import {
-  AccessiblePicker,
-  AccessibleTextInput,
-  AppButton,
-  ColorPicker,
   ConfirmationModal,
   DurationPicker,
   errorText,
-  IconPicker,
+  Form,
+  FormColorRow,
+  FormContent,
+  FormIconRow,
+  FormPickerRow,
+  FormRow,
+  FormSection,
+  FormSheet,
+  FormSwitchRow,
+  FormTextField,
+  HeaderTextButton,
+  IconButton,
   Screen,
 } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -166,62 +172,6 @@ function inputFromDraft(
   return input;
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  const { colors } = useAppTheme();
-  return (
-    <Column spacing={6} style={{ width: '100%' }}>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>{label}</Text>
-      {children}
-    </Column>
-  );
-}
-
-function Input({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  testID,
-  multiline = false,
-  keyboardType = 'default',
-  width,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  placeholder: string;
-  testID: string;
-  multiline?: boolean;
-  keyboardType?: 'default' | 'numeric';
-  width?: number | '100%';
-}) {
-  const { colors } = useAppTheme();
-  return (
-    <AccessibleTextInput
-      defaultValue={value}
-      label={label}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      keyboardType={keyboardType}
-      multiline={multiline}
-      numberOfLines={multiline ? 3 : undefined}
-      testID={testID}
-      style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 10,
-        borderWidth: 1,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        width: width ?? '100%',
-      }}
-      placeholderTextColor={colors.textMuted}
-      returnKeyType={multiline ? 'default' : 'next'}
-      textStyle={{ color: colors.text, fontSize: 16 }}
-    />
-  );
-}
-
 function ErrorMessage({
   message,
   onRetry,
@@ -254,201 +204,181 @@ function ErrorMessage({
   );
 }
 
-function FolderPicker({
-  folders,
-  currentFolderId,
-  value,
-  onChange,
-}: {
-  folders: readonly Folder[];
-  currentFolderId: UUID | null;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <AccessiblePicker
-      label="Parent folder"
-      selectedValue={value}
-      onValueChange={onChange}
-      testID="routine-folder-picker"
-    >
-      <Picker.Item label="Root" value={ROOT_VALUE} />
-      {folders
-        .filter((folder) => folder.archivedAt === null || folder.id === currentFolderId)
-        .map((folder) => (
-          <Picker.Item
-            key={folder.id}
-            label={folder.archivedAt ? `${folder.name} (archived)` : folder.name}
-            value={folder.id}
-          />
-        ))}
-    </AccessiblePicker>
-  );
+function formatStepDuration(durationMs: number): string {
+  const { hours, minutes, seconds } = durationParts(durationMs);
+  const parts = [
+    Number(hours) > 0 ? `${hours} hr` : null,
+    Number(minutes) > 0 ? `${minutes} min` : null,
+    Number(seconds) > 0 ? `${seconds} sec` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : '0 sec';
 }
 
-function StepForm({
+function isAutoAdvance(endBehavior: EditableStep['endBehavior']): boolean {
+  return endBehavior === 'auto-advance' || endBehavior === 'autoAdvance';
+}
+
+function StepSheet({
   draft,
+  isExisting,
   activities,
   folders,
   trackingMode,
   onChange,
   onSave,
   onCancel,
+  onDuplicate,
+  onDelete,
   busy,
   error,
   onRetry,
-  onClose,
+  onCloseError,
+  children,
 }: {
-  draft: StepDraft;
+  draft: StepDraft | null;
+  isExisting: boolean;
   activities: readonly Activity[];
   folders: readonly Folder[];
   trackingMode: RoutineTrackingMode;
   onChange: (draft: StepDraft) => void;
   onSave: () => void;
   onCancel: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
   busy: boolean;
   error: string | null;
   onRetry?: () => void;
-  onClose: () => void;
+  onCloseError: () => void;
+  children?: ReactNode;
 }) {
   const { colors } = useAppTheme();
+  const current = draft ?? emptyDraft(activities, trackingMode);
+  const update = (changes: Partial<StepDraft>) => onChange({ ...current, ...changes });
   const availableActivities = activities.filter(
-    (activity) => activity.archivedAt === null || activity.id === draft.activityId
+    (activity) => activity.archivedAt === null || activity.id === current.activityId
   );
-  const selectedActivity = activities.find((activity) => activity.id === draft.activityId) ?? null;
-  const selectedActivityColor = selectedActivity
-    ? resolveDisplayColor(selectedActivity, folders, colors.primary)
-    : colors.primary;
-  const update = (changes: Partial<StepDraft>) => onChange({ ...draft, ...changes });
+  const selectedActivity = activities.find((activity) => activity.id === current.activityId);
   return (
-    <Column
-      spacing={14}
-      style={{
-        backgroundColor: colors.surfaceMuted,
-        borderColor: colors.primary,
-        borderRadius: 14,
-        borderWidth: 1,
-        padding: 14,
-        width: '100%',
-      }}
-      testID={draft.id ? `step-form-${draft.id}` : 'new-step-form'}
+    <FormSheet
+      confirmDisabled={busy}
+      confirmLabel={isExisting ? 'Save' : 'Add'}
+      onClose={onCancel}
+      onConfirm={onSave}
+      testID={isExisting ? `step-form-${current.id}` : 'new-step-form'}
+      title={isExisting ? 'Edit Step' : 'New Step'}
+      visible={draft !== null}
     >
-      <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-        {draft.id ? 'Edit step' : 'Add step'}
-      </Text>
+      <ErrorMessage message={error} onClose={onCloseError} onRetry={onRetry} />
       {trackingMode === 'steps' ? (
-        <>
-          <Field label="Activity tracked by this step">
-            <AccessiblePicker
-              label="Activity tracked by this step"
-              selectedValue={draft.activityId}
-              onValueChange={(activityId) => update({ activityId })}
-              testID="step-activity-picker"
-            >
-              <Picker.Item label="Choose an activity" value="" />
-              {availableActivities.map((activity) => (
-                <Picker.Item
-                  key={activity.id}
-                  label={activity.archivedAt ? `${activity.name} (archived)` : activity.name}
-                  value={activity.id}
-                />
-              ))}
-            </AccessiblePicker>
-          </Field>
-          {selectedActivity ? (
-            <Row
-              alignment="center"
-              spacing={10}
-              style={{ paddingHorizontal: 4, width: '100%' }}
-              testID="step-activity-preview"
-            >
-              <AppIcon
-                name={selectedActivity.iconName || 'activity'}
-                color={selectedActivityColor}
-                size={24}
+        <FormSection footer="Time spent on this step is logged to this activity.">
+          <FormPickerRow
+            icon={selectedActivity?.iconName || 'activity'}
+            iconColor={
+              selectedActivity
+                ? resolveDisplayColor(selectedActivity, folders, colors.primary)
+                : colors.textMuted
+            }
+            label="Activity"
+            onValueChange={(activityId) => update({ activityId })}
+            selectedValue={current.activityId}
+            testID="step-activity-picker"
+          >
+            <Picker.Item label="Choose" value="" />
+            {availableActivities.map((activity) => (
+              <Picker.Item
+                key={activity.id}
+                label={activity.archivedAt ? `${activity.name} (archived)` : activity.name}
+                value={activity.id}
               />
-              <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>
-                {selectedActivity.name}
-              </Text>
-            </Row>
-          ) : null}
-        </>
+            ))}
+          </FormPickerRow>
+        </FormSection>
       ) : (
-        <>
-          <Field label="Step title">
-            <Input
-              label="Step title"
-              value={draft.title}
-              onChangeText={(title) => update({ title })}
-              placeholder="What will you do?"
-              testID="step-title"
-            />
-          </Field>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-            This routine tracks continuously. Each step is part of the same routine activity.
-          </Text>
-          <Field label="Step icon">
-            <IconPicker
-              value={draft.iconName || null}
-              onChange={(iconName) => update({ iconName: iconName ?? '' })}
-              testID="step-icon-picker"
-            />
-          </Field>
-        </>
+        <FormSection>
+          <FormTextField
+            label="Step title"
+            onChangeText={(title) => update({ title })}
+            placeholder="Title"
+            testID="step-title"
+            value={current.title}
+          />
+          <FormIconRow
+            onChange={(iconName) => update({ iconName: iconName ?? '' })}
+            testID="step-icon-picker"
+            value={current.iconName || null}
+          />
+        </FormSection>
       )}
-      <Field label="Duration">
-        <DurationPicker
-          hours={Number(draft.hours) || 0}
-          minutes={Number(draft.minutes) || 0}
-          onChange={({ hours, minutes, seconds }) =>
-            update({ hours: String(hours), minutes: String(minutes), seconds: String(seconds) })
-          }
-          seconds={Number(draft.seconds) || 0}
-          testID="step-duration"
-        />
-      </Field>
-      <Field label="When time expires">
-        <AccessiblePicker
-          label="When time expires"
-          selectedValue={draft.endBehavior}
+      <FormSection title="Duration">
+        <FormContent>
+          <DurationPicker
+            hours={Number(current.hours) || 0}
+            minutes={Number(current.minutes) || 0}
+            onChange={({ hours, minutes, seconds }) =>
+              update({ hours: String(hours), minutes: String(minutes), seconds: String(seconds) })
+            }
+            seconds={Number(current.seconds) || 0}
+            testID="step-duration"
+          />
+        </FormContent>
+      </FormSection>
+      <FormSection
+        footer={
+          current.endBehavior === 'auto-advance'
+            ? 'The next step starts as soon as this one runs out.'
+            : 'The timer keeps counting into overtime until you move on.'
+        }
+      >
+        <FormPickerRow
+          label="When time is up"
           onValueChange={(endBehavior) =>
             update({ endBehavior: endBehavior as RoutineStepEndBehavior })
           }
+          selectedValue={current.endBehavior}
           testID="step-end-behavior"
         >
-          <Picker.Item label="Keep running into overtime" value="overtime" />
-          <Picker.Item label="Auto-advance to the next step" value="auto-advance" />
-        </AccessiblePicker>
-      </Field>
-      <Field label="Notes">
-        <Input
+          <Picker.Item label="Keep going" value="overtime" />
+          <Picker.Item label="Next step" value="auto-advance" />
+        </FormPickerRow>
+        <FormSwitchRow
+          label="Include in routine"
+          onValueChange={(enabled) => update({ enabled })}
+          testID="step-enabled"
+          value={current.enabled}
+        />
+      </FormSection>
+      <FormSection title="Notes">
+        <FormTextField
           label="Step notes"
-          value={draft.notes}
-          onChangeText={(notes) => update({ notes })}
-          placeholder="Optional step notes"
-          testID="step-notes"
           multiline
+          onChangeText={(notes) => update({ notes })}
+          placeholder="Shown while this step runs"
+          testID="step-notes"
+          value={current.notes}
         />
-      </Field>
-      <ErrorMessage message={error} onClose={onClose} onRetry={onRetry} />
-      <Column spacing={8} style={{ width: '100%' }}>
-        <AppButton
-          disabled={busy}
-          label={busy ? 'Saving...' : 'Save step'}
-          onPress={onSave}
-          style={{ height: 50, width: '100%' }}
-          testID="save-step"
-        />
-        <AppButton
-          disabled={busy}
-          label="Cancel"
-          onPress={onCancel}
-          style={{ height: 48, width: '100%' }}
-          variant="outlined"
-          testID="cancel-step"
-        />
-      </Column>
-    </Column>
+      </FormSection>
+      {isExisting ? (
+        <FormSection>
+          <FormRow
+            disabled={busy}
+            icon="plus"
+            kind="action"
+            label="Duplicate Step"
+            onPress={onDuplicate}
+            testID={`duplicate-step-${current.id}`}
+          />
+          <FormRow
+            disabled={busy}
+            icon="trash-2"
+            kind="destructive"
+            label="Delete Step"
+            onPress={onDelete}
+            testID={`delete-step-${current.id}`}
+          />
+        </FormSection>
+      ) : null}
+      {children}
+    </FormSheet>
   );
 }
 
@@ -459,11 +389,9 @@ function StepRow({
   trackingMode,
   index,
   count,
+  reordering,
   onEdit,
-  onDuplicate,
-  onDelete,
   onMove,
-  onToggle,
   busy,
 }: {
   step: EditableStep;
@@ -472,16 +400,12 @@ function StepRow({
   trackingMode: RoutineTrackingMode;
   index: number;
   count: number;
+  reordering: boolean;
   onEdit: () => void;
-  onDuplicate: () => void;
-  onDelete: () => void;
   onMove: (direction: 'up' | 'down') => void;
-  onToggle: () => void;
   busy: boolean;
 }) {
   const { colors } = useAppTheme();
-  const duration = durationParts(step.durationMs);
-  const durationText = `${duration.hours}h ${duration.minutes}m ${duration.seconds}s`;
   const selectedActivity =
     trackingMode === 'steps' && step.activityId !== null
       ? activities.find((activity) => activity.id === step.activityId)
@@ -489,106 +413,43 @@ function StepRow({
   const stepColor = selectedActivity
     ? resolveDisplayColor(selectedActivity, folders, colors.primary)
     : (step.color ?? colors.primary);
+  const included = step.enabled !== false;
+  const subtitle = included
+    ? `${formatStepDuration(step.durationMs)} · ${isAutoAdvance(step.endBehavior) ? 'then next step' : 'then keeps going'}`
+    : `Not included · ${formatStepDuration(step.durationMs)}`;
   return (
-    <Column
-      spacing={10}
-      style={{
-        paddingHorizontal: 4,
-        paddingVertical: 14,
-        width: '100%',
-      }}
+    <FormRow
+      accessibilityHint={reordering ? undefined : 'Opens this step'}
+      icon={step.iconName || 'timer'}
+      iconColor={included ? stepColor : colors.textMuted}
+      label={step.name || 'Untitled step'}
+      muted={!included}
+      onPress={reordering ? undefined : onEdit}
+      subtitle={subtitle}
       testID={`routine-step-${step.id}`}
-    >
-      <Row alignment="center" spacing={12} style={{ width: '100%' }}>
-        <AppIcon
-          accessibilityLabel={`Icon for step ${index + 1}`}
-          name={step.iconName || 'timer'}
-          color={stepColor}
-          size={25}
-        />
-        <View style={{ flex: 1 }}>
-          <Column spacing={3}>
-            <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-              {`${index + 1}. ${step.name || 'Untitled step'}`}
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              {`${step.enabled === false ? 'Excluded · ' : ''}${durationText} · ${step.endBehavior === 'auto-advance' || step.endBehavior === 'autoAdvance' ? 'Auto-advance' : 'Overtime'}`}
-            </Text>
-          </Column>
-        </View>
-        <AppButton
-          disabled={busy}
-          label={step.enabled === false ? 'Enable' : 'Disable'}
-          onPress={onToggle}
-          style={{ height: 40, width: 86, paddingHorizontal: 10 }}
-          variant="outlined"
-          testID={`toggle-routine-step-${step.id}`}
-        />
-      </Row>
-      {step.notes ? (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-          {step.notes}
-        </Text>
-      ) : null}
-      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-        <AppButton
-          disabled={busy}
-          label="Edit"
-          onPress={onEdit}
-          style={{ height: 44, width: '52%' }}
-          testID={`edit-step-${step.id}`}
-        />
-        <AppButton
-          disabled={busy || index === 0}
-          onPress={() => onMove('up')}
-          style={{ height: 44, paddingHorizontal: 0, width: 44 }}
-          variant="outlined"
-          testID={`move-step-up-${step.id}`}
-        >
-          <AppIcon
-            accessibilityLabel="Move step up"
-            color={colors.text}
-            name="chevron-up"
-            size={20}
-          />
-        </AppButton>
-        <AppButton
-          disabled={busy || index === count - 1}
-          onPress={() => onMove('down')}
-          style={{ height: 44, paddingHorizontal: 0, width: 44 }}
-          variant="outlined"
-          testID={`move-step-down-${step.id}`}
-        >
-          <AppIcon
-            accessibilityLabel="Move step down"
-            color={colors.text}
-            name="chevron-down"
-            size={20}
-          />
-        </AppButton>
-      </Row>
-      <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-        <AppButton
-          disabled={busy}
-          label="Duplicate"
-          onPress={onDuplicate}
-          style={{ height: 44, width: '48%' }}
-          variant="outlined"
-          testID={`duplicate-step-${step.id}`}
-        />
-        <AppButton
-          disabled={busy}
-          label="Delete"
-          onPress={onDelete}
-          style={{ height: 44, width: '48%' }}
-          variant="outlined"
-          testID={`delete-step-${step.id}`}
-        />
-      </Row>
-      {index < count - 1 ? (
-        <View style={{ backgroundColor: colors.border, height: 1, width: '100%' }} />
-      ) : null}
-    </Column>
+      trailing={
+        reordering ? (
+          <View style={{ flexDirection: 'row', gap: 4 }}>
+            <IconButton
+              disabled={busy || index === 0}
+              icon="chevron-up"
+              label="Move step up"
+              onPress={() => onMove('up')}
+              testID={`move-step-up-${step.id}`}
+              variant="plain"
+            />
+            <IconButton
+              disabled={busy || index === count - 1}
+              icon="chevron-down"
+              label="Move step down"
+              onPress={() => onMove('down')}
+              testID={`move-step-down-${step.id}`}
+              variant="plain"
+            />
+          </View>
+        ) : undefined
+      }
+    />
   );
 }
 
@@ -763,6 +624,7 @@ function RoutineEditorForm({
   const [editingStepId, setEditingStepId] = useState<UUID | null>(null);
   const [draft, setDraft] = useState<StepDraft | null>(null);
   const [deleteStepId, setDeleteStepId] = useState<UUID | null>(null);
+  const [reordering, setReordering] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
@@ -913,293 +775,241 @@ function RoutineEditorForm({
           : editableStep;
       });
   const deletingStep = deleteStepId ? steps.find((step) => step.id === deleteStepId) : undefined;
+  const includedSteps = steps.filter((step) => step.enabled !== false);
+  const totalDurationMs = includedSteps.reduce((total, step) => total + step.durationMs, 0);
+  const editingExisting = editingStepId !== null;
+  const closeStep = () => {
+    setDraft(null);
+    setEditingStepId(null);
+    setError(null);
+  };
+  const duplicateStep = (step: EditableStep) => {
+    if (routine) {
+      void run(async () => {
+        await service.duplicateRoutineStep(routine.id, step.id);
+      });
+    } else {
+      setNewSteps((current) => [
+        ...current,
+        { ...draftFromStep(step), id: createId(), title: `${step.name ?? ''} copy` },
+      ]);
+    }
+  };
+  const moveStep = (step: EditableStep, index: number, direction: 'up' | 'down') =>
+    routine
+      ? void run(async () => {
+          await service.reorderRoutineStep(routine.id, step.id, direction);
+        })
+      : setNewSteps((current) => {
+          const to = direction === 'up' ? index - 1 : index + 1;
+          if (to < 0 || to >= current.length) return current;
+          const next = [...current];
+          const [moved] = next.splice(index, 1);
+          if (moved) next.splice(to, 0, moved);
+          return next;
+        });
+  const trackingFooter = routine
+    ? trackingMode === 'steps'
+      ? 'Each step logs time to its own activity. This is set when a routine is created.'
+      : 'The whole routine logs time as one activity. This is set when a routine is created.'
+    : trackingMode === 'steps'
+      ? 'Each step logs time to its own activity.'
+      : trackingMode === 'overall'
+        ? 'The whole routine logs time as one activity.'
+        : "Choose before adding steps. This can't be changed later.";
 
   return (
     <>
-      <Screen onBack={onBack} title={routine ? 'Edit routine' : 'New routine'}>
-        <Column
-          spacing={18}
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderRadius: 18,
-            borderWidth: 1,
-            padding: 18,
-            width: '100%',
-          }}
-        >
-          <Row alignment="center" spacing={12}>
-            <AppIcon name={iconName || 'repeat'} color={previewColor} size={30} />
-            <Column spacing={3} style={{ width: '100%' }}>
-              <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
-                {name || 'Untitled routine'}
-              </Text>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                {`${steps.filter((step) => step.enabled !== false).length} included · ${steps.length} total`}
-              </Text>
-            </Column>
-          </Row>
-          <Field label="Routine name">
-            <Input
-              label="Routine name"
-              value={name}
-              onChangeText={setName}
-              placeholder="Routine name"
-              testID="routine-name"
+      <Screen
+        headerRight={
+          <HeaderTextButton
+            disabled={busy || (!routine && !trackingMode)}
+            emphasized
+            label={routine ? 'Save' : 'Create'}
+            onPress={() => void saveRoutine()}
+            testID="save-routine"
+          />
+        }
+        onBack={onBack}
+        title={routine ? 'Edit Routine' : 'New Routine'}
+      >
+        <Form>
+          {draft === null ? (
+            <ErrorMessage
+              message={error}
+              onClose={() => setError(null)}
+              onRetry={() => {
+                if (lastAction.current) void lastAction.current();
+              }}
             />
-          </Field>
-          <Field label="Track time by">
-            <AccessiblePicker
-              enabled={!routine && newSteps.length === 0 && draft === null}
-              label="Track time by"
-              selectedValue={trackingMode}
-              onValueChange={(value) => setTrackingMode(value as RoutineTrackingMode)}
-              testID="routine-tracking-mode"
-            >
-              <Picker.Item label="Choose a tracking mode" value="" />
-              <Picker.Item label="Entire routine" value="overall" />
-              <Picker.Item label="Each step" value="steps" />
-            </AccessiblePicker>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-              {trackingMode === 'steps'
-                ? 'Switch to each step activity as the routine progresses.'
-                : trackingMode === 'overall'
-                  ? 'Keep one continuous activity for the entire routine.'
-                  : 'Choose one mode before adding steps.'}
-            </Text>
-          </Field>
-          <Field label="Standalone color">
-            <ColorPicker
+          ) : null}
+          <FormSection
+            footer={selectedFolder ? "Uses its folder's color while it's in a folder." : undefined}
+          >
+            <FormTextField
+              label="Routine name"
+              onChangeText={setName}
+              placeholder="Name"
+              testID="routine-name"
+              value={name}
+            />
+            <FormIconRow
+              color={previewColor}
+              onChange={(next) => setIconName(next ?? '')}
+              testID="routine-icon-picker"
+              value={iconName || null}
+            />
+            <FormColorRow
               onChange={(next) => setColor(next ?? '')}
               testID="routine-color"
               value={color || null}
             />
-          </Field>
-          <Field label="Routine icon">
-            <IconPicker
-              value={iconName || null}
-              onChange={(next) => setIconName(next ?? '')}
-              testID="routine-icon-picker"
-            />
-          </Field>
-          <Field label="Root or folder placement">
-            <FolderPicker
-              folders={catalog.folders}
-              currentFolderId={routine?.folderId ?? null}
-              value={folderId}
-              onChange={setFolderId}
-            />
-          </Field>
-          <ErrorMessage
-            message={error}
-            onClose={() => setError(null)}
-            onRetry={() => {
-              if (lastAction.current) void lastAction.current();
-            }}
-          />
-          <AppButton
-            disabled={busy || (!routine && !trackingMode)}
-            label={busy ? 'Saving...' : routine ? 'Save routine' : 'Create routine'}
-            onPress={() => void saveRoutine()}
-            style={{ height: 52, width: '100%' }}
-            testID="save-routine"
-          />
-        </Column>
-
-        <Column spacing={12} style={{ width: '100%' }}>
-          <Column spacing={10} style={{ width: '100%' }}>
-            <Text textStyle={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>Steps</Text>
-            <AppButton
-              disabled={busy || draft !== null || !trackingMode}
-              label="Add step"
-              onPress={startAdd}
-              style={{ height: 50, width: '100%' }}
-              testID="add-routine-step"
-            />
-            {!trackingMode ? (
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                Choose a tracking mode to start building steps.
-              </Text>
-            ) : null}
-          </Column>
-          {draft && !editingStepId ? (
-            <StepForm
-              draft={draft}
-              activities={activities}
-              folders={catalog.folders}
-              trackingMode={trackingMode as RoutineTrackingMode}
-              onChange={setDraft}
-              onSave={() => void saveStep()}
-              onCancel={() => setDraft(null)}
-              onClose={() => setError(null)}
-              busy={busy}
-              error={error}
-              onRetry={() => {
-                const action = lastAction.current;
-                if (action) void run(action);
-              }}
-            />
-          ) : null}
-          {steps.map((step, index) =>
-            editingStepId === step.id && draft ? (
-              <StepForm
-                key={step.id}
-                draft={draft}
-                activities={activities}
-                folders={catalog.folders}
-                trackingMode={trackingMode as RoutineTrackingMode}
-                onChange={setDraft}
-                onSave={() => void saveStep()}
-                onCancel={() => {
-                  setDraft(null);
-                  setEditingStepId(null);
-                }}
-                onClose={() => setError(null)}
-                busy={busy}
-                error={error}
-                onRetry={() => {
-                  const action = lastAction.current;
-                  if (action) void run(action);
-                }}
-              />
-            ) : (
+            <FormPickerRow
+              label="Folder"
+              onValueChange={setFolderId}
+              selectedValue={folderId}
+              testID="routine-folder-picker"
+            >
+              <Picker.Item label="None" value={ROOT_VALUE} />
+              {catalog.folders
+                .filter((folder) => folder.archivedAt === null || folder.id === routine?.folderId)
+                .map((folder) => (
+                  <Picker.Item
+                    key={folder.id}
+                    label={folder.archivedAt ? `${folder.name} (archived)` : folder.name}
+                    value={folder.id}
+                  />
+                ))}
+            </FormPickerRow>
+          </FormSection>
+          <FormSection footer={trackingFooter}>
+            <FormPickerRow
+              enabled={!routine && newSteps.length === 0 && draft === null}
+              label="Log time as"
+              onValueChange={(value) => setTrackingMode(value as RoutineTrackingMode)}
+              selectedValue={trackingMode}
+              testID="routine-tracking-mode"
+            >
+              <Picker.Item label="Choose" value="" />
+              <Picker.Item label="One activity" value="overall" />
+              <Picker.Item label="Each step" value="steps" />
+            </FormPickerRow>
+          </FormSection>
+          <FormSection
+            footer={
+              steps.length > 0
+                ? `${includedSteps.length} of ${steps.length} steps · ${formatStepDuration(totalDurationMs)} total`
+                : trackingMode
+                  ? 'Add at least one step before starting this routine.'
+                  : undefined
+            }
+            headerAction={
+              steps.length > 1 ? (
+                <HeaderTextButton
+                  compact
+                  label={reordering ? 'Done' : 'Reorder'}
+                  onPress={() => setReordering((current) => !current)}
+                  testID="reorder-routine-steps"
+                />
+              ) : undefined
+            }
+            title="Steps"
+          >
+            {steps.map((step, index) => (
               <StepRow
-                key={step.id}
-                step={step}
                 activities={activities}
-                folders={catalog.folders}
-                trackingMode={trackingMode as RoutineTrackingMode}
-                index={index}
-                count={steps.length}
                 busy={busy}
+                count={steps.length}
+                folders={catalog.folders}
+                index={index}
+                key={step.id}
                 onEdit={() => {
                   setError(null);
                   setEditingStepId(step.id);
                   setDraft(draftFromStep(step));
                 }}
-                onDuplicate={() =>
-                  routine
-                    ? void run(async () => {
-                        await service.duplicateRoutineStep(routine.id, step.id);
-                      })
-                    : setNewSteps((current) => [
-                        ...current,
-                        {
-                          ...draftFromStep(step),
-                          id: createId(),
-                          title: `${step.name ?? ''} copy`,
-                        },
-                      ])
-                }
-                onToggle={() => {
-                  const enabled = step.enabled === false;
-                  if (routine) {
-                    void run(async () => {
-                      await service.updateRoutineStep(routine.id, step.id, { enabled });
-                    });
-                  } else {
-                    setNewSteps((current) =>
-                      current.map((candidate) =>
-                        candidate.id === step.id ? { ...candidate, enabled } : candidate
-                      )
-                    );
-                  }
-                }}
-                onDelete={() => setDeleteStepId(step.id)}
-                onMove={(direction) =>
-                  routine
-                    ? void run(async () => {
-                        await service.reorderRoutineStep(routine.id, step.id, direction);
-                      })
-                    : setNewSteps((current) => {
-                        const from = index;
-                        const to = direction === 'up' ? from - 1 : from + 1;
-                        if (to < 0 || to >= current.length) return current;
-                        const next = [...current];
-                        const [moved] = next.splice(from, 1);
-                        if (moved) next.splice(to, 0, moved);
-                        return next;
-                      })
-                }
+                onMove={(direction) => moveStep(step, index, direction)}
+                reordering={reordering}
+                step={step}
+                trackingMode={trackingMode as RoutineTrackingMode}
               />
-            )
-          )}
-          {steps.length === 0 ? (
-            <Column
-              spacing={6}
-              style={{
-                backgroundColor: colors.surfaceMuted,
-                borderColor: colors.border,
-                borderRadius: 14,
-                borderWidth: 1,
-                padding: 16,
-                width: '100%',
-              }}
-            >
-              <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
-                No steps yet
-              </Text>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                Add at least one step before starting this routine.
-              </Text>
-            </Column>
+            ))}
+            <FormRow
+              disabled={busy || !trackingMode || reordering}
+              icon="plus"
+              kind="action"
+              label="Add Step"
+              onPress={startAdd}
+              testID="add-routine-step"
+            />
+          </FormSection>
+          {routine ? (
+            <FormSection>
+              <FormRow
+                disabled={busy || includedSteps.length === 0}
+                icon="play"
+                kind="action"
+                label="Start Routine"
+                onPress={() => void startRoutine()}
+                testID="run-routine"
+              />
+            </FormSection>
           ) : null}
-        </Column>
-        {routine ? (
-          <Column spacing={10} style={{ width: '100%' }}>
-            <AppButton
-              disabled={busy || !routine.steps.some((step) => step.enabled !== false)}
-              label="Run routine"
-              onPress={() => void startRoutine()}
-              style={{ height: 54, width: '100%' }}
-              testID="run-routine"
-            />
-            <AppButton
-              disabled={busy || routine.archivedAt !== null}
-              label="Move routine up"
-              onPress={() =>
-                void run(async () => void (await service.reorderItem(routine.id, 'up')))
-              }
-              style={{ height: 48, width: '100%' }}
-              variant="outlined"
-            />
-            <AppButton
-              disabled={busy || routine.archivedAt !== null}
-              label="Move routine down"
-              onPress={() =>
-                void run(async () => void (await service.reorderItem(routine.id, 'down')))
-              }
-              style={{ height: 48, width: '100%' }}
-              variant="outlined"
-            />
-          </Column>
-        ) : null}
+        </Form>
       </Screen>
-      <ConfirmationModal
-        busy={busy}
-        cancelLabel="Keep step"
-        cancelTestID="cancel-delete-step"
-        confirmLabel="Yes, delete step"
-        confirmTestID="confirm-delete-step"
-        message="This removes the step from the routine. Confirm only if you want to discard its settings."
-        onCancel={() => setDeleteStepId(null)}
-        onConfirm={() => {
-          const stepId = deleteStepId;
-          if (!stepId) return;
-          if (routine) {
-            void run(async () => {
-              await service.deleteRoutineStep(routine.id, stepId);
-              setDeleteStepId(null);
-            });
-          } else {
-            setNewSteps((current) => current.filter((candidate) => candidate.id !== stepId));
-            setDeleteStepId(null);
-          }
-        }}
-        testID="delete-step-confirmation"
-        title="Delete this step?"
-        visible={deletingStep !== undefined}
-      />
+      {trackingMode ? (
+        <StepSheet
+          activities={activities}
+          busy={busy}
+          draft={draft}
+          error={draft ? error : null}
+          folders={catalog.folders}
+          isExisting={editingExisting}
+          onCancel={closeStep}
+          onChange={setDraft}
+          onCloseError={() => setError(null)}
+          onDelete={() => setDeleteStepId(editingStepId)}
+          onDuplicate={() => {
+            const step = steps.find((candidate) => candidate.id === editingStepId);
+            closeStep();
+            if (step) duplicateStep(step);
+          }}
+          onRetry={() => {
+            const action = lastAction.current;
+            if (action) void run(action);
+          }}
+          onSave={() => void saveStep()}
+          trackingMode={trackingMode}
+        >
+          <ConfirmationModal
+            busy={busy}
+            cancelLabel="Keep step"
+            cancelTestID="cancel-delete-step"
+            confirmLabel="Delete step"
+            confirmTestID="confirm-delete-step"
+            message="This removes the step and its settings from the routine."
+            onCancel={() => setDeleteStepId(null)}
+            onConfirm={() => {
+              const stepId = deleteStepId;
+              if (!stepId) return;
+              if (routine) {
+                void run(async () => {
+                  await service.deleteRoutineStep(routine.id, stepId);
+                  setDeleteStepId(null);
+                  closeStep();
+                });
+              } else {
+                setNewSteps((current) => current.filter((candidate) => candidate.id !== stepId));
+                setDeleteStepId(null);
+                closeStep();
+              }
+            }}
+            testID="delete-step-confirmation"
+            title="Delete this step?"
+            visible={deletingStep !== undefined}
+          />
+        </StepSheet>
+      ) : null}
     </>
   );
 }

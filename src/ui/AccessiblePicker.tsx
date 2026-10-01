@@ -8,6 +8,8 @@ import { pickerItems } from './picker-items';
 
 export interface AccessiblePickerProps<T extends PickerItemValue> extends PickerProps<T> {
   label: string;
+  /** Renders a borderless, trailing-aligned menu for use inside a form row. */
+  inline?: boolean;
 }
 
 function WebPicker<T extends PickerItemValue>({
@@ -16,10 +18,23 @@ function WebPicker<T extends PickerItemValue>({
   selectedValue,
   onValueChange,
   enabled = true,
+  inline = false,
   testID,
 }: AccessiblePickerProps<T> & { children?: ReactNode }) {
   const { colorScheme, colors } = useAppTheme();
   const items = pickerItems<T>(children);
+  const inlineStyle = {
+    backgroundColor: 'transparent',
+    border: 'none',
+    color: colors.textMuted,
+    colorScheme,
+    flex: 1,
+    fontSize: 17,
+    height: 44,
+    minWidth: 0,
+    textAlign: 'right',
+    textAlignLast: 'right',
+  } as const;
   return (
     <select
       aria-label={label}
@@ -29,17 +44,21 @@ function WebPicker<T extends PickerItemValue>({
         const item = items[event.currentTarget.selectedIndex];
         if (item) onValueChange(item.value);
       }}
-      style={{
-        backgroundColor: colors.surface,
-        border: `1px solid ${colors.border}`,
-        borderRadius: 10,
-        color: colors.text,
-        colorScheme,
-        fontSize: 16,
-        height: 48,
-        padding: '0 12px',
-        width: '100%',
-      }}
+      style={
+        inline
+          ? inlineStyle
+          : {
+              backgroundColor: colors.surface,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 10,
+              color: colors.text,
+              colorScheme,
+              fontSize: 16,
+              height: 48,
+              padding: '0 12px',
+              width: '100%',
+            }
+      }
       value={String(selectedValue)}
     >
       {items.map((item) => (
@@ -58,6 +77,7 @@ function WebPicker<T extends PickerItemValue>({
 /** Gives native pickers a label and uses a semantic web select because Expo's picker omits ARIA props. */
 export function AccessiblePicker<T extends PickerItemValue>({
   children,
+  inline = false,
   label,
   testID,
   ...pickerProps
@@ -68,6 +88,7 @@ export function AccessiblePicker<T extends PickerItemValue>({
     return (
       <WebPicker
         {...pickerProps}
+        inline={inline}
         label={label}
         onValueChange={pickerProps.onValueChange}
         selectedValue={pickerProps.selectedValue}
@@ -81,14 +102,18 @@ export function AccessiblePicker<T extends PickerItemValue>({
   return (
     <View
       accessibilityLabel={label}
-      style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 10,
-        borderWidth: 1,
-        height: pickerHeight,
-        width: '100%',
-      }}
+      style={
+        inline
+          ? { flex: 1, height: 44, minWidth: 0 }
+          : {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderRadius: 10,
+              borderWidth: 1,
+              height: pickerHeight,
+              width: '100%',
+            }
+      }
     >
       <Host colorScheme={colorScheme} seedColor={colors.primary} style={{ flex: 1, width: '100%' }}>
         <Picker {...pickerProps} testID={testID}>

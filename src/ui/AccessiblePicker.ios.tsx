@@ -10,16 +10,20 @@ import { pickerItems } from './picker-items';
 
 export interface AccessiblePickerProps<T extends PickerItemValue> extends PickerProps<T> {
   label: string;
+  /** Renders a borderless, trailing-aligned menu for use inside a form row. */
+  inline?: boolean;
 }
 
 const MENU_HEIGHT = 48;
 const WHEEL_HEIGHT = 150;
+const INLINE_HEIGHT = 44;
 
 /** A labelled SwiftUI picker inside a bordered field that matches the text inputs. */
 export function AccessiblePicker<T extends PickerItemValue>({
   appearance,
   children,
   enabled = true,
+  inline = false,
   label,
   onValueChange,
   selectedValue,
@@ -31,20 +35,28 @@ export function AccessiblePicker<T extends PickerItemValue>({
   return (
     <View
       accessibilityLabel={label}
-      style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 10,
-        borderWidth: 1,
-        height: wheel ? WHEEL_HEIGHT : MENU_HEIGHT,
-        width: '100%',
-      }}
+      style={
+        inline
+          ? { flex: 1, height: INLINE_HEIGHT, minWidth: 0 }
+          : {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderRadius: 10,
+              borderWidth: 1,
+              height: wheel ? WHEEL_HEIGHT : MENU_HEIGHT,
+              width: '100%',
+            }
+      }
     >
       <Host colorScheme={colorScheme} seedColor={colors.primary} style={{ flex: 1, width: '100%' }}>
         <Picker
           modifiers={[
             pickerStyle(wheel ? 'wheel' : 'menu'),
-            frame({ alignment: 'leading', maxHeight: Infinity, maxWidth: Infinity }),
+            frame({
+              alignment: inline ? 'trailing' : 'leading',
+              maxHeight: Infinity,
+              maxWidth: Infinity,
+            }),
             ...(enabled ? [] : [disabled(true)]),
           ]}
           onSelectionChange={(value) => onValueChange(value as T)}

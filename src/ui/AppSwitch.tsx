@@ -18,7 +18,7 @@ export function AppSwitch({
   disabled = false,
   testID,
 }: AppSwitchProps) {
-  const { colorScheme, colors } = useAppTheme();
+  const { colors } = useAppTheme();
   return (
     <Pressable
       accessibilityLabel={label}
@@ -42,9 +42,6 @@ export function AppSwitch({
         importantForAccessibility="no"
         onValueChange={onValueChange}
         testID={testID}
-        trackColor={{ true: colors.primary }}
-        // The dark theme's primary is white, so the thumb needs contrast.
-        thumbColor={colorScheme === 'dark' ? colors.onPrimary : undefined}
         value={value}
       />
     </Pressable>
