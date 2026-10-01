@@ -26,6 +26,7 @@ const habitItem = habitList.slice(habitItemStart, habitItemEnd);
 const weekPagerStart = habitList.indexOf('function HabitWeekStrip(');
 const weekDaysStart = habitList.indexOf('function WeekDaysRow(');
 const weekPager = habitList.slice(weekPagerStart, weekDaysStart);
+const swipePager = read('src/ui/SwipePager.tsx');
 const metricTargetStart = habitItem.indexOf('testID={`toggle-habit-metric-${habit.id}`}');
 const metricTarget = habitItem.slice(
   habitItem.lastIndexOf('<Pressable', metricTargetStart),
@@ -109,7 +110,7 @@ assert(
 );
 assert(
   weekPager.includes('borderRadius: ROW_SURFACE_RADIUS') &&
-    weekPager.includes("overflow: 'hidden'") &&
+    swipePager.includes("overflow: 'hidden'") &&
     weekPager.includes('getRowSurfaceBackground') &&
     weekPager.includes('backgroundColor: rowSurface') &&
     ROW_SURFACE_RADIUS === 14,
@@ -154,21 +155,18 @@ assert(
   'past-midnight warning must explain the configured rollover and provide a safe dismissal'
 );
 assert(
-  weekPager.includes('onPanResponderMove: (_, gesture) =>') &&
-    !weekPager.includes('Animated.event([null, { dx: dragX }], { useNativeDriver })'),
-  'week-strip optimization is reverted pending device-level profiling'
+  weekPager.includes('<SwipePager') &&
+    habitList.includes('function HabitDayPager(') &&
+    swipePager.includes('usePanGesture({') &&
+    swipePager.includes('failOffsetY') &&
+    swipePager.includes('scheduleOnRN(onChange'),
+  'day and week swipes must run on the UI thread through the shared Gesture Handler pager'
 );
 assert(
-  habitList.includes('const pageGap = 12') &&
-    habitList.includes('marginRight: pageGap') &&
-    habitList.includes('flexShrink: 0') &&
-    habitList.includes('marginLeft: -horizontalInsets.left') &&
+  habitList.includes('marginLeft: -horizontalInsets.left') &&
     habitList.includes('paddingLeft: horizontalInsets.left') &&
-    habitList.includes("overflow: 'hidden'") &&
-    !habitList.includes(
-      "borderColor: colors.border,\n        borderRadius: 12,\n        borderWidth: 1,\n        overflow: 'hidden'"
-    ),
-  'habit day pages must use a full-bleed clipped viewport with explicit per-page insets'
+    swipePager.includes("overflow: 'hidden'"),
+  'habit day pages must use a full-bleed clipped viewport with insets inside the scrolled content'
 );
 assert(
   appScreen.includes('const screenBackground = backgroundColor ?? colors.background') &&

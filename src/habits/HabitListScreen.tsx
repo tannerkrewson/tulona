@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Modal,
-  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -16,7 +15,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ViewStyle } from 'react-native';
 
-import type { Habit, HabitDayOutcome, HabitDayState, LogicalDayKey } from '@domain';
+import {
+  shiftLogicalDay,
+  type Habit,
+  type HabitDayOutcome,
+  type HabitDayState,
+  type LogicalDayKey,
+} from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 import {
@@ -34,6 +39,7 @@ import {
   PageFilterMenuSelection,
   Screen,
 } from '@ui';
+import { SwipePager } from '@ui/SwipePager';
 
 import { HabitContextMenu } from './HabitContextMenu';
 import { HabitErrorMessage } from './HabitErrorMessage';
@@ -48,10 +54,13 @@ import {
 import {
   formatHabitDay,
   formatHabitRolloverHour,
+  habitDayOffset,
   habitDaySwipeTarget,
   habitWeekDays,
+  habitWeekOffset,
   habitWeekSwipeTarget,
   isPastMidnightHabitDay,
+  shiftHabitDay,
   shiftHabitWeek,
   sundayFirstWeekdayLabels,
 } from './date-navigation';
@@ -146,7 +155,6 @@ function HabitListContent({ store }: { store: HabitStore }) {
   const saving = store((state) => state.saving);
   const persistenceError = store((state) => state.persistenceError);
   const [clockMs, setClockMs] = useState(() => Date.now());
-  const [contentWidth, setContentWidth] = useState(0);
   const [metricMode, setMetricMode] = useState<HabitMetricMode>('streak');
   const [selectedCategory, setSelectedCategory] = useState<HabitCategory>(DEFAULT_HABIT_CATEGORY);
   const habitViewOptions = [
@@ -192,10 +200,11 @@ function HabitListContent({ store }: { store: HabitStore }) {
     []
   );
 
-  const renderDay = (day: LogicalDayKey) => (
+  const renderDay = (day: LogicalDayKey, horizontalInsets: { left: number; right: number }) => (
     <HabitDayList
       activeHabits={habitsByCategory.active}
       day={day}
+      horizontalInsets={horizontalInsets}
       editMode={editMode}
       logicalDayRolloverHour={logicalDayRolloverHour}
       onDetails={(habitId) => router.push(`/habit/${habitId}`)}
@@ -213,10 +222,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
   return (
     <>
       <Screen scrollable={false} testID="habits-screen">
-        <View
-          onLayout={(event) => setContentWidth(event.nativeEvent.layout.width)}
-          style={{ flex: 1, gap: 14, minHeight: 0, position: 'relative', width: '100%' }}
-        >
+        <View style={{ flex: 1, gap: 14, minHeight: 0, position: 'relative', width: '100%' }}>
           <HabitHeader
             onAdd={() => router.push('/habit/new')}
             editLabel="Edit habits"
@@ -288,7 +294,6 @@ function HabitListContent({ store }: { store: HabitStore }) {
                   today={today}
                 />
                 <HabitDayPager
-                  contentWidth={contentWidth}
                   horizontalInsets={{ left: 20 + insets.left, right: 20 + insets.right }}
                   onSelectDay={selectDay}
                   renderDay={renderDay}
@@ -494,10 +499,7 @@ function HabitCategoryListItem({
   );
 }
 
-const DAY_SWIPE_THRESHOLD = 48;
-const DAY_SETTLE_DURATION = 200;
-const WEEK_SWIPE_THRESHOLD = 40;
-const WEEK_SETTLE_DURATION = 180;
+const WEEK_STRIP_HEIGHT = 70;
 const HABIT_MENU_WIDTH = 220;
 const HABIT_MENU_HEIGHT = 190;
 // Habit cards intentionally exceed the compact row height: the optional
@@ -533,18 +535,7 @@ const styles = StyleSheet.create({
   },
 });
 
-function webGestureStyle(touchAction: 'pan-y' | 'none'): ViewStyle | undefined {
-  if (Platform.OS !== 'web') return undefined;
-  return {
-    touchAction,
-    userSelect: 'none',
-    WebkitUserSelect: 'none',
-    WebkitTouchCallout: 'none',
-  } as unknown as ViewStyle;
-}
-
 function HabitDayPager({
-  contentWidth,
   horizontalInsets,
   selectedDay,
   today,
@@ -552,166 +543,30 @@ function HabitDayPager({
   onSelectDay,
   renderDay,
 }: {
-  contentWidth: number;
   horizontalInsets: { left: number; right: number };
   selectedDay: LogicalDayKey;
   today: LogicalDayKey;
   rolloverHour: number;
   onSelectDay: (day: LogicalDayKey) => void;
-  renderDay: (day: LogicalDayKey) => ReactNode;
+  renderDay: (day: LogicalDayKey, insets: { left: number; right: number }) => ReactNode;
 }) {
-  const { width: viewportWidth } = useWindowDimensions();
-  const [dragX] = useState(() => new Animated.Value(0));
-  const gestureLock = useRef({ locked: false });
-  const useNativeDriver = Platform.OS !== 'web';
-  const gestureStyle = webGestureStyle('pan-y');
-  const insetWidth = horizontalInsets.left + horizontalInsets.right;
-  const measuredContentWidth =
-    contentWidth > 0 ? contentWidth : Math.max(Math.min(viewportWidth - insetWidth, 720), 280);
-  const effectiveWidth = measuredContentWidth + insetWidth;
-  const pageGap = 12;
-  const pageStride = effectiveWidth + pageGap;
-
-  const prevDay = habitDaySwipeTarget(selectedDay, -1, today, rolloverHour) ?? selectedDay;
-  const nextTarget = habitDaySwipeTarget(selectedDay, 1, today, rolloverHour);
-  const nextDay = nextTarget ?? selectedDay;
-  const translateX = dragX.interpolate({
-    extrapolate: 'clamp',
-    inputRange: [-pageStride, 0, pageStride],
-    outputRange: [nextTarget ? -pageStride : -pageStride / 3, 0, pageStride],
-  });
-
-  useEffect(() => {
-    dragX.setValue(0);
-    gestureLock.current.locked = false;
-  }, [dragX, gestureLock, selectedDay]);
-
-  const settleTo = useCallback(
-    (target: number, nextDayValue?: LogicalDayKey) => {
-      gestureLock.current.locked = true;
-      dragX.stopAnimation();
-      Animated.timing(dragX, {
-        duration: DAY_SETTLE_DURATION,
-        isInteraction: false,
-        toValue: target,
-        useNativeDriver,
-      }).start(({ finished }) => {
-        if (!finished) {
-          gestureLock.current.locked = false;
-          return;
-        }
-        if (nextDayValue) {
-          // Keep the settled offset in place; the selectedDay effect resets
-          // the drag once the middle page becomes the target day, so the
-          // pre-rendered neighbor content stays visually continuous.
-          onSelectDay(nextDayValue);
-          return;
-        }
-        gestureLock.current.locked = false;
-      });
-    },
-    [dragX, onSelectDay, useNativeDriver]
-  );
-
-  const panResponder = useMemo(
-    () =>
-      // eslint-disable-next-line react-hooks/refs
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gesture) =>
-          !gestureLock.current.locked &&
-          Math.abs(gesture.dx) > 12 &&
-          Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
-        onMoveShouldSetPanResponderCapture: (_, gesture) =>
-          !gestureLock.current.locked &&
-          Math.abs(gesture.dx) > 12 &&
-          Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
-        onPanResponderGrant: () => {
-          if (gestureLock.current.locked) return;
-          dragX.stopAnimation();
-        },
-        // Map the gesture directly to the animated value. The interpolated
-        // transform below retains future-day resistance without extra
-        // per-frame JS work on platforms that support the native driver.
-        onPanResponderMove: Animated.event([null, { dx: dragX }], { useNativeDriver }),
-        onPanResponderRelease: (_, gesture) => {
-          if (gestureLock.current.locked) return;
-          if (Math.abs(gesture.dx) < DAY_SWIPE_THRESHOLD) {
-            settleTo(0);
-            return;
-          }
-          if (gesture.dx > 0) {
-            settleTo(pageStride, prevDay);
-            return;
-          }
-          if (!nextTarget) {
-            settleTo(0);
-            return;
-          }
-          settleTo(-pageStride, nextTarget);
-        },
-        onPanResponderTerminate: () => {
-          gestureLock.current.locked = false;
-          dragX.setValue(0);
-        },
-        onPanResponderTerminationRequest: () => false,
-      }),
-    [dragX, gestureLock, nextTarget, pageStride, prevDay, settleTo, useNativeDriver]
-  );
-
   return (
-    <View
-      {...panResponder.panHandlers}
-      style={[
-        {
-          flex: 1,
-          marginLeft: -horizontalInsets.left,
-          marginRight: -horizontalInsets.right,
-          minHeight: 0,
-          overflow: 'hidden',
-          width: effectiveWidth,
-        },
-        gestureStyle,
-      ]}
+    <SwipePager
+      canGoNext={habitDaySwipeTarget(selectedDay, 1, today, rolloverHour) !== null}
+      index={habitDayOffset(selectedDay, today)}
+      onChange={(delta) => onSelectDay(shiftHabitDay(selectedDay, delta, rolloverHour))}
+      renderPage={(page) =>
+        renderDay(shiftLogicalDay(today, page, { rolloverHour }), horizontalInsets)
+      }
+      // Pages span the full screen so rows slide off its edges instead of a clipped inset.
+      style={{
+        flex: 1,
+        marginLeft: -horizontalInsets.left,
+        marginRight: -horizontalInsets.right,
+        minHeight: 0,
+      }}
       testID="habit-day-navigation"
-    >
-      <Animated.View
-        style={{
-          flex: 1,
-          flexDirection: 'row',
-          flexShrink: 0,
-          marginLeft: -pageStride,
-          minHeight: 0,
-          transform: [
-            {
-              translateX,
-            },
-          ],
-          width: pageStride * 3,
-        }}
-      >
-        {[
-          { day: prevDay, key: `prev-${prevDay}` },
-          { day: selectedDay, key: `current-${selectedDay}` },
-          { day: nextDay, key: `next-${nextDay}` },
-        ].map(({ day, key }) => (
-          <View
-            key={key}
-            style={{
-              flexBasis: effectiveWidth,
-              flexGrow: 0,
-              flexShrink: 0,
-              marginRight: pageGap,
-              minHeight: 0,
-              paddingLeft: horizontalInsets.left,
-              paddingRight: horizontalInsets.right,
-              width: effectiveWidth,
-            }}
-          >
-            {renderDay(day)}
-          </View>
-        ))}
-      </Animated.View>
-    </View>
+    />
   );
 }
 
@@ -727,151 +582,46 @@ function HabitWeekStrip({
   onSelectDay: (day: LogicalDayKey) => void;
 }) {
   const { colorScheme, colors } = useAppTheme();
-  const { width: viewportWidth } = useWindowDimensions();
-  const [pageWidth, setPageWidth] = useState(0);
-  const [dragX] = useState(() => new Animated.Value(0));
-  const gestureLock = useRef({ locked: false });
-  const useNativeDriver = Platform.OS !== 'web';
-  const gestureStyle = webGestureStyle('pan-y');
-  const effectiveWidth = pageWidth > 0 ? pageWidth : Math.max(viewportWidth - 40, 280);
   const rowSurface = getRowSurfaceBackground({
     colorScheme,
     surface: colors.surface,
     surfaceMuted: colors.surfaceMuted,
   });
-
-  const prevAnchor = shiftHabitWeek(selectedDay, -1, rolloverHour);
-  const nextAnchor = shiftHabitWeek(selectedDay, 1, rolloverHour);
-  const prevDays = habitWeekDays(prevAnchor, rolloverHour);
-  const currentDays = habitWeekDays(selectedDay, rolloverHour);
-  const nextDays = habitWeekDays(nextAnchor, rolloverHour);
+  const index = habitWeekOffset(selectedDay, today, rolloverHour);
   const nextWeekTarget = habitWeekSwipeTarget(selectedDay, 1, today, rolloverHour);
 
-  useEffect(() => {
-    dragX.setValue(0);
-    gestureLock.current.locked = false;
-  }, [dragX, gestureLock, selectedDay]);
-
-  const settleTo = useCallback(
-    (target: number, nextDayValue?: LogicalDayKey) => {
-      gestureLock.current.locked = true;
-      dragX.stopAnimation();
-      Animated.timing(dragX, {
-        duration: WEEK_SETTLE_DURATION,
-        toValue: target,
-        useNativeDriver,
-      }).start(({ finished }) => {
-        if (!finished) {
-          gestureLock.current.locked = false;
-          return;
-        }
-        if (nextDayValue) {
-          onSelectDay(nextDayValue);
-          return;
-        }
-        gestureLock.current.locked = false;
-      });
-    },
-    [dragX, onSelectDay, useNativeDriver]
-  );
-
-  const panResponder = useMemo(
-    () =>
-      // eslint-disable-next-line react-hooks/refs
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gesture) =>
-          !gestureLock.current.locked &&
-          Math.abs(gesture.dx) > 10 &&
-          Math.abs(gesture.dx) > Math.abs(gesture.dy),
-        onMoveShouldSetPanResponderCapture: (_, gesture) =>
-          !gestureLock.current.locked &&
-          Math.abs(gesture.dx) > 10 &&
-          Math.abs(gesture.dx) > Math.abs(gesture.dy),
-        onPanResponderGrant: () => {
-          if (gestureLock.current.locked) return;
-          dragX.stopAnimation();
-        },
-        // Keep the known pre-optimization gesture path until the week-strip
-        // jank has been profiled on the target devices.
-        onPanResponderMove: (_, gesture) => {
-          if (gestureLock.current.locked) return;
-          let dx = gesture.dx;
-          if (dx < 0 && !nextWeekTarget) dx /= 3;
-          dx = Math.max(-effectiveWidth, Math.min(effectiveWidth, dx));
-          dragX.setValue(dx);
-        },
-        onPanResponderRelease: (_, gesture) => {
-          if (gestureLock.current.locked) return;
-          if (Math.abs(gesture.dx) < WEEK_SWIPE_THRESHOLD) {
-            settleTo(0);
-            return;
-          }
-          if (gesture.dx > 0) {
-            settleTo(effectiveWidth, prevAnchor);
-            return;
-          }
-          if (!nextWeekTarget) {
-            settleTo(0);
-            return;
-          }
-          settleTo(-effectiveWidth, nextWeekTarget);
-        },
-        onPanResponderTerminate: () => {
-          gestureLock.current.locked = false;
-          dragX.setValue(0);
-        },
-        onPanResponderTerminationRequest: () => false,
-      }),
-    [dragX, effectiveWidth, gestureLock, nextWeekTarget, prevAnchor, settleTo]
-  );
-
   return (
-    <View
-      onLayout={(event) => setPageWidth(event.nativeEvent.layout.width)}
+    <SwipePager
+      canGoNext={nextWeekTarget !== null}
+      index={index}
+      onChange={(delta) =>
+        onSelectDay(
+          delta === 1 && nextWeekTarget
+            ? nextWeekTarget
+            : shiftHabitWeek(selectedDay, -1, rolloverHour)
+        )
+      }
+      renderPage={(page) => (
+        <View style={{ paddingHorizontal: 4, paddingVertical: 8, width: '100%' }}>
+          <WeekDaysRow
+            days={habitWeekDays(
+              shiftLogicalDay(selectedDay, (page - index) * 7, { rolloverHour }),
+              rolloverHour
+            )}
+            onSelectDay={onSelectDay}
+            selectedDay={selectedDay}
+            today={today}
+          />
+        </View>
+      )}
       style={{
         backgroundColor: rowSurface,
         borderRadius: ROW_SURFACE_RADIUS,
-        overflow: 'hidden',
+        height: WEEK_STRIP_HEIGHT,
         width: '100%',
       }}
       testID="habit-week-strip"
-    >
-      <View {...panResponder.panHandlers} style={[{ width: '100%' }, gestureStyle]}>
-        <Animated.View
-          style={{
-            flexDirection: 'row',
-            marginLeft: -effectiveWidth,
-            transform: [{ translateX: dragX }],
-            width: effectiveWidth * 3,
-          }}
-        >
-          {[
-            { days: prevDays, key: `week-prev-${prevDays[0]}` },
-            { days: currentDays, key: `week-current-${currentDays[0]}` },
-            { days: nextDays, key: `week-next-${nextDays[0]}` },
-          ].map(({ days, key }) => (
-            <View
-              key={key}
-              style={{
-                flexBasis: effectiveWidth,
-                flexGrow: 0,
-                flexShrink: 0,
-                paddingHorizontal: 4,
-                paddingVertical: 8,
-                width: effectiveWidth,
-              }}
-            >
-              <WeekDaysRow
-                days={days}
-                onSelectDay={onSelectDay}
-                selectedDay={selectedDay}
-                today={today}
-              />
-            </View>
-          ))}
-        </Animated.View>
-      </View>
-    </View>
+    />
   );
 }
 
@@ -939,6 +689,7 @@ function WeekDaysRow({
 function HabitDayList({
   activeHabits,
   day,
+  horizontalInsets,
   editMode,
   logicalDayRolloverHour,
   onDetails,
@@ -951,6 +702,7 @@ function HabitDayList({
 }: {
   activeHabits: Habit[];
   day: LogicalDayKey;
+  horizontalInsets: { left: number; right: number };
   editMode: boolean;
   logicalDayRolloverHour: number;
   onDetails: (habitId: string) => void;
@@ -963,7 +715,13 @@ function HabitDayList({
 }) {
   return (
     <View style={{ flex: 1, minHeight: 0, width: '100%' }}>
-      <ScrollView style={{ height: '100%', width: '100%' }}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingLeft: horizontalInsets.left,
+          paddingRight: horizontalInsets.right,
+        }}
+        style={{ height: '100%', width: '100%' }}
+      >
         <Column spacing={12} style={{ paddingBottom: 20, paddingTop: 12, width: '100%' }}>
           {activeHabits.length === 0 ? (
             <EmptyState iconName="heart" testID="habits-empty" title="No active habits yet" />

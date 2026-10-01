@@ -1,14 +1,16 @@
+import '@/src/setup/ignore-logs';
+
 import { Stack } from 'expo-router';
 import Head from 'expo-router/head';
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { BootCoordinatorGate } from '@/src/orchestration';
 import { ActiveActivityBar } from '@/src/tracker';
 import { ActiveActivityWidgetBridge } from '@/src/widgets/ActiveActivityWidgetBridge';
 import { registerServiceWorker } from '@/src/pwa/registerServiceWorker';
 import { ThemeProvider } from '@theme';
-
 export default function RootLayout() {
   useEffect(() => {
     registerServiceWorker();
@@ -20,7 +22,7 @@ export default function RootLayout() {
         <Head>
           <title>Tulona</title>
         </Head>
-        <View role="main" style={{ flex: 1 }}>
+        <GestureHandlerRootView role="main" style={{ flex: 1 }}>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen
               name="(tabs)"
@@ -60,7 +62,7 @@ export default function RootLayout() {
             <ActiveActivityWidgetBridge />
             <ActiveActivityBar />
           </View>
-        </View>
+        </GestureHandlerRootView>
       </>
     </ThemeProvider>
   );

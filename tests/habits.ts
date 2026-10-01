@@ -239,7 +239,8 @@ async function run(): Promise<void> {
   );
   assert(
     habitWeekSwipeTarget('2026-08-26', 1, '2026-09-03') === '2026-09-02' &&
-      habitWeekSwipeTarget('2026-08-26', 1, '2026-09-01') === null,
+      habitWeekSwipeTarget('2026-08-26', 1, '2026-09-01') === '2026-09-01' &&
+      habitWeekSwipeTarget('2026-08-26', 1, '2026-08-29') === null,
     'habit page swipes advance exactly one week and reject future pages'
   );
   assert(

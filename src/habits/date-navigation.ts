@@ -26,7 +26,28 @@ export function habitWeekSwipeTarget(
   rolloverHour = 0
 ): LogicalDayKey | null {
   const nextDay = shiftHabitWeek(selectedDay, amount, rolloverHour);
-  return nextDay <= today ? nextDay : null;
+  if (nextDay <= today) return nextDay;
+  // The current week is reachable even when the same weekday hasn't arrived yet.
+  return habitWeekStart(nextDay, { rolloverHour, weekStartsOn: 0 }) <= today ? today : null;
+}
+
+function dayNumber(day: LogicalDayKey): number {
+  return Math.round(Date.parse(`${day}T00:00:00Z`) / 86_400_000);
+}
+
+/** Whole days from `today` to `day`; yesterday is -1. */
+export function habitDayOffset(day: LogicalDayKey, today: LogicalDayKey): number {
+  return dayNumber(day) - dayNumber(today);
+}
+
+/** Whole weeks from the week containing `today` to the week containing `day`. */
+export function habitWeekOffset(
+  day: LogicalDayKey,
+  today: LogicalDayKey,
+  rolloverHour = 0
+): number {
+  const start = (value: LogicalDayKey) => habitWeekStart(value, { rolloverHour, weekStartsOn: 0 });
+  return Math.round(habitDayOffset(start(day), start(today)) / 7);
 }
 
 /** One-day pager target for the habit list. Swipe right goes to yesterday. */
