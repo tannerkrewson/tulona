@@ -15,7 +15,7 @@ import { DurationText, errorText, formatDuration } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { routineTiming } from '../routine/routine-engine';
-import { TRACKER_ROW_FONT_SIZE } from './catalog-row-geometry';
+import { routineOwnsActivity } from '../routine/routine-visuals';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 
 function isCatalogPath(pathname: string): boolean {
@@ -81,13 +81,6 @@ function activeItem(
 ): ReturnType<typeof resolveCatalogItem> {
   if (!catalog || !transition?.activityId) return null;
   return resolveCatalogItem(catalog, transition.activityId, baseColor);
-}
-
-function routineOwnsActivity(routine: ActiveRoutine, activityId: string): boolean {
-  if (routine.routineSnapshot.trackingMode === 'overall') {
-    return routine.routineId === activityId;
-  }
-  return routine.routineSnapshot.steps.some((step) => step.activityId === activityId);
 }
 
 /** Finds the persisted length of an idle activity session from its next stop/switch. */
@@ -444,7 +437,7 @@ function ActiveActivityBarContent({
                 numberOfLines={1}
                 style={{
                   color: colors.text,
-                  fontSize: inline ? 16 : TRACKER_ROW_FONT_SIZE,
+                  fontSize: inline ? 14 : 16,
                   fontWeight: '600',
                 }}
               >
@@ -455,7 +448,7 @@ function ActiveActivityBarContent({
           <Text
             style={{
               color: isActive ? colors.text : colors.textMuted,
-              fontSize: inline ? 16 : TRACKER_ROW_FONT_SIZE,
+              fontSize: inline ? 14 : 16,
               fontVariant: ['tabular-nums'],
               fontWeight: '600',
             }}
@@ -546,7 +539,7 @@ function ActiveActivityBarContent({
                 {routineInFocus ? <AppIcon color={accent} name="repeat" size={15} /> : null}
                 <Text
                   numberOfLines={1}
-                  style={{ color: colors.text, fontSize: TRACKER_ROW_FONT_SIZE, fontWeight: '700' }}
+                  style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}
                 >
                   {routineInFocus && activeRoutine.status === 'paused'
                     ? `Paused · ${displayName}`
@@ -560,9 +553,7 @@ function ActiveActivityBarContent({
               ) : null}
             </View>
             {routineInFocus && routineTimer !== null ? (
-              <Text
-                style={{ color: colors.text, fontSize: TRACKER_ROW_FONT_SIZE, fontWeight: '700' }}
-              >
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
                 {routineTimer}
               </Text>
             ) : (
@@ -570,7 +561,7 @@ function ActiveActivityBarContent({
                 durationMs={isActive ? elapsedMs : previousDurationMs}
                 textStyle={{
                   color: colors.text,
-                  fontSize: TRACKER_ROW_FONT_SIZE,
+                  fontSize: 16,
                   fontWeight: '700',
                 }}
               />

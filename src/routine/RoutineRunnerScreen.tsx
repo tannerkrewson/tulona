@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Circle, Svg } from 'react-native-svg';
 import { Pressable, StyleSheet, Switch, useWindowDimensions, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import {
   formatCountdownMs,
@@ -26,8 +27,8 @@ import {
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { goBackInAppStack } from '../navigation/app-back';
 
-import { inheritRoutineStepMetadata, resolveCatalogItem } from '../catalog/catalog-service';
 import { routineTiming } from './routine-engine';
+import { orderedSteps, routineStepVisual, routineStyle, validHexColor } from './routine-visuals';
 import { loadRoutineRuntime, type RoutineRuntime } from './routine-runtime';
 
 export interface RoutineRunnerScreenProps {
@@ -108,48 +109,6 @@ function compactDuration(durationMs: number): string {
   return `${seconds}s`;
 }
 
-function orderedSteps(active: ActiveRoutine) {
-  return [...active.routineSnapshot.steps].sort((left, right) => left.sortOrder - right.sortOrder);
-}
-
-function validHexColor(color: string | null | undefined): string | null {
-  return color && /^#[0-9a-f]{6}$/i.test(color.trim()) ? color.trim() : null;
-}
-
-function routineStepVisual(
-  step: ActiveRoutine['routineSnapshot']['steps'][number],
-  trackingMode: ActiveRoutine['routineSnapshot']['trackingMode'],
-  catalog: CatalogCollection | null,
-  baseColor: string
-) {
-  if (trackingMode !== 'steps' || !catalog || step.activityId === null) return step;
-  const inherited = inheritRoutineStepMetadata(catalog, step);
-  const resolved = resolveCatalogItem(catalog, step.activityId, baseColor);
-  return {
-    ...inherited,
-    color: resolved?.displayColor ?? inherited.color ?? null,
-    iconName: inherited.iconName ?? resolved?.item.iconName ?? null,
-  };
-}
-
-function routineStyle(
-  active: ActiveRoutine,
-  catalog: CatalogCollection | null,
-  baseColor: string
-): { accent: string; iconName: string } {
-  const routine = catalog?.routines.find((candidate) => candidate.id === active.routineId);
-  const resolved = routine && catalog ? resolveCatalogItem(catalog, routine.id, baseColor) : null;
-  const accent =
-    validHexColor(active.routineSnapshot.color) ??
-    resolved?.displayColor ??
-    validHexColor(routine?.color) ??
-    baseColor;
-  return {
-    accent,
-    iconName: active.routineSnapshot.iconName ?? routine?.iconName ?? 'repeat',
-  };
-}
-
 function RunnerError({
   message,
   palette,
@@ -190,6 +149,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const [busy, setBusy] = useState(false);
   const [routineMenuOpen, setRoutineMenuOpen] = useState(false);
   const [timerAreaHeight, setTimerAreaHeight] = useState(0);
+  const [adjustingTime, setAdjustingTime] = useState(false);
   const recovering = useRef(false);
   const lastAction = useRef<
     ((nextRuntime: RoutineRuntime) => Promise<ActiveRoutine | void>) | null
@@ -606,35 +566,6 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
       : { stop: 54, addTime: 56, complete: 80, pause: 56, skip: 56 };
   const currentName = currentVisual.name || 'Current step';
 
-  const adjustTime = () => {
-    const addedTimeMs = currentSession?.addedTimeMs ?? 0;
-    const options = [
-      { label: 'Add 1 Minute', value: 60_000 },
-      { label: 'Add 5 Minutes', value: 300_000 },
-      { label: 'Add 10 Minutes', value: 600_000 },
-      ...(addedTimeMs >= 60_000 ? [{ label: 'Remove 1 Minute', value: -60_000 }] : []),
-      ...(addedTimeMs !== 0
-        ? [{ label: `Reset to ${compactDuration(currentStep.durationMs)}`, value: 0 }]
-        : []),
-    ];
-    void chooseAction({
-      actions: options,
-      message:
-        addedTimeMs === 0
-          ? `${currentName} is ${compactDuration(totalCurrentMs)}.`
-          : `${currentName} is ${compactDuration(totalCurrentMs)}, including ${compactDuration(addedTimeMs)} added.`,
-      title: 'Adjust Time',
-    }).then((index) => {
-      const option = index === null ? undefined : options[index];
-      if (!option) return;
-      void runAction((nextRuntime) =>
-        option.value === 0
-          ? nextRuntime.routineService.resetTime()
-          : nextRuntime.routineService.addTime(option.value)
-      );
-    });
-  };
-
   const skipStep = () =>
     void chooseAction({
       actions: [
@@ -687,10 +618,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
       title={active.routineSnapshot.name}
     >
       <View style={styles.runnerBody}>
-        <View
-          style={[styles.stats, { backgroundColor: RUNNER.surface, borderColor: RUNNER.border }]}
-          testID="routine-run-stats"
-        >
+        <View style={styles.stats} testID="routine-run-stats">
           <RunStat
             label="Elapsed"
             palette={RUNNER}
@@ -839,100 +767,117 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
           </RunnerError>
         ) : null}
 
-        <View style={styles.nextRow} testID="routine-next-step">
-          {nextStep ? (
-            <>
-              <Text textStyle={{ color: RUNNER.muted, fontSize: 13, fontWeight: '700' }}>
-                UP NEXT
-              </Text>
-              <AppIcon name={nextIcon} color={nextIconColor} size={18} />
-              <Text
-                numberOfLines={1}
-                style={{ flexShrink: 1 }}
-                textStyle={{ color: RUNNER.text, fontSize: 16, fontWeight: '600' }}
-              >
-                {nextVisual?.name || 'Untitled step'}
-              </Text>
-              <Text textStyle={{ color: RUNNER.muted, fontSize: 15 }}>
-                {compactDuration(nextStep.durationMs)}
-              </Text>
-            </>
-          ) : (
-            <Text textStyle={{ color: RUNNER.muted, fontSize: 15, fontWeight: '600' }}>
-              Last step
-            </Text>
-          )}
-        </View>
+        {adjustingTime && !isPaused ? (
+          <TimeAdjustPanel
+            addedTimeMs={currentSession?.addedTimeMs ?? 0}
+            busy={busy}
+            onAdd={(deltaMs) =>
+              void runAction((nextRuntime) => nextRuntime.routineService.addTime(deltaMs))
+            }
+            onClose={() => setAdjustingTime(false)}
+            onReset={() => void runAction((nextRuntime) => nextRuntime.routineService.resetTime())}
+            originalDurationMs={currentStep.durationMs}
+            palette={RUNNER}
+            stepName={currentName}
+          />
+        ) : (
+          <>
+            <View style={styles.nextRow} testID="routine-next-step">
+              {nextStep ? (
+                <>
+                  <Text textStyle={{ color: RUNNER.muted, fontSize: 15, fontWeight: '500' }}>
+                    Up next
+                  </Text>
+                  <AppIcon name={nextIcon} color={nextIconColor} size={18} />
+                  <Text
+                    numberOfLines={1}
+                    style={{ flexShrink: 1 }}
+                    textStyle={{ color: RUNNER.text, fontSize: 16, fontWeight: '600' }}
+                  >
+                    {nextVisual?.name || 'Untitled step'}
+                  </Text>
+                  <Text textStyle={{ color: RUNNER.muted, fontSize: 15 }}>
+                    {compactDuration(nextStep.durationMs)}
+                  </Text>
+                </>
+              ) : (
+                <Text textStyle={{ color: RUNNER.muted, fontSize: 15, fontWeight: '600' }}>
+                  Last step
+                </Text>
+              )}
+            </View>
 
-        <Row alignment="center" style={styles.controlRow}>
-          <RoundControl
-            disabled={busy}
-            icon="square"
-            label="Stop routine"
-            onPress={stopRoutine}
-            palette={RUNNER}
-            size={controlSizes.stop}
-            testID="stop-routine"
-          />
-          <RoundControl
-            disabled={busy || isPaused}
-            icon="clock"
-            label="Adjust time"
-            onPress={adjustTime}
-            palette={RUNNER}
-            size={controlSizes.addTime}
-            testID="open-add-time"
-          />
-          <RoundControl
-            disabled={busy || isPaused}
-            emphasis
-            icon="arrow-right"
-            label="Complete current step"
-            onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.done())}
-            palette={RUNNER}
-            size={controlSizes.complete}
-            testID="routine-done"
-          />
-          <RoundControl
-            disabled={busy || isPaused}
-            icon="pause"
-            label="Pause routine"
-            onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.pause())}
-            palette={RUNNER}
-            size={controlSizes.pause}
-            testID="routine-pause"
-          />
-          <RoundControl
-            disabled={busy || isPaused}
-            icon="skip-forward"
-            label="Skip or move current step"
-            onPress={skipStep}
-            palette={RUNNER}
-            size={controlSizes.skip}
-            testID="routine-skip"
-          />
-        </Row>
+            <Row alignment="center" style={styles.controlRow}>
+              <RoundControl
+                disabled={busy}
+                icon="square"
+                label="Stop routine"
+                onPress={stopRoutine}
+                palette={RUNNER}
+                size={controlSizes.stop}
+                testID="stop-routine"
+              />
+              <RoundControl
+                disabled={busy || isPaused}
+                icon="clock"
+                label="Adjust time"
+                onPress={() => setAdjustingTime(true)}
+                palette={RUNNER}
+                size={controlSizes.addTime}
+                testID="open-add-time"
+              />
+              <RoundControl
+                disabled={busy || isPaused}
+                emphasis
+                icon="arrow-right"
+                label="Complete current step"
+                onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.done())}
+                palette={RUNNER}
+                size={controlSizes.complete}
+                testID="routine-done"
+              />
+              <RoundControl
+                disabled={busy || isPaused}
+                icon="pause"
+                label="Pause routine"
+                onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.pause())}
+                palette={RUNNER}
+                size={controlSizes.pause}
+                testID="routine-pause"
+              />
+              <RoundControl
+                disabled={busy || isPaused}
+                icon="skip-forward"
+                label="Skip or move current step"
+                onPress={skipStep}
+                palette={RUNNER}
+                size={controlSizes.skip}
+                testID="routine-skip"
+              />
+            </Row>
 
-        <Pressable
-          accessibilityLabel={`Open routine steps, step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
-          accessibilityRole="button"
-          onPress={() => setRoutineMenuOpen(true)}
-          style={({ pressed }) => [
-            styles.stepCounter,
-            {
-              backgroundColor: RUNNER.surface,
-              borderColor: RUNNER.border,
-              opacity: pressed ? 0.68 : 1,
-            },
-          ]}
-          testID="open-routine-steps"
-        >
-          <AppIcon name="list-checks" color={RUNNER.accent} size={18} />
-          <Text textStyle={{ color: RUNNER.text, fontSize: 16, fontWeight: '700' }}>
-            {`Step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
-          </Text>
-          <AppIcon name="chevron-up" color={RUNNER.muted} size={16} />
-        </Pressable>
+            <Pressable
+              accessibilityLabel={`Open routine steps, step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
+              accessibilityRole="button"
+              onPress={() => setRoutineMenuOpen(true)}
+              style={({ pressed }) => [
+                styles.stepCounter,
+                {
+                  backgroundColor: RUNNER.surface,
+                  borderColor: RUNNER.border,
+                  opacity: pressed ? 0.68 : 1,
+                },
+              ]}
+              testID="open-routine-steps"
+            >
+              <AppIcon name="list-checks" color={RUNNER.accent} size={18} />
+              <Text textStyle={{ color: RUNNER.text, fontSize: 16, fontWeight: '700' }}>
+                {`Step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
+              </Text>
+              <AppIcon name="chevron-up" color={RUNNER.muted} size={16} />
+            </Pressable>
+          </>
+        )}
       </View>
 
       <RoutineStepsSheet
@@ -974,9 +919,7 @@ function RunStat({
 }) {
   return (
     <View accessible accessibilityLabel={`${label}, ${value}`} style={styles.stat} testID={testID}>
-      <Text textStyle={{ color: palette.muted, fontSize: 12, fontWeight: '700' }}>
-        {label.toUpperCase()}
-      </Text>
+      <Text textStyle={{ color: palette.muted, fontSize: 14, fontWeight: '500' }}>{label}</Text>
       <Text
         textStyle={{
           color: palette.text,
@@ -1089,6 +1032,124 @@ function RoundControl({
         strokeWidth={2.6}
       />
     </Pressable>
+  );
+}
+
+const TIME_ADJUSTMENTS = [
+  { label: '−1 min', value: -60_000 },
+  { label: '+1 min', value: 60_000 },
+  { label: '+5 min', value: 300_000 },
+  { label: '+10 min', value: 600_000 },
+] as const;
+
+function TimeAdjustPanel({
+  addedTimeMs,
+  busy,
+  onAdd,
+  onClose,
+  onReset,
+  originalDurationMs,
+  palette,
+  stepName,
+}: {
+  addedTimeMs: number;
+  busy: boolean;
+  onAdd: (deltaMs: number) => void;
+  onClose: () => void;
+  onReset: () => void;
+  originalDurationMs: number;
+  palette: RunnerPalette;
+  stepName: string;
+}) {
+  const totalMs = originalDurationMs + addedTimeMs;
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(180)}
+      style={[styles.timePanel, { backgroundColor: palette.surface, borderColor: palette.border }]}
+      testID="routine-time-panel"
+    >
+      <View style={styles.timePanelHeader}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text textStyle={{ color: palette.text, fontSize: 17, fontWeight: '700' }}>
+            Adjust time
+          </Text>
+          <Text numberOfLines={1} textStyle={{ color: palette.muted, fontSize: 14 }}>
+            {`${stepName} · ${compactDuration(totalMs)}${
+              addedTimeMs === 0
+                ? ''
+                : ` (${addedTimeMs > 0 ? '+' : '−'}${compactDuration(Math.abs(addedTimeMs))})`
+            }`}
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={onClose}
+          style={({ pressed }) => [
+            styles.timePanelDone,
+            { backgroundColor: palette.accent, opacity: pressed ? 0.75 : 1 },
+          ]}
+          testID="routine-time-panel-done"
+        >
+          <Text textStyle={{ color: palette.accentText, fontSize: 15, fontWeight: '700' }}>
+            Done
+          </Text>
+        </Pressable>
+      </View>
+      <View style={styles.timePanelButtons}>
+        {TIME_ADJUSTMENTS.map((option) => {
+          const disabled = busy || (option.value < 0 && addedTimeMs < 60_000);
+          return (
+            <Pressable
+              key={option.value}
+              accessibilityLabel={
+                option.value < 0
+                  ? 'Remove 1 minute'
+                  : `Add ${option.value / 60_000} minute${option.value === 60_000 ? '' : 's'}`
+              }
+              accessibilityRole="button"
+              accessibilityState={{ disabled }}
+              disabled={disabled}
+              onPress={() => onAdd(option.value)}
+              style={({ pressed }) => [
+                styles.timePanelButton,
+                {
+                  backgroundColor: palette.background,
+                  borderColor: palette.border,
+                  opacity: disabled ? 0.35 : pressed ? 0.6 : 1,
+                },
+              ]}
+              testID={`add-time-${option.value}`}
+            >
+              <Text
+                textStyle={{
+                  color: palette.text,
+                  fontSize: 17,
+                  fontVariant: ['tabular-nums'],
+                  fontWeight: '700',
+                }}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        disabled={busy || addedTimeMs === 0}
+        onPress={onReset}
+        style={({ pressed }) => [
+          styles.timePanelReset,
+          { opacity: addedTimeMs === 0 ? 0.35 : pressed ? 0.6 : 1 },
+        ]}
+        testID="reset-time-original"
+      >
+        <Text textStyle={{ color: palette.muted, fontSize: 15, fontWeight: '600' }}>
+          {`Reset to ${compactDuration(originalDurationMs)}`}
+        </Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -1235,13 +1296,7 @@ function RoutineStepsSheet({
 
 const styles = StyleSheet.create({
   runnerBody: { flex: 1, gap: 16, minHeight: 0, width: '100%' },
-  stats: {
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: 'row',
-    paddingVertical: 10,
-    width: '100%',
-  },
+  stats: { flexDirection: 'row', width: '100%' },
   stat: { alignItems: 'center', flex: 1, gap: 2 },
   statDivider: { width: StyleSheet.hairlineWidth },
   timerArea: {
@@ -1336,4 +1391,23 @@ const styles = StyleSheet.create({
   flexSpacer: { flex: 1 },
   completionActions: { gap: 10, width: '100%' },
   completionLink: { alignItems: 'center', minHeight: 44, justifyContent: 'center' },
+  timePanel: { borderRadius: 24, borderWidth: 1, gap: 14, padding: 16, width: '100%' },
+  timePanelHeader: { alignItems: 'center', flexDirection: 'row', gap: 12 },
+  timePanelDone: {
+    alignItems: 'center',
+    borderRadius: 18,
+    justifyContent: 'center',
+    minHeight: 36,
+    paddingHorizontal: 16,
+  },
+  timePanelButtons: { flexDirection: 'row', gap: 8 },
+  timePanelButton: {
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 54,
+  },
+  timePanelReset: { alignItems: 'center', justifyContent: 'center', minHeight: 32 },
 });

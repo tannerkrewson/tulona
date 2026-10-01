@@ -129,8 +129,8 @@ export function HistoricalSessionEditor({
                   : null,
               ]}
             >
-              <Text textStyle={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>
-                {target === 'start' ? 'FROM' : 'TO'}
+              <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '500' }}>
+                {target === 'start' ? 'From' : 'To'}
               </Text>
               <Pressable
                 cancelable={false}

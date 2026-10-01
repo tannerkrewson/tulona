@@ -583,7 +583,7 @@ const styles = StyleSheet.create({
     minHeight: 20,
     paddingHorizontal: ROW_PADDING,
   },
-  sectionTitle: { fontSize: 13, fontWeight: '500', textTransform: 'uppercase' },
+  sectionTitle: { fontSize: 15, fontWeight: '600' },
   sectionFooter: { fontSize: 13, lineHeight: 18, paddingHorizontal: ROW_PADDING },
   group: { borderCurve: 'continuous', borderRadius: 14, overflow: 'hidden', width: '100%' },
   separator: { height: StyleSheet.hairlineWidth, marginLeft: ROW_PADDING },

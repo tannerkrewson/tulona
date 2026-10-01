@@ -11,7 +11,7 @@ import { formatSessionDate, formatSessionTime } from './session-time';
 export type SessionCorrectionIntent = 'switch' | 'stop';
 
 const MINUTES_AGO = [5, 15, 30, 60] as const;
-type WhenChoice = 'now' | 'custom' | `${(typeof MINUTES_AGO)[number]}`;
+type WhenChoice = 'now' | 'custom' | 'replace' | `${(typeof MINUTES_AGO)[number]}`;
 
 function minutesAgoLabel(minutes: number): string {
   return minutes === 60 ? '1 hour ago' : `${minutes} minutes ago`;
@@ -36,6 +36,8 @@ interface Props {
   busy: boolean;
   error: string | null;
   onSave: (activityId: string | null, timestamp: number) => Promise<boolean>;
+  /** Relabels the whole running session instead of ending it. */
+  onReplace: (activityId: string) => Promise<boolean>;
 }
 
 /**
@@ -53,6 +55,7 @@ export function ActiveSessionCorrection({
   busy,
   error,
   onSave,
+  onReplace,
 }: Props) {
   const { colors } = useAppTheme();
   const [openIntent, setOpenIntent] = useState<SessionCorrectionIntent | null>(intent);
@@ -77,8 +80,9 @@ export function ActiveSessionCorrection({
   const stopping = shownIntent === 'stop';
   const startMs = timestampMs(transition.timestamp);
   const minuteFloor = (ms: number) => Math.floor(ms / 60_000) * 60_000;
+  const replacing = !stopping && when === 'replace';
   const boundaryMs =
-    when === 'now'
+    when === 'now' || when === 'replace'
       ? nowMs
       : when === 'custom'
         ? (customMs ?? nowMs)
@@ -89,15 +93,17 @@ export function ActiveSessionCorrection({
   const nextActivity = catalog.activities.find(
     (item) => item.id === activityId && item.archivedAt === null
   );
-  const validTime = boundaryMs > startMs && boundaryMs <= nowMs;
+  const validTime = replacing || (boundaryMs > startMs && boundaryMs <= nowMs);
   const endLabel = when === 'now' ? 'now' : formatSessionTime(boundaryMs);
-  const summary = `${activityName} will be logged from ${formatSessionTime(startMs)} to ${endLabel} (${shortDuration(boundaryMs - startMs)}).${
-    stopping
-      ? ''
-      : nextActivity
-        ? ` ${nextActivity.name} starts ${when === 'now' ? 'now' : `at ${endLabel}`}.`
-        : ''
-  }`;
+  const summary = replacing
+    ? `${nextActivity?.name ?? 'The activity you choose'} replaces ${activityName} for this whole session, starting ${formatSessionTime(startMs)}.`
+    : `${activityName} will be logged from ${formatSessionTime(startMs)} to ${endLabel} (${shortDuration(boundaryMs - startMs)}).${
+        stopping
+          ? ''
+          : nextActivity
+            ? ` ${nextActivity.name} starts ${when === 'now' ? 'now' : `at ${endLabel}`}.`
+            : ''
+      }`;
   const message =
     pickerError ??
     error ??
@@ -113,17 +119,20 @@ export function ActiveSessionCorrection({
     setWhen(next);
   };
 
-  const save = () =>
-    void onSave(stopping ? null : activityId, when === 'now' ? Date.now() : boundaryMs).then(
-      (saved) => {
-        if (saved) onClose();
-      }
-    );
+  const save = () => {
+    const saving =
+      replacing && nextActivity
+        ? onReplace(nextActivity.id)
+        : onSave(stopping ? null : activityId, when === 'now' ? Date.now() : boundaryMs);
+    void saving.then((saved) => {
+      if (saved) onClose();
+    });
+  };
 
   return (
     <FormSheet
       confirmDisabled={busy || picking || !validTime || (!stopping && !nextActivity)}
-      confirmLabel={busy ? 'Saving…' : stopping ? 'Stop' : 'Switch'}
+      confirmLabel={busy ? 'Saving…' : stopping ? 'Stop' : replacing ? 'Replace' : 'Switch'}
       onClose={() => {
         if (!busy) onClose();
       }}
@@ -149,6 +158,12 @@ export function ActiveSessionCorrection({
             <Picker.Item key={minutes} label={minutesAgoLabel(minutes)} value={`${minutes}`} />
           ))}
           <Picker.Item label="Other time" value="custom" />
+          {stopping ? null : (
+            <Picker.Item
+              label={`From ${formatSessionTime(startMs)} (replace ${activityName})`}
+              value="replace"
+            />
+          )}
         </FormPickerRow>
         {when === 'custom' && customMs !== null && !picking ? (
           <FormRow
@@ -204,9 +219,8 @@ export function ActiveSessionCorrection({
 const styles = StyleSheet.create({
   choices: { gap: 8, width: '100%' },
   choicesTitle: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     paddingHorizontal: 16,
-    textTransform: 'uppercase',
   },
 });

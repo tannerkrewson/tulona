@@ -23,11 +23,11 @@ assert(
   'routine controls remain mounted and disabled while paused'
 );
 assert(
-  runner.includes("title: 'Adjust Time'") &&
-    runner.includes('nextRuntime.routineService.addTime(option.value)') &&
+  runner.includes('testID="routine-time-panel"') &&
+    runner.includes('nextRuntime.routineService.addTime(deltaMs)') &&
     runner.includes('nextRuntime.routineService.resetTime()') &&
-    runner.includes('chooseAction({'),
-  'time adjustments use a native action sheet with presets and reset'
+    !runner.includes("title: 'Adjust Time'"),
+  'time adjustments stay open in a bottom panel so repeated presets update the live timer'
 );
 assert(
   !runner.includes('label="Keep running"') &&

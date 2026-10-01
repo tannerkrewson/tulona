@@ -294,12 +294,14 @@ function ActivitySessionContent({
   const endMs = following ? timestampMs(following.timestamp) : isActive ? nowMs : null;
   const durationMs = endMs === null ? 0 : Math.max(0, endMs - timestampMs(transition.timestamp));
   const totalSeconds = Math.floor(durationMs / 1000);
-  const timerMain = `${Math.floor(totalSeconds / 3600)
-    .toString()
-    .padStart(2, '0')}:${Math.floor((totalSeconds / 60) % 60)
-    .toString()
-    .padStart(2, '0')}`;
-  const timerSeconds = (totalSeconds % 60).toString().padStart(2, '0');
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor(totalSeconds / 60) % 60;
+  const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+  const stopwatch =
+    hours > 0
+      ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds}`
+      : `${minutes}:${seconds}`;
+  const isRoutineItem = resolved?.item.kind === 'routine';
   const activityColor =
     transition.activitySnapshot?.color ?? resolved?.displayColor ?? colors.primary;
   const iconForeground = getAccessibleTextColor(activityColor);
@@ -397,6 +399,13 @@ function ActivitySessionContent({
         if (saved) goBackInAppStack(router, '/');
         return saved;
       }}
+      onReplace={async (nextActivityId) => {
+        const saved = await runAction(async () => {
+          await store.getState().reassignTransition(transition.id, nextActivityId);
+        });
+        if (saved) goBackInAppStack(router, '/');
+        return saved;
+      }}
     />
   ) : null;
 
@@ -413,30 +422,54 @@ function ActivitySessionContent({
         <View style={[styles.content, height < 740 ? { gap: 8 } : null]}>
           {!editingTime ? (
             <View style={styles.timer} testID="activity-session-summary">
+              <Pressable
+                accessibilityLabel={isActive ? activityName : `Change activity, ${activityName}`}
+                accessibilityRole={isActive ? 'header' : 'button'}
+                cancelable={false}
+                disabled={isActive || busy}
+                onPress={() => setChoosingActivity(true)}
+                style={({ pressed }) => [styles.titleRow, { opacity: pressed ? 0.6 : 1 }]}
+                testID="activity-session-title"
+              >
+                {transition.activityId ? (
+                  <AppIcon
+                    name={isRoutineItem ? 'repeat' : 'play'}
+                    size={isRoutineItem ? 22 : TRACKER_PLAYBACK_ICON_SIZE}
+                    color={activityColor}
+                    fill={isRoutineItem ? 'none' : activityColor}
+                    strokeWidth={isRoutineItem ? 2.5 : 0}
+                  />
+                ) : null}
+                <NativeText
+                  numberOfLines={1}
+                  style={{ color: colors.text, flexShrink: 1, fontSize: 24, fontWeight: '700' }}
+                >
+                  {activityName}
+                </NativeText>
+                {isActive ? null : (
+                  <AppIcon name="chevron-down" size={18} color={colors.textMuted} />
+                )}
+              </Pressable>
               <NativeText
                 adjustsFontSizeToFit
                 minimumFontScale={0.5}
                 numberOfLines={1}
                 accessibilityLabel={
-                  endMs === null ? 'Open-ended session' : `${timerMain}:${timerSeconds} elapsed`
+                  endMs === null
+                    ? 'Open-ended session'
+                    : `${stopwatch} ${isActive ? 'elapsed' : 'long'}`
                 }
                 testID="activity-session-duration"
                 style={{
                   color: colors.text,
-                  fontSize: Math.min(88, (width - 44) / 4.9),
-                  fontWeight: '300',
+                  fontSize: Math.min(96, (width - 44) / (stopwatch.length * 0.62)),
                   fontVariant: ['tabular-nums'],
+                  fontWeight: '200',
+                  letterSpacing: -1,
                   textAlign: 'center',
                 }}
               >
-                {endMs === null ? (
-                  '—'
-                ) : (
-                  <>
-                    {timerMain}
-                    <NativeText style={{ color: colors.textMuted }}>:{timerSeconds}</NativeText>
-                  </>
-                )}
+                {endMs === null ? '—' : stopwatch}
               </NativeText>
             </View>
           ) : null}
@@ -456,39 +489,6 @@ function ActivitySessionContent({
             transition={transition}
             onEditRunningEnd={() => setCorrection('stop')}
           />
-          {!editingTime ? (
-            <Pressable
-              cancelable={false}
-              disabled={busy}
-              accessibilityRole="button"
-              accessibilityLabel={`Change activity, ${activityName}`}
-              onPress={() => setChoosingActivity(true)}
-              style={({ pressed }) => [
-                styles.activityRow,
-                { backgroundColor: colors.surfaceMuted, opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
-              ]}
-              testID="activity-session-choose-activity"
-            >
-              {transition.activityId ? (
-                <View style={styles.activityIcon}>
-                  <AppIcon
-                    name={resolved?.item.kind === 'routine' ? 'repeat' : 'play'}
-                    size={resolved?.item.kind === 'routine' ? 20 : TRACKER_PLAYBACK_ICON_SIZE}
-                    color={activityColor}
-                    fill={resolved?.item.kind === 'routine' ? 'none' : activityColor}
-                    strokeWidth={resolved?.item.kind === 'routine' ? 2.5 : 0}
-                  />
-                </View>
-              ) : null}
-              <NativeText
-                numberOfLines={1}
-                style={{ color: colors.text, fontSize: 23, fontWeight: '600', flex: 1 }}
-              >
-                {activityName}
-              </NativeText>
-              <AppIcon name="chevron-right" size={18} color={colors.textMuted} />
-            </Pressable>
-          ) : null}
           {actionError ? (
             <NativeText
               accessibilityRole="alert"
@@ -518,19 +518,19 @@ function ActivitySessionContent({
                 testID="activity-session-delete"
               />
               <SessionControl
-                backgroundColor={activityColor}
+                backgroundColor={colors.surfaceMuted}
                 busy={busy}
                 filled
-                foregroundColor={iconForeground}
+                foregroundColor={colors.text}
                 icon="square"
                 label="Stop"
                 onPress={() => setCorrection('stop')}
                 testID="activity-session-stop"
               />
               <SessionControl
-                backgroundColor={colors.surfaceMuted}
+                backgroundColor={activityColor}
                 busy={busy}
-                foregroundColor={colors.text}
+                foregroundColor={iconForeground}
                 icon="arrow-right-left"
                 label="Switch activity"
                 onPress={() => setCorrection('switch')}
@@ -578,7 +578,7 @@ function ActivitySessionContent({
         <NativeText
           style={{ color: colors.textMuted, fontSize: 15, lineHeight: 21, paddingHorizontal: 16 }}
         >
-          {`Log this whole session as something other than ${activityName}.${isActive ? ' To keep this time and start something new, use Switch instead.' : ''}`}
+          {`Log this whole session as something other than ${activityName}.`}
         </NativeText>
         <SessionActivityChoices
           catalog={catalog}
@@ -605,16 +605,23 @@ function ActivitySessionContent({
 
 const styles = StyleSheet.create({
   content: { flex: 1, minHeight: 0, gap: 14, width: '100%', maxWidth: 620 },
-  timer: { flex: 1, minHeight: 48, width: '100%', alignItems: 'center', justifyContent: 'center' },
-  activityRow: {
-    flexDirection: 'row',
+  timer: {
     alignItems: 'center',
-    gap: 12,
-    minHeight: 78,
-    padding: 20,
-    borderRadius: 18,
+    flex: 1,
+    gap: 4,
+    justifyContent: 'center',
+    minHeight: 48,
+    width: '100%',
   },
-  activityIcon: { alignItems: 'center', height: 28, justifyContent: 'center', width: 28 },
+  titleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+    maxWidth: '100%',
+    minHeight: 44,
+    paddingHorizontal: 8,
+  },
   controls: {
     alignItems: 'center',
     flexDirection: 'row',

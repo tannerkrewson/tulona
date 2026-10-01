@@ -36,10 +36,18 @@ assert(
   'running sessions must expose missed switch/stop correction with a preview before saving'
 );
 assert(
-  correction.includes("stopping ? 'Stop' : 'Switch'") &&
+  correction.includes("stopping ? 'Stop' : replacing ? 'Replace' : 'Switch'") &&
     correction.includes('<FormSheet') &&
     session.includes('switchActiveSession'),
   'draft corrections must support explicit save/cancel and use the guarded active-session mutation'
+);
+assert(
+  correction.includes("useState<WhenChoice>('now')") &&
+    correction.includes("when === 'replace'") &&
+    session.includes('onReplace={async (nextActivityId)') &&
+    session.includes('reassignTransition(transition.id, nextActivityId)') &&
+    session.includes('disabled={isActive || busy}'),
+  'live sessions change activity through an opt-in replace switch, not a tappable title'
 );
 assert(
   session.includes('Change Activity') &&
@@ -64,7 +72,7 @@ assert(
   'iOS wheels must stage edits until Done and let Cancel discard them'
 );
 assert(
-  editor.includes('FROM') && editor.includes('TO') && !editor.includes('Set start to now'),
+  editor.includes("'From' : 'To'") && !editor.includes('Set start to now'),
   'session boundaries must be clear without a destructive reset shortcut'
 );
 
