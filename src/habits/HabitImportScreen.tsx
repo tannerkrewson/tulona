@@ -1,5 +1,5 @@
 import { Picker } from '@expo/ui';
-import { Column, Row, Text } from '@ui/primitives';
+import { Column, Text } from '@ui/primitives';
 import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -8,7 +8,16 @@ import { Pressable, View } from 'react-native';
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
 import { goBackInAppStack } from '../navigation/app-back';
-import { AccessiblePicker, AppButton, AppSwitch, errorText, Screen } from '@ui';
+import {
+  errorText,
+  Form,
+  FormPickerRow,
+  FormRow,
+  FormSection,
+  FormSwitchRow,
+  HeaderTextButton,
+  Screen,
+} from '@ui';
 
 import { bootCoordinator } from '../orchestration';
 import { formatHabitSchedule } from './habit-format';
@@ -62,6 +71,14 @@ function HabitChoice({
   onToggle: () => void;
 }) {
   const { colors } = useAppTheme();
+  const details = [
+    statusLabel(habit),
+    formatHabitSchedule(habit.schedule),
+    `${habit.checkIns.length.toLocaleString()} check-ins`,
+    habit.goal ? `Goal: ${habit.goal}` : null,
+  ]
+    .filter((value): value is string => value !== null)
+    .join(' · ');
   return (
     <Pressable
       accessibilityLabel={`${habit.name}, ${statusLabel(habit)}, ${formatHabitSchedule(habit.schedule)}`}
@@ -70,14 +87,12 @@ function HabitChoice({
       onPress={onToggle}
       style={({ pressed }) => ({
         alignItems: 'center',
-        backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
-        borderBottomColor: colors.border,
-        borderBottomWidth: 1,
+        backgroundColor: pressed ? colors.border : 'transparent',
         flexDirection: 'row',
         gap: 12,
-        minHeight: 78,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
+        minHeight: 64,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
         width: '100%',
       })}
       testID={`ticktick-habit-${habit.key}`}
@@ -85,72 +100,34 @@ function HabitChoice({
       <View
         style={{
           alignItems: 'center',
-          backgroundColor: selected ? colors.primary : colors.surface,
-          borderColor: selected ? colors.primary : colors.border,
-          borderRadius: 7,
-          borderWidth: 2,
+          backgroundColor: selected ? colors.primary : 'transparent',
+          borderColor: selected ? colors.primary : colors.textMuted,
+          borderRadius: 12,
+          borderWidth: 1.5,
           height: 24,
           justifyContent: 'center',
           width: 24,
         }}
       >
         {selected ? (
-          <AppIcon color={colors.onPrimary} name="check" size={16} strokeWidth={3} />
+          <AppIcon color={colors.onPrimary} name="check" size={15} strokeWidth={3} />
         ) : null}
       </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text numberOfLines={1} textStyle={{ color: colors.text, fontSize: 17 }}>
           {habit.name}
         </Text>
         <Text
           numberOfLines={2}
           textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}
         >
-          {`${statusLabel(habit)} · ${formatHabitSchedule(habit.schedule)} · ${habit.checkIns.length.toLocaleString()} check-ins`}
+          {details}
         </Text>
-        {[
-          habit.goal ? `Goal: ${habit.goal}` : null,
-          habit.section ? `Section: ${habit.section}` : null,
-          habit.reminder ? `Reminder: ${habit.reminder}` : null,
-        ].filter((value): value is string => value !== null).length > 0 ? (
-          <Text
-            numberOfLines={2}
-            textStyle={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
-          >
-            {[
-              habit.goal ? `Goal: ${habit.goal}` : null,
-              habit.section ? `Section: ${habit.section}` : null,
-              habit.reminder ? `Reminder: ${habit.reminder}` : null,
-            ]
-              .filter((value): value is string => value !== null)
-              .join(' · ')}
-          </Text>
-        ) : null}
         <Text numberOfLines={1} textStyle={{ color: colors.textMuted, fontSize: 12 }}>
           {formatHistoryRange(habit)}
         </Text>
       </View>
     </Pressable>
-  );
-}
-
-function Panel({ children, testID }: { children: ReactNode; testID?: string }) {
-  const { colors } = useAppTheme();
-  return (
-    <Column
-      spacing={10}
-      style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 16,
-        borderWidth: 1,
-        padding: 16,
-        width: '100%',
-      }}
-      testID={testID}
-    >
-      {children}
-    </Column>
   );
 }
 
@@ -223,22 +200,23 @@ function SelectedWarnings({
 function ImportResultPanel({ result }: { result: HabitImportResult }) {
   const { colors } = useAppTheme();
   return (
-    <MessagePanel tone="success" testID="ticktick-import-result">
-      <Row alignment="center" spacing={8}>
-        <AppIcon color={colors.success.foreground} name="check-circle-2" size={20} />
-        <Text textStyle={{ color: colors.success.foreground, fontSize: 16, fontWeight: '700' }}>
-          TickTick habits imported
-        </Text>
-      </Row>
-      <Text textStyle={{ color: colors.success.foreground, fontSize: 14 }}>
-        {`${result.imported.length} habit${result.imported.length === 1 ? '' : 's'} added · ${result.importedStateCount.toLocaleString()} history days imported`}
-      </Text>
-      {result.skippedNames.length > 0 ? (
-        <Text textStyle={{ color: colors.success.foreground, fontSize: 13 }}>
-          {`Skipped existing names: ${result.skippedNames.join(', ')}`}
-        </Text>
-      ) : null}
-    </MessagePanel>
+    <FormSection
+      footer={
+        result.skippedNames.length > 0
+          ? `Skipped because the name already exists: ${result.skippedNames.join(', ')}`
+          : undefined
+      }
+      testID="ticktick-import-result"
+      title="Imported"
+    >
+      <FormRow
+        icon="check-circle-2"
+        iconColor={colors.success.foreground}
+        label="Habits added"
+        value={`${result.imported.length}`}
+      />
+      <FormRow label="History days" value={result.importedStateCount.toLocaleString()} />
+    </FormSection>
   );
 }
 
@@ -253,72 +231,56 @@ function ReviewControls({
   onOptionsChange: (changes: Partial<TickTickImportOptions>) => void;
   options: TickTickImportOptions;
 }) {
-  const { colors } = useAppTheme();
   return (
-    <Panel testID="ticktick-import-controls">
-      <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-        Import options
-      </Text>
-      <AppSwitch
-        label="Import check-in history"
+    <FormSection
+      footer="TickTick sections and reminders aren’t copied. Count and minute goals become a simple done or not done for each day."
+      testID="ticktick-import-controls"
+      title="Options"
+    >
+      <FormSwitchRow
+        label="Import History"
         onValueChange={(value) => onOptionsChange({ importHistory: value })}
         testID="ticktick-import-history"
         value={options.importHistory}
       />
-      <AppSwitch
+      <FormSwitchRow
         disabled={!options.importHistory}
-        label="Include incomplete and partially completed days"
+        label="Include Unfinished Days"
         onValueChange={(value) => onOptionsChange({ includeIncomplete: value })}
         testID="ticktick-include-incomplete"
         value={options.includeIncomplete}
       />
-      <AppSwitch
-        label="Keep TickTick archived habits archived"
+      <FormPickerRow
+        enabled={options.importHistory && options.includeIncomplete}
+        label="Partly Done Days"
+        onValueChange={(value) =>
+          onOptionsChange({
+            partialPolicy: String(value) as TickTickImportOptions['partialPolicy'],
+          })
+        }
+        selectedValue={options.partialPolicy}
+        testID="ticktick-partial-policy"
+      >
+        <Picker.Item label="Missed" value="failed" />
+        <Picker.Item label="Done" value="done" />
+        <Picker.Item label="Leave out" value="skip" />
+      </FormPickerRow>
+      <FormSwitchRow
+        label="Keep Archived Habits Archived"
         onValueChange={(value) => onOptionsChange({ preserveArchived: value })}
         testID="ticktick-preserve-archived"
         value={options.preserveArchived}
       />
-      <Column spacing={6} style={{ width: '100%' }}>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>
-          Partially completed days
-        </Text>
-        <AccessiblePicker
-          enabled={options.importHistory && options.includeIncomplete}
-          label="Partially completed days"
-          onValueChange={(value) =>
-            onOptionsChange({
-              partialPolicy: String(value) as TickTickImportOptions['partialPolicy'],
-            })
-          }
-          selectedValue={options.partialPolicy}
-          testID="ticktick-partial-policy"
-        >
-          <Picker.Item label="Mark as failed" value="failed" />
-          <Picker.Item label="Mark as done" value="done" />
-          <Picker.Item label="Skip these days" value="skip" />
-        </AccessiblePicker>
-      </Column>
-      <Column spacing={6} style={{ width: '100%' }}>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>
-          Existing habit names
-        </Text>
-        <AccessiblePicker
-          label="Existing habit names"
-          onValueChange={(value) =>
-            onDuplicatePolicyChange(String(value) as TickTickDuplicatePolicy)
-          }
-          selectedValue={duplicatePolicy}
-          testID="ticktick-duplicate-policy"
-        >
-          <Picker.Item label="Skip existing names" value="skip" />
-          <Picker.Item label="Import duplicates" value="import" />
-        </AccessiblePicker>
-      </Column>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
-        TickTick sections and reminders are shown in the preview but are not copied because Tulona
-        has no equivalent fields. Count and minute goals become one binary completion per day.
-      </Text>
-    </Panel>
+      <FormPickerRow
+        label="Name Already Exists"
+        onValueChange={(value) => onDuplicatePolicyChange(String(value) as TickTickDuplicatePolicy)}
+        selectedValue={duplicatePolicy}
+        testID="ticktick-duplicate-policy"
+      >
+        <Picker.Item label="Skip" value="skip" />
+        <Picker.Item label="Import anyway" value="import" />
+      </FormPickerRow>
+    </FormSection>
   );
 }
 
@@ -349,57 +311,43 @@ function ReviewPanel({
   busy: boolean;
   duplicatePolicy: TickTickDuplicatePolicy;
 }) {
-  const { colors } = useAppTheme();
   const selectedCount = selectedKeys.size;
+  const allSelected = selectedCount === preview.habits.length;
   return (
-    <Column spacing={14} style={{ width: '100%' }}>
-      <Panel testID="ticktick-import-file">
-        <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{fileName}</Text>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-          {`${preview.habits.length} habits found · ${selectedCount} selected`}
-        </Text>
-        <Row spacing={8} style={{ width: '100%' }}>
-          <AppButton
-            disabled={busy}
-            label="Select all"
-            onPress={onSelectAll}
-            style={{ height: 44, width: '48%' }}
-            testID="ticktick-select-all"
-            variant="outlined"
-          />
-          <AppButton
-            disabled={busy}
-            label="Clear"
-            onPress={onClearSelection}
-            style={{ height: 44, width: '48%' }}
-            testID="ticktick-clear-selection"
-            variant="outlined"
-          />
-        </Row>
-      </Panel>
-      <Panel testID="ticktick-habit-selection">
-        <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-          Habits to import
-        </Text>
-        <View
-          style={{
-            borderColor: colors.border,
-            borderRadius: 12,
-            borderWidth: 1,
-            overflow: 'hidden',
-            width: '100%',
-          }}
-        >
-          {preview.habits.map((habit) => (
-            <HabitChoice
-              habit={habit}
-              key={habit.key}
-              onToggle={() => onToggle(habit.key)}
-              selected={selectedKeys.has(habit.key)}
+    <>
+      <FormSection
+        footer={`${selectedCount} of ${preview.habits.length} selected from ${fileName}`}
+        headerAction={
+          allSelected ? (
+            <HeaderTextButton
+              compact
+              disabled={busy}
+              label="Deselect All"
+              onPress={onClearSelection}
+              testID="ticktick-clear-selection"
             />
-          ))}
-        </View>
-      </Panel>
+          ) : (
+            <HeaderTextButton
+              compact
+              disabled={busy}
+              label="Select All"
+              onPress={onSelectAll}
+              testID="ticktick-select-all"
+            />
+          )
+        }
+        testID="ticktick-habit-selection"
+        title="Habits"
+      >
+        {preview.habits.map((habit) => (
+          <HabitChoice
+            habit={habit}
+            key={habit.key}
+            onToggle={() => onToggle(habit.key)}
+            selected={selectedKeys.has(habit.key)}
+          />
+        ))}
+      </FormSection>
       <ReviewControls
         duplicatePolicy={duplicatePolicy}
         onDuplicatePolicyChange={setDuplicatePolicy}
@@ -407,18 +355,18 @@ function ReviewPanel({
         options={options}
       />
       <SelectedWarnings preview={preview} selectedKeys={selectedKeys} />
-      <AppButton
-        disabled={busy || selectedCount === 0}
-        label={
-          busy
-            ? 'Importing…'
-            : `Import ${selectedCount} selected habit${selectedCount === 1 ? '' : 's'}`
-        }
-        onPress={onImport}
-        style={{ height: 52, width: '100%' }}
-        testID="ticktick-import-selected"
-      />
-    </Column>
+      <FormSection>
+        <FormRow
+          disabled={busy || selectedCount === 0}
+          kind="action"
+          label={
+            busy ? 'Importing…' : `Import ${selectedCount} Habit${selectedCount === 1 ? '' : 's'}`
+          }
+          onPress={onImport}
+          testID="ticktick-import-selected"
+        />
+      </FormSection>
+    </>
   );
 }
 
@@ -507,7 +455,7 @@ export default function HabitImportScreen() {
     return (
       <Screen
         onBack={() => goBackInAppStack(router, '/settings/data')}
-        title="Import TickTick habits"
+        title="TickTick Import"
         testID="habit-import-screen"
       >
         <Text
@@ -522,27 +470,32 @@ export default function HabitImportScreen() {
   return (
     <Screen
       onBack={() => goBackInAppStack(router, '/settings/data')}
-      title="Import TickTick habits"
+      title="TickTick Import"
       testID="habit-import-screen"
     >
-      <Column spacing={14} style={{ width: '100%' }}>
+      <Form>
+        {error ? (
+          <MessagePanel tone="danger" testID="ticktick-import-error">
+            <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{error}</Text>
+            <Text textStyle={{ color: colors.danger.foreground, fontSize: 13 }}>
+              No habits were changed.
+            </Text>
+          </MessagePanel>
+        ) : null}
+        {result ? <ImportResultPanel result={result} /> : null}
         {!preview ? (
-          <Panel testID="ticktick-import-start">
-            <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>
-              Bring over a TickTick export
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-              Choose TickTick&apos;s XLSX habit export, review the individual sheets, and select
-              exactly which habits and history to add to Tulona. Existing data stays in place.
-            </Text>
-            <AppButton
+          <FormSection
+            footer="In TickTick, export your habits as an .xlsx file. You’ll choose which habits to add before anything is imported."
+            testID="ticktick-import-start"
+          >
+            <FormRow
               disabled={busy}
-              label={busy ? 'Reading export…' : 'Choose TickTick XLSX'}
+              kind="action"
+              label={busy ? 'Reading File…' : 'Choose Export File'}
               onPress={() => void chooseFile()}
-              style={{ height: 52, width: '100%' }}
               testID="choose-ticktick-xlsx"
             />
-          </Panel>
+          </FormSection>
         ) : (
           <ReviewPanel
             busy={busy}
@@ -566,44 +519,25 @@ export default function HabitImportScreen() {
             setOptions={(changes) => setOptions((current) => ({ ...current, ...changes }))}
           />
         )}
-        {busy && preview ? (
-          <Text
-            textStyle={{ color: colors.textMuted, fontSize: 14 }}
-            testID="ticktick-import-progress"
-          >
-            Working…
-          </Text>
-        ) : null}
-        {error ? (
-          <MessagePanel tone="danger" testID="ticktick-import-error">
-            <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{error}</Text>
-            <Text textStyle={{ color: colors.danger.foreground, fontSize: 13 }}>
-              No habits were changed by this failed action.
-            </Text>
-          </MessagePanel>
-        ) : null}
-        {result ? <ImportResultPanel result={result} /> : null}
         {preview ? (
-          <Row spacing={8} style={{ width: '100%' }}>
-            <AppButton
+          <FormSection>
+            <FormRow
               disabled={busy}
-              label="Choose another file"
-              onPress={chooseFile}
-              style={{ height: 48, width: '48%' }}
+              kind="action"
+              label="Choose Another File"
+              onPress={() => void chooseFile()}
               testID="choose-another-ticktick-file"
-              variant="outlined"
             />
-            <AppButton
+            <FormRow
               disabled={busy}
-              label="Start over"
+              kind="action"
+              label="Start Over"
               onPress={clearReview}
-              style={{ height: 48, width: '48%' }}
               testID="reset-ticktick-import"
-              variant="outlined"
             />
-          </Row>
+          </FormSection>
         ) : null}
-      </Column>
+      </Form>
     </Screen>
   );
 }
