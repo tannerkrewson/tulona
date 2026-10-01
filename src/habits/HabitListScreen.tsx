@@ -22,12 +22,10 @@ import {
   type HabitDayState,
   type LogicalDayKey,
 } from '@domain';
-import { AppIcon } from '@icons';
+import { AppIcon, type IconName } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 import {
-  AppButton,
   EmptyState,
-  ConfirmationModal,
   errorText,
   getRowSurfaceBackground,
   getRowSurfaceStyle,
@@ -53,6 +51,7 @@ import {
 } from './categories';
 import {
   formatHabitDay,
+  formatHabitDayShort,
   formatHabitRolloverHour,
   habitDayOffset,
   habitDaySwipeTarget,
@@ -220,155 +219,152 @@ function HabitListContent({ store }: { store: HabitStore }) {
   );
 
   return (
-    <>
-      <Screen scrollable={false} testID="habits-screen">
-        <View style={{ flex: 1, gap: 14, minHeight: 0, position: 'relative', width: '100%' }}>
-          <HabitHeader
-            onAdd={() => router.push('/habit/new')}
-            editLabel="Edit habits"
-            editOpen={editMode}
-            editOpenLabel="Done editing habits"
-            editTestID="habit-edit-mode"
-            filterMenu={
-              <PageFilterMenu
-                accessibilityLabel="Choose habit view"
-                onChange={setSelectedCategory}
-                options={habitViewOptions}
-                testID="habit-view-menu"
-                value={selectedCategory}
-              />
-            }
-            onToggleEdit={() => setEditMode((open) => !open)}
-            title="Habits"
-            testID="habits-header"
-          />
-          <HabitErrorMessage
-            message={persistenceError ? errorText(persistenceError) : null}
-            onBack={() => router.replace('/')}
-            onRetry={() => {
-              const action = lastAction.current;
-              runAction(action ?? (() => store.getState().refresh()));
-            }}
-          />
-          <PageFilterMenuSelection
-            defaultValue={DEFAULT_HABIT_CATEGORY}
-            onChange={setSelectedCategory}
-            options={habitViewOptions}
-            testID="habit-view-menu"
-            value={selectedCategory}
-          />
-          <View style={{ flex: 1, minHeight: 0, paddingBottom: 68, width: '100%' }}>
-            {selectedCategory === 'active' ? (
-              <>
-                {reviewGap ? (
-                  <View style={{ width: '100%' }}>
-                    <Column
-                      spacing={8}
-                      style={{
-                        backgroundColor: colors.active.background,
-                        borderColor: colors.border,
-                        borderRadius: 14,
-                        borderWidth: 1,
-                        padding: 12,
-                        width: '100%',
-                      }}
-                      testID="incomplete-habit-day-reminder"
+    <Screen scrollable={false} testID="habits-screen">
+      <View style={{ flex: 1, gap: 14, minHeight: 0, position: 'relative', width: '100%' }}>
+        <HabitHeader
+          onAdd={() => router.push('/habit/new')}
+          editLabel="Edit habits"
+          editOpen={editMode}
+          editOpenLabel="Done editing habits"
+          editTestID="habit-edit-mode"
+          filterMenu={
+            <PageFilterMenu
+              accessibilityLabel="Choose habit view"
+              onChange={setSelectedCategory}
+              options={habitViewOptions}
+              testID="habit-view-menu"
+              value={selectedCategory}
+            />
+          }
+          onToggleEdit={() => setEditMode((open) => !open)}
+          title="Habits"
+          testID="habits-header"
+        />
+        <HabitErrorMessage
+          message={persistenceError ? errorText(persistenceError) : null}
+          onBack={() => router.replace('/')}
+          onRetry={() => {
+            const action = lastAction.current;
+            runAction(action ?? (() => store.getState().refresh()));
+          }}
+        />
+        <PageFilterMenuSelection
+          defaultValue={DEFAULT_HABIT_CATEGORY}
+          onChange={setSelectedCategory}
+          options={habitViewOptions}
+          testID="habit-view-menu"
+          value={selectedCategory}
+        />
+        <View style={{ flex: 1, minHeight: 0, paddingBottom: 68, width: '100%' }}>
+          {selectedCategory === 'active' ? (
+            <>
+              {pastMidnightWarningVisible ? (
+                <HabitNoticeRow
+                  accessibilityLabel={`Still logging ${formatHabitDayShort(selectedDay)}. Your day rolls over at ${formatHabitRolloverHour(logicalDayRolloverHour)}.`}
+                  icon="moon"
+                  subtitle={`Your day rolls over at ${formatHabitRolloverHour(logicalDayRolloverHour)}`}
+                  testID="habit-past-midnight-warning"
+                  title={`Still logging ${formatHabitDayShort(selectedDay)}`}
+                  trailing={
+                    <Pressable
+                      accessibilityHint="Dismisses this reminder without changing habit data"
+                      accessibilityLabel="Dismiss"
+                      accessibilityRole="button"
+                      hitSlop={10}
+                      onPress={() => setDismissedPastMidnightDay(selectedDay)}
+                      style={styles.noticeDismiss}
+                      testID="habit-past-midnight-dismiss"
                     >
-                      <Text textStyle={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
-                        {`${reviewGap.count} ${reviewGap.count === 1 ? 'habit needs' : 'habits need'} a status for ${formatHabitDay(reviewGap.day)}.`}
-                      </Text>
-                      <AppButton
-                        label="Review this day"
-                        onPress={() => router.push(`/habit-review?day=${reviewGap.day}` as Href)}
-                        style={{ height: 46, width: '100%' }}
+                      <AppIcon color={colors.textMuted} name="x" size={18} />
+                    </Pressable>
+                  }
+                />
+              ) : null}
+              {reviewGap ? (
+                <HabitNoticeRow
+                  accessibilityHint="Opens a review of that day's unlogged habits"
+                  accessibilityLabel={`${reviewGap.count} ${reviewGap.count === 1 ? 'habit' : 'habits'} not logged on ${formatHabitDayShort(reviewGap.day)}`}
+                  icon="calendar-days"
+                  onPress={() => router.push(`/habit-review?day=${reviewGap.day}` as Href)}
+                  subtitle={formatHabitDayShort(reviewGap.day)}
+                  testID="incomplete-habit-day-reminder"
+                  title={`${reviewGap.count} ${reviewGap.count === 1 ? 'habit' : 'habits'} not logged`}
+                  trailing={
+                    <>
+                      <NativeText
+                        selectable={false}
+                        style={{ color: colors.primary, fontSize: 15, fontWeight: '600' }}
                         testID="review-incomplete-habit-day"
-                        variant="outlined"
-                      />
-                    </Column>
-                  </View>
-                ) : null}
-                <HabitWeekStrip
-                  onSelectDay={selectDay}
-                  rolloverHour={logicalDayRolloverHour}
-                  selectedDay={selectedDay}
-                  today={today}
+                      >
+                        Review
+                      </NativeText>
+                      <AppIcon color={colors.textMuted} name="chevron-right" size={18} />
+                    </>
+                  }
                 />
-                <HabitDayPager
-                  horizontalInsets={{ left: 20 + insets.left, right: 20 + insets.right }}
-                  onSelectDay={selectDay}
-                  renderDay={renderDay}
-                  rolloverHour={logicalDayRolloverHour}
-                  selectedDay={selectedDay}
-                  today={today}
-                />
-              </>
-            ) : (
-              <HabitCategoryList
-                category={selectedCategory}
-                habits={visibleHabits}
-                editMode={editMode}
-                onDetails={(habitId) => router.push(`/habit/${habitId}`)}
+              ) : null}
+              <HabitWeekStrip
+                onSelectDay={selectDay}
                 rolloverHour={logicalDayRolloverHour}
+                selectedDay={selectedDay}
+                today={today}
               />
-            )}
-          </View>
-          <Pressable
-            accessibilityHint={
-              habitsByCategory.active.length === 0
-                ? 'Add an active habit to start a mindful review'
-                : 'Review today’s active habits one at a time'
-            }
-            accessibilityLabel="Start mindful review"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: habitsByCategory.active.length === 0 }}
-            disabled={habitsByCategory.active.length === 0}
-            onPress={() => router.push('/habit-review' as Href)}
-            style={({ pressed }) => ({
-              alignItems: 'center',
-              backgroundColor: colors.surfaceMuted,
-              borderColor: colors.border,
-              borderRadius: 16,
-              borderWidth: 1,
-              bottom: 0,
-              flexDirection: 'row',
-              gap: 10,
-              height: 58,
-              justifyContent: 'center',
-              left: 0,
-              opacity: habitsByCategory.active.length === 0 ? 0.42 : pressed ? 0.78 : 1,
-              position: 'absolute',
-              right: 0,
-              width: '100%',
-            })}
-            testID="start-habit-review"
-          >
-            <AppIcon color={colors.primary} name="sparkles" size={20} />
-            <NativeText style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-              Start mindful review
-            </NativeText>
-          </Pressable>
+              <HabitDayPager
+                horizontalInsets={{ left: 20 + insets.left, right: 20 + insets.right }}
+                onSelectDay={selectDay}
+                renderDay={renderDay}
+                rolloverHour={logicalDayRolloverHour}
+                selectedDay={selectedDay}
+                today={today}
+              />
+            </>
+          ) : (
+            <HabitCategoryList
+              category={selectedCategory}
+              habits={visibleHabits}
+              editMode={editMode}
+              onDetails={(habitId) => router.push(`/habit/${habitId}`)}
+              rolloverHour={logicalDayRolloverHour}
+            />
+          )}
         </View>
-      </Screen>
-      <ConfirmationModal
-        cancelAccessibilityHint="Dismisses this reminder without changing habit data"
-        cancelLabel="Dismiss"
-        cancelTestID="habit-past-midnight-dismiss"
-        confirmLabel="Keep logging here"
-        confirmTestID="habit-past-midnight-keep"
-        message={
-          'It’s after midnight. Your logical day rolls over at ' +
-          formatHabitRolloverHour(logicalDayRolloverHour) +
-          '. Check that you’re logging the intended day; entries saved now apply to ' +
-          formatHabitDay(selectedDay) +
-          '.'
-        }
-        onCancel={() => setDismissedPastMidnightDay(selectedDay)}
-        onConfirm={() => setDismissedPastMidnightDay(selectedDay)}
-        testID="habit-past-midnight-warning"
-        title="Past midnight reminder"
-        visible={pastMidnightWarningVisible}
-      />
-    </>
+        <Pressable
+          accessibilityHint={
+            habitsByCategory.active.length === 0
+              ? 'Add an active habit to start a mindful review'
+              : 'Review today’s active habits one at a time'
+          }
+          accessibilityLabel="Start mindful review"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: habitsByCategory.active.length === 0 }}
+          disabled={habitsByCategory.active.length === 0}
+          onPress={() => router.push('/habit-review' as Href)}
+          style={({ pressed }) => ({
+            alignItems: 'center',
+            backgroundColor: colors.surfaceMuted,
+            borderColor: colors.border,
+            borderRadius: 16,
+            borderWidth: 1,
+            bottom: 0,
+            flexDirection: 'row',
+            gap: 10,
+            height: 58,
+            justifyContent: 'center',
+            left: 0,
+            opacity: habitsByCategory.active.length === 0 ? 0.42 : pressed ? 0.78 : 1,
+            position: 'absolute',
+            right: 0,
+            width: '100%',
+          })}
+          testID="start-habit-review"
+        >
+          <AppIcon color={colors.primary} name="sparkles" size={20} />
+          <NativeText style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
+            Start mindful review
+          </NativeText>
+        </Pressable>
+      </View>
+    </Screen>
   );
 }
 
@@ -499,6 +495,68 @@ function HabitCategoryListItem({
   );
 }
 
+function HabitNoticeRow({
+  accessibilityHint,
+  accessibilityLabel,
+  icon,
+  onPress,
+  subtitle,
+  testID,
+  title,
+  trailing,
+}: {
+  accessibilityHint?: string;
+  accessibilityLabel: string;
+  icon: IconName;
+  onPress?: () => void;
+  subtitle: string;
+  testID: string;
+  title: string;
+  trailing: ReactNode;
+}) {
+  const { colorScheme, colors } = useAppTheme();
+  const rowSurface = getRowSurfaceBackground({
+    colorScheme,
+    surface: colors.surface,
+    surfaceMuted: colors.surfaceMuted,
+  });
+
+  return (
+    <Pressable
+      accessibilityHint={accessibilityHint}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={onPress ? 'button' : 'summary'}
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => [
+        getRowSurfaceStyle({ backgroundColor: rowSurface }),
+        styles.noticeRow,
+        pressed ? styles.categoryPressed : null,
+      ]}
+      testID={testID}
+    >
+      <AppIcon color={colors.textMuted} name={icon} size={20} />
+      <View style={styles.categoryListText}>
+        <NativeText
+          numberOfLines={1}
+          selectable={false}
+          style={{ color: colors.text, fontSize: 15, fontWeight: '600', lineHeight: 20 }}
+        >
+          {title}
+        </NativeText>
+        <NativeText
+          numberOfLines={1}
+          selectable={false}
+          style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}
+        >
+          {subtitle}
+        </NativeText>
+      </View>
+      {trailing}
+    </Pressable>
+  );
+}
+
 const WEEK_STRIP_HEIGHT = 70;
 const HABIT_MENU_WIDTH = 220;
 const HABIT_MENU_HEIGHT = 190;
@@ -532,6 +590,21 @@ const styles = StyleSheet.create({
   },
   categoryPressed: {
     opacity: 0.72,
+  },
+  noticeDismiss: {
+    alignItems: 'center',
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  noticeRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 2,
+    minHeight: 56,
+    paddingHorizontal: ROW_SURFACE_PADDING_HORIZONTAL,
+    paddingVertical: 8,
+    width: '100%',
   },
 });
 

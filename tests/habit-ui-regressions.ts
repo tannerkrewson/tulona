@@ -146,13 +146,12 @@ assert(
   'the row and status control must retain their existing outcome-cycle taps'
 );
 assert(
-  habitList.includes('<ConfirmationModal') &&
-    habitList.includes('habit-past-midnight-warning') &&
+  !habitList.includes('<ConfirmationModal') &&
+    habitList.includes('testID="habit-past-midnight-warning"') &&
     habitList.includes('formatHabitRolloverHour(logicalDayRolloverHour)') &&
     habitList.includes('Dismisses this reminder without changing habit data') &&
-    habitList.includes('confirmTestID="habit-past-midnight-keep"') &&
-    habitList.includes('cancelTestID="habit-past-midnight-dismiss"'),
-  'past-midnight warning must explain the configured rollover and provide a safe dismissal'
+    habitList.includes('testID="habit-past-midnight-dismiss"'),
+  'past-midnight notice must sit inline, explain the configured rollover, and be dismissible'
 );
 assert(
   weekPager.includes('<SwipePager') &&

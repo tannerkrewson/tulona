@@ -75,6 +75,12 @@ export function formatHabitDay(value: LogicalDayKey): string {
   return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+export function formatHabitDayShort(value: LogicalDayKey): string {
+  const date = new Date(`${value}T12:00:00`);
+  if (!Number.isFinite(date.getTime())) return value;
+  return date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+}
+
 /**
  * Returns true when a fresh calendar rollover can make the selected logical
  * day surprising. Show the reminder for the current or immediately previous

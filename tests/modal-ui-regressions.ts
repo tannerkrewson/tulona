@@ -46,13 +46,6 @@ const migratedPrompts = [
     oldPattern: '<ArchiveHabitConfirmation',
   },
   {
-    file: 'src/habits/HabitListScreen.tsx',
-    modalTestID: 'habit-past-midnight-warning',
-    confirmTestID: 'habit-past-midnight-keep',
-    cancelTestID: 'habit-past-midnight-dismiss',
-    oldPattern: '{pastMidnightWarningVisible ? (',
-  },
-  {
     file: 'src/routine/RoutineEditorScreen.tsx',
     modalTestID: 'delete-step-confirmation',
     confirmTestID: 'confirm-delete-step',
