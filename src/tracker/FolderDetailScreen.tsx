@@ -10,7 +10,10 @@ import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
-import { RoutineStartConflictModal } from '../routine/RoutineStartConflictModal';
+import {
+  chooseRoutineStartConflict,
+  type RoutineConflictChoice,
+} from '../routine/routine-start-conflict';
 import { ACTIVE_ACTIVITY_BAR_HEIGHT } from './ActiveActivityBar';
 import { ActivityRow } from './ActivityRow';
 import { CatalogHeader } from './CatalogHeader';
@@ -76,10 +79,6 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
   const [busy, setBusy] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [routineConflict, setRoutineConflict] = useState<{
-    active: ActiveRoutine;
-    target: RoutineDefinition;
-  } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -172,7 +171,10 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
             await runtime.routineService.switchToActivity(null);
             resolvedActive = (await runtime.routineService.getActive()) ?? activeRoutine;
           }
-          setRoutineConflict({ active: resolvedActive, target: item });
+          const conflict = { active: resolvedActive, target: item };
+          void chooseRoutineStartConflict(resolvedActive, item).then((choice) => {
+            if (choice) resolveRoutineConflict(choice, conflict);
+          });
           return;
         }
 
@@ -197,21 +199,20 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
     }
   };
 
-  const resolveRoutineConflict = (choice: 'resume' | 'cancel-and-start') => {
-    const conflict = routineConflict;
-    if (!conflict) return;
+  const resolveRoutineConflict = (
+    choice: RoutineConflictChoice,
+    conflict: { active: ActiveRoutine; target: RoutineDefinition }
+  ) => {
     void runAction(async () => {
       if (choice === 'resume') {
         await prepareRoutineAlarm();
         await runtime.routineService.resume();
-        setRoutineConflict(null);
         await store.getState().refresh();
         router.push(`/routine/${conflict.active.routineId}`);
         return;
       }
 
       await runtime.routineService.cancelAndFinalize();
-      setRoutineConflict(null);
       await prepareRoutineAlarm();
       const started = await runtime.routineService.startRoutine(conflict.target.id);
       await store.getState().refresh();
@@ -293,15 +294,6 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
           <View style={{ height: ACTIVE_ACTIVITY_BAR_HEIGHT + 20, width: '100%' }} />
         </Column>
       </Column>
-      <RoutineStartConflictModal
-        activeRoutine={routineConflict?.active ?? null}
-        targetRoutine={routineConflict?.target ?? null}
-        visible={routineConflict !== null}
-        busy={busy}
-        onResume={() => resolveRoutineConflict('resume')}
-        onCancelAndStart={() => resolveRoutineConflict('cancel-and-start')}
-        onKeepPaused={() => setRoutineConflict(null)}
-      />
     </Screen>
   );
 }

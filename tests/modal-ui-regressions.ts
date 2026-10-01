@@ -68,4 +68,20 @@ assert(
   'activity-session deletion must delete only after a destructive native confirmation'
 );
 
+const conflict = read('src/routine/routine-start-conflict.ts');
+assert(
+  conflict.includes('Alert.alert(') &&
+    !fs.existsSync(path.join(root, 'src/routine/RoutineStartConflictModal.tsx')) &&
+    [
+      'src/tracker/ActivitiesScreen.tsx',
+      'src/tracker/FolderDetailScreen.tsx',
+      'src/routine/RoutineEditorScreen.tsx',
+    ].every((file) => read(file).includes('chooseRoutineStartConflict(')),
+  'starting a routine over a paused one must ask with a native alert'
+);
+assert(
+  read('src/ui/confirm-action.ts').includes('ActionSheetIOS.showActionSheetWithOptions'),
+  'menus of actions must use the native iOS action sheet'
+);
+
 console.log('Validated native confirmation alerts across the app.');

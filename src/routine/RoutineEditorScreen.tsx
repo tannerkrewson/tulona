@@ -5,7 +5,6 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import type {
-  ActiveRoutine,
   Activity,
   CatalogCollection,
   Folder,
@@ -45,7 +44,7 @@ import {
   type CreateRoutineStepInput,
 } from '../catalog/catalog-service';
 import { loadRoutineRuntime } from './routine-runtime';
-import { RoutineStartConflictModal } from './RoutineStartConflictModal';
+import { chooseRoutineStartConflict, type RoutineConflictChoice } from './routine-start-conflict';
 
 const ROOT_VALUE = '__root__';
 const NEW_ID = 'new';
@@ -455,12 +454,6 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
   const [resource, setResource] = useState<EditorResource | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
-  const [routineConflict, setRoutineConflict] = useState<{
-    active: ActiveRoutine;
-    target: RoutineDefinition;
-  } | null>(null);
-  const [conflictBusy, setConflictBusy] = useState(false);
-  const [conflictError, setConflictError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -521,8 +514,8 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
         runtime.catalogService.getRoutine(routineId),
       ]);
       if (!pausedActive) throw new Error('The active routine could not be paused');
-      setConflictError(null);
-      setRoutineConflict({ active: pausedActive, target });
+      const choice = await chooseRoutineStartConflict(pausedActive, target);
+      if (choice) await resolveRoutineConflict(choice, target);
       return;
     }
     if (runtime.settings.alarmSettings.enabled && runtime.settings.alarmSettings.sound) {
@@ -535,35 +528,22 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
     const started = await runtime.routineService.startRoutine(routineId);
     router.push(`/routine/${started.routineId}`);
   };
-  const resolveRoutineConflict = async (choice: 'resume' | 'cancel-and-start') => {
-    const conflict = routineConflict;
-    if (!conflict || conflictBusy) return;
-    setConflictBusy(true);
-    setConflictError(null);
-    try {
-      const runtime = await loadRoutineRuntime();
-      if (choice === 'resume') {
-        if (runtime.settings.alarmSettings.enabled && runtime.settings.alarmSettings.sound) {
-          await runtime.routineAlarmService.prepare().catch(() => undefined);
-        }
-        const resumed = await runtime.routineService.resume();
-        setRoutineConflict(null);
-        router.push(`/routine/${resumed.routineId}`);
-        return;
-      }
-
-      await runtime.routineService.cancelAndFinalize();
-      if (runtime.settings.alarmSettings.enabled && runtime.settings.alarmSettings.sound) {
-        await runtime.routineAlarmService.prepare().catch(() => undefined);
-      }
-      const started = await runtime.routineService.startRoutine(conflict.target.id);
-      setRoutineConflict(null);
-      router.push(`/routine/${started.routineId}`);
-    } catch (error) {
-      setConflictError(errorText(error));
-    } finally {
-      setConflictBusy(false);
+  const resolveRoutineConflict = async (
+    choice: RoutineConflictChoice,
+    target: RoutineDefinition
+  ) => {
+    const runtime = await loadRoutineRuntime();
+    if (runtime.settings.alarmSettings.enabled && runtime.settings.alarmSettings.sound) {
+      await runtime.routineAlarmService.prepare().catch(() => undefined);
     }
+    if (choice === 'resume') {
+      const resumed = await runtime.routineService.resume();
+      router.push(`/routine/${resumed.routineId}`);
+      return;
+    }
+    await runtime.routineService.cancelAndFinalize();
+    const started = await runtime.routineService.startRoutine(target.id);
+    router.push(`/routine/${started.routineId}`);
   };
   return (
     <Fragment>
@@ -574,20 +554,6 @@ export function RoutineEditorScreen({ id, initialFolderId = null }: RoutineEdito
         resource={resource}
         onSaved={() => router.replace('/')}
         onRun={runRoutine}
-      />
-      <RoutineStartConflictModal
-        activeRoutine={routineConflict?.active ?? null}
-        targetRoutine={routineConflict?.target ?? null}
-        visible={routineConflict !== null}
-        busy={conflictBusy}
-        error={conflictError}
-        onResume={() => void resolveRoutineConflict('resume')}
-        onCancelAndStart={() => void resolveRoutineConflict('cancel-and-start')}
-        onKeepPaused={() => {
-          if (conflictBusy) return;
-          setConflictError(null);
-          setRoutineConflict(null);
-        }}
       />
     </Fragment>
   );

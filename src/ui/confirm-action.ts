@@ -1,4 +1,4 @@
-import { Alert, Keyboard, Platform } from 'react-native';
+import { ActionSheetIOS, Alert, Keyboard, Platform } from 'react-native';
 
 export interface ConfirmActionOptions {
   title: string;
@@ -34,6 +34,65 @@ export function confirmAction({
         },
       ],
       { cancelable: true, onDismiss: () => resolve(false) }
+    );
+  });
+}
+
+export interface ActionSheetOption {
+  label: string;
+  destructive?: boolean;
+}
+
+export interface ChooseActionOptions {
+  title: string;
+  message?: string;
+  actions: readonly ActionSheetOption[];
+  cancelLabel?: string;
+}
+
+/** Shows a native action sheet and resolves the chosen action index, or null when cancelled. */
+export function chooseAction({
+  title,
+  message,
+  actions,
+  cancelLabel = 'Cancel',
+}: ChooseActionOptions): Promise<number | null> {
+  if (Platform.OS === 'web') {
+    const prompt = (globalThis as { prompt?: (text: string) => string | null }).prompt;
+    const list = actions.map((action, index) => `${index + 1}. ${action.label}`).join('\n');
+    const answer = prompt?.(`${title}${message ? `\n${message}` : ''}\n\n${list}`);
+    const index = answer ? Number.parseInt(answer, 10) - 1 : -1;
+    return Promise.resolve(index >= 0 && index < actions.length ? index : null);
+  }
+  if (Platform.OS === 'ios') {
+    return new Promise((resolve) => {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          cancelButtonIndex: actions.length,
+          destructiveButtonIndex: actions.flatMap((action, index) =>
+            action.destructive ? [index] : []
+          ),
+          message,
+          options: [...actions.map((action) => action.label), cancelLabel],
+          title,
+        },
+        (index) => resolve(index < actions.length ? index : null)
+      );
+    });
+  }
+  return new Promise((resolve) => {
+    Alert.alert(
+      title,
+      message,
+      [
+        ...actions.map((action, index) => ({
+          onPress: () => resolve(index),
+          style: action.destructive ? ('destructive' as const) : ('default' as const),
+          text: action.label,
+        })),
+        { onPress: () => resolve(null), style: 'cancel' as const, text: cancelLabel },
+      ],
+      { cancelable: true, onDismiss: () => resolve(null) }
     );
   });
 }

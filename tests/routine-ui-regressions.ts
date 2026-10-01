@@ -23,15 +23,17 @@ assert(
   'routine controls remain mounted and disabled while paused'
 );
 assert(
-  runner.includes('onAdd={(addedTimeMs) =>') &&
-    runner.includes('routineService.addTime(addedTimeMs))'),
-  'preset time changes do not close the add-time modal'
+  runner.includes("title: 'Adjust Time'") &&
+    runner.includes('nextRuntime.routineService.addTime(option.value)') &&
+    runner.includes('nextRuntime.routineService.resetTime()') &&
+    runner.includes('chooseAction({'),
+  'time adjustments use a native action sheet with presets and reset'
 );
 assert(
   !runner.includes('label="Keep running"') &&
-    runner.includes('label="Stop and replace"') &&
-    runner.includes('label="Stop and switch"') &&
-    runner.includes("allowReplace={active.routineSnapshot.trackingMode === 'overall'}") &&
+    runner.includes("label: 'Log Whole Run as Something Else'") &&
+    runner.includes("label: 'Stop and Choose Next Activity'") &&
+    runner.includes("const allowReplace = active.routineSnapshot.trackingMode === 'overall'") &&
     !runner.includes('cancelAndDiscard()'),
   'stop routine offers replace only for overall tracking and keeps logged time when switching'
 );
@@ -45,19 +47,43 @@ assert(
 assert(
   runner.includes('<Screen') &&
     runner.includes('title={active.routineSnapshot.name}') &&
+    runner.includes('scrollable={false}') &&
+    runner.includes('onBack={goBack}') &&
     !runner.includes('<SlideUpSheet') &&
+    !runner.includes('<Modal') &&
+    !runner.includes('absoluteTime(') &&
     runner.includes('testID="routine-current-step-name"') &&
     runner.includes('testID="open-routine-steps"') &&
+    runner.includes('testID="routine-elapsed"') &&
+    runner.includes('testID="routine-estimated-end"') &&
     runner.includes('icon="square"') &&
     runner.includes('icon="arrow-right"') &&
-    runner.includes('label="Back"') &&
-    runner.includes('animationType="fade"') &&
-    !runner.includes('styles.modalHandleArea') &&
-    runner.includes('paddingBottom: Math.max(insets.bottom, 18) + 16') &&
-    runner.includes('height: 48') &&
-    runner.includes('paddingTop: 16') &&
     runner.includes('const strokeWidth = 8'),
-  'the routine runner is full screen with a stop-menu back action, right-arrow control, subtle menus, and a thicker timer ring'
+  'the routine runner is a fixed full screen with elapsed and estimated-end stats and a thicker timer ring'
+);
+const nextPreview = runner.indexOf('testID="routine-next-step"');
+assert(
+  nextPreview >= 0 &&
+    nextPreview < runner.indexOf('<Row alignment="center" style={styles.controlRow}>') &&
+    runner.indexOf('<Row alignment="center" style={styles.controlRow}>') <
+      runner.indexOf('testID="open-routine-steps"'),
+  'the next-step preview sits above the controls, with the step list button below them'
+);
+assert(
+  runner.includes('<FormSheet') &&
+    runner.includes('testID="routine-steps-sheet"') &&
+    runner.includes('testID="routine-steps-edit"') &&
+    runner.includes('<Switch') &&
+    runner.includes('testID={`routine-jump-step-${step.id}`}'),
+  'the steps list is a native page sheet with an edit mode for toggling and reordering'
+);
+assert(
+  runner.includes('testID="routine-completion"') &&
+    runner.includes('label="Start Next Activity"') &&
+    runner.includes('testID="routine-completion-done"') &&
+    runner.includes('Redo a Step') &&
+    runner.includes('styles.flexSpacer'),
+  'the completion page summarizes the run and keeps its actions near the bottom'
 );
 const restoringStart = runner.indexOf('testID="routine-runner-restoring"');
 const restoringEnd = runner.indexOf('</Text>', restoringStart);
@@ -67,7 +93,7 @@ assert(
     restoringStatus.includes('Restoring routine…') &&
     !restoringStatus.includes('RunnerError') &&
     runner.includes('{loadError ? (') &&
-    runner.includes('size={62}') &&
+    runner.includes('Math.min(62, circleSize / 5.5)') &&
     runner.includes('fontSize: 22') &&
     runner.includes('maxWidth: circleSize - 88') &&
     runner.includes('numberOfLines={2}'),
@@ -78,17 +104,15 @@ assert(
     runner.includes(': { stop: 54, addTime: 56, complete: 80, pause: 56, skip: 56 }') &&
     runner.includes('borderWidth: 1') &&
     runner.includes('minHeight: 46') &&
-    runner.includes('minHeight: 58') &&
     runner.includes("style={{ height: 56, width: '100%' }}") &&
     runner.includes("style={{ height: 52, width: '100%' }}"),
   'active routine controls and the step selector must have larger, touch-friendly bordered targets'
 );
-const nextStepModalStart = runner.indexOf('function SkipModal(');
-const nextStepModalEnd = runner.indexOf('function RoutineStepsModal(', nextStepModalStart);
-const nextStepModal = runner.slice(nextStepModalStart, nextStepModalEnd);
+const skipStart = runner.indexOf('const skipStep = () =>');
+const skipMenu = runner.slice(skipStart, runner.indexOf('const stopRoutine', skipStart));
 assert(
-  nextStepModal.indexOf('label="Skip step"') < nextStepModal.indexOf('label="Move step to end"'),
-  'Skip step must be the first action in the Next step menu'
+  skipStart >= 0 && skipMenu.indexOf("'Skip Step'") < skipMenu.indexOf("'Do It Last'"),
+  'Skip Step must be the first action in the skip menu'
 );
 const controlRowStart = runner.indexOf('<Row alignment="center" style={styles.controlRow}>');
 const controlRowEnd = runner.indexOf('</Row>', controlRowStart);

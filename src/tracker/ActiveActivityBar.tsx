@@ -205,7 +205,9 @@ function ActiveActivityBarContent({
       : colors.primary;
   const onAccent = getAccessibleTextColor(accent);
   const routineInFocus =
-    activeRoutine !== null && routineOwnsActivity(activeRoutine, activeActivityId);
+    activeRoutine !== null &&
+    (activeRoutine.status === 'running' || activeRoutine.status === 'paused') &&
+    routineOwnsActivity(activeRoutine, activeActivityId);
   const routineSteps = routineInFocus
     ? [...activeRoutine.routineSnapshot.steps].sort(
         (left, right) => left.sortOrder - right.sortOrder

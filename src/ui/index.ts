@@ -77,4 +77,10 @@ export {
 export { Screen, type ScreenProps } from './Screen';
 export { isIOSSafari, isIOSSafariEnvironment, type IOSWebEnvironment } from './platform';
 export { errorText } from './error-text';
-export { confirmAction, type ConfirmActionOptions } from './confirm-action';
+export {
+  chooseAction,
+  confirmAction,
+  type ActionSheetOption,
+  type ChooseActionOptions,
+  type ConfirmActionOptions,
+} from './confirm-action';
