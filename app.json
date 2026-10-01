@@ -51,7 +51,8 @@
             }
           ]
         }
-      ]
+      ],
+      "./plugins/with-launch-appearance.cjs"
     ],
     "experiments": {
       "typedRoutes": true

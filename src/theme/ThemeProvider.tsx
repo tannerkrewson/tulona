@@ -1,4 +1,5 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
+import { applyAppearance, readStoredAppearance } from './appearance-store';
 import { getThemeColors, resolveColorScheme, type ThemeMode } from './colors';
 import { useSystemColorScheme } from './systemColorScheme';
 
@@ -16,9 +17,11 @@ const ThemePreferenceContext = createContext<ThemePreferenceContextValue>(defaul
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const systemColorScheme = useSystemColorScheme();
-  const [appearance, setAppearance] = useState<ThemeMode>('system');
+  const [appearance, setAppearance] = useState<ThemeMode>(readStoredAppearance);
   const colorScheme = resolveColorScheme(appearance, systemColorScheme);
   const colors = getThemeColors(colorScheme);
+
+  useEffect(() => applyAppearance(appearance), [appearance]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
