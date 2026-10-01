@@ -35,6 +35,7 @@ import { DropboxBackupService } from '../backup/dropbox-backup';
 import { createHabitReconciliationService, type HabitReconciliationService } from '../habits';
 import { createHabitService, type HabitService } from '../habits/habit-service';
 import { createHabitStore, type HabitStore } from '../habits/habit-store';
+import { observeRoutineWrites } from '../routine/routine-changes';
 import { createGoalService, type GoalService } from '../goals/goal-service';
 import { createReportingService, type ReportingService } from '../reporting/reporting-service';
 import { createRoutineAlarmService, type RoutineAlarmService } from '../routine/routine-alarm';
@@ -311,7 +312,7 @@ export class BootCoordinator {
       catalog: createCatalogRepository(this.database, namespace),
       settings: createSettingsRepository(this.database, namespace),
       tracker: createTrackerRepository(this.database, namespace),
-      routine: createRoutineRepository(this.database, namespace),
+      routine: observeRoutineWrites(createRoutineRepository(this.database, namespace)),
       habits: createHabitRepository(this.database, namespace),
       goals: createGoalRepository(this.database, namespace),
       backup: new BackupRepository(this.database),

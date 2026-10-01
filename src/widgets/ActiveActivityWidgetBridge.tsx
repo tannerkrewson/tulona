@@ -1,10 +1,14 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
+import type { ActiveRoutine } from '@domain';
 import { useAppTheme } from '@theme';
 
+import { subscribeRoutineChanges } from '../routine/routine-changes';
 import { loadRoutineRuntime } from '../routine/routine-runtime';
 import { syncActiveActivityWidget } from './active-activity-widget';
+import { routineSurfaceProps } from './active-activity-widget-shared';
+import { syncRoutineLiveActivity } from './routine-live-activity';
 
 function transitionKey(
   transition: { id: string; activityId: string | null; timestamp: string } | null
@@ -14,7 +18,10 @@ function transitionKey(
     : '';
 }
 
-/** Keeps the native home-screen widget aligned with the same persisted transition as the app. */
+/**
+ * Keeps the home-screen widget and the routine Live Activity aligned with the same persisted
+ * transition and active routine as the app.
+ */
 export function ActiveActivityWidgetBridge() {
   const { colors } = useAppTheme();
   const baseColor = colors.primary;
@@ -24,28 +31,50 @@ export function ActiveActivityWidgetBridge() {
     if (Platform.OS !== 'ios') return;
 
     let cancelled = false;
-    let unsubscribe: (() => void) | null = null;
+    const cleanups: (() => void)[] = [];
 
     const publish = (runtime: Awaited<ReturnType<typeof loadRoutineRuntime>>) => {
       const store = runtime.trackerStore;
-      const publishState = (state: ReturnType<typeof store.getState>) => {
-        syncActiveActivityWidget({
-          baseColor,
-          catalog: state.catalog,
-          idleColor,
-          transition: state.activeTransition?.activityId === null ? null : state.activeTransition,
-        });
+      let activeRoutine: ActiveRoutine | null = null;
+      let readToken = 0;
+
+      const publishState = () => {
+        const state = store.getState();
+        const transition =
+          state.activeTransition?.activityId === null ? null : state.activeTransition;
+        const input = { activeRoutine, baseColor, catalog: state.catalog, idleColor, transition };
+        syncActiveActivityWidget(input);
+        syncRoutineLiveActivity(routineSurfaceProps(input));
       };
 
-      publishState(store.getState());
-      unsubscribe = store.subscribe((state, previousState) => {
-        if (
-          state.catalog !== previousState.catalog ||
-          transitionKey(state.activeTransition) !== transitionKey(previousState.activeTransition)
-        ) {
-          publishState(state);
-        }
+      const refreshRoutine = () => {
+        const token = ++readToken;
+        void runtime.routineService
+          .getActive()
+          .catch(() => null)
+          .then((routine) => {
+            if (cancelled || token !== readToken) return;
+            activeRoutine = routine;
+            publishState();
+          });
+      };
+
+      refreshRoutine();
+      cleanups.push(subscribeRoutineChanges(refreshRoutine));
+      cleanups.push(
+        store.subscribe((state, previousState) => {
+          if (
+            state.catalog !== previousState.catalog ||
+            transitionKey(state.activeTransition) !== transitionKey(previousState.activeTransition)
+          ) {
+            refreshRoutine();
+          }
+        })
+      );
+      const appState = AppState.addEventListener('change', (next) => {
+        if (next === 'active') refreshRoutine();
       });
+      cleanups.push(() => appState.remove());
     };
 
     void loadRoutineRuntime()
@@ -54,18 +83,14 @@ export function ActiveActivityWidgetBridge() {
       })
       .catch(() => {
         if (!cancelled) {
-          syncActiveActivityWidget({
-            baseColor,
-            catalog: null,
-            idleColor,
-            transition: null,
-          });
+          syncActiveActivityWidget({ baseColor, catalog: null, idleColor, transition: null });
+          syncRoutineLiveActivity(null);
         }
       });
 
     return () => {
       cancelled = true;
-      unsubscribe?.();
+      for (const cleanup of cleanups) cleanup();
     };
   }, [baseColor, idleColor]);
 

@@ -52,13 +52,20 @@ cache. Workbox leaves new workers waiting, so an active routine is not
 replaced in the middle of a session; a later safe navigation activates the
 update.
 
-## Native iOS and home-screen widget
+## Native iOS, widget, and Live Activity
 
 Tulona is also configured as a native iOS app with bundle identifier
-`com.tannerkrewson.tulona`. The small home-screen widget shows the current
-activity, its activity/folder color, and a live elapsed timer. The timer is
-rendered by WidgetKit, so it continues updating while the app is not in the
-foreground.
+`com.tannerkrewson.tulona`. The small and medium home-screen widget shows the
+current activity, its activity/folder color, and a live elapsed timer, and
+opens that session when tapped. While a routine is running or paused, the
+widget switches to a routine design with the current step, a countdown (or
+overtime count-up), step progress, and what is up next, and opens the routine.
+Timers are rendered by WidgetKit, so they keep updating while the app is not in
+the foreground.
+
+A Live Activity (lock screen and Dynamic Island) is shown only during an active
+routine; tracking a plain activity does not start one. It ends when the routine
+finishes or another activity interrupts it.
 
 Native iOS and Android builds use Expo Router's platform-native tabs, while
 the web/PWA keeps the styled JavaScript tab bar. On iOS 26 and later, the

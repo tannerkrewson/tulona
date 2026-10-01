@@ -43,10 +43,10 @@
           "widgets": [
             {
               "name": "ActiveActivityWidget",
-              "displayName": "Active activity",
-              "description": "See the activity you are tracking and its live duration.",
+              "displayName": "Current activity",
+              "description": "See what you are tracking, or your current routine step, with a live timer.",
               "ios": {
-                "supportedFamilies": ["systemSmall"]
+                "supportedFamilies": ["systemSmall", "systemMedium"]
               }
             }
           ]
