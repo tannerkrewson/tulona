@@ -15,6 +15,7 @@ import { DurationText, errorText, formatDuration } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { routineTiming } from '../routine/routine-engine';
+import { TRACKER_ROW_FONT_SIZE } from './catalog-row-geometry';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 
 function isCatalogPath(pathname: string): boolean {
@@ -160,6 +161,7 @@ function ActiveActivityBarContent({
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [activeRoutine, setActiveRoutine] = useState<ActiveRoutine | null>(null);
+  const [accessoryHeight, setAccessoryHeight] = useState<number | null>(null);
   const isActive = activeTransition !== null && activeTransition.activityId !== null;
   const activeTransitionId = isActive ? activeTransition.id : null;
   const activeTransitionTimestamp = isActive ? activeTransition.timestamp : null;
@@ -327,9 +329,13 @@ function ActiveActivityBarContent({
 
   const showResumeRoutine = activeRoutine?.status === 'paused' && !routineInFocus;
 
+  const showSwitch = isActive && !routineInFocus;
+
   const togglePrimary = () => {
     if (routineInFocus && activeRoutine.status === 'paused') {
       void resumePausedRoutine();
+    } else if (showSwitch) {
+      router.push(`/activity-session/${displayedTransition.id}?action=switch` as Href);
     } else if (isActive) {
       void pause();
     } else {
@@ -340,13 +346,25 @@ function ActiveActivityBarContent({
   const primaryLabel =
     routineInFocus && activeRoutine.status === 'paused'
       ? `Resume ${activeRoutine.routineSnapshot.name}`
-      : isActive
-        ? routineInFocus
-          ? `Pause ${activeRoutine.routineSnapshot.name}`
-          : 'Pause active activity'
-        : `Start ${name}`;
+      : showSwitch
+        ? 'Switch activity'
+        : isActive
+          ? `Pause ${activeRoutine?.routineSnapshot.name ?? 'routine'}`
+          : `Start ${name}`;
   const primaryIcon =
-    routineInFocus && activeRoutine.status === 'paused' ? 'play' : isActive ? 'pause' : 'play';
+    routineInFocus && activeRoutine.status === 'paused'
+      ? 'play'
+      : showSwitch
+        ? 'arrow-right-left'
+        : isActive
+          ? 'pause'
+          : 'play';
+  const primaryFilled = primaryIcon !== 'arrow-right-left';
+  const primaryTestID = showSwitch
+    ? 'active-activity-switch'
+    : isActive
+      ? 'active-activity-pause'
+      : 'active-activity-play';
   const titleText =
     routineInFocus && activeRoutine.status === 'paused' ? `Paused · ${displayName}` : displayName;
   const timerText =
@@ -356,9 +374,16 @@ function ActiveActivityBarContent({
 
   if (isAccessory) {
     const inline = accessoryPlacement === 'inline';
-    const buttonSize = inline ? 30 : 36;
+    const buttonSize = accessoryHeight
+      ? accessoryHeight - ACCESSORY_BUTTON_INSET * 2
+      : inline
+        ? 32
+        : 40;
     return (
-      <View style={[styles.accessoryRow, inline && styles.accessoryRowInline]}>
+      <View
+        onLayout={(event) => setAccessoryHeight(Math.round(event.nativeEvent.layout.height))}
+        style={[styles.accessoryRow, inline && styles.accessoryRowInline]}
+      >
         <Pressable
           accessibilityHint={
             isActive ? undefined : 'Starts a new tracking session for this activity'
@@ -379,14 +404,14 @@ function ActiveActivityBarContent({
               width: buttonSize,
             },
           ]}
-          testID={isActive ? 'active-activity-pause' : 'active-activity-play'}
+          testID={primaryTestID}
         >
           <AppIcon
             color={isActive ? onAccent : accent}
-            fill={isActive ? onAccent : accent}
+            fill={primaryFilled ? (isActive ? onAccent : accent) : 'none'}
             name={primaryIcon}
-            size={inline ? 14 : 16}
-            strokeWidth={0}
+            size={primaryFilled ? (inline ? 15 : 18) : inline ? 16 : 20}
+            strokeWidth={primaryFilled ? 0 : 2.5}
           />
         </Pressable>
         <Pressable
@@ -411,11 +436,15 @@ function ActiveActivityBarContent({
             ) : null}
             <View style={styles.activityTitle}>
               {routineInFocus && !inline ? (
-                <AppIcon color={accent} name="repeat" size={13} />
+                <AppIcon color={accent} name="repeat" size={16} />
               ) : null}
               <Text
                 numberOfLines={1}
-                style={{ color: colors.text, fontSize: inline ? 14 : 15, fontWeight: '600' }}
+                style={{
+                  color: colors.text,
+                  fontSize: inline ? 16 : TRACKER_ROW_FONT_SIZE,
+                  fontWeight: '600',
+                }}
               >
                 {actionError ?? titleText}
               </Text>
@@ -424,7 +453,7 @@ function ActiveActivityBarContent({
           <Text
             style={{
               color: isActive ? colors.text : colors.textMuted,
-              fontSize: inline ? 13 : 15,
+              fontSize: inline ? 16 : TRACKER_ROW_FONT_SIZE,
               fontVariant: ['tabular-nums'],
               fontWeight: '600',
             }}
@@ -474,41 +503,20 @@ function ActiveActivityBarContent({
           accessibilityHint={
             isActive ? undefined : 'Starts a new tracking session for this activity'
           }
-          accessibilityLabel={
-            routineInFocus && activeRoutine.status === 'paused'
-              ? `Resume ${activeRoutine.routineSnapshot.name}`
-              : isActive
-                ? routineInFocus
-                  ? `Pause ${activeRoutine.routineSnapshot.name}`
-                  : 'Pause active activity'
-                : `Start ${name}`
-          }
+          accessibilityLabel={primaryLabel}
           accessibilityRole="button"
           accessibilityState={{ disabled: busy }}
           disabled={busy}
           onPress={togglePrimary}
           style={[styles.pauseButton, { backgroundColor: isActive ? accent : colors.surfaceMuted }]}
-          testID={isActive ? 'active-activity-pause' : 'active-activity-play'}
+          testID={primaryTestID}
         >
           <AppIcon
-            accessibilityLabel={
-              routineInFocus && activeRoutine.status === 'paused'
-                ? 'Play'
-                : isActive
-                  ? 'Pause'
-                  : 'Play'
-            }
             color={isActive ? onAccent : accent}
-            fill={isActive ? onAccent : accent}
-            name={
-              routineInFocus && activeRoutine.status === 'paused'
-                ? 'play'
-                : isActive
-                  ? 'pause'
-                  : 'play'
-            }
-            size={25}
-            strokeWidth={0}
+            fill={primaryFilled ? (isActive ? onAccent : accent) : 'none'}
+            name={primaryIcon}
+            size={primaryFilled ? 25 : 26}
+            strokeWidth={primaryFilled ? 0 : 2.5}
           />
         </Pressable>
         <Pressable
@@ -536,7 +544,7 @@ function ActiveActivityBarContent({
                 {routineInFocus ? <AppIcon color={accent} name="repeat" size={15} /> : null}
                 <Text
                   numberOfLines={1}
-                  style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}
+                  style={{ color: colors.text, fontSize: TRACKER_ROW_FONT_SIZE, fontWeight: '700' }}
                 >
                   {routineInFocus && activeRoutine.status === 'paused'
                     ? `Paused · ${displayName}`
@@ -550,13 +558,19 @@ function ActiveActivityBarContent({
               ) : null}
             </View>
             {routineInFocus && routineTimer !== null ? (
-              <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>
+              <Text
+                style={{ color: colors.text, fontSize: TRACKER_ROW_FONT_SIZE, fontWeight: '700' }}
+              >
                 {routineTimer}
               </Text>
             ) : (
               <DurationText
                 durationMs={isActive ? elapsedMs : previousDurationMs}
-                textStyle={{ color: colors.text, fontSize: 15, fontWeight: '700' }}
+                textStyle={{
+                  color: colors.text,
+                  fontSize: TRACKER_ROW_FONT_SIZE,
+                  fontWeight: '700',
+                }}
               />
             )}
           </View>
@@ -598,6 +612,9 @@ function ActiveActivityBarContent({
   );
 }
 
+/** Equal gap on every side keeps the circle concentric with the capsule's rounded end. */
+const ACCESSORY_BUTTON_INSET = 4;
+
 const styles = StyleSheet.create({
   bar: {
     borderTopWidth: 1,
@@ -630,15 +647,15 @@ const styles = StyleSheet.create({
   },
   accessoryRow: {
     alignItems: 'center',
+    alignSelf: 'stretch',
     flex: 1,
     flexDirection: 'row',
     gap: 12,
-    paddingLeft: 8,
+    paddingLeft: ACCESSORY_BUTTON_INSET,
     paddingRight: 18,
   },
   accessoryRowInline: {
     gap: 8,
-    paddingLeft: 6,
     paddingRight: 12,
   },
   accessoryButton: {

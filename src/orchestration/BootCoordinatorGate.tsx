@@ -3,7 +3,7 @@ import { usePathname, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { exportRawDataJson } from '../backup/export-file';
-import { AppButton, ConfirmationModal, errorText, Screen } from '@ui';
+import { AppButton, confirmAction, errorText, Screen } from '@ui';
 import { useAppTheme, useThemePreference } from '@theme';
 
 import {
@@ -44,7 +44,6 @@ export function BootCoordinatorGate() {
   const pathname = usePathname();
   const [state, setState] = useState<GateState>({ kind: 'hydrating' });
   const [rawError, setRawError] = useState<string | null>(null);
-  const [clearConfirming, setClearConfirming] = useState(false);
   const [clearBusy, setClearBusy] = useState(false);
   const destinationApplied = useRef(false);
 
@@ -150,26 +149,21 @@ export function BootCoordinatorGate() {
           <AppButton
             disabled={clearBusy}
             label="Clear local data"
-            onPress={() => setClearConfirming(true)}
+            onPress={() =>
+              void confirmAction({
+                confirmLabel: 'Clear Local Data',
+                destructive: true,
+                message: 'This clears all local data and restarts with an empty workspace.',
+                title: 'Clear Local Data?',
+              }).then((confirmed) => {
+                if (confirmed) clearLocalData();
+              })
+            }
             testID="boot-clear-local-data"
             variant="outlined"
           />
         </Column>
       </Screen>
-      <ConfirmationModal
-        busy={clearBusy}
-        cancelLabel="Cancel"
-        cancelTestID="boot-cancel-clear-local-data"
-        confirmLabel="Yes, clear local data"
-        confirmTestID="boot-confirm-clear-local-data"
-        message="Clear all local data and restart with an empty workspace?"
-        onCancel={() => setClearConfirming(false)}
-        onConfirm={clearLocalData}
-        testID="boot-clear-local-data-confirmation"
-        title="Clear all local data?"
-        tone="danger"
-        visible={clearConfirming}
-      />
     </>
   );
 }

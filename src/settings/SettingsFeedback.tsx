@@ -2,7 +2,7 @@ import { Column, Text } from '@ui/primitives';
 import { useState } from 'react';
 
 import { useAppTheme } from '@theme';
-import { ConfirmationModal, errorText, FormRow, FormSection } from '@ui';
+import { confirmAction, errorText, FormRow, FormSection } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { bootCoordinator } from '../orchestration/boot-coordinator';
 
@@ -52,7 +52,6 @@ export function SettingsActionError({
 }
 
 export function PrototypeDataReset({ onCleared }: { onCleared: () => void }) {
-  const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,24 +78,20 @@ export function PrototypeDataReset({ onCleared }: { onCleared: () => void }) {
           disabled={busy}
           kind="destructive"
           label="Clear All Data"
-          onPress={() => setConfirming(true)}
+          onPress={() =>
+            void confirmAction({
+              confirmLabel: 'Clear All Data',
+              destructive: true,
+              message:
+                'This removes every dataset, routine, activity, habit, setting, and history record from this device.',
+              title: 'Clear All Data?',
+            }).then((confirmed) => {
+              if (confirmed) void clearData();
+            })
+          }
           testID="clear-local-data"
         />
       </FormSection>
-      <ConfirmationModal
-        busy={busy}
-        cancelLabel="Cancel"
-        cancelTestID="cancel-clear-local-data"
-        confirmLabel={busy ? 'Clearing…' : 'Clear All Data'}
-        confirmTestID="confirm-clear-local-data"
-        message="This removes every dataset, routine, activity, habit, setting, and history record from this device."
-        onCancel={() => setConfirming(false)}
-        onConfirm={() => void clearData()}
-        testID="clear-local-data-confirmation"
-        title="Clear all data?"
-        tone="danger"
-        visible={confirming}
-      />
     </>
   );
 }

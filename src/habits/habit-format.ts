@@ -75,3 +75,11 @@ export function habitOutcomeLabel(outcome: HabitDayOutcome | null | undefined): 
       return null;
   }
 }
+
+export function formatThreshold(seconds: number): string {
+  if (seconds < 60) return `${seconds} sec`;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  if (hours === 0) return `${minutes} min`;
+  return minutes === 0 ? `${hours} hr` : `${hours} hr ${minutes} min`;
+}

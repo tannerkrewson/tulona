@@ -14,7 +14,7 @@ import { useAppTheme } from '@theme';
 import {
   AppButton,
   ColorDot,
-  ConfirmationModal,
+  confirmAction,
   errorText,
   Form,
   FormPickerRow,
@@ -75,7 +75,6 @@ function StatusSheet({
   onSave: () => void;
   onDelete: () => Promise<boolean>;
 }) {
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const current = draft ?? { id: null, name: '', color: 'green' as const };
   const testSuffix = current.id ?? 'new';
   return (
@@ -116,28 +115,20 @@ function StatusSheet({
             icon="trash-2"
             kind="destructive"
             label="Delete Status"
-            onPress={() => setConfirmingDelete(true)}
+            onPress={() =>
+              void confirmAction({
+                confirmLabel: 'Delete',
+                destructive: true,
+                message: 'Goals that used this status will need a new one.',
+                title: `Delete ${current.name || 'this status'}?`,
+              }).then((confirmed) => {
+                if (confirmed) void onDelete();
+              })
+            }
             testID={`goal-status-delete-${testSuffix}`}
           />
         </FormSection>
       ) : null}
-      <ConfirmationModal
-        busy={busy}
-        cancelLabel="Cancel"
-        cancelTestID={`goal-status-cancel-delete-${testSuffix}`}
-        confirmLabel="Delete"
-        confirmTestID={`goal-status-confirm-delete-${testSuffix}`}
-        message="Goals that used this status will need a new one."
-        onCancel={() => setConfirmingDelete(false)}
-        onConfirm={() => {
-          void onDelete().then((deleted) => {
-            if (deleted) setConfirmingDelete(false);
-          });
-        }}
-        testID={`goal-status-delete-confirmation-${testSuffix}`}
-        title={`Delete ${current.name || 'this status'}?`}
-        visible={confirmingDelete}
-      />
     </FormSheet>
   );
 }

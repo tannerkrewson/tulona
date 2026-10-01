@@ -31,7 +31,7 @@ import {
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { loadHabitStore } from './habit-runtime';
 import type { HabitStore } from './habit-store';
-import { weekdayLabels } from './habit-format';
+import { formatThreshold, weekdayLabels } from './habit-format';
 
 const NEW_ID = 'new';
 
@@ -162,14 +162,6 @@ function inputFromDraft(draft: HabitDraft) {
 const THRESHOLD_PRESET_SECONDS = [
   60, 300, 600, 900, 1200, 1800, 2700, 3600, 5400, 7200, 10800, 14400,
 ] as const;
-
-function formatThreshold(seconds: number): string {
-  if (seconds < 60) return `${seconds} sec`;
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.round((seconds % 3600) / 60);
-  if (hours === 0) return `${minutes} min`;
-  return minutes === 0 ? `${hours} hr` : `${hours} hr ${minutes} min`;
-}
 
 function todayKey(): string {
   const now = new Date();

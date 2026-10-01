@@ -17,7 +17,6 @@ const habitList = read('src/habits/HabitListScreen.tsx');
 const habitHeader = read('src/habits/HabitHeader.tsx');
 const habitStore = read('src/habits/habit-store.ts');
 const bootGate = read('src/orchestration/BootCoordinatorGate.tsx');
-const confirmationModal = read('src/ui/ConfirmationModal.tsx');
 const activeActivityBar = read('src/tracker/ActiveActivityBar.tsx');
 const habitReview = read('src/habits/HabitReviewScreen.tsx');
 const habitItemStart = habitList.indexOf('function HabitListItem(');
@@ -146,7 +145,7 @@ assert(
   'the row and status control must retain their existing outcome-cycle taps'
 );
 assert(
-  !habitList.includes('<ConfirmationModal') &&
+  !habitList.includes('confirmAction(') &&
     habitList.includes('testID="habit-past-midnight-warning"') &&
     habitList.includes('formatHabitRolloverHour(logicalDayRolloverHour)') &&
     habitList.includes('Dismisses this reminder without changing habit data') &&
@@ -177,10 +176,7 @@ assert(
   'the boot overlay must keep its SwiftUI content directly under the AppScreen Host'
 );
 assert(
-  !confirmationModal.includes("from '@expo/ui'") &&
-    confirmationModal.includes('<ModalActionButton') &&
-    confirmationModal.includes('Text,') &&
-    activeActivityBar.includes('Text, View') &&
+  activeActivityBar.includes('Text, View') &&
     !activeActivityBar.includes("from '@expo/ui'") &&
     !read('src/ui/DurationText.tsx').includes("from '@expo/ui'"),
   'React Native modal and activity-bar subtrees must not mount SwiftUI controls below UIView parents'

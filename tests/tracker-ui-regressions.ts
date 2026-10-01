@@ -45,15 +45,19 @@ assert(
   activeBar.includes("routineInFocus && activeRoutine.status === 'paused'") &&
     activeBar.includes("? 'pause'") &&
     activeBar.includes("? 'play'") &&
-    activeBar.includes("testID={isActive ? 'active-activity-pause' : 'active-activity-play'}") &&
+    activeBar.includes("? 'arrow-right-left'") &&
+    activeBar.includes("'active-activity-switch'") &&
+    activeBar.includes('/activity-session/${displayedTransition.id}?action=switch') &&
+    activeBar.includes('testID={primaryTestID}') &&
     activeBar.includes('Starts a new tracking session for this activity'),
-  'the tracker bar must expose accessible active pause and idle play controls'
+  'the tracker bar must switch a running activity, pause a running routine, and play when idle'
 );
 assert(
   activityRow.includes('fontSize: TRACKER_ROW_FONT_SIZE') &&
     activityRow.includes('size={solidIcon ? TRACKER_PLAYBACK_ICON_SIZE : 20}') &&
-    activeBar.includes('fill={isActive ? onAccent : accent}') &&
-    activeBar.includes('strokeWidth={0}') &&
+    !activityRow.includes("'pause'") &&
+    activeBar.includes("fill={primaryFilled ? (isActive ? onAccent : accent) : 'none'}") &&
+    activeBar.includes('fontSize: inline ? 16 : TRACKER_ROW_FONT_SIZE') &&
     folderEditor.includes('<FormIconRow') &&
     folderEditor.includes('filled'),
   'tracker labels and playback controls must use the requested sizing and solid icon treatment'

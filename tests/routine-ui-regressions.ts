@@ -127,10 +127,10 @@ assert(
 assert(
   activeBar.includes('const previousDurationMs = isActive ? 0 : activityDurationMs') &&
     activeBar.includes('durationMs={isActive ? elapsedMs : previousDurationMs}') &&
-    activeBar.includes('fill={isActive ? onAccent : accent}') &&
-    activeBar.includes('strokeWidth={0}') &&
+    activeBar.includes("fill={primaryFilled ? (isActive ? onAccent : accent) : 'none'}") &&
+    activeBar.includes('strokeWidth={primaryFilled ? 0 : 2.5}') &&
     activeBar.includes('backgroundColor: isActive ? accent : colors.surfaceMuted'),
-  'activity preview preserves its previous duration and both playback states use solid icons'
+  'activity preview preserves its previous duration and play/pause states use solid icons'
 );
 assert(
   activeBar.includes('routineInFocus') &&

@@ -1,8 +1,7 @@
 import { Picker } from '@expo/ui';
 import { Column, Text } from '@ui/primitives';
 import { useRouter } from 'expo-router';
-import { Fragment, type ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import type {
@@ -19,7 +18,7 @@ import type {
 import { createId } from '@domain';
 import { useAppTheme } from '@theme';
 import {
-  ConfirmationModal,
+  confirmAction,
   DurationPicker,
   errorText,
   Form,
@@ -233,7 +232,6 @@ function StepSheet({
   error,
   onRetry,
   onCloseError,
-  children,
 }: {
   draft: StepDraft | null;
   isExisting: boolean;
@@ -249,7 +247,6 @@ function StepSheet({
   error: string | null;
   onRetry?: () => void;
   onCloseError: () => void;
-  children?: ReactNode;
 }) {
   const { colors } = useAppTheme();
   const current = draft ?? emptyDraft(activities, trackingMode);
@@ -377,7 +374,6 @@ function StepSheet({
           />
         </FormSection>
       ) : null}
-      {children}
     </FormSheet>
   );
 }
@@ -623,7 +619,6 @@ function RoutineEditorForm({
   const [newSteps, setNewSteps] = useState<StepDraft[]>([]);
   const [editingStepId, setEditingStepId] = useState<UUID | null>(null);
   const [draft, setDraft] = useState<StepDraft | null>(null);
-  const [deleteStepId, setDeleteStepId] = useState<UUID | null>(null);
   const [reordering, setReordering] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -774,7 +769,6 @@ function RoutineEditorForm({
           ? inheritRoutineStepMetadata(catalog, editableStep)
           : editableStep;
       });
-  const deletingStep = deleteStepId ? steps.find((step) => step.id === deleteStepId) : undefined;
   const includedSteps = steps.filter((step) => step.enabled !== false);
   const totalDurationMs = includedSteps.reduce((total, step) => total + step.durationMs, 0);
   const editingExisting = editingStepId !== null;
@@ -968,7 +962,27 @@ function RoutineEditorForm({
           onCancel={closeStep}
           onChange={setDraft}
           onCloseError={() => setError(null)}
-          onDelete={() => setDeleteStepId(editingStepId)}
+          onDelete={() => {
+            const stepId = editingStepId;
+            if (!stepId) return;
+            void confirmAction({
+              confirmLabel: 'Delete',
+              destructive: true,
+              message: 'This removes the step and its settings from the routine.',
+              title: 'Delete Step?',
+            }).then((confirmed) => {
+              if (!confirmed) return;
+              if (routine) {
+                void run(async () => {
+                  await service.deleteRoutineStep(routine.id, stepId);
+                  closeStep();
+                });
+              } else {
+                setNewSteps((current) => current.filter((candidate) => candidate.id !== stepId));
+                closeStep();
+              }
+            });
+          }}
           onDuplicate={() => {
             const step = steps.find((candidate) => candidate.id === editingStepId);
             closeStep();
@@ -980,35 +994,7 @@ function RoutineEditorForm({
           }}
           onSave={() => void saveStep()}
           trackingMode={trackingMode}
-        >
-          <ConfirmationModal
-            busy={busy}
-            cancelLabel="Keep step"
-            cancelTestID="cancel-delete-step"
-            confirmLabel="Delete step"
-            confirmTestID="confirm-delete-step"
-            message="This removes the step and its settings from the routine."
-            onCancel={() => setDeleteStepId(null)}
-            onConfirm={() => {
-              const stepId = deleteStepId;
-              if (!stepId) return;
-              if (routine) {
-                void run(async () => {
-                  await service.deleteRoutineStep(routine.id, stepId);
-                  setDeleteStepId(null);
-                  closeStep();
-                });
-              } else {
-                setNewSteps((current) => current.filter((candidate) => candidate.id !== stepId));
-                setDeleteStepId(null);
-                closeStep();
-              }
-            }}
-            testID="delete-step-confirmation"
-            title="Delete this step?"
-            visible={deletingStep !== undefined}
-          />
-        </StepSheet>
+        />
       ) : null}
     </>
   );

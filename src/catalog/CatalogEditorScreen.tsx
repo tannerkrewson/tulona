@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Activity, CatalogCollection, Folder, UUID } from '@domain';
 import { useAppTheme } from '@theme';
 import {
-  ConfirmationModal,
+  confirmAction,
   errorText,
   Form,
   FormColorRow,
@@ -244,8 +244,6 @@ function ActivityEditor({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
-  const [confirmingArchive, setConfirmingArchive] = useState(false);
-  const [confirmingConversion, setConfirmingConversion] = useState(false);
   const originalFolderId = activity?.folderId ?? null;
   const selectedFolder =
     folderId === ROOT_VALUE ? null : folders.find((folder) => folder.id === folderId);
@@ -298,7 +296,6 @@ function ActivityEditor({
     setError(null);
     try {
       await action();
-      setConfirmingConversion(false);
     } catch (actionError) {
       setError(errorText(actionError));
     } finally {
@@ -359,7 +356,16 @@ function ActivityEditor({
                 icon="repeat"
                 kind="action"
                 label="Convert to Routine"
-                onPress={() => setConfirmingConversion(true)}
+                onPress={() =>
+                  void confirmAction({
+                    confirmLabel: 'Convert',
+                    message:
+                      'Its tracked time, goals, and habit triggers stay connected. Routines that use it as a step keep an archived copy. You can add steps next.',
+                    title: 'Convert to Routine?',
+                  }).then((confirmed) => {
+                    if (confirmed) void convertToRoutine();
+                  })
+                }
                 testID="convert-activity-to-routine"
               />
             </FormSection>
@@ -378,7 +384,19 @@ function ActivityEditor({
                 kind={activity.archivedAt === null ? 'destructive' : 'action'}
                 label={activity.archivedAt === null ? 'Archive Activity' : 'Restore Activity'}
                 onPress={() => {
-                  if (activity.archivedAt === null) setConfirmingArchive(true);
+                  if (activity.archivedAt === null)
+                    void confirmAction({
+                      confirmLabel: 'Archive',
+                      destructive: true,
+                      message:
+                        'It’s hidden from the tracker, and its history is kept. You can restore it later.',
+                      title: `Archive ${activity.name}?`,
+                    }).then((confirmed) => {
+                      if (confirmed)
+                        void run(async () => {
+                          await service.archiveActivity(activity.id);
+                        });
+                    });
                   else
                     void run(async () => {
                       await service.restoreActivity(activity.id);
@@ -390,41 +408,6 @@ function ActivityEditor({
           ) : null}
         </Form>
       </Screen>
-      {activity ? (
-        <>
-          <ConfirmationModal
-            busy={busy}
-            cancelLabel="Keep activity"
-            cancelTestID="cancel-archive-activity"
-            confirmLabel="Yes, archive activity"
-            confirmTestID="confirm-archive-activity"
-            message="It will be hidden from active catalog views but retained for history. You can restore it later."
-            onCancel={() => setConfirmingArchive(false)}
-            onConfirm={() =>
-              void run(async () => {
-                await service.archiveActivity(activity.id);
-                setConfirmingArchive(false);
-              })
-            }
-            testID="archive-activity-confirmation"
-            title="Archive this activity?"
-            visible={confirmingArchive}
-          />
-          <ConfirmationModal
-            busy={busy}
-            cancelLabel="Keep activity"
-            cancelTestID="cancel-convert-activity-to-routine"
-            confirmLabel="Convert to routine"
-            confirmTestID="confirm-convert-activity-to-routine"
-            message="This keeps the same item ID so its tracked time, goal checks, and habit triggers stay connected. Existing routines that use it as a step will keep an archived copy. The new routine will track one continuous activity for the whole routine; you can add its steps next."
-            onCancel={() => setConfirmingConversion(false)}
-            onConfirm={() => void convertToRoutine()}
-            testID="convert-activity-to-routine-confirmation"
-            title="Convert this activity?"
-            visible={confirmingConversion}
-          />
-        </>
-      ) : null}
     </>
   );
 }
@@ -447,7 +430,6 @@ function FolderEditor({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
-  const [confirmingArchive, setConfirmingArchive] = useState(false);
 
   const run = async (action: () => Promise<void>) => {
     lastAction.current = action;
@@ -543,7 +525,19 @@ function FolderEditor({
                 kind={folder.archivedAt === null ? 'destructive' : 'action'}
                 label={folder.archivedAt === null ? 'Archive Folder' : 'Restore Folder'}
                 onPress={() => {
-                  if (folder.archivedAt === null) setConfirmingArchive(true);
+                  if (folder.archivedAt === null)
+                    void confirmAction({
+                      confirmLabel: 'Archive',
+                      destructive: true,
+                      message:
+                        'It’s hidden from the tracker, and its history is kept. You can restore it later.',
+                      title: `Archive ${folder.name}?`,
+                    }).then((confirmed) => {
+                      if (confirmed)
+                        void run(async () => {
+                          await service.archiveFolder(folder.id);
+                        });
+                    });
                   else
                     void run(async () => {
                       await service.restoreFolder(folder.id);
@@ -555,26 +549,6 @@ function FolderEditor({
           ) : null}
         </Form>
       </Screen>
-      {folder ? (
-        <ConfirmationModal
-          busy={busy}
-          cancelLabel="Keep folder"
-          cancelTestID="cancel-archive-folder"
-          confirmLabel="Yes, archive folder"
-          confirmTestID="confirm-archive-folder"
-          message="It will be hidden from active catalog views but retained for history. You can restore it later."
-          onCancel={() => setConfirmingArchive(false)}
-          onConfirm={() =>
-            void run(async () => {
-              await service.archiveFolder(folder.id);
-              setConfirmingArchive(false);
-            })
-          }
-          testID="archive-folder-confirmation"
-          title="Archive this folder?"
-          visible={confirmingArchive}
-        />
-      ) : null}
     </>
   );
 }

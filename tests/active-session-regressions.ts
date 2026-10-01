@@ -82,8 +82,15 @@ assert(
   !session.includes('activity-session-close') &&
     !session.includes('Currently tracking') &&
     !session.includes('Session details') &&
-    session.includes('activity-session-stop-now'),
-  'timer sheet must avoid redundant close controls and headings while preserving immediate stop'
+    !session.includes('activity-session-stop-now') &&
+    session.includes('icon="square"') &&
+    session.includes('icon="arrow-right-left"') &&
+    session.includes('icon="trash-2"') &&
+    session.indexOf('testID="activity-session-delete"') <
+      session.indexOf('testID="activity-session-stop"') &&
+    session.indexOf('testID="activity-session-stop"') <
+      session.indexOf('testID="activity-session-switch"'),
+  'timer sheet must show delete, stop, and switch controls in order without a duplicate pause'
 );
 assert(
   correction.includes('activity-session-correction-sheet') &&
@@ -106,31 +113,11 @@ assert(
 
 assert(
   session.includes('activity-session-delete') &&
-    session.includes('<ConfirmationModal') &&
-    session.includes('activity-session-delete-confirmation') &&
-    session.includes('activity-session-confirm-delete') &&
-    session.includes('activity-session-cancel-delete') &&
-    session.includes('onPress={openDeleteConfirmation}') &&
-    session.includes('setDeleteConfirmationOpen(true)') &&
+    session.includes("title: 'Delete Session?'") &&
+    session.includes('onPress={deleteSession}') &&
     session.includes('await store.getState().deleteTransition(transition.id, { confirm: true })') &&
-    session.includes('setDeleteConfirmationOpen(false)') &&
-    session.includes('visible={deleteConfirmationOpen}') &&
     session.includes("goBackInAppStack(router, '/')"),
   'activity sessions must expose an explicit, confirmed delete action that returns after success'
-);
-const deleteModalStart = session.indexOf('<ConfirmationModal');
-const deleteScreenEnd = session.lastIndexOf('</SlideUpSheet>');
-const deleteCall = session.indexOf(
-  'await store.getState().deleteTransition(transition.id, { confirm: true })'
-);
-const deleteClose = session.indexOf('setDeleteConfirmationOpen(false)', deleteCall);
-const deleteReturn = session.indexOf("goBackInAppStack(router, '/')", deleteClose);
-assert(
-  deleteModalStart > deleteScreenEnd &&
-    deleteCall >= 0 &&
-    deleteClose > deleteCall &&
-    deleteReturn > deleteClose,
-  'session deletion confirmation must be outside the scrollable screen and return only after deletion succeeds'
 );
 assert(
   trackerStore.includes('deleteTransition: (id, confirmation) =>') &&

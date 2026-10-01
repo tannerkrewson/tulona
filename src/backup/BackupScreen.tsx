@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { useAppTheme } from '@theme';
 import {
-  ConfirmationModal,
+  confirmAction,
   errorText,
   Form,
   FormContent,
@@ -207,12 +207,6 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
   const { colors } = useAppTheme();
   const [status, setStatus] = useState<DropboxBackupStatus | null>(null);
   const [busy, setBusy] = useState(false);
-  const [choice, setChoice] = useState<DropboxSetupChoice>('cloud');
-  const [confirmSetup, setConfirmSetup] = useState(false);
-  const chooseSetup = (next: DropboxSetupChoice) => {
-    setChoice(next);
-    setConfirmSetup(true);
-  };
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
@@ -252,6 +246,27 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
       await Linking.openURL(url);
     });
   const review = status?.setupReview ?? null;
+  const chooseSetup = (choice: DropboxSetupChoice) => {
+    if (!review) return;
+    void confirmAction({
+      confirmLabel: choice === 'merge' ? 'Combine' : 'Replace',
+      destructive: choice !== 'merge',
+      message:
+        choice === 'cloud'
+          ? 'Everything on this device, including settings and running timers, will be replaced with your Dropbox data. A copy of this device’s data is saved first.'
+          : choice === 'local'
+            ? 'Dropbox will be replaced with this device’s data. A copy of the Dropbox data is saved first. Your other devices may ask which data to use.'
+            : 'Records from both are kept. When the same record exists in both, the Dropbox version wins. Copies of both are saved first.',
+      title:
+        choice === 'cloud'
+          ? 'Replace This Device’s Data?'
+          : choice === 'local'
+            ? 'Replace Dropbox Data?'
+            : 'Combine Both?',
+    }).then((confirmed) => {
+      if (confirmed) void run(() => service.resolveSetup(review.token, choice));
+    });
+  };
   const syncFooter = error
     ? error
     : status?.lastError && !review
@@ -412,42 +427,6 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
           testID="dropbox-disconnect"
         />
       </FormSection>
-      <ConfirmationModal
-        visible={confirmSetup && Boolean(review)}
-        title={
-          choice === 'cloud'
-            ? 'Replace this device’s data?'
-            : choice === 'local'
-              ? 'Replace Dropbox data?'
-              : 'Combine both?'
-        }
-        message={
-          choice === 'cloud'
-            ? 'Everything on this device, including settings and running timers, will be replaced with your Dropbox data. A copy of this device’s data is saved first.'
-            : choice === 'local'
-              ? 'Dropbox will be replaced with this device’s data. A copy of the Dropbox data is saved first. Your other devices may ask which data to use.'
-              : 'Records from both are kept. When the same record exists in both, the Dropbox version wins. Copies of both are saved first.'
-        }
-        confirmLabel={choice === 'merge' ? 'Combine' : 'Replace'}
-        cancelLabel="Cancel"
-        busy={busy}
-        tone="danger"
-        onCancel={() => setConfirmSetup(false)}
-        onConfirm={() => {
-          const selected = choice;
-          if (!review || !selected) return;
-          void run(async () => {
-            try {
-              await service.resolveSetup(review.token, selected);
-            } finally {
-              setConfirmSetup(false);
-            }
-          });
-        }}
-        testID="dropbox-setup-confirmation"
-        confirmTestID="dropbox-setup-confirm"
-        cancelTestID="dropbox-setup-cancel"
-      />
     </>
   );
 }
@@ -469,11 +448,9 @@ function BackupContent({
   const [error, setError] = useState<string | null>(null);
   const [importText, setImportText] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<BackupImportResult | null>(null);
-  const [confirming, setConfirming] = useState(false);
   const [timematorText, setTimematorText] = useState<string | null>(null);
   const [timematorPreview, setTimematorPreview] = useState<TimematorCsvPreview | null>(null);
   const [timematorResult, setTimematorResult] = useState<TimematorImportResult | null>(null);
-  const [timematorConfirming, setTimematorConfirming] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [restored, setRestored] = useState(false);
   const lastAction = useRef<(() => Promise<void>) | null>(null);
@@ -517,7 +494,6 @@ function BackupContent({
     setSuccess(null);
     setImportResult(null);
     setImportText(null);
-    setConfirming(false);
     try {
       const result = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
@@ -541,7 +517,6 @@ function BackupContent({
     if (!importText) return;
     setBusy(true);
     setError(null);
-    setConfirming(false);
     try {
       const result = await runtime.backupService.replaceCurrentData(importText);
       setSuccess('Backup restored.');
@@ -565,7 +540,6 @@ function BackupContent({
     setTimematorResult(null);
     setTimematorText(null);
     setTimematorPreview(null);
-    setTimematorConfirming(false);
     try {
       const result = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
@@ -588,7 +562,6 @@ function BackupContent({
     if (!timematorText) return;
     setBusy(true);
     setError(null);
-    setTimematorConfirming(false);
     try {
       const result = await runtime.timematorImportService.importCsv(timematorText);
       setTimematorResult(result);
@@ -675,7 +648,17 @@ function BackupContent({
           {importResult && importText ? (
             <BackupFileSection
               busy={busy}
-              onRestore={() => setConfirming(true)}
+              onRestore={() =>
+                void confirmAction({
+                  confirmLabel: 'Restore',
+                  destructive: true,
+                  message:
+                    'Everything on this device will be replaced with this backup. Your current data is kept as a separate copy.',
+                  title: 'Restore This Backup?',
+                }).then((confirmed) => {
+                  if (confirmed) void replace();
+                })
+              }
               result={importResult}
             />
           ) : null}
@@ -702,7 +685,16 @@ function BackupContent({
           {timematorPreview && timematorText ? (
             <TimematorFileSection
               busy={busy}
-              onImport={() => setTimematorConfirming(true)}
+              onImport={() =>
+                void confirmAction({
+                  confirmLabel: 'Add',
+                  message:
+                    'These entries are added to your tracker. Nothing you already have is changed.',
+                  title: 'Add Timemator History?',
+                }).then((confirmed) => {
+                  if (confirmed) void importTimemator();
+                })
+              }
               preview={timematorPreview}
             />
           ) : null}
@@ -710,32 +702,6 @@ function BackupContent({
           {footer}
         </Form>
       </Screen>
-      <ConfirmationModal
-        busy={busy}
-        cancelLabel="Cancel"
-        cancelTestID="cancel-timemator-import"
-        confirmLabel="Add"
-        confirmTestID="confirm-timemator-import"
-        message="These entries are added to your tracker. Nothing you already have is changed."
-        onCancel={() => setTimematorConfirming(false)}
-        onConfirm={() => void importTimemator()}
-        testID="timemator-import-confirmation"
-        title="Add Timemator history?"
-        visible={timematorConfirming && timematorPreview !== null && timematorText !== null}
-      />
-      <ConfirmationModal
-        busy={busy}
-        cancelLabel="Cancel"
-        cancelTestID="cancel-replace"
-        confirmLabel="Restore"
-        confirmTestID="confirm-replace"
-        message="Everything on this device will be replaced with this backup. Your current data is kept as a separate copy."
-        onCancel={() => setConfirming(false)}
-        onConfirm={() => void replace()}
-        testID="backup-replace-confirmation"
-        title="Restore this backup?"
-        visible={confirming && importResult !== null && importText !== null}
-      />
     </>
   );
 }

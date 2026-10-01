@@ -12,7 +12,6 @@ export {
   type PopoverSurfaceProps,
 } from './PopoverSurface';
 export { SlideUpSheet, type SlideUpSheetProps } from './SlideUpSheet';
-export { ConfirmationModal, type ConfirmationModalProps } from './ConfirmationModal';
 export {
   ColorPicker,
   COLOR_PALETTE,
@@ -37,6 +36,7 @@ export {
   FormSwitchRow,
   FormTextField,
   HeaderTextButton,
+  SYSTEM_RED,
   type FormRowProps,
   type FormSectionProps,
   type FormSheetProps,
@@ -77,3 +77,4 @@ export {
 export { Screen, type ScreenProps } from './Screen';
 export { isIOSSafari, isIOSSafariEnvironment, type IOSWebEnvironment } from './platform';
 export { errorText } from './error-text';
+export { confirmAction, type ConfirmActionOptions } from './confirm-action';

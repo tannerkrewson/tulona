@@ -7,13 +7,14 @@ import { Pressable, StyleSheet, Text as NativeText, useWindowDimensions, View } 
 import { timestampMs, type TimeTransition } from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { ConfirmationModal, errorText, FormSheet, SlideUpSheet } from '@ui';
+import { confirmAction, errorText, FormSheet, SlideUpSheet, SYSTEM_RED } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { goBackInAppStack } from '../navigation/app-back';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import { ActiveSessionCorrection, type SessionCorrectionIntent } from './ActiveSessionCorrection';
+import { TRACKER_PLAYBACK_ICON_SIZE } from './catalog-row-geometry';
 import { HistoricalSessionEditor } from './HistoricalSessionEditor';
 import { SessionActivityChoices } from './SessionActivityChoices';
 import type { TransitionContext } from './tracker-service';
@@ -43,20 +44,25 @@ function visibleAdjacentTransition(
   );
 }
 
-function SideControl({
+function SessionControl({
   busy,
   icon,
   label,
   onPress,
   testID,
+  backgroundColor,
+  foregroundColor,
+  filled = false,
 }: {
   busy: boolean;
   icon: string;
   label: string;
   onPress: () => void;
   testID: string;
+  backgroundColor: string;
+  foregroundColor: string;
+  filled?: boolean;
 }) {
-  const { colors } = useAppTheme();
   return (
     <Pressable
       cancelable={false}
@@ -64,15 +70,19 @@ function SideControl({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      style={({ pressed }) => [styles.sideControl, { opacity: busy ? 0.5 : pressed ? 0.6 : 1 }]}
+      style={({ pressed }) => [
+        styles.control,
+        { backgroundColor, opacity: busy ? 0.5 : pressed ? 0.6 : 1 },
+      ]}
       testID={testID}
     >
-      <View style={[styles.sideControlCircle, { backgroundColor: colors.surfaceMuted }]}>
-        <AppIcon name={icon} size={24} color={colors.text} />
-      </View>
-      <NativeText style={{ color: colors.text, fontSize: 13, fontWeight: '500' }}>
-        {label}
-      </NativeText>
+      <AppIcon
+        name={icon}
+        size={filled ? 30 : 28}
+        color={foregroundColor}
+        fill={filled ? foregroundColor : 'none'}
+        strokeWidth={filled ? 0 : 2.25}
+      />
     </Pressable>
   );
 }
@@ -111,9 +121,14 @@ function SessionError({
 
 export interface ActivitySessionScreenProps {
   transitionId: string;
+  /** Opens straight into the switch sheet and closes the screen when it is dismissed. */
+  quickSwitch?: boolean;
 }
 
-export function ActivitySessionScreen({ transitionId }: ActivitySessionScreenProps) {
+export function ActivitySessionScreen({
+  transitionId,
+  quickSwitch = false,
+}: ActivitySessionScreenProps) {
   const { colors } = useAppTheme();
   const router = useRouter();
   const close = useCallback(() => goBackInAppStack(router, '/'), [router]);
@@ -137,6 +152,7 @@ export function ActivitySessionScreen({ transitionId }: ActivitySessionScreenPro
   }, [reloadToken]);
 
   if (!runtime) {
+    if (quickSwitch && !loadError) return null;
     return (
       <SlideUpSheet onClose={close} testID="activity-session-sheet">
         {loadError ? (
@@ -156,22 +172,32 @@ export function ActivitySessionScreen({ transitionId }: ActivitySessionScreenPro
     );
   }
 
-  return <ActivitySessionContent runtime={runtime} transitionId={transitionId} />;
+  return (
+    <ActivitySessionContent
+      quickSwitch={quickSwitch}
+      runtime={runtime}
+      transitionId={transitionId}
+    />
+  );
 }
 
 function ActivitySessionContent({
+  quickSwitch,
   runtime,
   transitionId,
 }: {
+  quickSwitch: boolean;
   runtime: RoutineRuntime;
   transitionId: string;
 }) {
-  const { colors } = useAppTheme();
+  const { colorScheme, colors } = useAppTheme();
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const [editingTime, setEditingTime] = useState(false);
   const [choosingActivity, setChoosingActivity] = useState(false);
-  const [correction, setCorrection] = useState<SessionCorrectionIntent | null>(null);
+  const [correction, setCorrection] = useState<SessionCorrectionIntent | null>(
+    quickSwitch ? 'switch' : null
+  );
   const store = runtime.trackerStore;
   const catalog = store((state) => state.catalog);
   const transitions = store((state) => state.transitions);
@@ -191,7 +217,6 @@ function ActivitySessionContent({
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
 
   const loadTransitionContext = useCallback(() => {
     const requestId = contextRequest.current + 1;
@@ -229,6 +254,7 @@ function ActivitySessionContent({
   }, [isActive]);
 
   if (!catalog || !transition) {
+    if (quickSwitch && contextLoading && !persistenceError && !contextError) return null;
     return (
       <SlideUpSheet onClose={() => goBackInAppStack(router, '/')} testID="activity-session-sheet">
         {contextLoading && !persistenceError && !contextError ? (
@@ -330,18 +356,51 @@ function ActivitySessionContent({
     if (saved) setNotice('End time updated.');
   };
 
-  const openDeleteConfirmation = () => {
+  const deleteSession = () => {
     if (busy) return;
     setActionError(null);
-    setDeleteConfirmationOpen(true);
+    void confirmAction({
+      confirmLabel: 'Delete',
+      destructive: true,
+      message: previous
+        ? `${previousName[0]?.toUpperCase() ?? ''}${previousName.slice(1)} will continue through this time${isActive ? (previous.activityId ? ' and become the current activity' : ', leaving the tracker stopped') : ''}. This can’t be undone.`
+        : `This removes ${activityName} from your history${isActive ? ' and stops tracking it' : ''}. This can’t be undone.`,
+      title: 'Delete Session?',
+    }).then((confirmed) => {
+      if (!confirmed) return;
+      void runAction(async () => {
+        await store.getState().deleteTransition(transition.id, { confirm: true });
+        goBackInAppStack(router, '/');
+      });
+    });
   };
 
-  const confirmDeleteSession = () =>
-    void runAction(async () => {
-      await store.getState().deleteTransition(transition.id, { confirm: true });
-      setDeleteConfirmationOpen(false);
-      goBackInAppStack(router, '/');
-    });
+  const correctionSheet = isActive ? (
+    <ActiveSessionCorrection
+      intent={correction}
+      onClose={() => {
+        setCorrection(null);
+        if (quickSwitch) goBackInAppStack(router, '/');
+      }}
+      transition={transition}
+      activityName={activityName}
+      catalog={catalog}
+      nowMs={nowMs}
+      busy={busy}
+      error={actionError}
+      onSave={async (nextActivityId, timestamp) => {
+        const saved = await runAction(async () => {
+          await store
+            .getState()
+            .switchActiveSession(transition.id, nextActivityId, timestamp, transition.timestamp);
+        });
+        if (saved) goBackInAppStack(router, '/');
+        return saved;
+      }}
+    />
+  ) : null;
+
+  if (quickSwitch && isActive) return correctionSheet;
 
   return (
     <>
@@ -410,6 +469,17 @@ function ActivitySessionContent({
               ]}
               testID="activity-session-choose-activity"
             >
+              {transition.activityId ? (
+                <View style={styles.activityIcon}>
+                  <AppIcon
+                    name={resolved?.item.kind === 'routine' ? 'repeat' : 'play'}
+                    size={resolved?.item.kind === 'routine' ? 20 : TRACKER_PLAYBACK_ICON_SIZE}
+                    color={activityColor}
+                    fill={resolved?.item.kind === 'routine' ? 'none' : activityColor}
+                    strokeWidth={resolved?.item.kind === 'routine' ? 2.5 : 0}
+                  />
+                </View>
+              ) : null}
               <NativeText
                 numberOfLines={1}
                 style={{ color: colors.text, fontSize: 23, fontWeight: '600', flex: 1 }}
@@ -438,59 +508,37 @@ function ActivitySessionContent({
               style={[styles.controls, height < 740 ? { paddingTop: 4 } : null]}
               testID="activity-session-controls"
             >
-              <SideControl
+              <SessionControl
+                backgroundColor={colors.surfaceMuted}
                 busy={busy}
-                icon="arrow-right"
-                label="Switch"
-                onPress={() => setCorrection('switch')}
-                testID="activity-session-switch"
+                foregroundColor={SYSTEM_RED[colorScheme]}
+                icon="trash-2"
+                label="Delete session"
+                onPress={deleteSession}
+                testID="activity-session-delete"
               />
-              <View
-                style={[
-                  styles.playbackRing,
-                  { backgroundColor: colors.surfaceMuted },
-                  height < 740 ? { width: 112, height: 112, borderRadius: 56 } : null,
-                ]}
-              >
-                <Pressable
-                  cancelable={false}
-                  disabled={busy}
-                  accessibilityRole="button"
-                  accessibilityLabel="Stop now"
-                  onPress={() =>
-                    void runAction(async () => {
-                      await store
-                        .getState()
-                        .switchActiveSession(transition.id, null, Date.now(), transition.timestamp);
-                      goBackInAppStack(router, '/');
-                    })
-                  }
-                  style={({ pressed }) => [
-                    styles.pause,
-                    height < 740 ? { width: 84, height: 84, borderRadius: 42 } : null,
-                    { backgroundColor: activityColor, opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
-                  ]}
-                  testID="activity-session-stop-now"
-                >
-                  <AppIcon
-                    name="pause"
-                    size={46}
-                    color={iconForeground}
-                    fill={iconForeground}
-                    strokeWidth={0}
-                  />
-                </Pressable>
-              </View>
-              <SideControl
+              <SessionControl
+                backgroundColor={activityColor}
                 busy={busy}
-                icon="clock"
-                label="Stop at…"
+                filled
+                foregroundColor={iconForeground}
+                icon="square"
+                label="Stop"
                 onPress={() => setCorrection('stop')}
                 testID="activity-session-stop"
               />
+              <SessionControl
+                backgroundColor={colors.surfaceMuted}
+                busy={busy}
+                foregroundColor={colors.text}
+                icon="arrow-right-left"
+                label="Switch activity"
+                onPress={() => setCorrection('switch')}
+                testID="activity-session-switch"
+              />
             </View>
           ) : null}
-          {!editingTime ? (
+          {!isActive && !editingTime ? (
             <View
               style={[styles.deleteArea, { borderColor: colors.border }]}
               testID="activity-session-actions"
@@ -500,7 +548,7 @@ function ActivitySessionContent({
                 disabled={busy}
                 accessibilityRole="button"
                 accessibilityLabel="Delete session"
-                onPress={openDeleteConfirmation}
+                onPress={deleteSession}
                 style={({ pressed }) => [
                   styles.deleteButton,
                   { opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
@@ -518,32 +566,7 @@ function ActivitySessionContent({
           ) : null}
         </View>
       </SlideUpSheet>
-      {isActive ? (
-        <ActiveSessionCorrection
-          intent={correction}
-          onClose={() => setCorrection(null)}
-          transition={transition}
-          activityName={activityName}
-          catalog={catalog}
-          nowMs={nowMs}
-          busy={busy}
-          error={actionError}
-          onSave={async (nextActivityId, timestamp) => {
-            const saved = await runAction(async () => {
-              await store
-                .getState()
-                .switchActiveSession(
-                  transition.id,
-                  nextActivityId,
-                  timestamp,
-                  transition.timestamp
-                );
-            });
-            if (saved) goBackInAppStack(router, '/');
-            return saved;
-          }}
-        />
-      ) : null}
+      {correctionSheet}
       <FormSheet
         onClose={() => {
           if (!busy) setChoosingActivity(false);
@@ -576,24 +599,6 @@ function ActivitySessionContent({
           </NativeText>
         ) : null}
       </FormSheet>
-      <ConfirmationModal
-        busy={busy}
-        cancelLabel="Cancel"
-        cancelTestID="activity-session-cancel-delete"
-        confirmLabel={busy ? 'Deleting…' : 'Delete Session'}
-        confirmTestID="activity-session-confirm-delete"
-        message={
-          previous
-            ? `This removes the start of ${activityName}. ${previousName} will continue through this time${isActive ? (previous.activityId ? ' and become the current activity' : ', leaving the tracker stopped') : ''}. This cannot be undone.`
-            : `This removes ${activityName} from recorded history${isActive ? ' and stops tracking it' : ''}. This cannot be undone.`
-        }
-        onCancel={() => setDeleteConfirmationOpen(false)}
-        onConfirm={confirmDeleteSession}
-        testID="activity-session-delete-confirmation"
-        title="Delete this session?"
-        tone="danger"
-        visible={deleteConfirmationOpen}
-      />
     </>
   );
 }
@@ -609,34 +614,20 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 18,
   },
+  activityIcon: { alignItems: 'center', height: 28, justifyContent: 'center', width: 28 },
   controls: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-evenly',
     paddingTop: 16,
-    paddingBottom: 4,
+    paddingBottom: 8,
   },
-  sideControl: { alignItems: 'center', gap: 8, width: 84 },
-  sideControlCircle: {
+  control: {
     alignItems: 'center',
-    borderRadius: 32,
-    height: 64,
+    borderRadius: 36,
+    height: 72,
     justifyContent: 'center',
-    width: 64,
-  },
-  playbackRing: {
-    height: 156,
-    width: 156,
-    borderRadius: 78,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pause: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 72,
   },
   deleteArea: { paddingTop: 8, width: '100%' },
   deleteButton: {

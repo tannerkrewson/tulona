@@ -59,16 +59,8 @@ export function ActivityRow({
     surface: colors.surface,
     surfaceMuted: colors.surfaceMuted,
   });
-  const iconName = editMode
-    ? 'pencil'
-    : active
-      ? item.kind === 'routine'
-        ? 'repeat'
-        : 'pause'
-      : item.kind === 'routine'
-        ? 'repeat'
-        : 'play';
-  const solidIcon = iconName === 'play' || iconName === 'pause';
+  const iconName = editMode ? 'pencil' : item.kind === 'routine' ? 'repeat' : 'play';
+  const solidIcon = iconName === 'play';
   const rowStyle = {
     ...getRowSurfaceStyle({
       backgroundColor: active ? accent : inactiveBackground,
@@ -97,13 +89,9 @@ export function ActivityRow({
           accessibilityLabel={
             editMode
               ? `Edit ${item.name}`
-              : active
-                ? item.kind === 'routine'
-                  ? `${item.name} active routine`
-                  : `${item.name} pause`
-                : item.kind === 'routine'
-                  ? `${item.name} routine`
-                  : `${item.name} play`
+              : item.kind === 'routine'
+                ? `${item.name} ${active ? 'active ' : ''}routine`
+                : `${item.name} ${active ? 'active' : 'play'}`
           }
           color={
             editMode

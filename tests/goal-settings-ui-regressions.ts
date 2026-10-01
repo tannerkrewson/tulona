@@ -51,7 +51,7 @@ assert(
 assert(
   goalsPanel.includes('goal-status-color') &&
     goalsPanel.includes("value: 'light-grey'") &&
-    goalsPanel.includes('goal-status-delete-confirmation'),
+    goalsPanel.includes('confirmAction({'),
   'status rows must expose semantic recoloring and deletion confirmation'
 );
 assert(

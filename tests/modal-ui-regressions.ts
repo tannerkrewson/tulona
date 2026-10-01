@@ -11,122 +11,61 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-const modal = read('src/ui/ConfirmationModal.tsx');
+const confirm = read('src/ui/confirm-action.ts');
 assert(
-  modal.includes('<Modal') &&
-    modal.includes('onRequestClose={dismiss}') &&
-    modal.includes('accessibilityViewIsModal') &&
-    modal.includes('importantForAccessibility="yes"') &&
-    modal.includes('<KeyboardAvoidingView') &&
-    modal.includes('setAccessibilityFocus') &&
-    modal.includes('disabled={busy}'),
-  'the shared confirmation modal must provide native modal, accessibility, focus, keyboard, and busy-state behavior'
+  confirm.includes('Alert.alert(') &&
+    confirm.includes("style: 'cancel'") &&
+    confirm.includes("style: destructive ? 'destructive' : 'default'") &&
+    confirm.includes('onDismiss: () => resolve(false)') &&
+    confirm.includes("Platform.OS === 'web'"),
+  'confirmations must use the native system alert with a cancel action and destructive styling'
+);
+assert(
+  !fs.existsSync(path.join(root, 'src/ui/ConfirmationModal.tsx')),
+  'the custom confirmation modal must stay removed in favor of native alerts'
 );
 
-const migratedPrompts = [
-  {
-    file: 'src/tracker/ActivitySessionScreen.tsx',
-    modalTestID: 'activity-session-delete-confirmation',
-    confirmTestID: 'activity-session-confirm-delete',
-    cancelTestID: 'activity-session-cancel-delete',
-    oldPattern: '{deleteConfirmationOpen ? (',
-  },
-  {
-    file: 'src/catalog/CatalogEditorScreen.tsx',
-    modalTestID: 'archive-activity-confirmation',
-    confirmTestID: 'confirm-archive-activity',
-    cancelTestID: 'cancel-archive-activity',
-    oldPattern: '<ArchiveConfirmation',
-  },
-  {
-    file: 'src/habits/HabitDetailScreen.tsx',
-    modalTestID: 'archive-habit-confirmation',
-    confirmTestID: 'confirm-archive-habit',
-    cancelTestID: 'cancel-archive-habit',
-    oldPattern: '<ArchiveHabitConfirmation',
-  },
-  {
-    file: 'src/routine/RoutineEditorScreen.tsx',
-    modalTestID: 'delete-step-confirmation',
-    confirmTestID: 'confirm-delete-step',
-    cancelTestID: 'cancel-delete-step',
-    oldPattern: '<DeleteStepConfirmation',
-  },
-  {
-    file: 'src/goals/GoalsScreen.tsx',
-    modalTestID: 'goal-delete-confirmation',
-    confirmTestID: 'goal-confirm-delete',
-    cancelTestID: 'goal-cancel-delete',
-    oldPattern: '{confirmDelete ? (',
-  },
-  {
-    file: 'src/settings/GoalsSettingsPanel.tsx',
-    modalTestID: 'goal-status-delete-confirmation-',
-    confirmTestID: 'goal-status-confirm-delete-',
-    cancelTestID: 'goal-status-cancel-delete-',
-    oldPattern: '{confirmingDelete ? (',
-  },
-  {
-    file: 'src/backup/BackupScreen.tsx',
-    modalTestID: 'backup-replace-confirmation',
-    confirmTestID: 'confirm-replace',
-    cancelTestID: 'cancel-replace',
-    oldPattern: 'confirming ? (',
-  },
-  {
-    file: 'src/settings/SettingsFeedback.tsx',
-    modalTestID: 'clear-local-data-confirmation',
-    confirmTestID: 'confirm-clear-local-data',
-    cancelTestID: 'cancel-clear-local-data',
-    oldPattern: '{confirming ? (',
-  },
-  {
-    file: 'src/orchestration/BootCoordinatorGate.tsx',
-    modalTestID: 'boot-clear-local-data-confirmation',
-    confirmTestID: 'boot-confirm-clear-local-data',
-    cancelTestID: 'boot-cancel-clear-local-data',
-    oldPattern: '{clearConfirming ? (',
-  },
+const confirmedFiles = [
+  ['src/tracker/ActivitySessionScreen.tsx', 'Delete Session?'],
+  ['src/catalog/CatalogEditorScreen.tsx', 'Convert to Routine?'],
+  ['src/habits/HabitDetailScreen.tsx', 'Archive ${habit.name}?'],
+  ['src/routine/RoutineEditorScreen.tsx', 'Delete Step?'],
+  ['src/goals/GoalsScreen.tsx', 'Delete Goal?'],
+  ['src/settings/GoalsSettingsPanel.tsx', 'Delete ${current.name'],
+  ['src/backup/BackupScreen.tsx', 'Restore This Backup?'],
+  ['src/settings/SettingsFeedback.tsx', 'Clear All Data?'],
+  ['src/orchestration/BootCoordinatorGate.tsx', 'Clear Local Data?'],
 ] as const;
 
-for (const prompt of migratedPrompts) {
-  const source = read(prompt.file);
+for (const [file, title] of confirmedFiles) {
+  const source = read(file);
   assert(
-    source.includes('<ConfirmationModal') &&
-      source.includes(prompt.modalTestID) &&
-      source.includes(prompt.confirmTestID) &&
-      source.includes(prompt.cancelTestID) &&
-      !source.includes(prompt.oldPattern),
-    `${prompt.file} must use the shared modal contract instead of its inline prompt`
+    source.includes('confirmAction(') && source.includes(title) && !source.includes('<Modal'),
+    `${file} must confirm with the native alert instead of a custom modal`
   );
 }
 
 const catalog = read('src/catalog/CatalogEditorScreen.tsx');
 assert(
-  catalog.includes('archive-folder-confirmation') &&
-    catalog.includes('confirm-archive-folder') &&
-    catalog.includes('cancel-archive-folder') &&
-    !catalog.includes('function ArchiveConfirmation'),
-  'activity and folder archive confirmations must both use modal controls'
+  catalog.includes('Archive ${activity.name}?') && catalog.includes('Archive ${folder.name}?'),
+  'activity and folder archive must both ask for confirmation'
 );
 
 const backup = read('src/backup/BackupScreen.tsx');
 assert(
-  backup.includes('timemator-import-confirmation') &&
-    backup.includes('confirm-timemator-import') &&
-    backup.includes('cancel-timemator-import') &&
-    backup.includes('visible={timematorConfirming') &&
-    backup.includes('visible={confirming'),
-  'backup replacement and Timemator import must retain separate modal confirmation paths'
+  backup.includes('Add Timemator History?') && backup.includes('Replace Dropbox Data?'),
+  'Timemator import and Dropbox setup must keep their own confirmations'
 );
 
 const session = read('src/tracker/ActivitySessionScreen.tsx');
-const sessionModalStart = session.indexOf('<ConfirmationModal');
+const deletePrompt = session.indexOf("title: 'Delete Session?'");
+const deleteCall = session.indexOf(
+  'await store.getState().deleteTransition(transition.id, { confirm: true })',
+  deletePrompt
+);
 assert(
-  sessionModalStart > session.lastIndexOf('</SlideUpSheet>') &&
-    session.includes('onConfirm={confirmDeleteSession}') &&
-    session.includes('tone="danger"'),
-  'activity-session deletion must render its destructive confirmation as a sibling modal after the screen'
+  deletePrompt >= 0 && deleteCall > deletePrompt && session.includes('destructive: true'),
+  'activity-session deletion must delete only after a destructive native confirmation'
 );
 
-console.log('Validated all migrated inline prompts and the activity-session modal deletion path.');
+console.log('Validated native confirmation alerts across the app.');

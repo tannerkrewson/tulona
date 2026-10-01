@@ -1,6 +1,7 @@
-import { Column, Row, Text } from '@ui/primitives';
+import { Column, Text } from '@ui/primitives';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Text as NativeText, StyleSheet, View } from 'react-native';
 
 import {
   shiftLogicalDay,
@@ -9,26 +10,19 @@ import {
   type HabitDayState,
   type LogicalDayKey,
 } from '@domain';
-import { AppIcon } from '@icons';
-import { useAppTheme } from '@theme';
+import { getAccessibleTextColor, useAppTheme } from '@theme';
 import { goBackInAppStack } from '../navigation/app-back';
-import { ConfirmationModal, errorText, Screen } from '@ui';
+import { confirmAction, errorText, Form, FormRow, FormSection, Screen, SYSTEM_RED } from '@ui';
 
 import { HabitErrorMessage } from './HabitErrorMessage';
 import { HabitHeader } from './HabitHeader';
-import { habitCompletionLabel, habitSignalSummary } from './habit-format';
+import { formatHabitSchedule, formatThreshold, habitCompletionLabel } from './habit-format';
 import { loadHabitStore } from './habit-runtime';
 import { calculateHabitStreak, habitCompleted } from './streak';
 import type { HabitStore } from './habit-store';
 import { isHabitScheduledDay } from './schedule';
 
-function recentDays(end: LogicalDayKey, count: number, rolloverHour: number): LogicalDayKey[] {
-  return Array.from({ length: count }, (_, index) =>
-    shiftLogicalDay(end, index - count + 1, { rolloverHour })
-  );
-}
-
-function triggerName(habit: Habit, catalog: CatalogCollection | null): string | null {
+function triggerSummary(habit: Habit, catalog: CatalogCollection | null): string | null {
   if (!habit.trigger) return null;
   const id =
     habit.trigger.kind === 'tracked-time'
@@ -44,15 +38,14 @@ function triggerName(habit: Habit, catalog: CatalogCollection | null): string | 
       : habit.trigger.kind === 'folder-time'
         ? catalog?.folders.find((folder) => folder.id === id)?.name
         : catalog?.routines.find((routine) => routine.id === id)?.name;
-  const kind =
-    habit.trigger.kind === 'tracked-time'
-      ? 'Tracked time'
-      : habit.trigger.kind === 'folder-time'
-        ? 'Folder time'
-        : 'Routine time';
-  const seconds = habit.trigger.minimumSeconds ?? (habit.trigger.minimumMs ?? 1000) / 1000;
-  const comparison = habit.trigger.comparison ?? 'at-least';
-  return `${kind}: ${source ?? 'Unavailable source'} · ${comparison === 'at-most' ? 'at most' : 'at least'} ${seconds} second${seconds === 1 ? '' : 's'} per day`;
+  const seconds = Math.round(
+    habit.trigger.minimumSeconds ?? (habit.trigger.minimumMs ?? 1000) / 1000
+  );
+  if (habit.trigger.kind === 'routine-completion' && seconds <= 1) {
+    return `Finishing ${source ?? 'a routine'}`;
+  }
+  const comparison = habit.trigger.comparison === 'at-most' ? 'or less' : 'or more';
+  return `${source ?? 'Unavailable'} · ${formatThreshold(seconds)} ${comparison}`;
 }
 
 export interface HabitDetailScreenProps {
@@ -128,7 +121,6 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
   const busy = store((state) => state.saving);
   const persistenceError = store((state) => state.persistenceError);
   const lastAction = useRef<(() => Promise<unknown>) | null>(null);
-  const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [editMenuOpen, setEditMenuOpen] = useState(false);
 
   if (!habit) {
@@ -157,6 +149,7 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
     weekStartsOn,
   });
   const unit = habit.schedule.kind === 'weekly-count' ? 'week' : 'day';
+  const accent = habit.color ?? colors.primary;
   const archived = habit.archivedAt !== null;
 
   const changeArchiveState = async (): Promise<boolean> => {
@@ -174,283 +167,274 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
     }
   };
 
+  const confirmArchive = () =>
+    void confirmAction({
+      confirmLabel: 'Archive',
+      message:
+        'It’s hidden from your habit list, and its history is kept. You can restore it later.',
+      title: `Archive ${habit.name}?`,
+    }).then((confirmed) => {
+      if (confirmed) void changeArchiveState();
+    });
+  const done = currentState?.manual === true || currentState?.automatic === true;
+  const trigger = triggerSummary(habit, catalog);
+
   return (
-    <>
-      <Screen testID="habit-detail-screen">
-        <Column spacing={16} style={{ width: '100%' }}>
-          <HabitHeader
-            editActions={[
-              {
-                label: 'Edit habit',
-                onPress: () => router.push(`/habit/${habit.id}?edit=1`),
-                systemImage: 'pencil',
-                testID: 'edit-habit-menu',
+    <Screen testID="habit-detail-screen">
+      <Column spacing={16} style={{ width: '100%' }}>
+        <HabitHeader
+          editActions={[
+            {
+              label: 'Edit habit',
+              onPress: () => router.push(`/habit/${habit.id}?edit=1`),
+              systemImage: 'pencil',
+              testID: 'edit-habit-menu',
+            },
+            {
+              disabled: busy,
+              label: archived ? 'Restore habit' : 'Archive habit',
+              onPress: () => {
+                if (archived) void changeArchiveState();
+                else confirmArchive();
               },
-              {
-                disabled: busy,
-                label: archived ? 'Restore habit' : 'Archive habit',
-                onPress: () => {
-                  if (archived) void changeArchiveState();
-                  else setConfirmingArchive(true);
-                },
-                systemImage: archived ? 'arrow.uturn.backward' : 'archivebox',
-                testID: archived ? 'restore-habit' : 'archive-habit',
-              },
-            ]}
-            editOpen={editMenuOpen}
-            onBack={() => goBackInAppStack(router, '/(tabs)/habits')}
-            onToggleEdit={() => setEditMenuOpen((open) => !open)}
-            title={habit.name}
-            testID="habit-header"
-          />
-          <HabitErrorMessage
-            message={persistenceError ? errorText(persistenceError) : null}
-            onBack={() => goBackInAppStack(router, '/(tabs)/habits')}
-            onRetry={() => {
-              const action = lastAction.current;
-              void (action ? action() : store.getState().refresh()).catch(() => undefined);
-            }}
-          />
-          {archived ? (
-            <Column
-              spacing={4}
-              style={{
-                backgroundColor: colors.warning.background,
-                borderColor: colors.warning.foreground,
-                borderRadius: 12,
-                borderWidth: 1,
-                padding: 14,
-                width: '100%',
-              }}
-            >
-              <Text
-                textStyle={{ color: colors.warning.foreground, fontSize: 15, fontWeight: '700' }}
-              >
-                Archived habit
-              </Text>
-              <Text textStyle={{ color: colors.warning.foreground, fontSize: 14 }}>
-                It is hidden from the active list until restored.
-              </Text>
-            </Column>
-          ) : null}
-          <Column
-            spacing={12}
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: 18,
-              borderWidth: 1,
-              padding: 18,
-              width: '100%',
-            }}
+              systemImage: archived ? 'arrow.uturn.backward' : 'archivebox',
+              testID: archived ? 'restore-habit' : 'archive-habit',
+            },
+          ]}
+          editOpen={editMenuOpen}
+          onBack={() => goBackInAppStack(router, '/(tabs)/habits')}
+          onToggleEdit={() => setEditMenuOpen((open) => !open)}
+          title={habit.name}
+          testID="habit-header"
+        />
+        <HabitErrorMessage
+          message={persistenceError ? errorText(persistenceError) : null}
+          onBack={() => goBackInAppStack(router, '/(tabs)/habits')}
+          onRetry={() => {
+            const action = lastAction.current;
+            void (action ? action() : store.getState().refresh()).catch(() => undefined);
+          }}
+        />
+        <Form>
+          <FormSection
+            footer={
+              archived ? 'Archived habits are hidden from your list until restored.' : undefined
+            }
           >
-            <Column spacing={4}>
-              <Text
-                numberOfLines={2}
-                textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}
-              >
-                {habit.name}
-              </Text>
-            </Column>
-            <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-              <AppIcon
-                color={
-                  currentState?.manual === true || currentState?.automatic === true
-                    ? colors.success.foreground
-                    : colors.textMuted
-                }
-                name={
-                  currentState?.manual === true || currentState?.automatic === true
-                    ? 'check-circle-2'
-                    : 'circle'
-                }
-                size={19}
-              />
-              <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
-                {`Today: ${habitCompletionLabel(currentState)}`}
-              </Text>
-            </Row>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              {`Signals: ${habitSignalSummary(currentState)}`}
-            </Text>
-            {habit.trigger ? (
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-                {triggerName(habit, catalog) ?? 'Configured trigger source is unavailable.'}
-              </Text>
-            ) : (
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-                No automatic trigger configured.
-              </Text>
-            )}
-          </Column>
-
-          <Row alignment="center" spacing={10} style={{ width: '100%' }}>
-            <StatCard label={`Current streak (${unit}s)`} value={String(streak.current)} />
-            <StatCard label={`Longest streak (${unit}s)`} value={String(streak.longest)} />
-          </Row>
-
-          <HistoryGrid
+            <FormRow
+              icon={done ? 'check-circle-2' : 'circle'}
+              iconColor={done ? accent : colors.textMuted}
+              label="Today"
+              subtitle={
+                currentState?.outcome == null && currentState?.automatic === true
+                  ? 'Completed automatically'
+                  : undefined
+              }
+              value={
+                currentState?.outcome == null && done
+                  ? 'Done'
+                  : habitCompletionLabel(currentState).replace('Not completed', 'Not done')
+              }
+            />
+            <FormRow label="Repeats" value={formatHabitSchedule(habit.schedule)} />
+            {trigger ? <FormRow label="Auto-complete" subtitle={trigger} /> : null}
+            {archived ? <FormRow label="Status" muted value="Archived" /> : null}
+          </FormSection>
+          <FormSection>
+            <View style={styles.stats}>
+              <Stat label="Current streak" unit={unit} value={streak.current} />
+              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+              <Stat label="Best streak" unit={unit} value={streak.longest} />
+            </View>
+          </FormSection>
+          <HistoryCalendar
+            accent={accent}
             habit={habit}
             logicalDayRolloverHour={logicalDayRolloverHour}
             states={habitStates}
             today={today}
+            weekStartsOn={weekStartsOn}
           />
-        </Column>
-      </Screen>
-      <ConfirmationModal
-        busy={busy}
-        cancelLabel="Keep habit"
-        cancelTestID="cancel-archive-habit"
-        confirmLabel="Yes, archive habit"
-        confirmTestID="confirm-archive-habit"
-        message="It will be hidden from the active list while its history is retained. You can restore it later."
-        onCancel={() => setConfirmingArchive(false)}
-        onConfirm={() => {
-          void changeArchiveState().then((changed) => {
-            if (changed) setConfirmingArchive(false);
-          });
-        }}
-        testID="archive-habit-confirmation"
-        title="Archive this habit?"
-        visible={!archived && confirmingArchive}
-      />
-    </>
+        </Form>
+      </Column>
+    </Screen>
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function Stat({ label, unit, value }: { label: string; unit: string; value: number }) {
   const { colors } = useAppTheme();
   return (
-    <Column
-      spacing={5}
-      style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 14,
-        borderWidth: 1,
-        width: '48%',
-        padding: 14,
-      }}
-    >
-      <Text textStyle={{ color: colors.primary, fontSize: 26, fontWeight: '700' }}>{value}</Text>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 13 }}>{label}</Text>
-    </Column>
+    <View style={styles.stat}>
+      <NativeText style={{ color: colors.text, fontSize: 28, fontWeight: '700' }}>
+        {value}
+        <NativeText style={{ color: colors.textMuted, fontSize: 15, fontWeight: '500' }}>
+          {` ${unit}${value === 1 ? '' : 's'}`}
+        </NativeText>
+      </NativeText>
+      <NativeText style={{ color: colors.textMuted, fontSize: 13 }}>{label}</NativeText>
+    </View>
   );
 }
 
-function HistoryGrid({
+const CALENDAR_WEEKS = 5;
+const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
+
+function weekdayOf(day: LogicalDayKey): number {
+  const [year, month, date] = day.split('-').map(Number);
+  return new Date(year ?? 1970, (month ?? 1) - 1, date ?? 1).getDay();
+}
+
+function HistoryCalendar({
+  accent,
   habit,
   states,
   today,
   logicalDayRolloverHour,
+  weekStartsOn,
 }: {
+  accent: string;
   habit: Habit;
   states: readonly HabitDayState[];
   today: LogicalDayKey;
   logicalDayRolloverHour: number;
+  weekStartsOn: number;
 }) {
-  const { colors } = useAppTheme();
-  const days = recentDays(today, 28, logicalDayRolloverHour);
+  const { colorScheme, colors } = useAppTheme();
+  const red = SYSTEM_RED[colorScheme];
+  const onAccent = getAccessibleTextColor(accent);
+  const options = { rolloverHour: logicalDayRolloverHour };
+  const daysIntoWeek = (weekdayOf(today) - weekStartsOn + 7) % 7;
+  const firstDay = shiftLogicalDay(today, -daysIntoWeek - (CALENDAR_WEEKS - 1) * 7, options);
+  const days = Array.from({ length: CALENDAR_WEEKS * 7 }, (_, index) =>
+    shiftLogicalDay(firstDay, index, options)
+  );
   const stateForDay = (day: LogicalDayKey) =>
     states.find((state) => state.logicalDay === day) ?? null;
+  const initials = Array.from(
+    { length: 7 },
+    (_, index) => WEEKDAY_INITIALS[(weekStartsOn + index) % 7] ?? ''
+  );
 
   return (
-    <Column
-      spacing={12}
-      style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 18,
-        borderWidth: 1,
-        padding: 18,
-        width: '100%',
-      }}
-      testID="habit-history"
-    >
-      <Column spacing={3}>
-        <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>
-          Recent history
-        </Text>
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-          Last 28 days, newest at the bottom.
-        </Text>
-      </Column>
-      {[0, 1, 2, 3].map((week) => (
-        <Row alignment="center" key={`history-week-${week}`} spacing={5} style={{ width: '100%' }}>
-          {days.slice(week * 7, week * 7 + 7).map((day) => {
-            const state = stateForDay(day);
-            const complete = habitCompleted(state);
-            const failed = state?.outcome === 'failed';
-            const skipped = state?.outcome === 'skipped';
-            const scheduled = isHabitScheduledDay(habit.schedule, day, {
-              rolloverHour: logicalDayRolloverHour,
-            });
-            return (
-              <Column
-                alignment="center"
-                key={day}
-                spacing={3}
-                style={{ width: 32 }}
-                testID={`habit-history-day-${day}`}
-              >
-                <Text textStyle={{ color: colors.textMuted, fontSize: 11 }}>{day.slice(8)}</Text>
-                <Column
-                  alignment="center"
-                  style={{
-                    backgroundColor: complete
-                      ? colors.success.background
-                      : failed
-                        ? colors.danger.background
-                        : skipped
-                          ? colors.surfaceMuted
-                          : !scheduled
-                            ? colors.surfaceMuted
-                            : colors.inactive.background,
-                    borderColor: complete
-                      ? colors.success.foreground
-                      : failed
-                        ? colors.danger.foreground
-                        : !scheduled
-                          ? colors.border
-                          : colors.border,
-                    borderRadius: 9,
-                    borderWidth: 1,
-                    height: 30,
-                    width: 30,
-                  }}
+    <FormSection testID="habit-history" title="History">
+      <View style={styles.calendar}>
+        <View style={styles.calendarRow}>
+          {initials.map((initial, index) => (
+            <NativeText
+              key={`${initial}-${index}`}
+              style={[styles.calendarHeading, { color: colors.textMuted }]}
+            >
+              {initial}
+            </NativeText>
+          ))}
+        </View>
+        {Array.from({ length: CALENDAR_WEEKS }, (_, week) => (
+          <View key={`week-${week}`} style={styles.calendarRow}>
+            {days.slice(week * 7, week * 7 + 7).map((day) => {
+              const future = day > today;
+              const state = future ? null : stateForDay(day);
+              const complete = habitCompleted(state);
+              const failed = state?.outcome === 'failed';
+              const skipped = state?.outcome === 'skipped';
+              const scheduled = isHabitScheduledDay(habit.schedule, day, options);
+              const label = complete
+                ? 'Done'
+                : failed
+                  ? 'Failed'
+                  : skipped
+                    ? 'Skipped'
+                    : future
+                      ? 'Upcoming'
+                      : scheduled
+                        ? 'Not logged'
+                        : 'Not scheduled';
+              return (
+                <View
+                  accessibilityLabel={`${day}: ${label}`}
+                  accessible
+                  key={day}
+                  style={styles.calendarCell}
+                  testID={`habit-history-day-${day}`}
                 >
-                  <AppIcon
-                    accessibilityLabel={`${day}: ${complete ? 'Completed' : failed ? 'Failed' : skipped ? 'Skipped' : scheduled ? 'Not completed' : 'Not scheduled'}`}
-                    color={
-                      complete
-                        ? colors.success.foreground
-                        : failed
-                          ? colors.danger.foreground
-                          : colors.textMuted
-                    }
-                    name={complete ? 'check' : failed ? 'x' : skipped ? 'skip-forward' : 'circle'}
-                    size={14}
-                  />
-                </Column>
-              </Column>
-            );
-          })}
-        </Row>
-      ))}
-      <Column spacing={8} style={{ width: '100%' }}>
-        <Row alignment="center" spacing={4}>
-          <AppIcon color={colors.success.foreground} name="check" size={14} />
-          <Text textStyle={{ color: colors.textMuted, fontSize: 12 }}>Completed</Text>
-        </Row>
-        <Row alignment="center" spacing={4}>
-          <AppIcon color={colors.textMuted} name="circle" size={14} />
-          <Text textStyle={{ color: colors.textMuted, fontSize: 12 }}>Not completed</Text>
-        </Row>
-        <Row alignment="center" spacing={4}>
-          <AppIcon color={colors.textMuted} name="circle" size={14} />
-          <Text textStyle={{ color: colors.textMuted, fontSize: 12 }}>Not scheduled</Text>
-        </Row>
-      </Column>
-    </Column>
+                  <View
+                    style={[
+                      styles.calendarDay,
+                      complete && { backgroundColor: accent },
+                      failed && { borderColor: red, borderWidth: 1.5 },
+                      skipped && {
+                        borderColor: colors.textMuted,
+                        borderStyle: 'dashed',
+                        borderWidth: 1.5,
+                      },
+                      day === today && !complete && !failed && !skipped
+                        ? { borderColor: colors.text, borderWidth: 1.5 }
+                        : null,
+                    ]}
+                  >
+                    <NativeText
+                      style={{
+                        color: complete ? onAccent : failed ? red : colors.text,
+                        fontSize: 15,
+                        fontVariant: ['tabular-nums'],
+                        fontWeight: complete || day === today ? '700' : '500',
+                        opacity: future ? 0.25 : !scheduled && !complete && !failed ? 0.4 : 1,
+                      }}
+                    >
+                      {Number(day.slice(8))}
+                    </NativeText>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ))}
+        <View style={styles.legend}>
+          <LegendItem label="Done">
+            <View style={[styles.legendDot, { backgroundColor: accent }]} />
+          </LegendItem>
+          <LegendItem label="Failed">
+            <View style={[styles.legendDot, { borderColor: red, borderWidth: 1.5 }]} />
+          </LegendItem>
+          <LegendItem label="Skipped">
+            <View
+              style={[
+                styles.legendDot,
+                { borderColor: colors.textMuted, borderStyle: 'dashed', borderWidth: 1.5 },
+              ]}
+            />
+          </LegendItem>
+        </View>
+      </View>
+    </FormSection>
   );
 }
+
+function LegendItem({ label, children }: { label: string; children: ReactNode }) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={styles.legendItem}>
+      {children}
+      <NativeText style={{ color: colors.textMuted, fontSize: 13 }}>{label}</NativeText>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  stats: { flexDirection: 'row', paddingVertical: 14, width: '100%' },
+  stat: { alignItems: 'center', flex: 1, gap: 2 },
+  statDivider: { width: StyleSheet.hairlineWidth },
+  calendar: { gap: 6, paddingHorizontal: 12, paddingVertical: 14, width: '100%' },
+  calendarRow: { flexDirection: 'row', width: '100%' },
+  calendarHeading: { flex: 1, fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  calendarCell: { alignItems: 'center', flex: 1, paddingVertical: 2 },
+  calendarDay: {
+    alignItems: 'center',
+    borderRadius: 18,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  legend: { flexDirection: 'row', gap: 18, justifyContent: 'center', paddingTop: 8 },
+  legendItem: { alignItems: 'center', flexDirection: 'row', gap: 6 },
+  legendDot: { borderRadius: 6, height: 12, width: 12 },
+});

@@ -29,7 +29,7 @@ import { formatGoalWeek } from './goal-review-navigation';
 import { useAppTheme } from '@theme';
 import {
   AppButton,
-  ConfirmationModal,
+  confirmAction,
   EmptyState,
   errorText,
   dayFromDate,
@@ -838,7 +838,6 @@ export function GoalEditor({
   const [backfillStatusId, setBackfillStatusId] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [lastAction, setLastAction] = useState<'save' | 'delete' | null>(null);
 
   const updateRule = (index: number, next: DraftRule) =>
@@ -1129,28 +1128,22 @@ export function GoalEditor({
                 icon="trash-2"
                 kind="destructive"
                 label="Delete Goal"
-                onPress={() => setConfirmDelete(true)}
+                onPress={() =>
+                  void confirmAction({
+                    confirmLabel: 'Delete',
+                    destructive: true,
+                    message: 'This also deletes the goal’s weekly review history.',
+                    title: 'Delete Goal?',
+                  }).then((confirmed) => {
+                    if (confirmed) deleteGoal();
+                  })
+                }
                 testID="goal-delete"
               />
             </FormSection>
           ) : null}
         </Form>
       </Screen>
-      {goal ? (
-        <ConfirmationModal
-          busy={saving}
-          cancelLabel="Keep goal"
-          cancelTestID="goal-cancel-delete"
-          confirmLabel="Confirm delete"
-          confirmTestID="goal-confirm-delete"
-          message="This also deletes the goal's weekly review history."
-          onCancel={() => setConfirmDelete(false)}
-          onConfirm={() => void deleteGoal()}
-          testID="goal-delete-confirmation"
-          title="Delete this goal?"
-          visible={confirmDelete}
-        />
-      ) : null}
     </>
   );
 }

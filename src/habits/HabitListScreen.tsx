@@ -601,6 +601,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 2,
+    marginBottom: 12,
     minHeight: 56,
     paddingHorizontal: ROW_SURFACE_PADDING_HORIZONTAL,
     paddingVertical: 8,

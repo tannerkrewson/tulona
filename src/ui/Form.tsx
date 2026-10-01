@@ -23,7 +23,7 @@ import { getRowSurfaceBackground } from './row-surface';
 
 const ROW_MIN_HEIGHT = 50;
 const ROW_PADDING = 16;
-const SYSTEM_RED = { light: '#FF3B30', dark: '#FF453A' } as const;
+export const SYSTEM_RED = { light: '#FF3B30', dark: '#FF453A' } as const;
 
 function useFormColors() {
   const { colorScheme, colors } = useAppTheme();
