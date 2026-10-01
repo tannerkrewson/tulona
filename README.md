@@ -18,7 +18,7 @@ app secret; do not supply an app secret.
 
 First open Tulona's Dropbox panel and sync. The MCP reads `/tulona-backup.json`,
 the JSON projection the app updates after synchronization. It does not read the
-app's local storage or modify the Automerge file.
+app's local storage or modify the sync file.
 
 Run this in a terminal on the machine where your MCP client runs:
 
@@ -123,7 +123,7 @@ when Dropbox is unavailable or validation fails.
 
 All results describe the **last synchronized export**. `source.exportedAt`
 tells you how old the app data is; `fetchedAt` only tells you when the server
-downloaded it. A JSON projection can briefly lag the Automerge file during a
+downloaded it. A JSON projection can briefly lag the sync file during a
 sync. The MCP does not observe live or unsynced app changes. Time reports stop
 at the export timestamp, even when a timer was running, and use UTC or explicit
 offsets rather than guessing the app machine's timezone. Habit dates are the
