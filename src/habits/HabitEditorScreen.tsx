@@ -1,7 +1,6 @@
 import { Picker } from '@expo/ui';
-import { Column, Text } from '@ui/primitives';
+import { Text } from '@ui/primitives';
 import { useRouter } from 'expo-router';
-import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
@@ -16,11 +15,16 @@ import type {
 import { useAppTheme } from '@theme';
 import { goBackInAppStack } from '../navigation/app-back';
 import {
-  AccessiblePicker,
-  AccessibleTextInput,
   AppButton,
-  ColorPicker,
   errorText,
+  Form,
+  FormColorRow,
+  FormContent,
+  FormDateRow,
+  FormPickerRow,
+  FormSection,
+  FormTextField,
+  HeaderTextButton,
   Screen,
 } from '@ui';
 
@@ -69,7 +73,7 @@ function draftFromHabit(habit: Habit | null): HabitDraft {
     timesPerWeek:
       habit?.schedule.kind === 'weekly-count' ? String(habit.schedule.timesPerWeek) : '3',
     intervalEveryDays: habit?.schedule.kind === 'interval' ? String(habit.schedule.everyDays) : '2',
-    intervalStartDate: habit?.schedule.kind === 'interval' ? habit.schedule.startDate : '',
+    intervalStartDate: habit?.schedule.kind === 'interval' ? habit.schedule.startDate : todayKey(),
     triggerKind: habit?.trigger?.kind ?? 'none',
     triggerId: habit?.trigger
       ? habit.trigger.kind === 'tracked-time'
@@ -155,58 +159,21 @@ function inputFromDraft(draft: HabitDraft) {
   };
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  const { colors } = useAppTheme();
-  return (
-    <Column spacing={6} style={{ width: '100%' }}>
-      <Text textStyle={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>{label}</Text>
-      {children}
-    </Column>
-  );
+const THRESHOLD_PRESET_SECONDS = [
+  60, 300, 600, 900, 1200, 1800, 2700, 3600, 5400, 7200, 10800, 14400,
+] as const;
+
+function formatThreshold(seconds: number): string {
+  if (seconds < 60) return `${seconds} sec`;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  if (hours === 0) return `${minutes} min`;
+  return minutes === 0 ? `${hours} hr` : `${hours} hr ${minutes} min`;
 }
 
-function Input({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  testID,
-  multiline = false,
-  keyboardType = 'default',
-}: {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  placeholder: string;
-  testID: string;
-  multiline?: boolean;
-  keyboardType?: 'default' | 'numeric';
-}) {
-  const { colors } = useAppTheme();
-  return (
-    <AccessibleTextInput
-      defaultValue={value}
-      keyboardType={keyboardType}
-      label={label}
-      multiline={multiline}
-      numberOfLines={multiline ? 3 : undefined}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.textMuted}
-      returnKeyType={multiline ? 'default' : 'next'}
-      style={{
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderRadius: 10,
-        borderWidth: 1,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        width: '100%',
-      }}
-      testID={testID}
-      textStyle={{ color: colors.text, fontSize: 16 }}
-    />
-  );
+function todayKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
 function WeekdayPicker({
@@ -218,22 +185,22 @@ function WeekdayPicker({
 }) {
   const { colors } = useAppTheme();
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, width: '100%' }}>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
       {weekdayLabels.map((label, day) => {
         const active = selected.includes(day);
         return (
           <AppButton
             key={label}
-            label={label}
+            label={label.slice(0, 1)}
             onPress={() => onChange(day)}
             style={{
               backgroundColor: active ? colors.primary : colors.surface,
               borderColor: active ? colors.primary : colors.border,
-              borderRadius: 999,
+              borderRadius: 20,
               borderWidth: 1,
               height: 40,
               paddingHorizontal: 0,
-              width: 48,
+              width: 40,
             }}
             testID={`habit-weekday-${day}`}
             variant={active ? 'filled' : 'outlined'}
@@ -264,20 +231,16 @@ function TriggerTargetPicker({
         ? catalog.folders.filter((folder) => folder.archivedAt === null || folder.id === value)
         : catalog.routines.filter((routine) => routine.archivedAt === null || routine.id === value);
   const label =
-    kind === 'tracked-time'
-      ? 'an activity or routine'
-      : kind === 'folder-time'
-        ? 'a folder'
-        : 'a routine';
+    kind === 'tracked-time' ? 'Activity' : kind === 'folder-time' ? 'Folder' : 'Routine';
 
   return (
-    <AccessiblePicker
-      label={`Source ${label}`}
+    <FormPickerRow
+      label={label}
       selectedValue={value}
       onValueChange={(next) => onChange(String(next))}
       testID="habit-trigger-target"
     >
-      <Picker.Item label={`Choose ${label}`} value="" />
+      <Picker.Item label="Choose" value="" />
       {candidates.map((candidate) => (
         <Picker.Item
           key={candidate.id}
@@ -288,7 +251,7 @@ function TriggerTargetPicker({
           value={candidate.id}
         />
       ))}
-    </AccessiblePicker>
+    </FormPickerRow>
   );
 }
 
@@ -369,7 +332,6 @@ function HabitEditorForm({
   onCancel: () => void;
   onSaved: (habit: Habit) => void;
 }) {
-  const { colors } = useAppTheme();
   const catalog = store((state) => state.catalog) ?? { folders: [], activities: [], routines: [] };
   const persistenceError = store((state) => state.persistenceError);
   const busy = store((state) => state.saving);
@@ -400,177 +362,35 @@ function HabitEditorForm({
     update({ daysOfWeek: days });
   };
 
+  const thresholdSeconds = draft.thresholdSeconds.trim() ? Number(draft.thresholdSeconds) : null;
+  const thresholdOptions =
+    thresholdSeconds !== null &&
+    Number.isFinite(thresholdSeconds) &&
+    !THRESHOLD_PRESET_SECONDS.some((preset) => preset === thresholdSeconds)
+      ? [...THRESHOLD_PRESET_SECONDS, thresholdSeconds].sort((left, right) => left - right)
+      : THRESHOLD_PRESET_SECONDS;
+  const intervalOptions = Array.from(
+    new Set([
+      ...Array.from({ length: 30 }, (_, index) => String(index + 2)),
+      draft.intervalEveryDays,
+    ])
+  );
+
   return (
-    <Screen onBack={onBack} title={habit ? 'Edit habit' : 'New habit'}>
-      <Column spacing={18} style={{ width: '100%' }}>
-        <Column spacing={18} style={{ paddingVertical: 6, width: '100%' }}>
-          <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>Habit</Text>
-          <Column spacing={3} style={{ width: '100%' }}>
-            <Text textStyle={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>
-              {draft.name || 'Untitled habit'}
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-              {habit ? 'Changes are saved on this device.' : 'Daily is the default schedule.'}
-            </Text>
-          </Column>
-          <Field label="Name">
-            <Input
-              label="Habit name"
-              onChangeText={(name) => update({ name })}
-              placeholder="Habit name"
-              testID="habit-name"
-              value={draft.name}
-            />
-          </Field>
-          <Field label="Color">
-            <ColorPicker
-              onChange={(color) => update({ color })}
-              testID="habit-color-picker"
-              value={draft.color}
-            />
-          </Field>
-        </Column>
-
-        <Column spacing={16} style={{ paddingVertical: 6, width: '100%' }}>
-          <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>Schedule</Text>
-          <Field label="Repeat">
-            <AccessiblePicker
-              label="Repeat"
-              selectedValue={draft.scheduleKind}
-              onValueChange={(next) => update({ scheduleKind: String(next) as ScheduleKind })}
-              testID="habit-schedule"
-            >
-              <Picker.Item label="Every day" value="daily" />
-              <Picker.Item label="Weekdays" value="weekdays" />
-              <Picker.Item label="Selected weekdays" value="weekly" />
-              <Picker.Item label="N times per week" value="weekly-count" />
-              <Picker.Item label="Every N days" value="interval" />
-            </AccessiblePicker>
-          </Field>
-          {draft.scheduleKind === 'weekly' ? (
-            <Field label="Days">
-              <WeekdayPicker onChange={toggleWeekday} selected={draft.daysOfWeek} />
-            </Field>
-          ) : null}
-          {draft.scheduleKind === 'weekly-count' ? (
-            <Field label="Times per week">
-              <AccessiblePicker
-                label="Times per week"
-                selectedValue={draft.timesPerWeek}
-                onValueChange={(next) => update({ timesPerWeek: String(next) })}
-                testID="habit-times-per-week"
-              >
-                {Array.from({ length: 7 }, (_, index) => String(index + 1)).map((value) => (
-                  <Picker.Item
-                    key={value}
-                    label={`${value} ${value === '1' ? 'time' : 'times'}`}
-                    value={value}
-                  />
-                ))}
-              </AccessiblePicker>
-            </Field>
-          ) : null}
-          {draft.scheduleKind === 'interval' ? (
-            <>
-              <Field label="Every number of days">
-                <Input
-                  label="Interval every number of days"
-                  keyboardType="numeric"
-                  onChangeText={(intervalEveryDays) => update({ intervalEveryDays })}
-                  placeholder="2"
-                  testID="habit-interval-days"
-                  value={draft.intervalEveryDays}
-                />
-              </Field>
-              <Field label="Start date (YYYY-MM-DD)">
-                <Input
-                  label="Interval start date"
-                  onChangeText={(intervalStartDate) => update({ intervalStartDate })}
-                  placeholder="2026-08-30"
-                  testID="habit-interval-start"
-                  value={draft.intervalStartDate}
-                />
-              </Field>
-            </>
-          ) : null}
-        </Column>
-
-        <Column spacing={16} style={{ paddingVertical: 6, width: '100%' }}>
-          <Column spacing={3}>
-            <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>
-              Automatic evidence
-            </Text>
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-              Optional. This never replaces or clears a manual completion.
-            </Text>
-          </Column>
-          <Field label="Trigger source">
-            <AccessiblePicker
-              label="Trigger source"
-              selectedValue={draft.triggerKind}
-              onValueChange={(next) =>
-                update({ triggerKind: String(next) as TriggerKind, triggerId: '' })
-              }
-              testID="habit-trigger-kind"
-            >
-              <Picker.Item label="No automatic trigger" value="none" />
-              <Picker.Item label="Tracked activity or routine time" value="tracked-time" />
-              <Picker.Item label="Folder time" value="folder-time" />
-              <Picker.Item label="Routine completion time" value="routine-completion" />
-            </AccessiblePicker>
-          </Field>
-          {draft.triggerKind !== 'none' ? (
-            <>
-              <Field label="Source">
-                <TriggerTargetPicker
-                  catalog={catalog}
-                  kind={draft.triggerKind}
-                  onChange={(triggerId) => update({ triggerId })}
-                  value={draft.triggerId}
-                />
-              </Field>
-              <Column spacing={8} style={{ width: '100%' }}>
-                <Field label="Tracked time threshold (seconds, optional)">
-                  <Input
-                    label="Daily tracked time threshold in seconds"
-                    keyboardType="numeric"
-                    onChangeText={(thresholdSeconds) => update({ thresholdSeconds })}
-                    placeholder="1"
-                    testID="habit-trigger-threshold"
-                    value={draft.thresholdSeconds}
-                  />
-                </Field>
-                <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
-                  This is the total time logged for the selected activity, folder, or routine in one
-                  logical day. Leave it blank to use the 1 second default.
-                </Text>
-                {draft.thresholdSeconds.trim() ? (
-                  <>
-                    <Field label="When should this count as complete?">
-                      <AccessiblePicker
-                        label="Tracked time comparison"
-                        onValueChange={(next) =>
-                          update({ thresholdComparison: String(next) as HabitTriggerComparison })
-                        }
-                        selectedValue={draft.thresholdComparison}
-                        testID="habit-trigger-comparison"
-                      >
-                        <Picker.Item label="At least this time · more is better" value="at-least" />
-                        <Picker.Item label="At most this time · less is better" value="at-most" />
-                      </AccessiblePicker>
-                    </Field>
-                    {draft.thresholdComparison === 'at-most' ? (
-                      <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
-                        At-most results are finalized when this logical day ends.
-                      </Text>
-                    ) : null}
-                  </>
-                ) : null}
-              </Column>
-            </>
-          ) : null}
-        </Column>
-
+    <Screen
+      headerRight={
+        <HeaderTextButton
+          disabled={busy}
+          emphasized
+          label={habit ? 'Save' : 'Add'}
+          onPress={() => void save()}
+          testID="save-habit"
+        />
+      }
+      onBack={onBack}
+      title={habit ? 'Edit Habit' : 'New Habit'}
+    >
+      <Form>
         <HabitErrorMessage
           message={formError ?? (persistenceError ? errorText(persistenceError) : null)}
           onBack={onCancel}
@@ -579,22 +399,143 @@ function HabitEditorForm({
             void (action ? action() : store.getState().refresh()).catch(() => undefined);
           }}
         />
-        <AppButton
-          disabled={busy}
-          label={busy ? 'Saving...' : habit ? 'Save habit' : 'Create habit'}
-          onPress={() => void save()}
-          style={{ height: 50, width: '100%' }}
-          testID="save-habit"
-        />
-        <AppButton
-          disabled={busy}
-          label="Cancel"
-          onPress={onCancel}
-          style={{ height: 46, width: '100%' }}
-          testID="cancel-habit"
-          variant="outlined"
-        />
-      </Column>
+        <FormSection>
+          <FormTextField
+            autoFocus={!habit}
+            label="Habit name"
+            onChangeText={(name) => update({ name })}
+            placeholder="Name"
+            testID="habit-name"
+            value={draft.name}
+          />
+          <FormColorRow
+            onChange={(color) => update({ color })}
+            testID="habit-color-picker"
+            value={draft.color}
+          />
+        </FormSection>
+
+        <FormSection title="Schedule">
+          <FormPickerRow
+            label="Repeat"
+            onValueChange={(next) => update({ scheduleKind: String(next) as ScheduleKind })}
+            selectedValue={draft.scheduleKind}
+            testID="habit-schedule"
+          >
+            <Picker.Item label="Every day" value="daily" />
+            <Picker.Item label="Weekdays" value="weekdays" />
+            <Picker.Item label="Certain days" value="weekly" />
+            <Picker.Item label="Times per week" value="weekly-count" />
+            <Picker.Item label="Every few days" value="interval" />
+          </FormPickerRow>
+          {draft.scheduleKind === 'weekly' ? (
+            <FormContent>
+              <WeekdayPicker onChange={toggleWeekday} selected={draft.daysOfWeek} />
+            </FormContent>
+          ) : null}
+          {draft.scheduleKind === 'weekly-count' ? (
+            <FormPickerRow
+              label="Times"
+              onValueChange={(next) => update({ timesPerWeek: String(next) })}
+              selectedValue={draft.timesPerWeek}
+              testID="habit-times-per-week"
+            >
+              {Array.from({ length: 7 }, (_, index) => String(index + 1)).map((value) => (
+                <Picker.Item
+                  key={value}
+                  label={`${value} ${value === '1' ? 'time' : 'times'} a week`}
+                  value={value}
+                />
+              ))}
+            </FormPickerRow>
+          ) : null}
+          {draft.scheduleKind === 'interval' ? (
+            <FormPickerRow
+              label="Every"
+              onValueChange={(next) => update({ intervalEveryDays: String(next) })}
+              selectedValue={draft.intervalEveryDays}
+              testID="habit-interval-days"
+            >
+              {intervalOptions.map((value) => (
+                <Picker.Item key={value} label={`${value} days`} value={value} />
+              ))}
+            </FormPickerRow>
+          ) : null}
+          {draft.scheduleKind === 'interval' ? (
+            <FormDateRow
+              label="Starting"
+              onChange={(intervalStartDate) => update({ intervalStartDate })}
+              testID="habit-interval-start"
+              value={draft.intervalStartDate}
+            />
+          ) : null}
+        </FormSection>
+
+        <FormSection
+          footer={
+            draft.triggerKind === 'none'
+              ? 'Mark this habit done from time you track. You can still log it by hand.'
+              : thresholdSeconds === null
+                ? 'Counts as soon as any time is logged that day. Logging by hand still works.'
+                : draft.thresholdComparison === 'at-most'
+                  ? 'Counts when the day ends with no more than this much time logged.'
+                  : 'Counts once this much time is logged in a day. Logging by hand still works.'
+          }
+          title="Complete Automatically"
+        >
+          <FormPickerRow
+            label="From"
+            onValueChange={(next) =>
+              update({ triggerKind: String(next) as TriggerKind, triggerId: '' })
+            }
+            selectedValue={draft.triggerKind}
+            testID="habit-trigger-kind"
+          >
+            <Picker.Item label="Off" value="none" />
+            <Picker.Item label="Tracked time" value="tracked-time" />
+            <Picker.Item label="Folder time" value="folder-time" />
+            <Picker.Item label="Finished routine" value="routine-completion" />
+          </FormPickerRow>
+          {draft.triggerKind !== 'none' ? (
+            <TriggerTargetPicker
+              catalog={catalog}
+              kind={draft.triggerKind}
+              onChange={(triggerId) => update({ triggerId })}
+              value={draft.triggerId}
+            />
+          ) : null}
+          {draft.triggerKind !== 'none' ? (
+            <FormPickerRow
+              label="Time"
+              onValueChange={(next) => update({ thresholdSeconds: String(next) })}
+              selectedValue={draft.thresholdSeconds.trim()}
+              testID="habit-trigger-threshold"
+            >
+              <Picker.Item label="Any" value="" />
+              {thresholdOptions.map((seconds) => (
+                <Picker.Item
+                  key={seconds}
+                  label={formatThreshold(seconds)}
+                  value={String(seconds)}
+                />
+              ))}
+            </FormPickerRow>
+          ) : null}
+          {draft.triggerKind !== 'none' && thresholdSeconds !== null ? (
+            <FormPickerRow
+              label="Counts when"
+              onValueChange={(next) =>
+                update({ thresholdComparison: String(next) as HabitTriggerComparison })
+              }
+              selectedValue={draft.thresholdComparison}
+              testID="habit-trigger-comparison"
+            >
+              <Picker.Item label="At least" value="at-least" />
+              <Picker.Item label="At most" value="at-most" />
+            </FormPickerRow>
+          ) : null}
+        </FormSection>
+      </Form>
     </Screen>
   );
 }

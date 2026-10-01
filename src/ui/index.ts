@@ -40,6 +40,7 @@ export {
   type FormSectionProps,
   type FormSheetProps,
 } from './Form';
+export { FormDateRow, type FormDateRowProps } from './FormDateRow';
 export { IconButton, type IconButtonProps, type IconButtonVariant } from './IconButton';
 export {
   NativeMenuButton,
