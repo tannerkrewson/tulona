@@ -28,8 +28,6 @@ import type { GoalEvaluationRuleInput, GoalService } from './goal-service';
 import { formatGoalWeek } from './goal-review-navigation';
 import { useAppTheme } from '@theme';
 import {
-  AccessiblePicker,
-  AccessibleTextInput,
   AppButton,
   ConfirmationModal,
   EmptyState,
@@ -497,7 +495,6 @@ export function ReviewPanel({
   currentSnapshot,
   settings,
   service,
-  onCancel,
   onSaved,
 }: {
   goals: readonly Goal[];
@@ -505,10 +502,8 @@ export function ReviewPanel({
   currentSnapshot: WeekSnapshot;
   settings: GoalSettings;
   service: GoalService;
-  onCancel: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const { colors } = useAppTheme();
   const reviewGoals = goals.filter(
     (goal) => !goal.startWeek || currentWeek.weekStart >= goal.startWeek
   );
@@ -551,115 +546,68 @@ export function ReviewPanel({
   };
 
   return (
-    <Column spacing={14} style={{ width: '100%' }} testID="goal-review-panel">
-      <Column spacing={4} style={{ width: '100%' }}>
-        <Text textStyle={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>
-          Weekly status
-        </Text>
-        <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}>
-          {formatWeek(currentWeek)}
-        </Text>
-      </Column>
+    <View style={{ gap: 28, width: '100%' }} testID="goal-review-panel">
       {reviewGoals.length === 0 ? (
-        <Text textStyle={{ color: colors.textMuted, fontSize: 14 }}>
-          This goal had not started yet.
-        </Text>
+        <FormSection footer="This goal hadn’t started yet." />
       ) : (
-        reviewGoals.map((goal, index) => {
+        reviewGoals.map((goal) => {
           const draft = drafts[goal.id] ?? { statusId: '', note: '' };
           return (
-            <View key={goal.id} style={{ width: '100%' }}>
-              {index > 0 ? (
-                <View
-                  style={{
-                    backgroundColor: colors.border,
-                    height: 1,
-                    marginBottom: 14,
-                    width: '100%',
-                  }}
-                />
-              ) : null}
-              <View style={{ width: '100%' }}>
-                <Column
-                  spacing={8}
-                  style={{ width: '100%' }}
-                  testID={'goal-review-item-' + goal.id}
-                >
-                  <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
-                    {goal.title}
-                  </Text>
-                  {goal.evaluationMode === 'automatic' ? (
-                    <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
-                      Calculated from its rules. Saving a status here will override the selected
-                      week’s result.
-                    </Text>
-                  ) : null}
-                  <AccessiblePicker
-                    enabled={!saving}
-                    label={goal.title + ' weekly status'}
-                    onValueChange={(value) =>
-                      setDrafts((current) => ({
-                        ...current,
-                        [goal.id]: { ...draft, statusId: String(value) },
-                      }))
-                    }
-                    selectedValue={draft.statusId}
-                    testID={'goal-review-status-' + goal.id}
-                  >
-                    {orderedStatusDefinitions(settings).map((definition) => (
-                      <Picker.Item
-                        key={definition.id}
-                        label={definition.name}
-                        value={definition.id}
-                      />
-                    ))}
-                  </AccessiblePicker>
-                  <View style={{ maxWidth: '100%', minWidth: 0, width: '100%' }}>
-                    <AccessibleTextInput
-                      defaultValue={draft.note}
-                      editable={!saving}
-                      label={goal.title + ' weekly note'}
-                      multiline
-                      numberOfLines={3}
-                      onChangeText={(note) =>
-                        setDrafts((current) => ({
-                          ...current,
-                          [goal.id]: { ...draft, note },
-                        }))
-                      }
-                      placeholder="What helped, what got in the way, or what should change?"
-                      style={{ height: 72, width: '100%' }}
-                      testID={'goal-review-note-' + goal.id}
-                      textStyle={{ color: colors.text, fontSize: 15 }}
-                    />
-                  </View>
-                </Column>
-              </View>
-            </View>
+            <FormSection
+              footer={
+                goal.evaluationMode === 'automatic'
+                  ? 'Choosing a status here replaces the calculated result for this week.'
+                  : undefined
+              }
+              key={goal.id}
+              testID={'goal-review-item-' + goal.id}
+              title={reviewGoals.length > 1 ? goal.title : undefined}
+            >
+              <FormPickerRow
+                enabled={!saving}
+                label="Status"
+                onValueChange={(value) =>
+                  setDrafts((current) => ({
+                    ...current,
+                    [goal.id]: { ...draft, statusId: String(value) },
+                  }))
+                }
+                selectedValue={draft.statusId}
+                testID={'goal-review-status-' + goal.id}
+              >
+                {orderedStatusDefinitions(settings).map((definition) => (
+                  <Picker.Item key={definition.id} label={definition.name} value={definition.id} />
+                ))}
+              </FormPickerRow>
+              <FormTextField
+                label={goal.title + ' weekly note'}
+                multiline
+                onChangeText={(note) =>
+                  setDrafts((current) => ({
+                    ...current,
+                    [goal.id]: { ...draft, note },
+                  }))
+                }
+                placeholder="Note"
+                testID={'goal-review-note-' + goal.id}
+                value={draft.note}
+              />
+            </FormSection>
           );
         })
       )}
-      {error ? (
-        <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{error}</Text>
+      {reviewGoals.length > 0 ? (
+        <FormSection footer={error ?? undefined} footerTone="danger">
+          <FormRow
+            disabled={saving}
+            kind="action"
+            label={saving ? 'Saving…' : 'Save Review'}
+            onPress={() => void save()}
+            testID="goal-review-save"
+          />
+        </FormSection>
       ) : null}
-      <Column spacing={8} style={{ width: '100%' }}>
-        <AppButton
-          disabled={saving}
-          label={saving ? 'Saving...' : 'Save review'}
-          onPress={() => void save()}
-          style={{ width: '100%' }}
-          testID="goal-review-save"
-        />
-        <AppButton
-          disabled={saving}
-          label="Cancel"
-          onPress={onCancel}
-          style={{ width: '100%' }}
-          testID="goal-review-cancel"
-          variant="outlined"
-        />
-      </Column>
-    </Column>
+    </View>
   );
 }
 

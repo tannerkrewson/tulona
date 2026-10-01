@@ -54,14 +54,12 @@ assert(
   'goal rows must reduce only the empty space below their content while preserving top and side insets'
 );
 assert(
-  reviewPanel.includes("style={{ width: '100%' }}") &&
-    !reviewPanel.includes('borderColor: colors.primary') &&
+  !reviewPanel.includes('borderColor: colors.primary') &&
     !reviewPanel.includes('Record how each manual goal went for') &&
-    reviewPanel.includes('formatWeek(currentWeek)') &&
-    reviewPanel.includes('height: 72') &&
-    reviewPanel.includes("maxWidth: '100%'") &&
-    reviewPanel.includes("label={saving ? 'Saving...' : 'Save review'}"),
-  'weekly review must be an unboxed, weekday-ranged, flexible-height form'
+    reviewPanel.includes('<FormPickerRow') &&
+    reviewPanel.includes('<FormTextField') &&
+    reviewPanel.includes("label={saving ? 'Saving…' : 'Save Review'}"),
+  'weekly review must be a grouped form with a status picker, note, and save action'
 );
 assert(
   goalReview.includes('goal-review-week-navigation') &&

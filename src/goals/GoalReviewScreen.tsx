@@ -4,7 +4,15 @@ import { useEffect, useState } from 'react';
 import { Text as NativeText, View } from 'react-native';
 
 import { useAppTheme } from '@theme';
-import { errorText, AppButton, IconButton, Screen } from '@ui';
+import {
+  errorText,
+  AppButton,
+  FormRow,
+  FormSection,
+  HeaderTextButton,
+  IconButton,
+  Screen,
+} from '@ui';
 import { goBackInAppStack } from '../navigation/app-back';
 
 import { formatGoalWeek, goalReviewWeekIndex, moveGoalReviewWeek } from './goal-review-navigation';
@@ -140,14 +148,13 @@ export function GoalReviewScreen({ goalId }: GoalReviewScreenProps) {
   if (goal.evaluationMode === 'manual') {
     return (
       <Screen headerRight={editButton} onBack={goBack} title={goal.title}>
-        <Column spacing={16} style={{ width: '100%' }}>
+        <Column spacing={28} style={{ width: '100%' }}>
           {weekNavigator}
           <ReviewPanel
             currentSnapshot={selectedSnapshot}
             currentWeek={selectedWeek}
             goals={[goal]}
             key={selectedWeek.weekStart}
-            onCancel={goBack}
             onSaved={async () => {
               goBack();
             }}
@@ -163,20 +170,25 @@ export function GoalReviewScreen({ goalId }: GoalReviewScreenProps) {
   const definition = statusDefinition(resource.goalSettings, status?.statusId);
   return (
     <Screen headerRight={editButton} onBack={goBack} title={goal.title}>
-      <Column spacing={16} style={{ width: '100%' }}>
+      <Column spacing={28} style={{ width: '100%' }}>
         {weekNavigator}
-        <Column spacing={14} style={{ width: '100%' }} testID="goal-automatic-review">
-          <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>
-            {currentWeekSelected ? 'Current result' : 'Previous week result'}
-          </Text>
-          <StatusBadge definition={definition} label={definition?.name ?? 'No result yet'} />
-        </Column>
+        <FormSection
+          footer="Calculated from this goal’s checks."
+          testID="goal-automatic-review"
+          title={currentWeekSelected ? 'Result So Far' : 'Result'}
+        >
+          <FormRow
+            label="Status"
+            trailing={
+              <StatusBadge definition={definition} label={definition?.name ?? 'No result yet'} />
+            }
+          />
+        </FormSection>
         <ReviewPanel
           currentSnapshot={selectedSnapshot}
           currentWeek={selectedWeek}
           goals={[goal]}
           key={selectedWeek.weekStart}
-          onCancel={goBack}
           onSaved={async () => {
             goBack();
           }}
@@ -213,38 +225,36 @@ function GoalReviewWeekNavigator({
     );
   }
 
+  const weeksAgo = snapshots.length - 1 - selectedIndex;
+  const weekLabel =
+    weeksAgo === 0 ? 'This Week' : weeksAgo === 1 ? 'Last Week' : `${weeksAgo} Weeks Ago`;
+
   return (
-    <Column spacing={8} style={{ width: '100%' }} testID="goal-review-week-navigation">
+    <Column spacing={6} style={{ width: '100%' }} testID="goal-review-week-navigation">
       <Row alignment="center" spacing={8} style={{ width: '100%' }}>
         <IconButton
           disabled={atOldest}
           icon="chevron-left"
-          label={atOldest ? 'No previous week available' : 'Review previous week'}
+          label={atOldest ? 'No earlier week' : 'Previous week'}
           onPress={() => onMove('previous')}
           testID="goal-review-previous-week"
-          variant="muted"
+          variant="plain"
         />
         <View
-          accessibilityLabel={`${
-            selectedIndex === snapshots.length - 1
-              ? 'Current week'
-              : `Previous week ${selectedIndex + 1} of ${previousWeekCount}`
-          }, ${formatGoalWeek(selectedSnapshot.week)}`}
+          accessibilityLabel={`${weekLabel}, ${formatGoalWeek(selectedSnapshot.week)}`}
           accessible
-          style={{ flex: 1, minWidth: 0 }}
+          style={{ alignItems: 'center', flex: 1, minWidth: 0 }}
           testID="goal-review-selected-week"
         >
           <NativeText
             numberOfLines={1}
-            style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}
+            style={{ color: colors.text, fontSize: 17, fontWeight: '600' }}
           >
-            {selectedIndex === snapshots.length - 1
-              ? 'Current week'
-              : `Previous week ${selectedIndex + 1} of ${previousWeekCount}`}
+            {weekLabel}
           </NativeText>
           <NativeText
             numberOfLines={1}
-            style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}
+            style={{ color: colors.textMuted, fontSize: 14 }}
             testID="goal-review-selected-week-range"
           >
             {formatGoalWeek(selectedSnapshot.week)}
@@ -253,28 +263,29 @@ function GoalReviewWeekNavigator({
         <IconButton
           disabled={atCurrent}
           icon="chevron-right"
-          label={atCurrent ? 'Already on current week' : 'Review next week'}
+          label={atCurrent ? 'Already on this week' : 'Next week'}
           onPress={() => onMove('next')}
           testID="goal-review-next-week"
-          variant="muted"
+          variant="plain"
         />
       </Row>
       {previousWeekCount === 0 ? (
         <Text
-          textStyle={{ color: colors.textMuted, fontSize: 13 }}
+          textStyle={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}
           testID="goal-review-no-previous-weeks"
         >
-          No previous weeks are available to review.
+          Earlier weeks appear here once this goal has been running longer.
         </Text>
       ) : null}
       {!atCurrent ? (
-        <AppButton
-          label="Return to current week"
-          onPress={() => onSelectIndex(snapshots.length - 1)}
-          style={{ width: '100%' }}
-          testID="goal-review-current-week"
-          variant="outlined"
-        />
+        <View style={{ alignItems: 'center', width: '100%' }}>
+          <HeaderTextButton
+            compact
+            label="Go to This Week"
+            onPress={() => onSelectIndex(snapshots.length - 1)}
+            testID="goal-review-current-week"
+          />
+        </View>
       ) : null}
     </Column>
   );
