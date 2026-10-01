@@ -41,6 +41,7 @@ export {
   type FormSheetProps,
 } from './Form';
 export { FormDateRow, type FormDateRowProps } from './FormDateRow';
+export { dateFromDay, dayFromDate } from './form-date';
 export { IconButton, type IconButtonProps, type IconButtonVariant } from './IconButton';
 export {
   NativeMenuButton,

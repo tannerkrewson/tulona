@@ -1,7 +1,7 @@
 import { Picker } from '@expo/ui';
 import { Column, Row, Text } from '@ui/primitives';
 import { useIsFocused, useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text as NativeText, View } from 'react-native';
 
 import type {
@@ -34,17 +34,24 @@ import {
   ConfirmationModal,
   EmptyState,
   errorText,
+  dayFromDate,
+  Form,
+  FormDateRow,
+  FormPickerRow,
+  FormRow,
+  FormSection,
+  FormTextField,
   getRowSurfaceBackground,
   getRowSurfaceStyle,
   IconButton,
   PageFilterMenu,
   PageFilterMenuSelection,
+  HeaderTextButton,
   Screen,
 } from '@ui';
 
 import { CatalogEditActions } from '../tracker/CatalogEditActions';
 import { CatalogIconButton } from '../tracker/CatalogIconButton';
-import { GoalStartWeekPicker } from './GoalStartWeekPicker';
 
 const OVERALL_STATUS_OPTIONS: readonly {
   value: GoalOverallStatusFilter;
@@ -250,16 +257,6 @@ export function statusDefinition(
   return statusId
     ? (settings.statusDefinitions.find((definition) => definition.id === statusId) ?? null)
     : null;
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  const { colors } = useAppTheme();
-  return (
-    <Column spacing={6} style={{ width: '100%' }}>
-      <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>{label}</Text>
-      {children}
-    </Column>
-  );
 }
 
 export function StatusBadge({
@@ -666,6 +663,19 @@ export function ReviewPanel({
   );
 }
 
+const MINUTE_PRESETS = [
+  5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240, 300, 360, 420, 480, 600, 720, 900, 1200, 1500, 1800,
+  2400, 3000,
+] as const;
+
+function minuteOptions(current: string, minimum: number, includeZero: boolean): number[] {
+  const values = new Set<number>(MINUTE_PRESETS.filter((minutes) => minutes > minimum));
+  if (includeZero) values.add(0);
+  const currentMinutes = current.trim() ? Number(current) : NaN;
+  if (Number.isInteger(currentMinutes) && currentMinutes >= 0) values.add(currentMinutes);
+  return [...values].sort((left, right) => left - right);
+}
+
 function RuleEditor({
   rule,
   index,
@@ -685,197 +695,165 @@ function RuleEditor({
   onChange: (rule: DraftRule) => void;
   onRemove: () => void;
 }) {
-  const { colors } = useAppTheme();
   const candidates =
     rule.kind === 'habit'
       ? habits
       : rule.kind === 'activity-duration'
         ? [...catalog.activities, ...catalog.routines]
         : [];
+  const per = rule.frequency === 'daily' ? 'day' : 'week';
+  const targetMinutes = Number(rule.targetMinutes) || 0;
+  const footer =
+    rule.kind === 'weekly-status'
+      ? 'You pick this result during your weekly review.'
+      : rule.kind === 'activity-duration' && rule.comparison === 'at-most'
+        ? rule.baselineMinutes.trim()
+          ? `Cutting back from where you started counts as Partial. Staying at or under the limit each ${per} counts as Good.`
+          : `Set where you're starting from to get Partial credit for cutting back.`
+        : undefined;
   return (
-    <View style={{ width: '100%' }} testID={'goal-rule-editor-' + index}>
-      {index > 0 ? (
-        <View
-          style={{ backgroundColor: colors.border, height: 1, marginBottom: 14, width: '100%' }}
+    <FormSection
+      footer={footer}
+      headerAction={
+        <HeaderTextButton
+          compact
+          disabled={disabled}
+          label="Remove"
+          onPress={onRemove}
+          testID={'goal-rule-remove-' + index}
         />
-      ) : null}
-      <View style={{ width: '100%' }}>
-        <Column spacing={10} style={{ width: '100%' }}>
-          <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-            <View style={{ flex: 1 }}>
-              <NativeText style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
-                {(rule.kind === 'weekly-status' ? 'Manual status' : 'Check') + ' ' + (index + 1)}
-              </NativeText>
-            </View>
-            <AppButton
-              disabled={disabled}
-              label="Remove"
-              onPress={onRemove}
-              testID={'goal-rule-remove-' + index}
-              variant="outlined"
+      }
+      testID={'goal-rule-editor-' + index}
+      title={'Check ' + (index + 1)}
+    >
+      <FormPickerRow
+        enabled={!disabled}
+        label="Type"
+        onValueChange={(value) => {
+          const kind = String(value) as GoalEvaluationRule['kind'];
+          onChange(blankDraftRule(kind, settings, habits, catalog));
+        }}
+        selectedValue={rule.kind}
+        testID={'goal-rule-kind-' + index}
+      >
+        <Picker.Item label="Habit" value="habit" />
+        <Picker.Item label="Tracked time" value="activity-duration" />
+        <Picker.Item label="Manual" value="weekly-status" />
+      </FormPickerRow>
+      {rule.kind !== 'weekly-status' ? (
+        <FormPickerRow
+          enabled={!disabled}
+          label={rule.kind === 'habit' ? 'Habit' : 'Activity'}
+          onValueChange={(value) => onChange({ ...rule, sourceId: String(value) })}
+          selectedValue={rule.sourceId}
+          testID={'goal-rule-source-' + index}
+        >
+          <Picker.Item label={candidates.length === 0 ? 'None available' : 'Choose'} value="" />
+          {candidates.map((candidate) => (
+            <Picker.Item
+              key={candidate.id}
+              label={
+                `${candidate.name}${'kind' in candidate && candidate.kind === 'routine' ? ' (routine)' : ''}` +
+                ('archivedAt' in candidate && candidate.archivedAt ? ' (archived)' : '')
+              }
+              value={candidate.id}
             />
-          </Row>
-          <Field label="Check type">
-            <AccessiblePicker
-              enabled={!disabled}
-              label="Check type"
-              onValueChange={(value) => {
-                const kind = String(value) as GoalEvaluationRule['kind'];
-                onChange(blankDraftRule(kind, settings, habits, catalog));
-              }}
-              selectedValue={rule.kind}
-              testID={'goal-rule-kind-' + index}
-            >
-              <Picker.Item label="Habit progress" value="habit" />
-              <Picker.Item label="Activity or routine time" value="activity-duration" />
-              <Picker.Item label="Weekly status (manual)" value="weekly-status" />
-            </AccessiblePicker>
-          </Field>
-          {rule.kind !== 'weekly-status' ? (
-            <Field label={rule.kind === 'habit' ? 'Habit' : 'Activity or routine'}>
-              <AccessiblePicker
-                enabled={!disabled}
-                label={rule.kind === 'habit' ? 'Habit' : 'Activity or routine'}
-                onValueChange={(value) => onChange({ ...rule, sourceId: String(value) })}
-                selectedValue={rule.sourceId}
-                testID={'goal-rule-source-' + index}
-              >
-                <Picker.Item
-                  label={
-                    candidates.length === 0
-                      ? 'No ' +
-                        (rule.kind === 'habit' ? 'habits' : 'activities or routines') +
-                        ' available'
-                      : 'Choose ' + (rule.kind === 'habit' ? 'a habit' : 'an activity or routine')
-                  }
-                  value=""
-                />
-                {candidates.map((candidate) => (
-                  <Picker.Item
-                    key={candidate.id}
-                    label={
-                      `${candidate.name}${'kind' in candidate && candidate.kind === 'routine' ? ' (routine)' : ''}` +
-                      ('archivedAt' in candidate && candidate.archivedAt ? ' (archived)' : '')
-                    }
-                    value={candidate.id}
-                  />
-                ))}
-              </AccessiblePicker>
-            </Field>
-          ) : (
-            <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
-              Choose the result for each week on the goal review screen. This check does not need an
-              activity or habit.
-            </Text>
-          )}
-          {rule.kind === 'habit' ? (
-            <>
-              <Field label="Measure">
-                <AccessiblePicker
-                  enabled={!disabled}
-                  label="Habit measure"
-                  onValueChange={(value) => {
-                    const measurement = String(value) as DraftRule['measurement'];
-                    onChange({
-                      ...rule,
-                      measurement,
-                      targetCount: measurement === 'completed-days' ? rule.targetCount || '1' : '',
-                    });
-                  }}
-                  selectedValue={rule.measurement}
-                  testID={'goal-rule-measurement-' + index}
-                >
-                  <Picker.Item label="Completed days" value="completed-days" />
-                  <Picker.Item label="No skipped days" value="no-skipped" />
-                  <Picker.Item label="Every scheduled day" value="every-day" />
-                </AccessiblePicker>
-              </Field>
-              {rule.measurement === 'completed-days' ? (
-                <Field label="Completed scheduled days target">
-                  <AccessibleTextInput
-                    defaultValue={rule.targetCount}
-                    editable={!disabled}
-                    keyboardType="numeric"
-                    label="Completed scheduled days target"
-                    onChangeText={(targetCount) => onChange({ ...rule, targetCount })}
-                    placeholder="1"
-                    testID={'goal-rule-target-count-' + index}
-                    textStyle={{ color: colors.text, fontSize: 16 }}
-                  />
-                </Field>
-              ) : null}
-            </>
-          ) : rule.kind === 'activity-duration' ? (
-            <>
-              <Field label="Time comparison">
-                <AccessiblePicker
-                  enabled={!disabled}
-                  label="Time comparison"
-                  onValueChange={(value) =>
-                    onChange({
-                      ...rule,
-                      comparison: String(value) as DraftRule['comparison'],
-                    })
-                  }
-                  selectedValue={rule.comparison}
-                  testID={'goal-rule-comparison-' + index}
-                >
-                  <Picker.Item label="At least this much time" value="at-least" />
-                  <Picker.Item label="At most this much time" value="at-most" />
-                </AccessiblePicker>
-              </Field>
-              <Field label="Target frequency">
-                <AccessiblePicker
-                  enabled={!disabled}
-                  label="Target frequency"
-                  onValueChange={(value) =>
-                    onChange({ ...rule, frequency: String(value) as GoalTargetFrequency })
-                  }
-                  selectedValue={rule.frequency}
-                  testID={'goal-rule-frequency-' + index}
-                >
-                  <Picker.Item label="Daily" value="daily" />
-                  <Picker.Item label="Weekly" value="weekly" />
-                </AccessiblePicker>
-              </Field>
-              <Field
-                label={(rule.frequency === 'daily' ? 'Daily' : 'Weekly') + ' target in minutes'}
-              >
-                <AccessibleTextInput
-                  defaultValue={rule.targetMinutes}
-                  editable={!disabled}
-                  keyboardType="numeric"
-                  label={(rule.frequency === 'daily' ? 'Daily' : 'Weekly') + ' target in minutes'}
-                  onChangeText={(targetMinutes) => onChange({ ...rule, targetMinutes })}
-                  placeholder="30"
-                  testID={'goal-rule-target-minutes-' + index}
-                  textStyle={{ color: colors.text, fontSize: 16 }}
-                />
-              </Field>
-              {rule.comparison === 'at-most' ? (
-                <Field label="Your usual time right now (optional, minutes)">
-                  <Column spacing={6} style={{ width: '100%' }}>
-                    <AccessibleTextInput
-                      defaultValue={rule.baselineMinutes}
-                      editable={!disabled}
-                      keyboardType="numeric"
-                      label="Your usual time right now (optional, minutes)"
-                      onChangeText={(baselineMinutes) => onChange({ ...rule, baselineMinutes })}
-                      placeholder="For example, 300"
-                      testID={'goal-rule-baseline-minutes-' + index}
-                      textStyle={{ color: colors.text, fontSize: 16 }}
-                    />
-                    <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
-                      {`Enter your usual time for this activity per ${rule.frequency === 'daily' ? 'day' : 'week'} right now. A reduction from this baseline that stays above the target counts as Partial; meeting or going below the target counts as Good.`}
-                    </Text>
-                  </Column>
-                </Field>
-              ) : null}
-            </>
-          ) : null}
-        </Column>
-      </View>
-    </View>
+          ))}
+        </FormPickerRow>
+      ) : null}
+      {rule.kind === 'habit' ? (
+        <FormPickerRow
+          enabled={!disabled}
+          label="Goal"
+          onValueChange={(value) => {
+            const measurement = String(value) as DraftRule['measurement'];
+            onChange({
+              ...rule,
+              measurement,
+              targetCount: measurement === 'completed-days' ? rule.targetCount || '1' : '',
+            });
+          }}
+          selectedValue={rule.measurement}
+          testID={'goal-rule-measurement-' + index}
+        >
+          <Picker.Item label="Done some days" value="completed-days" />
+          <Picker.Item label="No skipped days" value="no-skipped" />
+          <Picker.Item label="Every scheduled day" value="every-day" />
+        </FormPickerRow>
+      ) : null}
+      {rule.kind === 'habit' && rule.measurement === 'completed-days' ? (
+        <FormPickerRow
+          enabled={!disabled}
+          label="Days"
+          onValueChange={(value) => onChange({ ...rule, targetCount: String(value) })}
+          selectedValue={rule.targetCount}
+          testID={'goal-rule-target-count-' + index}
+        >
+          {Array.from({ length: 7 }, (_, day) => String(day + 1)).map((value) => (
+            <Picker.Item
+              key={value}
+              label={`${value} ${value === '1' ? 'day' : 'days'} a week`}
+              value={value}
+            />
+          ))}
+        </FormPickerRow>
+      ) : null}
+      {rule.kind === 'activity-duration' ? (
+        <FormPickerRow
+          enabled={!disabled}
+          label="Aim for"
+          onValueChange={(value) =>
+            onChange({ ...rule, comparison: String(value) as DraftRule['comparison'] })
+          }
+          selectedValue={rule.comparison}
+          testID={'goal-rule-comparison-' + index}
+        >
+          <Picker.Item label="At least" value="at-least" />
+          <Picker.Item label="At most" value="at-most" />
+        </FormPickerRow>
+      ) : null}
+      {rule.kind === 'activity-duration' ? (
+        <FormPickerRow
+          enabled={!disabled}
+          label="Time"
+          onValueChange={(value) => onChange({ ...rule, targetMinutes: String(value) })}
+          selectedValue={rule.targetMinutes}
+          testID={'goal-rule-target-minutes-' + index}
+        >
+          {minuteOptions(rule.targetMinutes, 0, rule.comparison === 'at-most').map((minutes) => (
+            <Picker.Item key={minutes} label={formatMinutes(minutes)} value={String(minutes)} />
+          ))}
+        </FormPickerRow>
+      ) : null}
+      {rule.kind === 'activity-duration' ? (
+        <FormPickerRow
+          enabled={!disabled}
+          label="Per"
+          onValueChange={(value) =>
+            onChange({ ...rule, frequency: String(value) as GoalTargetFrequency })
+          }
+          selectedValue={rule.frequency}
+          testID={'goal-rule-frequency-' + index}
+        >
+          <Picker.Item label="Day" value="daily" />
+          <Picker.Item label="Week" value="weekly" />
+        </FormPickerRow>
+      ) : null}
+      {rule.kind === 'activity-duration' && rule.comparison === 'at-most' ? (
+        <FormPickerRow
+          enabled={!disabled}
+          label="Starting from"
+          onValueChange={(value) => onChange({ ...rule, baselineMinutes: String(value) })}
+          selectedValue={rule.baselineMinutes.trim()}
+          testID={'goal-rule-baseline-minutes-' + index}
+        >
+          <Picker.Item label="Not set" value="" />
+          {minuteOptions(rule.baselineMinutes, targetMinutes, false).map((minutes) => (
+            <Picker.Item key={minutes} label={formatMinutes(minutes)} value={String(minutes)} />
+          ))}
+        </FormPickerRow>
+      ) : null}
+    </FormSection>
   );
 }
 
@@ -898,7 +876,6 @@ export function GoalEditor({
   onSaved: () => Promise<void>;
   onDeleted: () => Promise<void>;
 }) {
-  const { colors } = useAppTheme();
   const currentWeek = service.week(new Date());
   const initialStartWeek = goal ? service.week(goal.startWeek ?? goal.createdAt) : currentWeek;
   const [title, setTitle] = useState(goal?.title ?? '');
@@ -1045,23 +1022,48 @@ export function GoalEditor({
 
   return (
     <>
-      <Screen onBack={onCancel} testID="goal-editor-screen" title={goal ? 'Edit goal' : 'New goal'}>
-        <Column spacing={20} style={{ width: '100%' }} testID="goal-editor">
-          <Field label="Goal name">
-            <AccessibleTextInput
-              defaultValue={title}
-              editable={!saving}
+      <Screen
+        headerRight={
+          <HeaderTextButton
+            disabled={saving}
+            emphasized
+            label={goal ? 'Save' : 'Add'}
+            onPress={save}
+            testID="goal-save"
+          />
+        }
+        onBack={onCancel}
+        testID="goal-editor-screen"
+        title={goal ? 'Edit Goal' : 'New Goal'}
+      >
+        <Form testID="goal-editor">
+          {error ? (
+            <FormSection footer={error} testID="goal-editor-error">
+              <FormRow
+                disabled={saving || lastAction === null}
+                icon="repeat"
+                kind="action"
+                label="Try Again"
+                onPress={() => {
+                  if (lastAction === 'save') save();
+                  else if (lastAction === 'delete') deleteGoal();
+                }}
+                testID="goal-save-retry"
+              />
+            </FormSection>
+          ) : null}
+          <FormSection>
+            <FormTextField
+              autoFocus={!goal}
               label="Goal name"
               onChangeText={setTitle}
-              placeholder="What do you want to move forward?"
+              placeholder="Name"
               testID="goal-title"
-              textStyle={{ color: colors.text, fontSize: 16 }}
+              value={title}
             />
-          </Field>
-          <Field label="Overall status">
-            <AccessiblePicker
+            <FormPickerRow
               enabled={!saving}
-              label="Overall status"
+              label="Status"
               onValueChange={(value) => setOverallStatus(String(value) as Goal['overallStatus'])}
               selectedValue={overallStatus}
               testID="goal-overall-status"
@@ -1070,12 +1072,19 @@ export function GoalEditor({
               <Picker.Item label="Future" value="future" />
               <Picker.Item label="Completed" value="completed" />
               <Picker.Item label="Gave up" value="gave-up" />
-            </AccessiblePicker>
-          </Field>
-          <Field label="Status mode">
-            <AccessiblePicker
+            </FormPickerRow>
+          </FormSection>
+          <FormSection
+            footer={
+              evaluationMode === 'manual'
+                ? 'You pick each week’s result and write a note during your weekly review.'
+                : 'Each week gets the result of its weakest check.'
+            }
+            title="Weekly Result"
+          >
+            <FormPickerRow
               enabled={!saving}
-              label="Status mode"
+              label="Decided by"
               onValueChange={(value) => {
                 const nextMode = String(value) as GoalEvaluationMode;
                 setEvaluationMode(nextMode);
@@ -1084,85 +1093,53 @@ export function GoalEditor({
               selectedValue={evaluationMode}
               testID="goal-evaluation-mode"
             >
-              <Picker.Item label="Review" value="manual" />
-              <Picker.Item label="Rules" value="automatic" />
-            </AccessiblePicker>
-          </Field>
+              <Picker.Item label="Weekly review" value="manual" />
+              <Picker.Item label="Checks" value="automatic" />
+            </FormPickerRow>
+          </FormSection>
           {goal ? (
-            <Field label="Started">
-              <Text
-                textStyle={{ color: colors.text, fontSize: 16, fontWeight: '600' }}
+            <FormSection>
+              <FormRow
+                label="Started"
                 testID="goal-start-week-readonly"
-              >
-                {formatWeek(service.week(goal.startWeek ?? goal.createdAt))}
-              </Text>
-            </Field>
+                value={formatWeek(service.week(goal.startWeek ?? goal.createdAt))}
+              />
+            </FormSection>
           ) : (
-            <Column
-              spacing={10}
-              style={{ paddingTop: 16, width: '100%' }}
+            <FormSection
+              footer={`${formatWeek(service.week(startWeekDate))}. Earlier weeks aren’t part of this goal.`}
               testID="goal-timeline-options"
+              title="Timeline"
             >
-              <View style={{ backgroundColor: colors.border, height: 1, width: '100%' }} />
-              <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-                Goal timeline
-              </Text>
-              <Field label="Starting week">
-                <GoalStartWeekPicker
-                  maximumDate={new Date(currentWeek.endMs - 1)}
-                  onValueChange={(date) => {
-                    const selectedDay = new Date(date);
-                    selectedDay.setHours(23, 59, 59, 999);
-                    setStartWeekDate(selectedDay);
-                  }}
-                  value={startWeekDate}
-                  valueLabel={formatWeek(service.week(startWeekDate))}
-                />
-              </Field>
-              <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-                Weeks before this date are outside the goal. You can start in any past week or in
-                the current week.
-              </Text>
+              <FormDateRow
+                label="Starts"
+                maximumDate={dayFromDate(new Date(currentWeek.endMs - 1))}
+                onChange={(day) => setStartWeekDate(new Date(`${day}T23:59:59.999`))}
+                testID="goal-start-week"
+                value={dayFromDate(startWeekDate)}
+              />
               {evaluationMode === 'manual' ? (
-                <>
-                  <Field label="Optional starting statuses">
-                    <AccessiblePicker
-                      enabled={!saving}
-                      label="Optional starting statuses"
-                      onValueChange={(value) => setBackfillStatusId(String(value))}
-                      selectedValue={backfillStatusId}
-                      testID="goal-start-week-backfill-status"
-                    >
-                      <Picker.Item label="Leave all weeks empty" value="" />
-                      {orderedStatusDefinitions(settings).map((definition) => (
-                        <Picker.Item
-                          key={definition.id}
-                          label={'Fill each week with “' + definition.name + '”'}
-                          value={definition.id}
-                        />
-                      ))}
-                    </AccessiblePicker>
-                  </Field>
-                  <Text textStyle={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
-                    When chosen, this status is added to every week from the start week through this
-                    week. You can change individual weeks later.
-                  </Text>
-                </>
+                <FormPickerRow
+                  enabled={!saving}
+                  label="Fill weeks"
+                  onValueChange={(value) => setBackfillStatusId(String(value))}
+                  selectedValue={backfillStatusId}
+                  testID="goal-start-week-backfill-status"
+                >
+                  <Picker.Item label="Leave empty" value="" />
+                  {orderedStatusDefinitions(settings).map((definition) => (
+                    <Picker.Item
+                      key={definition.id}
+                      label={'Mark “' + definition.name + '”'}
+                      value={definition.id}
+                    />
+                  ))}
+                </FormPickerRow>
               ) : null}
-            </Column>
+            </FormSection>
           )}
-          {evaluationMode === 'automatic' ? (
-            <Column spacing={10} style={{ width: '100%' }} testID="goal-rule-list">
-              <Column spacing={4} style={{ width: '100%' }}>
-                <Text textStyle={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-                  Weekly checks
-                </Text>
-                <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-                  A goal uses the least successful automatic check for the week. Manual weekly
-                  status is set during review. Activity targets can be daily or weekly.
-                </Text>
-              </Column>
-              {rules.map((rule, index) => (
+          {evaluationMode === 'automatic'
+            ? rules.map((rule, index) => (
                 <RuleEditor
                   catalog={catalog}
                   disabled={saving}
@@ -1178,68 +1155,38 @@ export function GoalEditor({
                   rule={rule}
                   settings={settings}
                 />
-              ))}
-              <AppButton
+              ))
+            : null}
+          {evaluationMode === 'automatic' ? (
+            <FormSection testID="goal-rule-list">
+              <FormRow
                 disabled={saving}
-                label="Add weekly check"
+                icon="plus"
+                kind="action"
+                label="Add Check"
                 onPress={() =>
                   setRules((current) => [
                     ...current,
                     blankDraftRule(defaultNewRuleKind, settings, habits, catalog),
                   ])
                 }
-                style={{ width: '100%' }}
                 testID="goal-rule-add"
-                variant="outlined"
               />
-            </Column>
-          ) : (
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-              You will choose a shared status and write a note during your weekly review.
-            </Text>
-          )}
-          {error ? (
-            <Column spacing={8} style={{ width: '100%' }} testID="goal-editor-error">
-              <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{error}</Text>
-              <AppButton
-                disabled={saving || lastAction === null}
-                label="Retry"
-                onPress={() => {
-                  if (lastAction === 'save') save();
-                  else if (lastAction === 'delete') deleteGoal();
-                }}
-                testID="goal-save-retry"
-                variant="outlined"
-              />
-            </Column>
+            </FormSection>
           ) : null}
-          <Column spacing={8} style={{ width: '100%' }}>
-            <AppButton
-              disabled={saving}
-              label={saving ? 'Saving...' : goal ? 'Save goal' : 'Create goal'}
-              onPress={save}
-              style={{ width: '100%' }}
-              testID="goal-save"
-            />
-            <AppButton
-              disabled={saving}
-              label="Cancel"
-              onPress={onCancel}
-              style={{ width: '100%' }}
-              testID="goal-cancel"
-              variant="outlined"
-            />
-          </Column>
           {goal ? (
-            <AppButton
-              disabled={saving}
-              label="Delete goal"
-              onPress={() => setConfirmDelete(true)}
-              testID="goal-delete"
-              variant="outlined"
-            />
+            <FormSection>
+              <FormRow
+                disabled={saving}
+                icon="trash-2"
+                kind="destructive"
+                label="Delete Goal"
+                onPress={() => setConfirmDelete(true)}
+                testID="goal-delete"
+              />
+            </FormSection>
           ) : null}
-        </Column>
+        </Form>
       </Screen>
       {goal ? (
         <ConfirmationModal

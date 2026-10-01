@@ -28,9 +28,8 @@ const reviewPanel = goals.slice(reviewPanelStart, reviewPanelEnd);
 
 assert(
   goals.includes('function GoalEditor') &&
-    goals.includes('Create goal') &&
-    goals.includes('Save goal') &&
-    goals.includes('Delete goal'),
+    goals.includes("label={goal ? 'Save' : 'Add'}") &&
+    goals.includes('label="Delete Goal"'),
   'Goals must provide create, edit, save, and delete controls'
 );
 assert(
@@ -78,8 +77,8 @@ assert(
   'goal reviews must navigate bounded historical weeks with canonical date keys and retry states'
 );
 assert(
-  goals.includes('At least this much time') &&
-    goals.includes('At most this much time') &&
+  goals.includes('label="At least" value="at-least"') &&
+    goals.includes('label="At most" value="at-most"') &&
     goals.includes('baselineMinutes') &&
     goals.includes('No skipped days'),
   'automatic goals must support activity limits, reduction baselines, and habit completion rules'
@@ -112,7 +111,8 @@ assert(
     goals.includes("label={editMode ? 'Done' : 'Edit'}") &&
     goals.includes('testID="goal-editor-screen"') &&
     goals.includes('testID="goal-save-retry"') &&
-    goals.includes("label={saving ? 'Saving...' : goal ? 'Save goal' : 'Create goal'}") &&
+    goals.includes('testID="goal-save"') &&
+    goals.includes('disabled={saving}') &&
     goals.includes('onPress={save}'),
   'goal editing must reuse the tracker pencil style and expose a reachable busy/error/retry save'
 );

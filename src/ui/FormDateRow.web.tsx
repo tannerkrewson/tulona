@@ -3,7 +3,7 @@ import { useAppTheme } from '@theme';
 import { FormRow } from './Form';
 import type { FormDateRowProps } from './FormDateRow';
 
-export function FormDateRow({ label, value, onChange, testID }: FormDateRowProps) {
+export function FormDateRow({ label, value, onChange, maximumDate, testID }: FormDateRowProps) {
   const { colorScheme, colors } = useAppTheme();
   return (
     <FormRow
@@ -12,6 +12,7 @@ export function FormDateRow({ label, value, onChange, testID }: FormDateRowProps
         <input
           aria-label={label}
           data-testid={testID}
+          max={maximumDate}
           onChange={(event) => {
             if (event.currentTarget.value) onChange(event.currentTarget.value);
           }}
