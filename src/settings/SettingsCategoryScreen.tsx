@@ -1,11 +1,12 @@
-import { Column, Picker, Slider, Switch, Text } from '@expo/ui';
+import { Picker } from '@expo/ui';
+import { Column, Text } from '@ui/primitives';
 import { useIsFocused, useRouter } from 'expo-router';
 import { View } from 'react-native';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import type { AppSettings } from '@domain';
 import { useAppTheme, useThemePreference } from '@theme';
-import { AccessiblePicker, AppButton, errorText, Screen } from '@ui';
+import { AccessiblePicker, AppButton, AppSlider, AppSwitch, errorText, Screen } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { goBackInAppStack } from '../navigation/app-back';
 import BackupScreen from '../backup/BackupScreen';
@@ -145,7 +146,7 @@ function CategoryControls({ category, store }: Pick<CategoryContentProps, 'categ
           <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
             Foreground sound is best-effort and never schedules background notifications.
           </Text>
-          <Switch
+          <AppSwitch
             disabled={saving}
             label="Alarm"
             onValueChange={(value) => run(() => store.getState().setRoutineAlarmEnabled(value))}
@@ -156,7 +157,7 @@ function CategoryControls({ category, store }: Pick<CategoryContentProps, 'categ
             <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
               {`Volume · ${Math.round((settings.alarmSettings.volume ?? 1) * 100)}%`}
             </Text>
-            <Slider
+            <AppSlider
               disabled={saving || !settings.alarmSettings.enabled}
               max={1}
               min={0}

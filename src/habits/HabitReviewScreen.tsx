@@ -1,10 +1,10 @@
 /* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 */
-import { Column, Host, Text } from '@expo/ui';
+import { Column, Text } from '@ui/primitives';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text as NativeText, View } from 'react-native';
 
-import { logicalDayKey, type HabitDayOutcome, type LogicalDayKey } from '@domain';
+import { logicalDayKey, type Habit, type HabitDayOutcome, type LogicalDayKey } from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
 import { AppButton, errorText, Screen } from '@ui';
@@ -105,6 +105,15 @@ export default function HabitReviewScreen({ day: dayParam }: { day?: string | st
   );
 }
 
+function reviewQueue(store: HabitStore, day: LogicalDayKey): Habit[] {
+  const snapshot = store.getState();
+  const candidates =
+    day < snapshot.today
+      ? habitsNeedingReview(snapshot.habits, snapshot.states, day, snapshot.logicalDayRolloverHour)
+      : habitsActiveOnDay(snapshot.habits, day, snapshot.logicalDayRolloverHour);
+  return shuffle(candidates);
+}
+
 function HabitReviewContent({
   dayParam,
   goBack,
@@ -123,19 +132,12 @@ function HabitReviewContent({
   const [index, setIndex] = useState(0);
   const [outcome, setOutcome] = useState<HabitDayOutcome | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const queue = useMemo(() => {
-    const snapshot = store.getState();
-    const candidates =
-      day < snapshot.today
-        ? habitsNeedingReview(
-            snapshot.habits,
-            snapshot.states,
-            day,
-            snapshot.logicalDayRolloverHour
-          )
-        : habitsActiveOnDay(snapshot.habits, day, snapshot.logicalDayRolloverHour);
-    return shuffle(candidates);
-  }, [day, store]);
+  const [review, setReview] = useState(() => ({ day, queue: reviewQueue(store, day) }));
+  if (review.day !== day) {
+    setReview({ day, queue: reviewQueue(store, day) });
+    setIndex(0);
+  }
+  const { queue } = review;
   const habit = queue[index];
   const currentState = habit
     ? states.find((state) => state.habitId === habit.id && state.logicalDay === day)
@@ -264,7 +266,7 @@ function HabitReviewContent({
                         gap: 12,
                         minHeight: 58,
                         opacity: saving ? 0.5 : pressed ? 0.82 : 1,
-                        paddingHorizontal: 14,
+                        paddingHorizontal: selected ? 13 : 14,
                         width: '100%',
                       })}
                       testID={`habit-review-outcome-${option.value}`}
@@ -326,7 +328,7 @@ function HabitReviewContent({
             </View>
           ) : null}
           {habit ? (
-            <Host style={{ height: 54, width: '100%' }}>
+            <View style={{ height: 54, width: '100%' }}>
               <AppButton
                 disabled={saving || outcome === null}
                 label={index + 1 === queue.length ? 'Finish review' : 'Next habit'}
@@ -334,9 +336,9 @@ function HabitReviewContent({
                 style={{ height: 54, width: '100%' }}
                 testID="habit-review-next"
               />
-            </Host>
+            </View>
           ) : (
-            <Host style={{ height: 54, width: '100%' }}>
+            <View style={{ height: 54, width: '100%' }}>
               <AppButton
                 label="Back to habits"
                 onPress={goBack}
@@ -344,7 +346,7 @@ function HabitReviewContent({
                 testID="close-habit-review"
                 variant="outlined"
               />
-            </Host>
+            </View>
           )}
         </View>
       </View>

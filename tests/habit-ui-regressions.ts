@@ -172,8 +172,7 @@ assert(
 );
 assert(
   appScreen.includes('const screenBackground = backgroundColor ?? colors.background') &&
-    appScreen.includes('matchContents={{ vertical: true }}') &&
-    appScreen.includes('colorScheme={colorScheme}'),
+    appScreen.includes('{ backgroundColor: screenBackground }'),
   'app screens must use the theme background so habit surfaces remain visibly distinct'
 );
 assert(
@@ -191,13 +190,14 @@ assert(
 );
 assert(
   habitList.includes('function HabitCategoryList(') &&
-    habitList.includes("<Host style={{ flex: 1, minHeight: 0, width: '100%' }}>") &&
+    habitList.includes("<View style={{ flex: 1, minHeight: 0, width: '100%' }}>") &&
     habitList.includes('function HabitDayList(') &&
     habitList.includes('<NativeText') &&
     habitHeader.includes('<PopoverSurface') &&
+    habitHeader.includes('<NativeMenuButton') &&
     !habitHeader.includes("from '@expo/ui'") &&
-    habitReview.includes("<Host style={{ height: 54, width: '100%' }}>"),
-  'habit routes must keep menu actions in a single React Native popover surface'
+    habitReview.includes("<View style={{ height: 54, width: '100%' }}>"),
+  'habit routes must use the system menu on iOS and one React Native popover surface elsewhere'
 );
 
 console.log(

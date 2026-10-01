@@ -1,4 +1,4 @@
-import { Column, Text } from '@expo/ui';
+import { Column, Text } from '@ui/primitives';
 import { useState } from 'react';
 
 import { useAppTheme } from '@theme';

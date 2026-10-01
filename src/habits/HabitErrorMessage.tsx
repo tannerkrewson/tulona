@@ -1,4 +1,5 @@
-import { Column, Host, Text } from '@expo/ui';
+import { View } from 'react-native';
+import { Column, Text } from '@ui/primitives';
 
 import { useAppTheme } from '@theme';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -18,7 +19,7 @@ export function HabitErrorMessage({
   if (!message) return null;
 
   return (
-    <Host matchContents={{ vertical: true }} style={{ width: '100%' }}>
+    <View style={{ width: '100%' }}>
       <Column
         spacing={4}
         style={{
@@ -42,6 +43,6 @@ export function HabitErrorMessage({
           testID="habit-recovery"
         />
       </Column>
-    </Host>
+    </View>
   );
 }

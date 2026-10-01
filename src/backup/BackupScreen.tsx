@@ -1,4 +1,4 @@
-import { Column, Row, Switch, Text } from '@expo/ui';
+import { Column, Row, Text } from '@ui/primitives';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Linking from 'expo-linking';
 import { useRouter, type Href } from 'expo-router';
@@ -6,12 +6,12 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
-import { AppButton, ConfirmationModal, errorText, Screen } from '@ui';
+import { AppButton, AppSwitch, ConfirmationModal, errorText, Screen } from '@ui';
 import { bootCoordinator } from '../orchestration';
 import { goBackInAppStack } from '../navigation/app-back';
 
 import { BackupImportError, type BackupImportResult } from './backup-import';
-import { downloadBackupJson, downloadIntervalsCsv } from './web-download';
+import { exportBackupJson, exportIntervalsCsv } from './export-file';
 import { loadBackupRuntime, type BackupRuntime } from './backup-runtime';
 import {
   TimematorImportError,
@@ -276,7 +276,7 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
         <>
           {status?.syncSupported ? (
             <>
-              <Switch
+              <AppSwitch
                 disabled={busy || Boolean(status.setupReview)}
                 label="Sync automatically after changes"
                 onValueChange={(value) => void run(() => service.setEnabled(value))}
@@ -465,11 +465,7 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
           label="Export data from before last sync setup"
           onPress={() =>
             void run(async () => {
-              if (!downloadBackupJson(await service.exportRecoveryJson())) {
-                throw new Error(
-                  'Recovery download is available in Tulona on the web. Cloud recovery files are also available in Dropbox.'
-                );
-              }
+              await exportBackupJson(await service.exportRecoveryJson());
             })
           }
           testID="dropbox-export-recovery"
@@ -518,8 +514,7 @@ function BackupContent({
     setSuccess(null);
     try {
       const content = await runtime.backupService.exportJson();
-      if (!downloadBackupJson(content)) throw new Error('JSON download is only available on web');
-      setSuccess('JSON backup downloaded.');
+      if ((await exportBackupJson(content)) === 'exported') setSuccess('JSON backup exported.');
     } catch (actionError) {
       setError(errorText(actionError));
     } finally {
@@ -534,8 +529,9 @@ function BackupContent({
     setSuccess(null);
     try {
       const content = await runtime.backupService.exportCsv();
-      if (!downloadIntervalsCsv(content)) throw new Error('CSV download is only available on web');
-      setSuccess('CSV interval export downloaded.');
+      if ((await exportIntervalsCsv(content)) === 'exported') {
+        setSuccess('CSV interval export saved.');
+      }
     } catch (actionError) {
       setError(errorText(actionError));
     } finally {
@@ -682,6 +678,69 @@ function BackupContent({
               testID="import-json"
             />
           </Column>
+          {busy ? (
+            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }} testID="backup-progress">
+              Working...
+            </Text>
+          ) : null}
+          <ErrorPanel
+            message={error}
+            onBack={onBack}
+            onRetry={() => {
+              const action = lastAction.current;
+              if (action) void action();
+            }}
+          />
+          {success ? (
+            <Column
+              spacing={6}
+              style={{
+                backgroundColor: colors.success.background,
+                borderColor: colors.success.foreground,
+                borderRadius: 14,
+                borderWidth: 1,
+                padding: 14,
+                width: '100%',
+              }}
+              testID="backup-success"
+            >
+              <Row alignment="center" spacing={8}>
+                <AppIcon
+                  accessibilityLabel="Backup completed"
+                  color={colors.success.foreground}
+                  name="check-circle-2"
+                  size={18}
+                />
+                <Text textStyle={{ color: colors.success.foreground, fontSize: 15 }}>
+                  {success}
+                </Text>
+              </Row>
+            </Column>
+          ) : null}
+          {importResult ? <Summary result={importResult} /> : null}
+          {importResult && importText ? (
+            <AppButton
+              disabled={busy}
+              label="Replace current data"
+              onPress={() => setConfirming(true)}
+              style={{ height: 52, width: '100%' }}
+              testID="replace-current-data"
+            />
+          ) : null}
+          {success?.startsWith('Data replaced') ? (
+            <AppButton
+              label="Reload active dataset"
+              onPress={() => router.replace('/')}
+              testID="reload-after-restore"
+            />
+          ) : null}
+          {success?.startsWith('Timemator tracker data') ? (
+            <AppButton
+              label="Reload tracker"
+              onPress={() => router.replace('/')}
+              testID="reload-after-timemator-import"
+            />
+          ) : null}
           <Column
             spacing={10}
             style={{
@@ -746,69 +805,6 @@ function BackupContent({
             ) : null}
             {timematorResult ? <TimematorImportSummary result={timematorResult} /> : null}
           </Column>
-          {busy ? (
-            <Text textStyle={{ color: colors.textMuted, fontSize: 14 }} testID="backup-progress">
-              Working...
-            </Text>
-          ) : null}
-          <ErrorPanel
-            message={error}
-            onBack={onBack}
-            onRetry={() => {
-              const action = lastAction.current;
-              if (action) void action();
-            }}
-          />
-          {success ? (
-            <Column
-              spacing={6}
-              style={{
-                backgroundColor: colors.success.background,
-                borderColor: colors.success.foreground,
-                borderRadius: 14,
-                borderWidth: 1,
-                padding: 14,
-                width: '100%',
-              }}
-              testID="backup-success"
-            >
-              <Row alignment="center" spacing={8}>
-                <AppIcon
-                  accessibilityLabel="Backup completed"
-                  color={colors.success.foreground}
-                  name="check-circle-2"
-                  size={18}
-                />
-                <Text textStyle={{ color: colors.success.foreground, fontSize: 15 }}>
-                  {success}
-                </Text>
-              </Row>
-            </Column>
-          ) : null}
-          {importResult ? <Summary result={importResult} /> : null}
-          {importResult && importText ? (
-            <AppButton
-              disabled={busy}
-              label="Replace current data"
-              onPress={() => setConfirming(true)}
-              style={{ height: 52, width: '100%' }}
-              testID="replace-current-data"
-            />
-          ) : null}
-          {success?.startsWith('Data replaced') ? (
-            <AppButton
-              label="Reload active dataset"
-              onPress={() => router.replace('/')}
-              testID="reload-after-restore"
-            />
-          ) : null}
-          {success?.startsWith('Timemator tracker data') ? (
-            <AppButton
-              label="Reload tracker"
-              onPress={() => router.replace('/')}
-              testID="reload-after-timemator-import"
-            />
-          ) : null}
           {footer}
         </Column>
       </Screen>

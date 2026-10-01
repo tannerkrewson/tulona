@@ -136,8 +136,10 @@ assert(
     !iconButton.includes('marginHorizontal') &&
     !habitHeader.includes('iconSize={editOpen') &&
     iconButton.includes('const size = primary ? 46 : 42') &&
-    catalogHeader.includes('borderRadius: 16') &&
-    catalogHeader.includes("overflow: 'hidden'"),
+    catalogHeader.includes('<PopoverSurface') &&
+    catalogHeader.includes('<NativeMenuButton') &&
+    read('src/ui/PopoverSurface.tsx').includes('borderRadius: 16') &&
+    read('src/ui/PopoverSurface.tsx').includes("overflow: 'hidden'"),
   'header actions must share one gap and one icon size, and the create menu must clip to its rounded surface'
 );
 assert(

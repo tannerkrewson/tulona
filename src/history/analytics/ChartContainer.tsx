@@ -1,4 +1,4 @@
-import { Text } from '@expo/ui';
+import { Text } from '@ui/primitives';
 import type { ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 

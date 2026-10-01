@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Text as NativeText, View } from 'react-native';
 
-import { downloadRawDataJson } from '../backup/web-download';
+import { exportRawDataJson } from '../backup/export-file';
 import { bootCoordinator } from './boot-coordinator';
 import { AppButton, errorText, IconButton } from '@ui';
 import { useAppTheme } from '@theme';
@@ -29,11 +29,7 @@ export function RecoveryActions({
     setRawError(null);
     void bootCoordinator
       .exportRawData()
-      .then((content) => {
-        if (!downloadRawDataJson(content)) {
-          throw new Error('Raw data download is only available on web');
-        }
-      })
+      .then((content) => exportRawDataJson(content))
       .catch((error: unknown) => setRawError(errorText(error)));
   };
 

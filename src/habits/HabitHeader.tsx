@@ -1,12 +1,20 @@
 import type { ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
-import { IconButton, PageHeader, PopoverAction, PopoverSurface } from '@ui';
+import {
+  IconButton,
+  NativeMenuButton,
+  type NativeMenuItem,
+  PageHeader,
+  PopoverAction,
+  PopoverSurface,
+} from '@ui';
 
 export interface HabitHeaderAction {
   label: string;
   onPress: () => void;
   disabled?: boolean;
+  systemImage?: NativeMenuItem['systemImage'];
   testID?: string;
 }
 
@@ -56,7 +64,25 @@ export function HabitHeader({
         title={title}
       >
         {filterMenu}
-        {onToggleEdit ? (
+        {Platform.OS === 'ios' && editActions.length > 0 ? (
+          <NativeMenuButton
+            icon="pencil"
+            label={editLabel}
+            sections={[
+              {
+                id: 'edit',
+                items: editActions.map((action) => ({
+                  disabled: action.disabled,
+                  id: action.testID ?? action.label,
+                  onSelect: action.onPress,
+                  systemImage: action.systemImage,
+                  title: action.label,
+                })),
+              },
+            ]}
+            testID={editTestID}
+          />
+        ) : onToggleEdit ? (
           <IconButton
             accessibilityHint={editOpen ? 'Closes habit edit actions' : 'Opens habit edit actions'}
             expanded={editOpen}

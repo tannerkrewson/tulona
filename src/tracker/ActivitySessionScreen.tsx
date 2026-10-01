@@ -1,5 +1,5 @@
 /* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 · Session sheet, utilitarian; existing theme tokens. */
-import { Column, Text } from '@expo/ui';
+import { Column, Text } from '@ui/primitives';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {

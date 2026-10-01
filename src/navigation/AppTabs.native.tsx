@@ -1,8 +1,18 @@
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { Platform } from 'react-native';
+import { NativeTabs } from 'expo-router/native-tabs';
 
-import { ActiveActivityBar, supportsNativeBottomAccessory } from '@/src/tracker/ActiveActivityBar';
+import {
+  ActiveActivityAccessory,
+  supportsNativeBottomAccessory,
+  useActiveActivityRuntime,
+  useHasActivitySession,
+} from '@/src/tracker/ActiveActivityBar';
+import type { RoutineRuntime } from '@/src/routine/routine-runtime';
 import { useAppTheme } from '@theme';
+
+function AccessoryContent({ runtime }: { runtime: RoutineRuntime }) {
+  const placement = NativeTabs.BottomAccessory.usePlacement();
+  return <ActiveActivityAccessory accessoryPlacement={placement} runtime={runtime} />;
+}
 
 /**
  * Use the system tab bar on native platforms, including its current iOS glass
@@ -10,7 +20,9 @@ import { useAppTheme } from '@theme';
  */
 export default function AppTabs() {
   const { colors } = useAppTheme();
-  const useBottomAccessory = Platform.OS === 'ios' && supportsNativeBottomAccessory();
+  const accessorySupported = supportsNativeBottomAccessory();
+  const runtime = useActiveActivityRuntime(accessorySupported);
+  const hasSession = useHasActivitySession(runtime);
 
   return (
     <NativeTabs
@@ -21,9 +33,9 @@ export default function AppTabs() {
       minimizeBehavior="onScrollDown"
       tintColor={colors.primary}
     >
-      {useBottomAccessory ? (
+      {accessorySupported && runtime && hasSession ? (
         <NativeTabs.BottomAccessory>
-          <ActiveActivityBar placement="accessory" />
+          <AccessoryContent runtime={runtime} />
         </NativeTabs.BottomAccessory>
       ) : null}
       <NativeTabs.Trigger

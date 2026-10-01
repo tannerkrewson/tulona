@@ -1,4 +1,4 @@
-import { Column, Text } from '@expo/ui';
+import { Column, Text } from '@ui/primitives';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
@@ -23,7 +23,6 @@ import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 import { RoutineStartConflictModal } from '../routine/RoutineStartConflictModal';
-import { SwiftUIReactView } from '../ui/SwiftUIReactView';
 import { ACTIVE_ACTIVITY_BAR_HEIGHT } from './ActiveActivityBar';
 import { ActivityRow } from './ActivityRow';
 import { CatalogHeader } from './CatalogHeader';
@@ -332,62 +331,61 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
   return (
     <Screen testID="activities-screen">
       <Column spacing={20} style={{ width: '100%' }}>
-        <SwiftUIReactView>
-          <CatalogHeader
-            createActions={[
-              {
-                label: 'New activity',
-                onPress: () => router.push('/activity/new'),
-                testID: 'new-activity',
-              },
-              {
-                label: 'New routine',
-                onPress: () => router.push('/routine-edit/new'),
-                testID: 'new-routine',
-              },
-              {
-                label: 'New folder',
-                onPress: () => router.push('/folder-edit/new'),
-                testID: 'new-folder',
-              },
-            ]}
-            createOpen={createOpen}
-            editMode={editMode}
-            filterMenu={
-              <PageFilterMenu
-                accessibilityLabel="Choose tracker view"
-                onChange={setCatalogView}
-                options={TRACKER_VIEW_OPTIONS}
-                testID="tracker-view-menu"
-                toggles={[
-                  {
-                    label: 'Include archived items',
-                    value: showArchived,
-                    onChange: (value) => void changeArchivedVisibility(value),
-                    testID: 'tracker-show-archived',
-                  },
-                ]}
-                value={catalogView}
-              />
-            }
-            onToggleCreate={() => setCreateOpen((open) => !open)}
-            onToggleEdit={() => {
-              setEditMode((open) => !open);
-              setCreateOpen(false);
-            }}
-            onHistory={() => router.push('/history')}
-            title="Tracker"
-          />
-        </SwiftUIReactView>
-        <SwiftUIReactView>
-          <PageFilterMenuSelection
-            defaultValue="all"
-            onChange={setCatalogView}
-            options={TRACKER_VIEW_OPTIONS}
-            testID="tracker-view-menu"
-            value={catalogView}
-          />
-        </SwiftUIReactView>
+        <CatalogHeader
+          createActions={[
+            {
+              label: 'New activity',
+              onPress: () => router.push('/activity/new'),
+              systemImage: 'timer',
+              testID: 'new-activity',
+            },
+            {
+              label: 'New routine',
+              onPress: () => router.push('/routine-edit/new'),
+              systemImage: 'repeat',
+              testID: 'new-routine',
+            },
+            {
+              label: 'New folder',
+              onPress: () => router.push('/folder-edit/new'),
+              systemImage: 'folder.badge.plus',
+              testID: 'new-folder',
+            },
+          ]}
+          createOpen={createOpen}
+          editMode={editMode}
+          filterMenu={
+            <PageFilterMenu
+              accessibilityLabel="Choose tracker view"
+              onChange={setCatalogView}
+              options={TRACKER_VIEW_OPTIONS}
+              testID="tracker-view-menu"
+              toggles={[
+                {
+                  label: 'Include archived items',
+                  value: showArchived,
+                  onChange: (value) => void changeArchivedVisibility(value),
+                  testID: 'tracker-show-archived',
+                },
+              ]}
+              value={catalogView}
+            />
+          }
+          onToggleCreate={() => setCreateOpen((open) => !open)}
+          onToggleEdit={() => {
+            setEditMode((open) => !open);
+            setCreateOpen(false);
+          }}
+          onHistory={() => router.push('/history')}
+          title="Tracker"
+        />
+        <PageFilterMenuSelection
+          defaultValue="all"
+          onChange={setCatalogView}
+          options={TRACKER_VIEW_OPTIONS}
+          testID="tracker-view-menu"
+          value={catalogView}
+        />
         {visibleError ? (
           <CatalogError
             title="Catalog action failed"

@@ -1,4 +1,5 @@
-import { Column, Picker, Row, Text } from '@expo/ui';
+import { Picker } from '@expo/ui';
+import { Column, Row, Text } from '@ui/primitives';
 import { useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { View } from 'react-native';

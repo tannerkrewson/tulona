@@ -1,4 +1,4 @@
-import { Text } from '@expo/ui';
+import { Text } from '@ui/primitives';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 

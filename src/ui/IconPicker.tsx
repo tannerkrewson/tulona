@@ -1,4 +1,4 @@
-import { Column, Row, ScrollView, Text } from '@expo/ui';
+import { Column, Row, ScrollView, Text } from './primitives';
 import { useState } from 'react';
 import { Platform, Pressable, Text as NativeText, View } from 'react-native';
 
@@ -15,7 +15,6 @@ import { useAppTheme } from '@theme';
 import { AccessibleTextInput } from './AccessibleTextInput';
 import { AppButton } from './AppButton';
 import { EmojiPickerPlatform } from './EmojiPickerPlatform';
-import { SwiftUIReactView } from './SwiftUIReactView';
 
 export interface IconPickerProps {
   value: IconValue | null;
@@ -189,54 +188,52 @@ function ModeSegment({
     { id: 'lucide', label: 'Icons', testID: `${rootTestID}-lucide-tab` },
   ];
   return (
-    <SwiftUIReactView>
-      <View
-        style={{
-          backgroundColor: colors.surfaceMuted,
-          borderRadius: 12,
-          flexDirection: 'row',
-          gap: 4,
-          height: 48,
-          padding: 4,
-          width: '100%',
-        }}
-      >
-        {modes.map((option) => {
-          const selected = mode === option.id;
-          return (
-            <Pressable
-              accessibilityRole="tab"
-              accessibilityState={{ selected }}
-              key={option.id}
-              onPress={() => onChange(option.id)}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                backgroundColor: selected ? colors.surface : 'transparent',
-                borderColor: selected ? colors.border : 'transparent',
-                borderRadius: 8,
-                borderWidth: 1,
-                flex: 1,
-                height: 40,
-                justifyContent: 'center',
-                minWidth: 0,
-                opacity: pressed ? 0.75 : 1,
-              })}
-              testID={option.testID}
+    <View
+      style={{
+        backgroundColor: colors.surfaceMuted,
+        borderRadius: 12,
+        flexDirection: 'row',
+        gap: 4,
+        height: 48,
+        padding: 4,
+        width: '100%',
+      }}
+    >
+      {modes.map((option) => {
+        const selected = mode === option.id;
+        return (
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            key={option.id}
+            onPress={() => onChange(option.id)}
+            style={({ pressed }) => ({
+              alignItems: 'center',
+              backgroundColor: selected ? colors.surface : 'transparent',
+              borderColor: selected ? colors.border : 'transparent',
+              borderRadius: 8,
+              borderWidth: 1,
+              flex: 1,
+              height: 40,
+              justifyContent: 'center',
+              minWidth: 0,
+              opacity: pressed ? 0.75 : 1,
+            })}
+            testID={option.testID}
+          >
+            <NativeText
+              style={{
+                color: selected ? colors.text : colors.textMuted,
+                fontSize: 16,
+                fontWeight: selected ? '600' : '500',
+              }}
             >
-              <NativeText
-                style={{
-                  color: selected ? colors.text : colors.textMuted,
-                  fontSize: 16,
-                  fontWeight: selected ? '600' : '500',
-                }}
-              >
-                {option.label}
-              </NativeText>
-            </Pressable>
-          );
-        })}
-      </View>
-    </SwiftUIReactView>
+              {option.label}
+            </NativeText>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 

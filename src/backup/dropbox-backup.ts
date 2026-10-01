@@ -370,6 +370,16 @@ async function responseText(
 }
 
 /** Persistent Automerge sync with Dropbox revision-based compare-and-swap. */
+/** React Native defines `window` without the DOM event-target methods. */
+function hasWindowEvents(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.addEventListener === 'function' &&
+    typeof window.removeEventListener === 'function' &&
+    typeof window.dispatchEvent === 'function'
+  );
+}
+
 export class DropboxBackupService {
   private readonly storage: DropboxBackupStorage;
   private readonly appKey: string;
@@ -600,7 +610,7 @@ export class DropboxBackupService {
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', this.onVisibilityChange);
     }
-    if (typeof window !== 'undefined') window.addEventListener('online', this.onOnline);
+    if (hasWindowEvents()) window.addEventListener('online', this.onOnline);
     void this.getStatus()
       .then((status) => {
         if (status.connected && status.syncSupported && status.enabled)
@@ -628,7 +638,7 @@ export class DropboxBackupService {
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.onVisibilityChange);
     }
-    if (typeof window !== 'undefined') window.removeEventListener('online', this.onOnline);
+    if (hasWindowEvents()) window.removeEventListener('online', this.onOnline);
     this.cancelAutomaticTimer();
     this.automaticDirty = false;
     this.invalidateUploads();
@@ -1071,7 +1081,7 @@ export class DropboxBackupService {
     } catch {
       // Refreshing in-memory views must not block persistence or the Dropbox upload.
     }
-    if (typeof window !== 'undefined' && typeof Event !== 'undefined') {
+    if (hasWindowEvents() && typeof Event !== 'undefined') {
       window.dispatchEvent(new Event('tulona:dropbox-sync'));
     }
   }

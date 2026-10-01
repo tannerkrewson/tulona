@@ -1,4 +1,3 @@
-import { Host } from '@expo/ui';
 import { useIsFocused, useRouter, type Href } from 'expo-router';
 import { Pressable, Text as NativeText, View } from 'react-native';
 import { useCallback, useEffect, useState } from 'react';
@@ -116,9 +115,9 @@ function SettingsActionErrorHost({ onBack, store }: { onBack: () => void; store:
   if (!error) return null;
 
   return (
-    <Host matchContents={{ vertical: true }} style={{ width: '100%' }}>
+    <View style={{ width: '100%' }}>
       <SettingsActionError onBack={onBack} store={store} />
-    </Host>
+    </View>
   );
 }
 
@@ -141,7 +140,7 @@ export default function SettingsScreen() {
   }, [focused, load]);
 
   return (
-    <Screen hostContent={false} title="Settings">
+    <Screen title="Settings">
       <View style={{ gap: 16, width: '100%' }}>
         {store ? (
           <SettingsActionErrorHost onBack={() => router.replace('/')} store={store} />

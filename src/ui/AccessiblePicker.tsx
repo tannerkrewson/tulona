@@ -1,22 +1,13 @@
 import { Host, Picker, type PickerItemValue, type PickerProps } from '@expo/ui';
-import { Children, isValidElement, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Platform, View } from 'react-native';
 
 import { useAppTheme } from '@theme';
 
+import { pickerItems } from './picker-items';
+
 export interface AccessiblePickerProps<T extends PickerItemValue> extends PickerProps<T> {
   label: string;
-}
-
-function pickerItems<T extends PickerItemValue>(children: ReactNode) {
-  return Children.toArray(children).flatMap((child) => {
-    if (!isValidElement<{ label?: unknown; value?: unknown }>(child)) return [];
-    const { label, value } = child.props;
-    if (typeof label !== 'string' || (typeof value !== 'string' && typeof value !== 'number')) {
-      return [];
-    }
-    return [{ label, value: value as T }];
-  });
 }
 
 function WebPicker<T extends PickerItemValue>({

@@ -1,4 +1,4 @@
-import { Column, Row } from '@expo/ui';
+import { Column, Row } from '@ui/primitives';
 import type { ChangeEvent } from 'react';
 import { Text as NativeText, View } from 'react-native';
 

@@ -1,4 +1,4 @@
-import { Column, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@ui/primitives';
 import { useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Text as NativeText, View } from 'react-native';

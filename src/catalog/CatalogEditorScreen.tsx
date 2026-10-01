@@ -1,4 +1,5 @@
-import { Column, Picker, Row, Text } from '@expo/ui';
+import { Picker } from '@expo/ui';
+import { Column, Row, Text } from '@ui/primitives';
 import { useRouter, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';

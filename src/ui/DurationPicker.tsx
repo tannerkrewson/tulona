@@ -1,4 +1,5 @@
-import { Column, Picker, Row, Text } from '@expo/ui';
+import { Picker } from '@expo/ui';
+import { Column, Row, Text } from './primitives';
 
 import { useAppTheme } from '@theme';
 

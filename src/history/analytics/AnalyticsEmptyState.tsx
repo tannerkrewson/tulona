@@ -1,4 +1,4 @@
-import { Text } from '@expo/ui';
+import { Text } from '@ui/primitives';
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
 import { StyleSheet, View } from 'react-native';

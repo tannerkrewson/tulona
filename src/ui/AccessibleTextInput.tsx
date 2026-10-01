@@ -1,77 +1,84 @@
-import { Host, TextInput, type TextInputProps } from '@expo/ui';
-import { useEffect } from 'react';
-import { Platform, View } from 'react-native';
+import { forwardRef } from 'react';
+import {
+  TextInput,
+  type KeyboardTypeOptions,
+  type ReturnKeyTypeOptions,
+  type TextInput as TextInputHandle,
+  type TextStyle,
+} from 'react-native';
 
 import { useAppTheme } from '@theme';
 
-export interface AccessibleTextInputProps extends TextInputProps {
+export interface AccessibleTextInputProps {
   label: string;
+  defaultValue?: string;
+  onChangeText?: (text: string) => void;
+  onSubmitEditing?: (text: string) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  placeholder?: string;
+  placeholderTextColor?: string;
+  autoFocus?: boolean;
+  editable?: boolean;
+  multiline?: boolean;
+  numberOfLines?: number;
+  keyboardType?: KeyboardTypeOptions;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  autoCorrect?: boolean;
+  returnKeyType?: ReturnKeyTypeOptions;
+  maxLength?: number;
+  selectTextOnFocus?: boolean;
+  style?: TextStyle;
+  textStyle?: TextStyle;
+  testID?: string;
 }
 
-/** Associates the visible field label with Expo's cross-platform text input. */
-export function AccessibleTextInput({
-  label,
-  testID,
-  textStyle,
-  ...inputProps
-}: AccessibleTextInputProps) {
-  const { colorScheme, colors } = useAppTheme();
+/** A labelled native text field with the app's shared field surface. */
+export const AccessibleTextInput = forwardRef<TextInputHandle, AccessibleTextInputProps>(
+  function AccessibleTextInput(
+    { label, multiline = false, numberOfLines, onSubmitEditing, style, textStyle, ...inputProps },
+    ref
+  ) {
+    const { colorScheme, colors } = useAppTheme();
+    const lineCount = numberOfLines ?? (multiline ? 4 : 1);
+    const { height, ...surfaceStyle } = style ?? {};
 
-  useEffect(() => {
-    if (typeof document === 'undefined' || !testID) return;
-    const applyLabel = () => {
-      const input = Array.from(document.querySelectorAll('input, textarea')).find(
-        (candidate) => candidate.getAttribute('data-testid') === testID
-      );
-      if (!input) return false;
-      if (input.getAttribute('aria-label') !== label) input.setAttribute('aria-label', label);
-      return true;
-    };
-    applyLabel();
-    let attempts = 0;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    const retry = () => {
-      applyLabel();
-      if (attempts++ < 20) retryTimer = setTimeout(retry, 50);
-    };
-    retry();
-    if (typeof MutationObserver === 'undefined') return;
-    const observer = new MutationObserver(applyLabel);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ['aria-label', 'data-testid'],
-      childList: true,
-      subtree: true,
-    });
-    return () => {
-      observer.disconnect();
-      if (retryTimer) clearTimeout(retryTimer);
-    };
-  }, [label, testID]);
-
-  return (
-    <View accessibilityLabel={Platform.OS === 'web' ? undefined : label} style={{ width: '100%' }}>
-      <Host
-        colorScheme={colorScheme}
-        matchContents={{ vertical: true }}
-        seedColor={colors.primary}
-        style={{ width: '100%' }}
-      >
-        <TextInput
-          {...inputProps}
-          testID={testID}
-          style={{
+    return (
+      <TextInput
+        {...inputProps}
+        accessibilityLabel={label}
+        keyboardAppearance={colorScheme}
+        multiline={multiline}
+        numberOfLines={lineCount}
+        onSubmitEditing={
+          onSubmitEditing ? (event) => onSubmitEditing(event.nativeEvent.text) : undefined
+        }
+        placeholderTextColor={inputProps.placeholderTextColor ?? colors.textMuted}
+        ref={ref}
+        selectionColor={colors.primary}
+        style={[
+          {
             backgroundColor: colors.surface,
             borderColor: colors.border,
+            borderCurve: 'continuous',
             borderRadius: 10,
             borderWidth: 1,
-            height: 48,
+            color: colors.text,
+            fontSize: 16,
+            paddingHorizontal: 12,
             width: '100%',
-            ...inputProps.style,
-          }}
-          textStyle={{ color: colors.text, ...textStyle }}
-        />
-      </Host>
-    </View>
-  );
-}
+          },
+          multiline
+            ? {
+                minHeight: Math.max(48, lineCount * 22 + 20),
+                paddingVertical: 12,
+                textAlignVertical: 'top',
+              }
+            : { height: height ?? 48 },
+          surfaceStyle,
+          textStyle,
+        ]}
+      />
+    );
+  }
+);

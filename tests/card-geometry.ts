@@ -96,7 +96,6 @@ assert(
 assert(
   activityRow.includes('<Pressable') &&
     activityRow.includes('style={({ pressed }) => [rowStyle') &&
-    activityRow.includes('<SwiftUIReactView>') &&
     !activityRow.includes('AppButton') &&
     !activityRow.includes('borderColor:') &&
     !activityRow.includes('borderWidth:'),

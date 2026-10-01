@@ -1,7 +1,5 @@
-import { Column, Host, ScrollView } from '@expo/ui';
-import type { ComponentProps } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@theme';
 import { PageHeader } from './PageHeader';
@@ -9,29 +7,28 @@ import type { AppScreenProps } from './AppScreen.types';
 
 export type { AppScreenProps } from './AppScreen.types';
 
-const hostStyles = StyleSheet.create({
-  host: {
+const styles = StyleSheet.create({
+  root: {
     flex: 1,
   },
-  fill: {
-    flex: 1,
-  },
-  content: {
+  frame: {
     alignSelf: 'center',
-    flex: 1,
     gap: 16,
     maxWidth: 720,
+    paddingBottom: 32,
+    paddingHorizontal: 20,
+    paddingTop: 22,
     width: '100%',
+  },
+  scrollContent: {
+    alignItems: 'center',
+    flexGrow: 1,
   },
 });
 
-const contentStyle = {
-  alignSelf: 'center',
-  maxWidth: 720,
-  width: '100%',
-} as ComponentProps<typeof Column>['style'];
+const isIOS = Platform.OS === 'ios';
 
-/** The cross-platform screen boundary for feature content. */
+/** The shared screen boundary: page header, horizontal frame, and scrolling. */
 export function AppScreen({
   onBack,
   children,
@@ -40,108 +37,59 @@ export function AppScreen({
   scrollable = true,
   testID,
   backgroundColor,
-  hostContent = true,
 }: AppScreenProps) {
-  const { colorScheme, colors } = useAppTheme();
+  const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const screenBackground = backgroundColor ?? colors.background;
-  const frameStyle = {
-    backgroundColor: screenBackground,
-    paddingLeft: 20 + insets.left,
-    paddingRight: 20 + insets.right,
-    paddingBottom: 32,
-    paddingTop: 22 + insets.top,
-  };
-  // Non-scrollable screens (habits pager, routine runner) own their inner
-  // layout and must fill the host height; Column's universal style only
-  // covers width/height, so the full-bleed flex frame lives on RN Views.
+  const header =
+    onBack || title || headerRight ? (
+      <PageHeader onBack={onBack} title={title}>
+        {headerRight}
+      </PageHeader>
+    ) : null;
+
   if (!scrollable) {
+    // A native safe area tracks the tab bar and its accessory as well as the
+    // device edges, so fixed-height screens stop above system chrome.
     return (
-      <Host
-        colorScheme={colorScheme}
-        ignoreSafeArea="all"
-        seedColor={colors.primary}
-        style={[hostStyles.host, { backgroundColor: screenBackground }]}
+      <SafeAreaView
+        edges={['top', 'left', 'right', 'bottom']}
+        style={[styles.root, { backgroundColor: screenBackground }]}
         testID={testID}
-        useViewportSizeMeasurement
       >
-        <View style={[hostStyles.fill, frameStyle]}>
-          <View style={hostStyles.content}>
-            {onBack || title || headerRight ? (
-              <PageHeader onBack={onBack} title={title}>
-                {headerRight}
-              </PageHeader>
-            ) : null}
-            {hostContent ? (
-              <Host
-                colorScheme={colorScheme}
-                matchContents={{ vertical: true }}
-                seedColor={colors.primary}
-                style={{ flex: 1, minHeight: 0, width: '100%' }}
-              >
-                {children}
-              </Host>
-            ) : (
-              children
-            )}
-          </View>
+        <View style={[styles.frame, styles.root, { paddingBottom: 12 }]}>
+          {header}
+          {children}
         </View>
-      </Host>
+      </SafeAreaView>
     );
   }
-  const content = (
-    <Column
-      alignment="start"
-      spacing={16}
-      style={{
-        ...contentStyle,
-        backgroundColor: screenBackground,
-        paddingLeft: 20 + insets.left,
-        paddingRight: 20 + insets.right,
-        paddingBottom: 32,
-        paddingTop: 22 + insets.top,
-      }}
-    >
-      {onBack || title || headerRight ? (
-        <PageHeader onBack={onBack} title={title}>
-          {headerRight}
-        </PageHeader>
-      ) : null}
-      {hostContent ? (
-        <Host
-          colorScheme={colorScheme}
-          matchContents={{ vertical: true }}
-          seedColor={colors.primary}
-          style={{ width: '100%' }}
-        >
-          {children}
-        </Host>
-      ) : (
-        children
-      )}
-    </Column>
-  );
 
   return (
-    <Host
-      colorScheme={colorScheme}
-      // The tab navigator owns the bottom safe area; retain only screen-edge insets here.
-      ignoreSafeArea="all"
-      seedColor={colors.primary}
-      style={[hostStyles.host, { backgroundColor: screenBackground }]}
-      testID={testID}
-      useViewportSizeMeasurement
-    >
-      <ScrollView style={{ height: '100%', width: '100%' }}>
-        <Host
-          colorScheme={colorScheme}
-          matchContents={{ vertical: true }}
-          seedColor={colors.primary}
-          style={{ width: '100%' }}
+    <View style={[styles.root, { backgroundColor: screenBackground }]} testID={testID}>
+      <ScrollView
+        // UIKit insets the content for the status bar, tab bar, and bottom
+        // accessory; the web keeps an explicit top inset.
+        contentContainerStyle={styles.scrollContent}
+        contentInsetAdjustmentBehavior="automatic"
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
+        style={styles.root}
+      >
+        <View
+          style={[
+            styles.frame,
+            !isIOS && {
+              paddingLeft: 20 + insets.left,
+              paddingRight: 20 + insets.right,
+              paddingTop: 22 + insets.top,
+            },
+          ]}
         >
-          {content}
-        </Host>
+          {header}
+          {children}
+        </View>
       </ScrollView>
-    </Host>
+    </View>
   );
 }

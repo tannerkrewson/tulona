@@ -65,22 +65,24 @@ assert(
   'the native settings list must not mount SwiftUI descendants inside its React Native rows'
 );
 assert(
-  settingsScreen.includes("import { Host } from '@expo/ui'") &&
+  !settingsScreen.includes("from '@expo/ui'") &&
     !settingsScreen.includes('import { Column') &&
     !settingsScreen.includes('import { Text') &&
     settingsScreen.includes('<NativeText') &&
     !recoveryActions.includes("from '@expo/ui'") &&
     recoveryActions.includes('<NativeText'),
-  'the Settings menu and shared recovery controls must avoid unhosted SwiftUI text in native layouts'
+  'the Settings menu and shared recovery controls must render React Native text without SwiftUI hosts'
 );
 assert(
   settingsErrorHost.includes('const error = store((state) => state.persistenceError)') &&
-    settingsErrorHost.indexOf('if (!error) return null;') < settingsErrorHost.indexOf('<Host') &&
+    settingsErrorHost.indexOf('if (!error) return null;') <
+      settingsErrorHost.indexOf('<SettingsActionError ') &&
+    !settingsErrorHost.includes('<Host') &&
     settingsScreen.includes('<SettingsActionErrorHost') &&
     !settingsScreen.includes(
       "<Host matchContents={{ vertical: true }} style={{ width: '100%' }}>\n            <SettingsActionError"
     ),
-  'Settings must not mount an empty SwiftUI Host that adds a blank gap above the category list'
+  'Settings must not mount an empty error wrapper that adds a blank gap above the category list'
 );
 assert(
   activityRow.includes('getRowSurfaceStyle') &&

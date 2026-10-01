@@ -1,4 +1,5 @@
-import { Column, Host, Picker, Row, Text } from '@expo/ui';
+import { Picker } from '@expo/ui';
+import { Column, Row, Text } from '@ui/primitives';
 import { useIsFocused, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, Text as NativeText, View } from 'react-native';
@@ -43,7 +44,6 @@ import {
 
 import { CatalogEditActions } from '../tracker/CatalogEditActions';
 import { CatalogIconButton } from '../tracker/CatalogIconButton';
-import { SwiftUIReactView } from '../ui/SwiftUIReactView';
 import { GoalStartWeekPicker } from './GoalStartWeekPicker';
 
 const OVERALL_STATUS_OPTIONS: readonly {
@@ -442,16 +442,7 @@ function GoalRow({
       ) : null}
     </Column>
   );
-  const hostedCardContent = (
-    <Host
-      colorScheme={colorScheme}
-      matchContents={{ vertical: true }}
-      seedColor={colors.primary}
-      style={{ width: '100%' }}
-    >
-      {cardContent}
-    </Host>
-  );
+  const hostedCardContent = <View style={{ width: '100%' }}>{cardContent}</View>;
 
   const cardStyle = {
     ...getRowSurfaceStyle({
@@ -466,44 +457,40 @@ function GoalRow({
 
   if (editMode) {
     return (
-      <SwiftUIReactView>
-        <View style={{ ...cardStyle, flexDirection: 'row' }} testID={'goal-row-' + goal.id}>
-          <Pressable
-            accessibilityLabel={`Edit ${goal.title}`}
-            accessibilityRole="button"
-            onPress={onEdit}
-            style={({ pressed }) => ({
-              flex: 1,
-              minWidth: 0,
-              opacity: pressed ? 0.72 : 1,
-            })}
-          >
-            {hostedCardContent}
-          </Pressable>
-          <CatalogEditActions
-            disabled={disabled}
-            inline
-            onDown={onMoveDown}
-            onUp={onMoveUp}
-            testID={`goal-actions-${goal.id}`}
-          />
-        </View>
-      </SwiftUIReactView>
+      <View style={{ ...cardStyle, flexDirection: 'row' }} testID={'goal-row-' + goal.id}>
+        <Pressable
+          accessibilityLabel={`Edit ${goal.title}`}
+          accessibilityRole="button"
+          onPress={onEdit}
+          style={({ pressed }) => ({
+            flex: 1,
+            minWidth: 0,
+            opacity: pressed ? 0.72 : 1,
+          })}
+        >
+          {hostedCardContent}
+        </Pressable>
+        <CatalogEditActions
+          disabled={disabled}
+          inline
+          onDown={onMoveDown}
+          onUp={onMoveUp}
+          testID={`goal-actions-${goal.id}`}
+        />
+      </View>
     );
   }
 
   return (
-    <SwiftUIReactView>
-      <Pressable
-        accessibilityLabel={goal.title}
-        accessibilityRole="button"
-        onPress={onReview}
-        style={({ pressed }) => ({ ...cardStyle, opacity: pressed ? 0.78 : 1 })}
-        testID={'goal-row-' + goal.id}
-      >
-        {hostedCardContent}
-      </Pressable>
-    </SwiftUIReactView>
+    <Pressable
+      accessibilityLabel={goal.title}
+      accessibilityRole="button"
+      onPress={onReview}
+      style={({ pressed }) => ({ ...cardStyle, opacity: pressed ? 0.78 : 1 })}
+      testID={'goal-row-' + goal.id}
+    >
+      {hostedCardContent}
+    </Pressable>
   );
 }
 
@@ -524,7 +511,7 @@ export function ReviewPanel({
   onCancel: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const { colorScheme, colors } = useAppTheme();
+  const { colors } = useAppTheme();
   const reviewGoals = goals.filter(
     (goal) => !goal.startWeek || currentWeek.weekStart >= goal.startWeek
   );
@@ -595,12 +582,7 @@ export function ReviewPanel({
                   }}
                 />
               ) : null}
-              <Host
-                colorScheme={colorScheme}
-                matchContents={{ vertical: true }}
-                seedColor={colors.primary}
-                style={{ width: '100%' }}
-              >
+              <View style={{ width: '100%' }}>
                 <Column
                   spacing={8}
                   style={{ width: '100%' }}
@@ -655,7 +637,7 @@ export function ReviewPanel({
                     />
                   </View>
                 </Column>
-              </Host>
+              </View>
             </View>
           );
         })
@@ -703,7 +685,7 @@ function RuleEditor({
   onChange: (rule: DraftRule) => void;
   onRemove: () => void;
 }) {
-  const { colorScheme, colors } = useAppTheme();
+  const { colors } = useAppTheme();
   const candidates =
     rule.kind === 'habit'
       ? habits
@@ -717,12 +699,7 @@ function RuleEditor({
           style={{ backgroundColor: colors.border, height: 1, marginBottom: 14, width: '100%' }}
         />
       ) : null}
-      <Host
-        colorScheme={colorScheme}
-        matchContents={{ vertical: true }}
-        seedColor={colors.primary}
-        style={{ width: '100%' }}
-      >
+      <View style={{ width: '100%' }}>
         <Column spacing={10} style={{ width: '100%' }}>
           <Row alignment="center" spacing={8} style={{ width: '100%' }}>
             <View style={{ flex: 1 }}>
@@ -897,7 +874,7 @@ function RuleEditor({
             </>
           ) : null}
         </Column>
-      </Host>
+      </View>
     </View>
   );
 }
@@ -1477,15 +1454,13 @@ export default function GoalsScreen() {
                 {formatWeek(resource.currentWeek)}
               </Text>
             </Column>
-            <SwiftUIReactView>
-              <PageFilterMenuSelection
-                defaultValue="in-progress"
-                onChange={setFilter}
-                options={OVERALL_STATUS_OPTIONS}
-                testID="goal-view-menu"
-                value={filter}
-              />
-            </SwiftUIReactView>
+            <PageFilterMenuSelection
+              defaultValue="in-progress"
+              onChange={setFilter}
+              options={OVERALL_STATUS_OPTIONS}
+              testID="goal-view-menu"
+              value={filter}
+            />
             {visibleGoals.length === 0 ? (
               <EmptyState
                 iconName="award"

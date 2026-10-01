@@ -1,4 +1,4 @@
-import { Column, Text } from '@expo/ui';
+import { Column, Text } from '@ui/primitives';
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 

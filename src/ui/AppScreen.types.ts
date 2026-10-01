@@ -8,6 +8,4 @@ export interface AppScreenProps {
   scrollable?: boolean;
   testID?: string;
   backgroundColor?: string;
-  /** Set false when the screen body is entirely React Native UI. */
-  hostContent?: boolean;
 }

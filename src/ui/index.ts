@@ -1,6 +1,8 @@
 export { AccessiblePicker, type AccessiblePickerProps } from './AccessiblePicker';
 export { AccessibleTextInput, type AccessibleTextInputProps } from './AccessibleTextInput';
-export { AppButton } from './AppButton';
+export { AppButton, type AppButtonProps, type AppButtonVariant } from './AppButton';
+export { AppSlider, type AppSliderProps } from './AppSlider';
+export { AppSwitch, type AppSwitchProps } from './AppSwitch';
 export { AppScreen, type AppScreenProps } from './AppScreen';
 export { PageHeader, type PageHeaderProps } from './PageHeader';
 export {
@@ -23,6 +25,12 @@ export { DurationText, formatDuration, type DurationTextProps } from './Duration
 export { DurationPicker, type DurationPickerProps, type DurationValue } from './DurationPicker';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { IconButton, type IconButtonProps, type IconButtonVariant } from './IconButton';
+export {
+  NativeMenuButton,
+  type NativeMenuButtonProps,
+  type NativeMenuItem,
+  type NativeMenuSection,
+} from './NativeMenuButton';
 export { IconPicker, searchIconCatalog, type IconPickerProps } from './IconPicker';
 export {
   PageFilterMenu,

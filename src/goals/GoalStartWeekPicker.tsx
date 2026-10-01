@@ -1,4 +1,4 @@
-import { Column, Host, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@ui/primitives';
 import DateTimePickerComponent from '@expo/ui/community/datetime-picker';
 import { useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text as NativeText, View } from 'react-native';
@@ -107,13 +107,13 @@ export function GoalStartWeekPicker({
               style={[styles.modalSurface, { backgroundColor: colors.surface }]}
               testID="goal-start-week-picker-modal"
             >
-              <Host colorScheme={colorScheme} seedColor={colors.primary} style={{ width: '100%' }}>
+              <View style={{ width: '100%' }}>
                 <Column spacing={12} style={{ width: '100%' }}>
                   <Text textStyle={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>
                     Starting week
                   </Text>
                   <View style={{ alignItems: 'center', overflow: 'hidden', width: '100%' }}>
-                    <Host style={{ width: '100%' }}>
+                    <View style={{ width: '100%' }}>
                       <DateTimePickerComponent
                         accentColor={colors.primary}
                         display="spinner"
@@ -128,7 +128,7 @@ export function GoalStartWeekPicker({
                         themeVariant={colorScheme}
                         value={draft}
                       />
-                    </Host>
+                    </View>
                   </View>
                   <Row alignment="center" spacing={8} style={{ width: '100%' }}>
                     <AppButton
@@ -154,7 +154,7 @@ export function GoalStartWeekPicker({
                     </AppButton>
                   </Row>
                 </Column>
-              </Host>
+              </View>
             </View>
           </View>
         </Modal>

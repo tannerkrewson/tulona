@@ -1,4 +1,4 @@
-import { Column, Text } from '@expo/ui';
+import { Column, Text } from '@ui/primitives';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {

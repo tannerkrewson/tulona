@@ -1,4 +1,4 @@
-import { Column, Row, Text } from '@expo/ui';
+import { Column, Row, Text } from '@ui/primitives';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 
@@ -183,6 +183,7 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
               {
                 label: 'Edit habit',
                 onPress: () => router.push(`/habit/${habit.id}?edit=1`),
+                systemImage: 'pencil',
                 testID: 'edit-habit-menu',
               },
               {
@@ -192,6 +193,7 @@ function HabitDetailContent({ id, store }: { id: string; store: HabitStore }) {
                   if (archived) void changeArchiveState();
                   else setConfirmingArchive(true);
                 },
+                systemImage: archived ? 'arrow.uturn.backward' : 'archivebox',
                 testID: archived ? 'restore-habit' : 'archive-habit',
               },
             ]}

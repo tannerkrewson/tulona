@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { Text } from '@expo/ui';
+import { Text } from '@ui/primitives';
 
 import {
   currentHistoryPeriod,

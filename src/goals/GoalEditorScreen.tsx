@@ -1,4 +1,4 @@
-import { Column, Text } from '@expo/ui';
+import { Column, Text } from '@ui/primitives';
 import { useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 

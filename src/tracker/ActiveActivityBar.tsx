@@ -1,6 +1,6 @@
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { usePathname, useRouter, type Href } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import {
   formatCountdownMs,
@@ -11,7 +11,7 @@ import {
 } from '@domain';
 import { AppIcon } from '@icons';
 import { getAccessibleTextColor, useAppTheme } from '@theme';
-import { DurationText, errorText } from '@ui';
+import { DurationText, errorText, formatDuration } from '@ui';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { routineTiming } from '../routine/routine-engine';
@@ -26,13 +26,51 @@ export const ACTIVE_ACTIVITY_BAR_HEIGHT = 64;
 const ACTIVE_BAR_BOTTOM = TAB_BAR_HEIGHT;
 
 export type ActiveActivityBarPlacement = 'overlay' | 'accessory';
+export type AccessoryPlacement = 'regular' | 'inline';
 
-/** iOS 26 can host the activity control inside the system tab bar accessory. */
+/** iOS 26+ hosts the activity control inside the system tab bar accessory. */
 export function supportsNativeBottomAccessory(): boolean {
-  const iosVersion = Number(Platform.Version);
-  // Keep the accessory off on iOS 27 while investigating a native view-mount
-  // crash during launch. The normal in-app overlay remains available there.
-  return Platform.OS === 'ios' && iosVersion >= 26 && iosVersion < 27;
+  return Platform.OS === 'ios' && Number.parseInt(String(Platform.Version), 10) >= 26;
+}
+
+/** Loads the shared tracker runtime once and hydrates its store. */
+export function useActiveActivityRuntime(enabled = true): RoutineRuntime | null {
+  const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let cancelled = false;
+    void loadRoutineRuntime()
+      .then((nextRuntime) => {
+        if (cancelled) return;
+        setRuntime(nextRuntime);
+        return nextRuntime.trackerStore.getState().hydrate();
+      })
+      .catch(() => {
+        if (!cancelled) setRuntime(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+
+  return runtime;
+}
+
+const noopSubscribe = () => () => undefined;
+
+/** Whether there is a current or most recent activity session to show. */
+export function useHasActivitySession(runtime: RoutineRuntime | null): boolean {
+  const store = runtime?.trackerStore ?? null;
+  return useSyncExternalStore(store ? store.subscribe : noopSubscribe, () => {
+    if (!store) return false;
+    const { activeTransition, lastActivityTransition } = store.getState();
+    const displayed =
+      activeTransition && activeTransition.activityId !== null
+        ? activeTransition
+        : lastActivityTransition;
+    return Boolean(displayed && displayed.activityId !== null);
+  });
 }
 
 function activeItem(
@@ -70,46 +108,40 @@ function activityDurationMs(
   }
 }
 
-/** Loads once at the shell boundary so the player survives catalog navigation. */
-export function ActiveActivityBar({
-  placement = 'overlay',
-}: {
-  placement?: ActiveActivityBarPlacement;
-}) {
+/** The in-app overlay above the JavaScript tab bar, shown on catalog screens. */
+export function ActiveActivityBar() {
   const pathname = usePathname();
+  const usesAccessory = supportsNativeBottomAccessory();
   const catalogVisible = isCatalogPath(pathname);
-  const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const runtime = useActiveActivityRuntime(catalogVisible && !usesAccessory);
 
-  useEffect(() => {
-    if (!catalogVisible) return undefined;
+  if (usesAccessory || !catalogVisible || !runtime) return null;
+  return <ActiveActivityBarContent placement="overlay" runtime={runtime} />;
+}
 
-    let cancelled = false;
-    void loadRoutineRuntime()
-      .then((nextRuntime) => {
-        if (cancelled) return;
-        setError(null);
-        setRuntime(nextRuntime);
-        return nextRuntime.trackerStore.getState().hydrate();
-      })
-      .catch((loadError: unknown) => {
-        if (!cancelled) setError(errorText(loadError));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [catalogVisible]);
-
-  if (placement === 'overlay' && supportsNativeBottomAccessory()) return null;
-  if (!catalogVisible || !runtime || error) return null;
-  return <ActiveActivityBarContent placement={placement} runtime={runtime} />;
+/** The activity control rendered inside the native tab bar's bottom accessory. */
+export function ActiveActivityAccessory({
+  accessoryPlacement,
+  runtime,
+}: {
+  accessoryPlacement: AccessoryPlacement;
+  runtime: RoutineRuntime;
+}) {
+  return (
+    <ActiveActivityBarContent
+      accessoryPlacement={accessoryPlacement}
+      placement="accessory"
+      runtime={runtime}
+    />
+  );
 }
 
 function ActiveActivityBarContent({
+  accessoryPlacement = 'regular',
   placement,
   runtime,
 }: {
+  accessoryPlacement?: AccessoryPlacement;
   placement: ActiveActivityBarPlacement;
   runtime: RoutineRuntime;
 }) {
@@ -305,27 +337,134 @@ function ActiveActivityBarContent({
     }
   };
 
+  const primaryLabel =
+    routineInFocus && activeRoutine.status === 'paused'
+      ? `Resume ${activeRoutine.routineSnapshot.name}`
+      : isActive
+        ? routineInFocus
+          ? `Pause ${activeRoutine.routineSnapshot.name}`
+          : 'Pause active activity'
+        : `Start ${name}`;
+  const primaryIcon =
+    routineInFocus && activeRoutine.status === 'paused' ? 'play' : isActive ? 'pause' : 'play';
+  const titleText =
+    routineInFocus && activeRoutine.status === 'paused' ? `Paused · ${displayName}` : displayName;
+  const timerText =
+    routineInFocus && routineTimer !== null
+      ? routineTimer
+      : formatDuration(isActive ? elapsedMs : previousDurationMs);
+
+  if (isAccessory) {
+    const inline = accessoryPlacement === 'inline';
+    const buttonSize = inline ? 30 : 36;
+    return (
+      <View style={[styles.accessoryRow, inline && styles.accessoryRowInline]}>
+        <Pressable
+          accessibilityHint={
+            isActive ? undefined : 'Starts a new tracking session for this activity'
+          }
+          accessibilityLabel={primaryLabel}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
+          hitSlop={8}
+          onPress={togglePrimary}
+          style={({ pressed }) => [
+            styles.accessoryButton,
+            {
+              backgroundColor: isActive ? accent : colors.surfaceMuted,
+              borderRadius: buttonSize / 2,
+              height: buttonSize,
+              opacity: pressed ? 0.7 : 1,
+              width: buttonSize,
+            },
+          ]}
+          testID={isActive ? 'active-activity-pause' : 'active-activity-play'}
+        >
+          <AppIcon
+            color={isActive ? onAccent : accent}
+            fill={isActive ? onAccent : accent}
+            name={primaryIcon}
+            size={inline ? 14 : 16}
+            strokeWidth={0}
+          />
+        </Pressable>
+        <Pressable
+          accessibilityLabel={
+            routineInFocus
+              ? `Open ${activeRoutine.routineSnapshot.name} routine`
+              : `Open ${name} session details`
+          }
+          accessibilityRole="button"
+          onPress={() => void openDetails()}
+          style={styles.accessoryInfo}
+          testID="active-activity-details"
+        >
+          <View style={styles.infoText}>
+            {!inline && displayContext ? (
+              <Text
+                numberOfLines={1}
+                style={{ color: colors.textMuted, fontSize: 11, fontWeight: '700' }}
+              >
+                {displayContext}
+              </Text>
+            ) : null}
+            <View style={styles.activityTitle}>
+              {routineInFocus && !inline ? (
+                <AppIcon color={accent} name="repeat" size={13} />
+              ) : null}
+              <Text
+                numberOfLines={1}
+                style={{ color: colors.text, fontSize: inline ? 14 : 15, fontWeight: '600' }}
+              >
+                {actionError ?? titleText}
+              </Text>
+            </View>
+          </View>
+          <Text
+            style={{
+              color: isActive ? colors.text : colors.textMuted,
+              fontSize: inline ? 13 : 15,
+              fontVariant: ['tabular-nums'],
+              fontWeight: '600',
+            }}
+          >
+            {timerText}
+          </Text>
+        </Pressable>
+        {showResumeRoutine && !inline ? (
+          <Pressable
+            accessibilityHint="Switches back to the paused routine at its current step"
+            accessibilityLabel={`Resume ${activeRoutine.routineSnapshot.name}`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: busy }}
+            disabled={busy}
+            hitSlop={8}
+            onPress={() => void resumePausedRoutine()}
+            style={({ pressed }) => [styles.accessoryResume, { opacity: pressed ? 0.6 : 1 }]}
+            testID="active-activity-resume-routine"
+          >
+            <AppIcon color={colors.text} name="repeat" size={18} />
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  }
+
   return (
-    <View
-      pointerEvents="box-none"
-      style={isAccessory ? styles.accessory : [StyleSheet.absoluteFill, styles.overlay]}
-    >
+    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, styles.overlay]}>
       <View
         style={[
           styles.bar,
-          isAccessory ? styles.accessoryBar : styles.overlayBar,
+          styles.overlayBar,
           {
             backgroundColor: isWeb ? webSurface : colors.surface,
             borderColor: isWeb ? webBorder : colors.border,
             // The web tab bar's CSS height includes the cold-start-safe
             // home-indicator inset, so the bar can meet it exactly.
-            ...(isAccessory
-              ? {}
-              : {
-                  bottom: (isWeb
-                    ? `calc(${ACTIVE_BAR_BOTTOM}px + var(--tulona-safe-area-bottom))`
-                    : ACTIVE_BAR_BOTTOM) as unknown as number,
-                }),
+            bottom: (isWeb
+              ? `calc(${ACTIVE_BAR_BOTTOM}px + var(--tulona-safe-area-bottom))`
+              : ACTIVE_BAR_BOTTOM) as unknown as number,
             height: ACTIVE_ACTIVITY_BAR_HEIGHT,
           },
         ]}
@@ -469,10 +608,6 @@ const styles = StyleSheet.create({
   overlayBar: {
     position: 'absolute',
   },
-  accessoryBar: {
-    flexShrink: 0,
-    position: 'relative',
-  },
   info: {
     flex: 1,
     justifyContent: 'center',
@@ -493,8 +628,36 @@ const styles = StyleSheet.create({
   overlay: {
     alignItems: 'stretch',
   },
-  accessory: {
+  accessoryRow: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 12,
+    paddingLeft: 8,
+    paddingRight: 18,
+  },
+  accessoryRowInline: {
+    gap: 8,
+    paddingLeft: 6,
+    paddingRight: 12,
+  },
+  accessoryButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accessoryInfo: {
+    alignItems: 'center',
     alignSelf: 'stretch',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 8,
+    minWidth: 0,
+  },
+  accessoryResume: {
+    alignItems: 'center',
+    height: 36,
+    justifyContent: 'center',
+    width: 32,
   },
   pauseButton: {
     alignItems: 'center',

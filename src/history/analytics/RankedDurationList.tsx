@@ -1,4 +1,4 @@
-import { Text } from '@expo/ui';
+import { Text } from '@ui/primitives';
 import { useAppTheme } from '@theme';
 import { Pressable, StyleSheet, View } from 'react-native';
 

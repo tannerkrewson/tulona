@@ -1,4 +1,4 @@
-import { Column, Text } from '@expo/ui';
+import { Column, Text } from './primitives';
 
 import { AppIcon, normalizeIconName, type IconName } from '@icons';
 import { useAppTheme } from '@theme';

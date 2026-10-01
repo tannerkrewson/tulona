@@ -1,9 +1,9 @@
-import { Button, Column, Text } from '@expo/ui';
+import { Column, Text } from '@ui/primitives';
 import { usePathname, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { downloadRawDataJson } from '../backup/web-download';
-import { ConfirmationModal, errorText, Screen } from '@ui';
+import { exportRawDataJson } from '../backup/export-file';
+import { AppButton, ConfirmationModal, errorText, Screen } from '@ui';
 import { useAppTheme, useThemePreference } from '@theme';
 
 import {
@@ -134,24 +134,20 @@ export function BootCoordinatorGate() {
           {rawError ? (
             <Text textStyle={{ color: colors.danger.foreground, fontSize: 14 }}>{rawError}</Text>
           ) : null}
-          <Button label="Retry startup" onPress={retry} testID="boot-retry" />
-          <Button
+          <AppButton label="Retry startup" onPress={retry} testID="boot-retry" />
+          <AppButton
             label="Export raw local data"
             onPress={() => {
               setRawError(null);
               void bootCoordinator
                 .exportRawData()
-                .then((content) => {
-                  if (!downloadRawDataJson(content)) {
-                    throw new Error('Raw data download is only available on web');
-                  }
-                })
+                .then((content) => exportRawDataJson(content))
                 .catch((error: unknown) => setRawError(errorText(error)));
             }}
             testID="boot-export-raw"
             variant="outlined"
           />
-          <Button
+          <AppButton
             disabled={clearBusy}
             label="Clear local data"
             onPress={() => setClearConfirming(true)}

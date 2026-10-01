@@ -9,7 +9,6 @@ import {
   ROW_SURFACE_CONTENT_GAP,
   ROW_SURFACE_ICON_SIZE,
 } from '@ui';
-import { SwiftUIReactView } from '../ui/SwiftUIReactView';
 import { AppIcon } from '@icons';
 
 import { CatalogEditActions } from './CatalogEditActions';
@@ -139,47 +138,43 @@ export function ActivityRow({
 
   if (editMode) {
     return (
-      <SwiftUIReactView>
-        <View style={rowStyle} testID={testID}>
-          <Pressable
-            accessibilityLabel={`Edit ${item.name}`}
-            accessibilityRole="button"
+      <View style={rowStyle} testID={testID}>
+        <Pressable
+          accessibilityLabel={`Edit ${item.name}`}
+          accessibilityRole="button"
+          disabled={disabled}
+          onPress={onPress}
+          style={({ pressed }) => ({
+            flex: 1,
+            minWidth: 0,
+            opacity: disabled ? 0.45 : pressed ? 0.72 : 1,
+          })}
+        >
+          {rowContent}
+        </Pressable>
+        {onMoveUp && onMoveDown ? (
+          <CatalogEditActions
             disabled={disabled}
-            onPress={onPress}
-            style={({ pressed }) => ({
-              flex: 1,
-              minWidth: 0,
-              opacity: disabled ? 0.45 : pressed ? 0.72 : 1,
-            })}
-          >
-            {rowContent}
-          </Pressable>
-          {onMoveUp && onMoveDown ? (
-            <CatalogEditActions
-              disabled={disabled}
-              inline
-              onDown={onMoveDown}
-              onUp={onMoveUp}
-              testID={actionsTestID ?? `${testID ?? 'activity-row'}-actions`}
-            />
-          ) : null}
-        </View>
-      </SwiftUIReactView>
+            inline
+            onDown={onMoveDown}
+            onUp={onMoveUp}
+            testID={actionsTestID ?? `${testID ?? 'activity-row'}-actions`}
+          />
+        ) : null}
+      </View>
     );
   }
 
   return (
-    <SwiftUIReactView>
-      <Pressable
-        accessibilityLabel={item.name}
-        accessibilityRole="button"
-        disabled={disabled}
-        onPress={onPress}
-        style={({ pressed }) => [rowStyle, { opacity: disabled ? 0.45 : pressed ? 0.72 : 1 }]}
-        testID={testID}
-      >
-        {rowContent}
-      </Pressable>
-    </SwiftUIReactView>
+    <Pressable
+      accessibilityLabel={item.name}
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [rowStyle, { opacity: disabled ? 0.45 : pressed ? 0.72 : 1 }]}
+      testID={testID}
+    >
+      {rowContent}
+    </Pressable>
   );
 }

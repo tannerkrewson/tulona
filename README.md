@@ -66,6 +66,14 @@ system tab bar supplies the native Liquid Glass appearance and the activity
 control uses the native bottom accessory. Tracker folders live in a nested
 native Stack, so the standard left-edge swipe returns to Tracker.
 
+Screens lay out with React Native views (`src/ui/primitives.tsx`) on every
+platform. On iOS, SwiftUI is hosted only at the leaves: pickers, sliders, the
+system color well, header menus (add, filter, and habit edit actions), and the
+habit row context menu. Exports hand a file to the system share sheet, so
+"Save to Files" works for JSON and CSV backups. Dropbox synchronization depends
+on WebAssembly, which Hermes does not provide, so it is unavailable in the
+native app for now; use JSON export and import to move data.
+
 Run `npm run ios` on macOS to generate and launch the native project locally.
 The native project is generated from Expo configuration and is intentionally
 not committed; `expo prebuild` recreates it whenever native configuration

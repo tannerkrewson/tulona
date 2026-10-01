@@ -1,4 +1,5 @@
-import { Column, Picker, Row, Switch, Text } from '@expo/ui';
+import { Picker } from '@expo/ui';
+import { Column, Row, Text } from '@ui/primitives';
 import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -7,7 +8,7 @@ import { Pressable, View } from 'react-native';
 import { AppIcon } from '@icons';
 import { useAppTheme } from '@theme';
 import { goBackInAppStack } from '../navigation/app-back';
-import { AccessiblePicker, AppButton, errorText, Screen } from '@ui';
+import { AccessiblePicker, AppButton, AppSwitch, errorText, Screen } from '@ui';
 
 import { bootCoordinator } from '../orchestration';
 import { formatHabitSchedule } from './habit-format';
@@ -258,20 +259,20 @@ function ReviewControls({
       <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
         Import options
       </Text>
-      <Switch
+      <AppSwitch
         label="Import check-in history"
         onValueChange={(value) => onOptionsChange({ importHistory: value })}
         testID="ticktick-import-history"
         value={options.importHistory}
       />
-      <Switch
+      <AppSwitch
         disabled={!options.importHistory}
         label="Include incomplete and partially completed days"
         onValueChange={(value) => onOptionsChange({ includeIncomplete: value })}
         testID="ticktick-include-incomplete"
         value={options.includeIncomplete}
       />
-      <Switch
+      <AppSwitch
         label="Keep TickTick archived habits archived"
         onValueChange={(value) => onOptionsChange({ preserveArchived: value })}
         testID="ticktick-preserve-archived"

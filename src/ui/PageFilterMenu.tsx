@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import { AppIcon, type IconValue } from '@icons';
 import { useAppTheme } from '@theme';
 
 import { IconButton } from './IconButton';
+import { NativeMenuButton, type NativeMenuSection } from './NativeMenuButton';
 import { PopoverSurface } from './PopoverSurface';
 
 export interface PageFilterMenuOption<T extends string = string> {
@@ -48,6 +49,39 @@ export function PageFilterMenu<T extends string = string>({
 }: PageFilterMenuProps<T>) {
   const { colors } = useAppTheme();
   const [open, setOpen] = useState(false);
+
+  if (Platform.OS === 'ios') {
+    const sections: NativeMenuSection[] = [
+      {
+        id: 'view',
+        items: options.map((option) => ({
+          checked: option.value === value,
+          id: `view:${option.value}`,
+          onSelect: () => onChange(option.value),
+          title: option.label,
+        })),
+      },
+    ];
+    if (toggles.length > 0) {
+      sections.push({
+        id: 'toggles',
+        items: toggles.map((toggle) => ({
+          checked: toggle.value,
+          id: `toggle:${toggle.testID ?? toggle.label}`,
+          onSelect: () => toggle.onChange(!toggle.value),
+          title: toggle.label,
+        })),
+      });
+    }
+    return (
+      <NativeMenuButton
+        icon="list-filter"
+        label={accessibilityLabel}
+        sections={sections}
+        testID={`${testID}-button`}
+      />
+    );
+  }
 
   return (
     <View

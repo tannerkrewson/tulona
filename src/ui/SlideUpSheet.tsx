@@ -1,4 +1,3 @@
-import { Host } from '@expo/ui';
 import type { CSSProperties, ReactNode } from 'react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -41,7 +40,7 @@ export function SlideUpSheet({
   contentTestID,
   scrollable = true,
 }: SlideUpSheetProps) {
-  const { colorScheme, colors } = useAppTheme();
+  const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<View>(null);
   const handleRef = useRef<View>(null);
@@ -161,13 +160,7 @@ export function SlideUpSheet({
   }, [scrollable, testID, translateY]);
 
   return (
-    <Host
-      colorScheme={colorScheme}
-      ignoreSafeArea="all"
-      seedColor={colors.primary}
-      style={styles.host}
-      useViewportSizeMeasurement
-    >
+    <View style={styles.host}>
       <View style={styles.root} testID={testID}>
         <Pressable
           accessibilityLabel="Close sheet"
@@ -222,7 +215,7 @@ export function SlideUpSheet({
           )}
         </Animated.View>
       </View>
-    </Host>
+    </View>
   );
 }
 

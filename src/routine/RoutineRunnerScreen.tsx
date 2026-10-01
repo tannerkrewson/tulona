@@ -1,4 +1,4 @@
-import { Column, Row, ScrollView, Text } from '@expo/ui';
+import { Column, Row, ScrollView, Text } from '@ui/primitives';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Circle, Svg } from 'react-native-svg';

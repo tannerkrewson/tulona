@@ -1,13 +1,20 @@
 import type { ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
-import { PageHeader, PopoverAction, PopoverSurface } from '@ui';
+import {
+  NativeMenuButton,
+  type NativeMenuItem,
+  PageHeader,
+  PopoverAction,
+  PopoverSurface,
+} from '@ui';
 
 import { CatalogIconButton } from './CatalogIconButton';
 
 export interface CatalogCreateAction {
   label: string;
   onPress: () => void;
+  systemImage?: NativeMenuItem['systemImage'];
   testID?: string;
 }
 
@@ -70,14 +77,34 @@ export function CatalogHeader({
           onPress={onToggleEdit}
           testID="catalog-edit"
         />
-        <CatalogIconButton
-          expanded={createOpen}
-          icon="plus"
-          label={createOpen ? 'Close add menu' : 'Add'}
-          onPress={onToggleCreate}
-          testID="catalog-add"
-          primary
-        />
+        {Platform.OS === 'ios' ? (
+          <NativeMenuButton
+            icon="plus"
+            label="Add"
+            sections={[
+              {
+                id: 'create',
+                items: createActions.map((action) => ({
+                  id: action.testID ?? action.label,
+                  onSelect: action.onPress,
+                  systemImage: action.systemImage,
+                  title: action.label,
+                })),
+              },
+            ]}
+            testID="catalog-add"
+            variant="primary"
+          />
+        ) : (
+          <CatalogIconButton
+            expanded={createOpen}
+            icon="plus"
+            label={createOpen ? 'Close add menu' : 'Add'}
+            onPress={onToggleCreate}
+            testID="catalog-add"
+            primary
+          />
+        )}
       </PageHeader>
       {createOpen ? (
         <PopoverSurface
