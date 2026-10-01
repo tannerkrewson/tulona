@@ -27,3 +27,6 @@ yarn-error.log*
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# local env files
+.env*.local

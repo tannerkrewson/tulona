@@ -25,6 +25,9 @@ import {
 import { defaultGoalSettings } from '../src/domain';
 import { AsyncStorageDatabase, type AsyncStorageLike } from '../src/data';
 import { emptyDropboxBackupRecord } from '../src/backup/dropbox-backup-storage';
+import { HostedSyncEngineClient } from '../src/backup/hosted-sync-engine';
+import { registerHostedSyncRuntime } from '../src/backup/sync-engine';
+import { createSyncEngineWorker, handleSyncEngineMessage } from '../src/backup/sync-engine-worker';
 
 const DATASET_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const STAMP = '2026-09-01T12:00:00.000Z';
@@ -1153,6 +1156,28 @@ async function setupChoicesAndSafety(): Promise<void> {
   failedArchive.database.close();
 }
 
+/** Runs sync as Hermes does: no WebAssembly, with Automerge behind a JSON message channel. */
+async function withHostedSyncEngine(scenario: () => Promise<void>): Promise<void> {
+  const worker = createSyncEngineWorker();
+  const client = new HostedSyncEngineClient();
+  client.attach('test-engine', (message) => {
+    void handleSyncEngineMessage(worker, message).then((response) => client.receive(response));
+  });
+  const webAssembly = Object.getOwnPropertyDescriptor(globalThis, 'WebAssembly');
+  Object.defineProperty(globalThis, 'WebAssembly', {
+    configurable: true,
+    value: undefined,
+    writable: true,
+  });
+  registerHostedSyncRuntime({ transport: client.transport });
+  try {
+    await scenario();
+  } finally {
+    registerHostedSyncRuntime(null);
+    if (webAssembly) Object.defineProperty(globalThis, 'WebAssembly', webAssembly);
+  }
+}
+
 async function run(): Promise<void> {
   await setupChoicesAndSafety();
   await automergeSemantics();
@@ -1161,6 +1186,13 @@ async function run(): Promise<void> {
   await writeDuringSync();
   await persistentLocalHistory();
   await localMigrationHistoryAndCrossTabNotifications();
+  await withHostedSyncEngine(async () => {
+    await setupChoicesAndSafety();
+    await migrationAndCorruptRemote();
+    await revisionAndCreationRaces();
+    await writeDuringSync();
+    await persistentLocalHistory();
+  });
 }
 
 run().catch((error: unknown) => {

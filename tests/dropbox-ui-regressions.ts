@@ -41,10 +41,11 @@ assert(
   'automatic synchronization must be debounced, serialized, and retried on focus/reconnect'
 );
 assert(
-  backup.includes("import type { SyncConflict, SyncDocument } from './dropbox-sync-document'") &&
-    backup.includes("import('./dropbox-sync-document')") &&
-    backup.includes('isDropboxSyncRuntimeSupported'),
-  'Automerge must load lazily and only in runtimes that provide its required WebAssembly APIs'
+  backup.includes("import type { SyncConflict } from './dropbox-sync-document'") &&
+    backup.includes("import('./sync-engine-worker')") &&
+    backup.includes('hasWebAssemblySyncRuntime') &&
+    backup.includes('getHostedSyncRuntime'),
+  'Automerge must load lazily in-process with WebAssembly, or run in a hosted engine without it'
 );
 assert(
   syncDocument.includes('Automerge.merge') &&
@@ -81,10 +82,10 @@ assert(
   'Dropbox setup, OAuth scopes, and sync-file policy must be documented'
 );
 assert(
-  compactReadme.includes('WebAssembly exception support') &&
-    compactReadme.includes('JSON backup export/import') &&
-    compactReadme.includes('sync is disabled in that app'),
-  'native runtimes without the required WebAssembly APIs must have a documented safe fallback'
+  compactReadme.includes('WebAssembly with exception support') &&
+    compactReadme.includes('Hermes has no WebAssembly') &&
+    compactReadme.includes('tulona://dropbox-auth'),
+  'the iOS sync engine path and its Dropbox redirect setup must be documented'
 );
 
 console.log('Validated Dropbox synchronization UI, boot integration, and setup contract.');

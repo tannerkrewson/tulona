@@ -120,10 +120,20 @@ was already connected with the old write-only permission, disconnect and
 reconnect after updating the Dropbox app permissions so Dropbox grants the new
 read scopes.
 
-Dropbox synchronization requires a JavaScript runtime with WebAssembly and
-WebAssembly exception support. The current native Hermes runtime does not expose
-those APIs, so sync is disabled in that app; local data is unchanged, and JSON
-backup export/import or Dropbox sync in the web app remain available.
+Automerge needs WebAssembly with exception support. Browsers run it in-process.
+On iOS, Hermes has no WebAssembly, so Automerge runs in a hidden Expo DOM
+component (a WebView) that starts the first time sync needs it. The app keeps
+documents there by handle (`src/backup/sync-engine.ts`); Dropbox requests,
+storage, and the setup review still run in the app. The WebView also generates
+the PKCE codes, because Hermes has no Web Crypto.
+
+To try sync in the iOS app, put the key in `.env.local` before starting Metro,
+and register `tulona://dropbox-auth` as a redirect URI in the Dropbox app:
+
+```bash
+echo 'EXPO_PUBLIC_DROPBOX_APP_KEY=your-app-key' >> .env.local
+npm run ios
+```
 
 Tulona stores its persistent Automerge document in `/tulona-sync.am`. It reads
 the current file revision, merges it with local IndexedDB state, validates the
