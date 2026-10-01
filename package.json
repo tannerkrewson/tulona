@@ -10,6 +10,15 @@
     "mcp/README.md"
   ],
   "main": "expo-router/entry",
+  "expo": {
+    "autolinking": {
+      "ios": {
+        "buildFromSource": [
+          ".*"
+        ]
+      }
+    }
+  },
   "scripts": {
     "start": "expo start",
     "ios": "expo run:ios",

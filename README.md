@@ -92,6 +92,11 @@ signing, packages the device build as an IPA, and verifies that the widget
 extension is inside the archive. It needs no Expo account, EAS project, Apple
 Developer account, or repository secrets.
 
+Expo modules build from source on iOS, using the runtime versions in the lockfile.
+This avoids Swift ABI mismatches between precompiled Expo UI and Expo JSI
+frameworks. Before uploading an IPA, CI checks that the app and widget's imported
+Expo JSI symbols exist in their embedded runtime frameworks.
+
 The resulting IPA is unsigned. It is useful as a build artifact for inspecting
 or handing off the archive, but iOS will not install or run it on a physical
 device until it is signed with an Apple certificate and provisioning profile.
