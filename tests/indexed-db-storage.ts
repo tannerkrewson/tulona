@@ -63,7 +63,7 @@ async function run(): Promise<void> {
   assert(
     (await database.read(datasetKey)) === 'after-sync' &&
       (await database.read(syncKey)) === 'document-state',
-    'the projected dataset and Automerge state must be committed together'
+    'the projected dataset and sync state must be committed together'
   );
   const staleApplied = await database.compareAndApplySnapshot({
     prefix: datasetPrefix,

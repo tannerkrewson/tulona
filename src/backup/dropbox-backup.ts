@@ -1,3 +1,5 @@
+import './web-crypto';
+
 import { Dropbox, DropboxAuth } from 'dropbox';
 
 import { createId } from '@domain';
@@ -8,15 +10,8 @@ import type { BackupImportResult } from './backup-import';
 import type { BackupService } from './backup-service';
 import type { LifeTrackerBackup } from './backup-schema';
 import { serializeBackup } from './backup-export';
-import type { SyncConflict } from './dropbox-sync-document';
-import {
-  createSyncEngineSession,
-  getHostedSyncRuntime,
-  type PkceCodes,
-  type SyncDocumentHandle,
-  type SyncEngineSession,
-  type SyncEngineTransport,
-} from './sync-engine';
+import { subscribeToAppForeground } from './app-foreground';
+import type { SyncDocument } from './dropbox-sync-document';
 import {
   DropboxBackupStorage,
   emptyDropboxBackupRecord,
@@ -24,7 +19,7 @@ import {
 } from './dropbox-backup-storage';
 
 export const DROPBOX_BACKUP_PATH = '/tulona-backup.json';
-export const DROPBOX_SYNC_PATH = '/tulona-sync.am';
+export const DROPBOX_SYNC_PATH = '/tulona-sync.yjs';
 export const DROPBOX_SYNC_STORAGE_KEY = 'tulona:dropbox-sync-state:';
 export const DROPBOX_BACKUP_SCOPES = [
   'files.content.read',
@@ -35,61 +30,17 @@ export const DROPBOX_AUTH_PENDING_MAX_AGE_MS = 10 * 60 * 1000;
 export const DROPBOX_BACKUP_DEFAULT_DEBOUNCE_MS = 1500;
 export const DROPBOX_SYNC_MAX_RETRIES = 6;
 
-const SYNC_FILE_HEADER = 'TULONA_AUTOMERGE_SYNC_V1\n';
-const SYNC_STATE_VERSION = 1 as const;
+const SYNC_FILE_HEADER = 'TULONA_YJS_SYNC_V1\n';
+const SYNC_STATE_VERSION = 2 as const;
 const SYNC_LOCK_NAME = 'tulona-dropbox-sync';
-const DROPBOX_SYNC_RUNTIME_ERROR =
-  'Dropbox synchronization is unavailable in this app runtime because it does not support WebAssembly. Your local data is safe; use backup export/import or sync with Tulona on the web.';
+type SyncDocumentModule = typeof import('./dropbox-sync-document');
 
-let inProcessTransportPromise: Promise<SyncEngineTransport> | null = null;
+let syncDocumentModule: Promise<SyncDocumentModule> | null = null;
 
-function hasWebAssemblySyncRuntime(): boolean {
-  const webAssembly = Reflect.get(globalThis, 'WebAssembly') as
-    | {
-        Module?: unknown;
-        Instance?: unknown;
-        Tag?: unknown;
-        Exception?: unknown;
-      }
-    | undefined;
-  return Boolean(
-    webAssembly &&
-    typeof webAssembly.Module === 'function' &&
-    typeof webAssembly.Instance === 'function' &&
-    typeof webAssembly.Tag === 'function' &&
-    typeof webAssembly.Exception === 'function'
-  );
-}
-
-function isDropboxSyncRuntimeSupported(): boolean {
-  return hasWebAssemblySyncRuntime() || getHostedSyncRuntime() !== null;
-}
-
-/** Automerge loads lazily: in-process where WebAssembly exists, otherwise in a hosted engine. */
-function loadSyncEngineTransport(): Promise<SyncEngineTransport> {
-  if (hasWebAssemblySyncRuntime()) {
-    inProcessTransportPromise ??= import('./sync-engine-worker').then((worker) =>
-      worker.createInProcessSyncTransport()
-    );
-    return inProcessTransportPromise;
-  }
-  const hosted = getHostedSyncRuntime();
-  if (hosted) return Promise.resolve(hosted.transport);
-  return Promise.reject(new Error(DROPBOX_SYNC_RUNTIME_ERROR));
-}
-
-/** The SDK derives PKCE codes with Web Crypto, which Hermes does not provide. */
-function applyPkceCodes(auth: DropboxAuth, codes: PkceCodes): void {
-  const target = auth as unknown as {
-    codeVerifier?: string;
-    codeChallenge?: string;
-    generatePKCECodes: () => Promise<void>;
-  };
-  target.generatePKCECodes = () => {
-    target.codeVerifier = codes.verifier;
-    target.codeChallenge = codes.challenge;
-    return Promise.resolve();
-  };
+/** Yjs loads on first sync, keeping it out of app startup. */
+function loadSyncDocumentModule(): Promise<SyncDocumentModule> {
+  syncDocumentModule ??= import('./dropbox-sync-document');
+  return syncDocumentModule;
 }
 
 interface DropboxAuthConfig {
@@ -155,13 +106,11 @@ export type DropboxSyncPhase =
 export interface DropboxBackupStatus {
   appKeyConfigured: boolean;
   connected: boolean;
-  syncSupported: boolean;
   enabled: boolean;
   lastBackupAt: string | null;
   lastSyncAt: string | null;
   lastError: string | null;
   syncPhase: DropboxSyncPhase;
-  unresolvedConflictCount: number;
   setupReview: DropboxSetupReview | null;
   recoveryAvailable: boolean;
 }
@@ -181,6 +130,7 @@ export interface DropboxBackupServiceOptions {
   clientFactory?: (auth: DropboxAuth) => Dropbox;
   onExternalSync?: () => void | Promise<void>;
   maxRetries?: number;
+  subscribeToForeground?: (listener: () => void) => () => void;
 }
 
 function errorMessage(error: unknown): string {
@@ -283,16 +233,16 @@ function parseSyncState(value: string | null): DropboxSyncStateRecord | null {
   return parsed as DropboxSyncStateRecord;
 }
 
-async function serializeSyncState(
-  document: SyncDocumentHandle,
+function serializeSyncState(
+  document: SyncDocument,
   projection: LifeTrackerBackup,
   datasetId: string,
   now: () => number,
-  session: SyncEngineSession
-): Promise<string> {
+  sync: SyncDocumentModule
+): string {
   const value: DropboxSyncStateRecord = {
     version: SYNC_STATE_VERSION,
-    document: await session.save(document),
+    document: sync.encodeSyncDocument(document),
     projection,
     datasetId,
     updatedAt: new Date(now()).toISOString(),
@@ -304,24 +254,17 @@ export function dropboxSyncStorageKey(datasetId: string): string {
   return `${DROPBOX_SYNC_STORAGE_KEY}${datasetId}`;
 }
 
-async function encodeRemoteDocument(
-  document: SyncDocumentHandle,
-  session: SyncEngineSession
-): Promise<string> {
-  return `${SYNC_FILE_HEADER}${await session.save(document)}\n`;
+function encodeRemoteDocument(document: SyncDocument, sync: SyncDocumentModule): string {
+  return `${SYNC_FILE_HEADER}${sync.encodeSyncDocument(document)}\n`;
 }
 
-function decodeRemoteDocument(
-  value: string,
-  actorId: string,
-  session: SyncEngineSession
-): Promise<SyncDocumentHandle> {
+function decodeRemoteDocument(value: string, sync: SyncDocumentModule): SyncDocument {
   if (!value.startsWith(SYNC_FILE_HEADER)) {
     throw new Error('Dropbox synchronization file has an invalid header');
   }
   const encoded = value.slice(SYNC_FILE_HEADER.length).trim();
   if (!encoded) throw new Error('Dropbox synchronization file is empty');
-  return session.load(encoded, actorId);
+  return sync.decodeSyncDocument(encoded);
 }
 
 function sameDataset(left: LifeTrackerBackup, right: LifeTrackerBackup): boolean {
@@ -330,20 +273,6 @@ function sameDataset(left: LifeTrackerBackup, right: LifeTrackerBackup): boolean
     return dataset;
   };
   return JSON.stringify(stripMetadata(left)) === JSON.stringify(stripMetadata(right));
-}
-
-async function sameHeads(
-  left: SyncDocumentHandle,
-  right: SyncDocumentHandle,
-  session: SyncEngineSession
-): Promise<boolean> {
-  const a = [...(await session.heads(left))].sort();
-  const b = [...(await session.heads(right))].sort();
-  return a.length === b.length && a.every((head, index) => head === b[index]);
-}
-
-function conflictStatusCount(conflicts: readonly SyncConflict[]): number {
-  return new Set(conflicts.map((conflict) => conflict.id)).size;
 }
 
 function delay(milliseconds: number): Promise<void> {
@@ -394,7 +323,7 @@ function hasWindowEvents(): boolean {
   );
 }
 
-/** Persistent Automerge sync with Dropbox revision-based compare-and-swap. */
+/** Persistent Yjs sync with Dropbox revision-based compare-and-swap. */
 export class DropboxBackupService {
   private readonly storage: DropboxBackupStorage;
   private readonly appKey: string;
@@ -417,9 +346,8 @@ export class DropboxBackupService {
   private lastError: string | null = null;
   private syncPhase: DropboxSyncPhase = 'idle';
   private pendingSetup: PendingSetup | null = null;
-  private unresolvedConflictCount = 0;
   private readonly statusListeners = new Set<(status: DropboxBackupStatus) => void>();
-  private readonly actorId: string;
+  private readonly subscribeToForeground?: (listener: () => void) => () => void;
 
   constructor(
     private readonly backupService: Pick<
@@ -429,7 +357,6 @@ export class DropboxBackupService {
     private readonly database: KeyValueDatabase,
     options: DropboxBackupServiceOptions = {}
   ) {
-    this.actorId = createId().replaceAll('-', '');
     this.storage = options.storage ?? new DropboxBackupStorage(database);
     this.appKey = options.appKey ?? defaultAppKey();
     this.redirectUri = options.redirectUri ?? defaultRedirectUri();
@@ -440,23 +367,21 @@ export class DropboxBackupService {
     this.clientFactory =
       options.clientFactory ?? ((auth) => new Dropbox({ auth, fetch: textDownloadFetch() }));
     this.onExternalSync = options.onExternalSync;
+    this.subscribeToForeground = options.subscribeToForeground ?? subscribeToAppForeground;
   }
 
   private readonly onExternalSync?: () => void | Promise<void>;
 
   async getStatus(): Promise<DropboxBackupStatus> {
     const record = await this.storage.read();
-    const syncSupported = isDropboxSyncRuntimeSupported();
     return {
       appKeyConfigured: this.appKey.length > 0,
       connected: Boolean(record?.refreshToken),
-      syncSupported,
-      enabled: Boolean(syncSupported && record?.refreshToken && record.enabled),
+      enabled: Boolean(record?.refreshToken && record.enabled),
       lastBackupAt: this.lastBackupAt,
       lastSyncAt: this.lastSyncAt,
       lastError: this.lastError,
       syncPhase: this.syncPhase,
-      unresolvedConflictCount: this.unresolvedConflictCount,
       setupReview: this.pendingSetup?.review ?? null,
       recoveryAvailable: (await this.database.read(DROPBOX_RECOVERY_KEY)) !== null,
     };
@@ -469,14 +394,9 @@ export class DropboxBackupService {
   }
 
   async beginAuthorization(): Promise<DropboxAuthorizationStart> {
-    if (!isDropboxSyncRuntimeSupported()) throw new Error(DROPBOX_SYNC_RUNTIME_ERROR);
     this.requireAppKey();
     const state = createId();
     const auth = this.authFactory({ clientId: this.appKey });
-    const hosted = getHostedSyncRuntime();
-    if (hosted && typeof globalThis.crypto?.subtle?.digest !== 'function') {
-      applyPkceCodes(auth, await hosted.transport('createPkceCodes', []));
-    }
     const url = await auth.getAuthenticationUrl(
       this.redirectUri,
       state,
@@ -535,9 +455,6 @@ export class DropboxBackupService {
   }
 
   async setEnabled(enabled: boolean): Promise<void> {
-    if (enabled && !isDropboxSyncRuntimeSupported()) {
-      throw new Error(DROPBOX_SYNC_RUNTIME_ERROR);
-    }
     const record = await this.storage.read();
     if (enabled && !record?.refreshToken) {
       throw new Error('Connect Dropbox before enabling automatic synchronization');
@@ -559,7 +476,6 @@ export class DropboxBackupService {
     this.lastSyncAt = null;
     this.lastError = null;
     this.syncPhase = 'idle';
-    this.unresolvedConflictCount = 0;
     this.pendingSetup = null;
     void this.publishStatus();
   }
@@ -569,7 +485,7 @@ export class DropboxBackupService {
     return this.syncNow();
   }
 
-  /** Merge local and remote state, then conditionally publish the Automerge document. */
+  /** Merge local and remote state, then conditionally publish the Yjs document. */
   syncNow(): Promise<void> {
     this.cancelAutomaticTimer();
     this.automaticDirty = false;
@@ -610,7 +526,6 @@ export class DropboxBackupService {
   }
 
   startAutomaticSynchronization(): () => void {
-    if (!isDropboxSyncRuntimeSupported()) return () => this.stopAutomaticSynchronization();
     if (this.automaticUnsubscribe) return () => this.stopAutomaticSynchronization();
     this.automaticUnsubscribe =
       this.database.subscribeToWrites?.((keys, source) => {
@@ -632,12 +547,10 @@ export class DropboxBackupService {
       document.addEventListener('visibilitychange', this.onVisibilityChange);
     }
     if (hasWindowEvents()) window.addEventListener('online', this.onOnline);
-    this.automaticForegroundUnsubscribe =
-      getHostedSyncRuntime()?.subscribeToForeground?.(this.onOnline) ?? null;
+    this.automaticForegroundUnsubscribe = this.subscribeToForeground?.(this.onOnline) ?? null;
     void this.getStatus()
       .then((status) => {
-        if (status.connected && status.syncSupported && status.enabled)
-          void this.syncNow().catch(() => undefined);
+        if (status.connected && status.enabled) void this.syncNow().catch(() => undefined);
       })
       .catch((error: unknown) => this.setFailure(error));
     return () => this.stopAutomaticSynchronization();
@@ -712,9 +625,8 @@ export class DropboxBackupService {
     this.lastError = null;
     void this.publishStatus();
     const generation = this.uploadGeneration;
-    let session: SyncEngineSession | null = null;
     try {
-      session = createSyncEngineSession(await loadSyncEngineTransport());
+      const sync = await loadSyncDocumentModule();
       const authRecord = await this.storage.read();
       if (!authRecord?.refreshToken) throw new Error('Connect Dropbox before synchronizing data');
       this.requireAppKey();
@@ -735,21 +647,17 @@ export class DropboxBackupService {
         const syncStateKey = dropboxSyncStorageKey(local.datasetId);
         const localStateRaw = local.entries.get(syncStateKey) ?? null;
         let localState: DropboxSyncStateRecord | null = null;
-        let localDocument: SyncDocumentHandle | null = null;
+        let localDocument: SyncDocument | null = null;
         let historyError = false;
         try {
           localState = parseSyncState(localStateRaw);
           if (localState && localState.datasetId !== local.datasetId)
             throw new Error('Invalid history');
           localDocument = localState
-            ? await session.load(localState.document, this.actorId)
-            : await session.create(local.backup, this.actorId, local.datasetId);
+            ? sync.decodeSyncDocument(localState.document)
+            : sync.createSyncDocument(local.backup, local.datasetId);
           if (localState && !sameDataset(localState.projection, local.backup)) {
-            localDocument = await session.update(
-              localDocument,
-              localState.projection,
-              local.backup
-            );
+            sync.applyBackupChanges(localDocument, localState.projection, local.backup);
           }
         } catch {
           historyError = true;
@@ -757,14 +665,14 @@ export class DropboxBackupService {
 
         const remoteFile = await this.downloadFile(client, DROPBOX_SYNC_PATH);
         let legacyFile = remoteFile ? null : await this.downloadFile(client, DROPBOX_BACKUP_PATH);
-        let remoteDocument: SyncDocumentHandle | null = null;
+        let remoteDocument: SyncDocument | null = null;
         let cloudBackup: LifeTrackerBackup | null = null;
         let cloudError = false;
         try {
           if (remoteFile) {
-            remoteDocument = await decodeRemoteDocument(remoteFile.contents, this.actorId, session);
+            remoteDocument = decodeRemoteDocument(remoteFile.contents, sync);
             cloudBackup = this.backupService.inspectImport(
-              (await session.project(remoteDocument)).backup
+              sync.projectSyncDocument(remoteDocument)
             ).backup;
           } else if (legacyFile) {
             cloudBackup = this.backupService.inspectImport(legacyFile.contents).backup;
@@ -772,7 +680,7 @@ export class DropboxBackupService {
         } catch {
           cloudError = true;
           if (remoteFile) {
-            // A readable JSON snapshot can recover a damaged Automerge file, by explicit choice.
+            // A readable JSON snapshot can recover a damaged sync file, by explicit choice.
             remoteDocument = null;
             legacyFile = await this.downloadFile(client, DROPBOX_BACKUP_PATH);
             if (legacyFile) {
@@ -796,7 +704,10 @@ export class DropboxBackupService {
               : 'The Dropbox file is unreadable or uses an unsupported format. It will not be overwritten without your approval.'
             : historyError
               ? 'Local sync history is unreadable. Choose which data to use to rebuild synchronization.'
-              : remoteDocument && remoteDocument.datasetId !== localDocument?.datasetId
+              : remoteDocument &&
+                  localDocument &&
+                  sync.syncDocumentDatasetId(remoteDocument) !==
+                    sync.syncDocumentDatasetId(localDocument)
                 ? 'Dropbox contains a different Tulona dataset. Choose what to keep before syncing.'
                 : legacyFile && !remoteFile
                   ? 'Dropbox contains an older JSON backup. Choose how to set up synchronization.'
@@ -828,7 +739,7 @@ export class DropboxBackupService {
           const recoveryId = createId();
           const copies = [
             { suffix: 'local.json', contents: serializeBackup(local.backup) },
-            ...(remoteFile ? [{ suffix: 'cloud.am', contents: remoteFile.contents }] : []),
+            ...(remoteFile ? [{ suffix: 'cloud.yjs', contents: remoteFile.contents }] : []),
             ...(cloudBackup
               ? [{ suffix: 'cloud.json', contents: serializeBackup(cloudBackup) }]
               : []),
@@ -872,26 +783,29 @@ export class DropboxBackupService {
           await this.database.verify(DROPBOX_SETUP_PENDING_KEY, local.datasetId);
         }
 
-        let merged: SyncDocumentHandle;
+        let merged: SyncDocument;
         if (resolution?.choice === 'cloud') {
           if (!cloudBackup) throw new Error('Dropbox data is unavailable. Refresh setup.');
-          merged = remoteDocument ?? (await session.create(cloudBackup, this.actorId, createId()));
+          merged = remoteDocument
+            ? sync.cloneSyncDocument(remoteDocument)
+            : sync.createSyncDocument(cloudBackup, createId());
         } else if (resolution?.choice === 'local') {
-          merged = await session.create(local.backup, this.actorId, createId());
+          merged = sync.createSyncDocument(local.backup, createId());
         } else if (resolution?.choice === 'merge') {
           if (!cloudBackup) throw new Error('Dropbox data is unavailable. Refresh setup.');
-          const cloudDocument =
-            remoteDocument ??
-            (await session.create(cloudBackup, createId().replaceAll('-', ''), createId()));
-          merged = await session.merge(
-            await session.create(local.backup, this.actorId, cloudDocument.datasetId),
-            cloudDocument
-          );
+          merged = remoteDocument
+            ? sync.cloneSyncDocument(remoteDocument)
+            : sync.createSyncDocument(cloudBackup, createId());
+          sync.addMissingRecords(merged, local.backup);
+        } else if (remoteDocument && !localState) {
+          // Without sync history this device cannot tell its edits from stale copies, so it only
+          // contributes records the cloud lacks.
+          merged = sync.cloneSyncDocument(remoteDocument);
+          sync.addMissingRecords(merged, local.backup);
         } else {
           if (!localDocument) throw new Error('Local sync history is unavailable.');
-          merged = remoteDocument
-            ? await session.merge(localDocument, remoteDocument, localState?.projection)
-            : localDocument;
+          merged = localDocument;
+          if (remoteDocument) sync.mergeSyncDocuments(merged, remoteDocument);
         }
 
         let latestLocal = await this.backupService.exportSynchronizationSnapshot();
@@ -907,20 +821,18 @@ export class DropboxBackupService {
           );
         }
         if (!sameDataset(local.backup, latestLocal.backup)) {
-          merged = await session.update(merged, local.backup, latestLocal.backup);
+          sync.applyBackupChanges(merged, local.backup, latestLocal.backup);
         }
-        let projection = await session.project(merged, {
-          exportedAt: new Date(this.now()).toISOString(),
-        });
-        const validated = this.backupService.inspectImport(projection.backup).backup;
-        projection = { ...projection, backup: validated };
+        const projection = this.backupService.inspectImport(
+          sync.projectSyncDocument(merged, { exportedAt: new Date(this.now()).toISOString() })
+        ).backup;
 
-        const stateValue = await serializeSyncState(
+        const stateValue = serializeSyncState(
           merged,
-          projection.backup,
+          projection,
           latestLocal.datasetId,
           this.now,
-          session
+          sync
         );
         const expectedPrefix = new Map(
           [...latestLocal.entries].filter(([key]) => key.startsWith(`ds:${latestLocal.datasetId}:`))
@@ -928,7 +840,7 @@ export class DropboxBackupService {
         const expectedSyncState = latestLocal.entries.get(syncStateKey) ?? null;
         if (generation !== this.uploadGeneration) return;
         const applied = await this.backupService.applySynchronizationProjection(
-          projection.backup,
+          projection,
           latestLocal.datasetId,
           expectedPrefix,
           syncStateKey,
@@ -946,9 +858,8 @@ export class DropboxBackupService {
 
         await this.notifyViewsAfterSync();
 
-        this.unresolvedConflictCount = conflictStatusCount(projection.conflicts);
-        if (remoteDocument && (await sameHeads(merged, remoteDocument, session))) {
-          await this.uploadHumanReadableBackup(client, projection.backup, generation);
+        if (remoteDocument && sync.sameSyncState(merged, remoteDocument)) {
+          await this.uploadHumanReadableBackup(client, projection, generation);
           if (generation !== this.uploadGeneration) return;
           await this.markSynchronized();
           return;
@@ -956,7 +867,7 @@ export class DropboxBackupService {
 
         const upload: DropboxUploadArguments = {
           path: DROPBOX_SYNC_PATH,
-          contents: await encodeRemoteDocument(merged, session),
+          contents: encodeRemoteDocument(merged, sync),
           mode: remoteFile ? { '.tag': 'update', update: remoteFile.rev } : { '.tag': 'add' },
           autorename: false,
           strict_conflict: true,
@@ -989,7 +900,7 @@ export class DropboxBackupService {
           this.uploadAbortController = null;
         }
         if (generation !== this.uploadGeneration) return;
-        await this.uploadHumanReadableBackup(client, projection.backup, generation);
+        await this.uploadHumanReadableBackup(client, projection, generation);
         if (generation !== this.uploadGeneration) return;
         await this.markSynchronized();
         return;
@@ -1000,8 +911,6 @@ export class DropboxBackupService {
       if (generation !== this.uploadGeneration) return;
       this.setFailure(error);
       throw error;
-    } finally {
-      void session?.close().catch(() => undefined);
     }
   }
 
@@ -1071,7 +980,7 @@ export class DropboxBackupService {
     this.pendingSetup = null;
     this.lastSyncAt = new Date(this.now()).toISOString();
     this.lastError = null;
-    this.syncPhase = this.unresolvedConflictCount > 0 ? 'conflict' : 'synced';
+    this.syncPhase = 'synced';
     void this.publishStatus();
   }
 

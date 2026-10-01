@@ -70,9 +70,8 @@ Screens lay out with React Native views (`src/ui/primitives.tsx`) on every
 platform. On iOS, SwiftUI is hosted only at the leaves: pickers, sliders, the
 system color well, header menus (add, filter, and habit edit actions), and the
 habit row context menu. Exports hand a file to the system share sheet, so
-"Save to Files" works for JSON and CSV backups. Dropbox synchronization depends
-on WebAssembly, which Hermes does not provide, so it is unavailable in the
-native app for now; use JSON export and import to move data.
+"Save to Files" works for JSON and CSV backups. Dropbox synchronization works the same way
+in the native app as on the web (see below).
 
 Run `npm run ios` on macOS to generate and launch the native project locally.
 The native project is generated from Expo configuration and is intentionally
@@ -120,12 +119,11 @@ was already connected with the old write-only permission, disconnect and
 reconnect after updating the Dropbox app permissions so Dropbox grants the new
 read scopes.
 
-Automerge needs WebAssembly with exception support. Browsers run it in-process.
-On iOS, Hermes has no WebAssembly, so Automerge runs in a hidden Expo DOM
-component (a WebView) that starts the first time sync needs it. The app keeps
-documents there by handle (`src/backup/sync-engine.ts`); Dropbox requests,
-storage, and the setup review still run in the app. The WebView also generates
-the PKCE codes, because Hermes has no Web Crypto.
+Synchronization uses [Yjs](https://docs.yjs.dev), a pure JavaScript CRDT, so
+it runs unchanged in browsers and in Hermes on iOS. Yjs loads the first time
+sync runs. Hermes has no Web Crypto, so the native build installs one from
+`expo-crypto` (`src/backup/web-crypto.native.ts`) for the Dropbox SDK's PKCE
+codes and Yjs client IDs.
 
 To try sync in the iOS app, put the key in `.env.local` before starting Metro,
 and register `tulona://dropbox-auth` as a redirect URI in the Dropbox app:
@@ -135,23 +133,23 @@ echo 'EXPO_PUBLIC_DROPBOX_APP_KEY=your-app-key' >> .env.local
 npm run ios
 ```
 
-Tulona stores its persistent Automerge document in `/tulona-sync.am`. It reads
+Tulona stores its persistent Yjs document in `/tulona-sync.yjs`. It reads
 the current file revision, merges it with local IndexedDB state, validates the
 merged dataset, and updates the file only against that exact revision. Initial
 creation also uses a conditional add; a competing creator triggers a fresh
 download and merge. A bounded retry handles later revision conflicts.
 
 When enabled, automatic synchronization runs after startup and debounced local writes, and
-when the app regains visibility or network connectivity. The existing manual
-action now synchronizes immediately. The Automerge history and its projected
+when the app returns to the foreground or regains network connectivity. The existing manual
+action now synchronizes immediately. The Yjs document and its projected
 dataset are stored locally so a reload does not rebuild synchronization state
 from a backup snapshot. Changes from another tab are announced with
 `BroadcastChannel`; browser locks reduce duplicate work, while Dropbox revision
-checks and Automerge provide correctness.
+checks and the CRDT merge provide correctness.
 
 `/tulona-backup.json` remains the human-readable backup and restore format. It
 is not repurposed as the CRDT file. After a successful sync, Tulona conditionally
-updates this JSON projection too. When `/tulona-sync.am` does not exist, Tulona
+updates this JSON projection too. When `/tulona-sync.yjs` does not exist, Tulona
 asks which data to use before migrating the legacy JSON and updating the JSON
 projection. The regular Backup & restore
 export/import actions continue to use JSON.
@@ -161,8 +159,8 @@ synced file, or unreadable sync history, synchronization pauses for a setup revi
 The review shows local and cloud record counts and offers **Use Dropbox data**
 (replace all current local records and settings), **Use this device’s data**
 (replace the cloud dataset), or **Combine both datasets** when cloud data is valid.
-Combining treats matching IDs as the same record; different IDs remain separate.
-Settings and running timers can conflict. Canceling the confirmation changes
+Combining treats matching IDs as the same record and keeps the Dropbox version
+of it; different IDs remain separate. Canceling the confirmation changes
 nothing; Disconnect keeps both sources separate. Reconnect can change accounts.
 A readable JSON backup can also recover an unreadable sync document.
 
@@ -171,7 +169,7 @@ and uploads unique `/tulona-recovery-<id>-*` files containing the original local
 JSON, cloud document/backup, and local sync history. If recovery uploads fail,
 replacement stops. Export the last local recovery copy from the Dropbox panel
 and restore it through Backup & restore; older JSON copies are in Dropbox.
-Original `.am` recovery files retain cloud synchronization history. Recovery
+Original `.yjs` recovery files retain cloud synchronization history. Recovery
 files are retained until you delete them yourself. The local recovery copy stays
 after disconnecting. Confirmation is bound to the reviewed local snapshot and
 cloud revisions: changes during review require a fresh choice. Interrupted setup
@@ -179,12 +177,24 @@ also requires review before another sync can run, including after a reload.
 Replacing the cloud dataset starts new sync history so other devices must review
 it instead of automatically merging the replaced data back in.
 
-Concurrent edits to separate records or fields merge automatically. Incompatible
-edits, delete-versus-edit, routine ordering collisions, and tracker transitions
-with duplicate timestamps are retained in Automerge conflict history and
-reported in the Dropbox panel. For tracker timestamp collisions, the local
-projection uses a deterministic winner to satisfy the domain's timestamp
-uniqueness constraint while keeping both transitions in the sync document.
+The document holds one map per collection, keyed by record ID (habit days by
+habit and day, weekly goal statuses by week and goal), with each record stored
+whole. Each sync records only the records this device changed or deleted since
+its last sync, so edits to different records always merge, and settings merge
+field by field. When two devices edit the same record before syncing, every
+device converges on one complete version of it. A device joining with no sync
+history keeps the Dropbox version of shared records and adds only records
+Dropbox lacks.
+
+Merged data still has to pass backup validation, so the projection repairs the
+cases where concurrent edits could break it. Two devices recording a tracker
+transition at the same instant keep both in the document, and the projection
+picks one deterministically. When one device deletes something another just
+referenced, the projection does what the app does locally:
+
+- A deleted goal takes its weekly statuses with it.
+- A deleted status definition that is in use again comes back.
+- A correction whose original transition was deleted stands on its own.
 
 ## Read-only MCP server
 

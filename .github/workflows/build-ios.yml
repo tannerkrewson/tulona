@@ -43,9 +43,6 @@ jobs:
       - name: Test widget state mapping
         run: npm run test:widget
 
-      - name: Test Dropbox sync with and without WebAssembly
-        run: npm run test:dropbox-sync-runtime
-
       - name: Test Goals runtime and native event guards
         run: npm run test:goals-ui
 
@@ -79,9 +76,6 @@ jobs:
             --assets-dest "$bundle_dir/assets" \
             --minify false
           test -s "$bundle_dir/main.jsbundle"
-          # Hermes has no WebAssembly, so Dropbox sync runs Automerge in this DOM component bundle.
-          test -n "$(find "$bundle_dir/assets/www.bundle" -name '*.html' -print -quit)"
-          grep -rqF 'initializeBase64Wasm' "$bundle_dir/assets/www.bundle"
 
       - name: Validate Expo configuration
         run: |
@@ -126,7 +120,6 @@ jobs:
           fi
           grep -Fq 'ActiveActivityWidgetBridge' app/_layout.tsx
           grep -Fq 'expo-router/native-tabs' src/navigation/AppTabs.native.tsx
-          grep -Fq 'SyncEngineHost' app/_layout.tsx
           grep -Fq 'name="(tracker)"' src/navigation/AppTabs.native.tsx
           if grep -Fq 'nativeTabsPolicy' src/navigation/AppTabs.native.tsx; then
             echo 'Native tabs must not be bypassed for iOS 27'
@@ -199,10 +192,6 @@ jobs:
           unzip -l "artifacts/Tulona-${GITHUB_SHA}-unsigned.ipa" > ipa-contents.txt
           if ! grep -Fq 'ExpoWidgetsTarget.appex' ipa-contents.txt; then
             echo 'The unsigned IPA is missing the widget extension'
-            exit 1
-          fi
-          if ! grep -Fq 'Payload/Tulona.app/www.bundle/' ipa-contents.txt; then
-            echo 'The unsigned IPA is missing the Dropbox sync engine DOM bundle'
             exit 1
           fi
 

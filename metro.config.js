@@ -10,18 +10,18 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     return context.resolveRequest(context, 'react-native/asset-registry', platform);
   }
 
-  if (moduleName === '@automerge/automerge' && platform === 'web') {
-    // Automerge's browser export imports a raw .wasm file, which Metro cannot
-    // bundle. Its generic ESM export embeds the same wasm as base64 instead.
+  if (moduleName === 'lib0/webcrypto' && platform !== 'web') {
+    // lib0's react-native export needs isomorphic-webcrypto. The default export reads the
+    // global Web Crypto, which src/backup/web-crypto.native.ts installs from expo-crypto.
     return context.resolveRequest(
       {
         ...context,
         unstable_conditionNames: context.unstable_conditionNames.filter(
-          (condition) => condition !== 'node' && condition !== 'browser'
+          (condition) => condition !== 'react-native'
         ),
         unstable_conditionsByPlatform: {
           ...context.unstable_conditionsByPlatform,
-          web: [],
+          [platform]: [],
         },
       },
       moduleName,

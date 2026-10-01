@@ -56,7 +56,6 @@
     "test:database-observer": "tsx tests/database-observer.ts",
     "test:dropbox-backup": "tsx tests/dropbox-backup.ts",
     "test:dropbox-sync": "tsx tests/dropbox-sync.ts",
-    "test:dropbox-sync-runtime": "tsx tests/dropbox-sync-runtime.ts",
     "test:dropbox-ui": "tsx tests/dropbox-ui-regressions.ts",
     "test:persistence": "tsx tests/persistence-checks.ts",
     "test:tracker": "tsx tests/tracker-engine.ts",
@@ -72,7 +71,6 @@
     "deploy": "npm run web:build && gh-pages --dist dist --nojekyll"
   },
   "dependencies": {
-    "@automerge/automerge": "^3.5.0",
     "@expo/ui": "~58.0.7",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@shopify/react-native-skia": "2.11.2",
@@ -81,6 +79,7 @@
     "expo-asset": "~58.0.7",
     "expo-audio": "~58.0.2",
     "expo-constants": "~58.0.7",
+    "expo-crypto": "~58.0.3",
     "expo-document-picker": "~58.0.1",
     "expo-file-system": "~58.0.2",
     "expo-linking": "~58.0.7",
@@ -102,6 +101,7 @@
     "react-native-web": "^0.21.3",
     "react-native-worklets": "0.13.0",
     "victory-native": "^42.0.1",
+    "yjs": "^13.6.33",
     "zod": "4.6.5",
     "zustand": "5.0.15"
   },

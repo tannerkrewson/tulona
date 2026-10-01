@@ -3,7 +3,6 @@ import Head from 'expo-router/head';
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { SyncEngineHost } from '@/src/backup/SyncEngineHost';
 import { BootCoordinatorGate } from '@/src/orchestration';
 import { ActiveActivityBar } from '@/src/tracker';
 import { ActiveActivityWidgetBridge } from '@/src/widgets/ActiveActivityWidgetBridge';
@@ -59,7 +58,6 @@ export default function RootLayout() {
           <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
             <BootCoordinatorGate />
             <ActiveActivityWidgetBridge />
-            <SyncEngineHost />
             <ActiveActivityBar />
           </View>
         </View>

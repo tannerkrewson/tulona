@@ -1,5 +1,5 @@
-import * as Automerge from '@automerge/automerge';
 import type { Dropbox, DropboxAuth } from 'dropbox';
+import * as Y from 'yjs';
 
 import {
   BACKUP_FORMAT,
@@ -7,27 +7,28 @@ import {
   CURRENT_BACKUP_VERSION,
   DropboxBackupService,
   DROPBOX_SYNC_PATH,
-  createSyncDocument,
   dropboxSyncStorageKey,
-  documentHeads,
-  getDocumentConflicts,
-  loadSyncDocument,
-  mergeSyncDocuments,
   parseBackup,
-  projectSyncDocument,
-  saveSyncDocument,
   serializeBackup,
-  updateSyncDocumentFromBackup,
   type DropboxBackupServiceOptions,
   type LifeTrackerBackup,
-  type SyncDocument,
 } from '../src/backup';
+import {
+  addMissingRecords,
+  applyBackupChanges,
+  cloneSyncDocument,
+  createSyncDocument,
+  decodeSyncDocument,
+  encodeSyncDocument,
+  mergeSyncDocuments,
+  projectSyncDocument,
+  sameSyncState,
+  syncDocumentDatasetId,
+  type SyncDocument,
+} from '../src/backup/dropbox-sync-document';
 import { defaultGoalSettings } from '../src/domain';
 import { AsyncStorageDatabase, type AsyncStorageLike } from '../src/data';
 import { emptyDropboxBackupRecord } from '../src/backup/dropbox-backup-storage';
-import { HostedSyncEngineClient } from '../src/backup/hosted-sync-engine';
-import { registerHostedSyncRuntime } from '../src/backup/sync-engine';
-import { createSyncEngineWorker, handleSyncEngineMessage } from '../src/backup/sync-engine-worker';
 
 const DATASET_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const STAMP = '2026-09-01T12:00:00.000Z';
@@ -52,14 +53,6 @@ function assert(condition: unknown, message: string): asserts condition {
 
 function clone<T>(value: T): T {
   return structuredClone(value);
-}
-
-function actorId(value: string): string {
-  return [...value]
-    .map((character) => character.charCodeAt(0).toString(16).padStart(2, '0'))
-    .join('')
-    .padEnd(32, '0')
-    .slice(0, 32);
 }
 
 function baseBackup(): LifeTrackerBackup {
@@ -186,27 +179,6 @@ function baseBackup(): LifeTrackerBackup {
   };
 }
 
-function makeBranch(
-  base: LifeTrackerBackup,
-  actor: string,
-  edit: (backup: LifeTrackerBackup) => void,
-  sharedDocument?: SyncDocument
-): SyncDocument {
-  const changed = clone(base);
-  edit(changed);
-  return updateSyncDocumentFromBackup(
-    sharedDocument
-      ? Automerge.clone(sharedDocument, { actor: actorId(actor) })
-      : createSyncDocument(base, actorId(actor), DATASET_ID),
-    base,
-    changed
-  );
-}
-
-function hasConflict(document: SyncDocument, part: string): boolean {
-  return getDocumentConflicts(document).some((conflict) => conflict.path.includes(part));
-}
-
 function activeRoutine(
   status: 'running' | 'paused' | 'completed'
 ): NonNullable<LifeTrackerBackup['activeRoutine']> {
@@ -253,209 +225,273 @@ function activeRoutine(
   };
 }
 
-async function automergeSemantics(): Promise<void> {
+function branch(
+  shared: SyncDocument,
+  base: LifeTrackerBackup,
+  edit: (backup: LifeTrackerBackup) => void
+): SyncDocument {
+  const document = cloneSyncDocument(shared);
+  const changed = clone(base);
+  edit(changed);
+  applyBackupChanges(document, base, changed);
+  return document;
+}
+
+/** Merges in both directions and checks that both devices end with the same valid dataset. */
+function converge(left: SyncDocument, right: SyncDocument, message: string): LifeTrackerBackup {
+  const leftFirst = cloneSyncDocument(left);
+  mergeSyncDocuments(leftFirst, right);
+  const rightFirst = cloneSyncDocument(right);
+  mergeSyncDocuments(rightFirst, left);
+  const a = projectSyncDocument(leftFirst, { exportedAt: STAMP });
+  const b = projectSyncDocument(rightFirst, { exportedAt: STAMP });
+  assert(JSON.stringify(a) === JSON.stringify(b), `${message}: devices must converge`);
+  return parseBackup(a).backup;
+}
+
+function transition(id: string, timestamp: string, correctionOfId: string | null = null) {
+  return {
+    id,
+    activityId: IDs.activityA,
+    timestamp,
+    source: 'manual' as const,
+    status: 'recorded' as const,
+    createdAt: STAMP,
+    correctionOfId,
+    note: null,
+  };
+}
+
+function syncDocumentSemantics(): void {
   const base = baseBackup();
-  const bootstrapEdit = clone(base);
-  bootstrapEdit.catalog.activities[0]!.name = 'Legacy device edit';
-  bootstrapEdit.catalog.activities[0]!.updatedAt = '2026-09-02T12:00:00.000Z';
-  const independentBootstrapMerge = mergeSyncDocuments(
-    createSyncDocument(base, actorId('bootstrap-local'), DATASET_ID),
-    createSyncDocument(bootstrapEdit, actorId('bootstrap-remote'), DATASET_ID),
-    base
-  );
+  const shared = createSyncDocument(base, DATASET_ID);
   assert(
-    getDocumentConflicts(independentBootstrapMerge).some(
-      (conflict) => conflict.path.includes('activities') && conflict.values.length === 2
-    ),
-    'first-sync scalar differences without shared causal history must be preserved as conflicts'
+    JSON.stringify(parseBackup(projectSyncDocument(shared, { exportedAt: STAMP })).backup) ===
+      JSON.stringify(parseBackup(base).backup),
+    'a new sync document must project back to the original backup'
   );
 
-  const sharedDocument = createSyncDocument(base, actorId('shared-history'), DATASET_ID);
-  const branch = (actor: string, edit: (backup: LifeTrackerBackup) => void) =>
-    makeBranch(base, actor, edit, sharedDocument);
-
-  const deviceA = branch('device-a', (backup) => {
-    backup.catalog.activities.push({
-      ...clone(backup.catalog.activities[0]!),
-      id: IDs.activityB,
-      name: 'Drawing',
-      sortOrder: 1,
-    });
-  });
-  const deviceB = branch('device-b', (backup) => {
-    backup.catalog.activities.push({
-      ...clone(backup.catalog.activities[0]!),
-      id: IDs.activityC,
-      name: 'Writing',
-      sortOrder: 2,
-    });
-  });
-  let merged = mergeSyncDocuments(deviceA, deviceB, base);
-  let projected = projectSyncDocument(merged).backup;
+  let merged = converge(
+    branch(shared, base, (backup) => addActivity(backup, IDs.activityB, 'Drawing', 1)),
+    branch(shared, base, (backup) => addActivity(backup, IDs.activityC, 'Writing', 2)),
+    'independent additions'
+  );
   assert(
-    projected.catalog.activities.some((activity) => activity.id === IDs.activityB) &&
-      projected.catalog.activities.some((activity) => activity.id === IDs.activityC),
+    merged.catalog.activities.some((activity) => activity.id === IDs.activityB) &&
+      merged.catalog.activities.some((activity) => activity.id === IDs.activityC),
     'independent additions from two devices must survive'
   );
 
-  const differentFieldsA = branch('field-a', (backup) => {
-    backup.catalog.activities[0]!.name = 'Deep reading';
-  });
-  const differentFieldsB = branch('field-b', (backup) => {
-    backup.catalog.activities[0]!.color = '#abcdef';
-  });
-  merged = mergeSyncDocuments(differentFieldsA, differentFieldsB, base);
-  projected = projectSyncDocument(merged).backup;
-  assert(
-    projected.catalog.activities[0]?.name === 'Deep reading' &&
-      projected.catalog.activities[0]?.color === '#abcdef',
-    'concurrent edits to different fields of one record must merge'
-  );
-
-  const sameFieldA = branch('same-a', (backup) => {
-    backup.catalog.activities[0]!.name = 'Reading books';
-  });
-  const sameFieldB = branch('same-b', (backup) => {
-    backup.catalog.activities[0]!.name = 'Read articles';
-  });
-  merged = mergeSyncDocuments(sameFieldA, sameFieldB, base);
-  assert(
-    hasConflict(merged, 'activities'),
-    'same-field edits must be recorded as unresolved conflicts'
-  );
-
-  const deletion = branch('delete', (backup) => {
-    backup.catalog.activities = [];
-  });
-  const edit = branch('edit', (backup) => {
-    backup.catalog.activities[0]!.color = '#fedcba';
-  });
-  merged = mergeSyncDocuments(deletion, edit, base);
-  projected = projectSyncDocument(merged).backup;
-  assert(
-    projected.catalog.activities.some(
-      (activity) => activity.id === IDs.activityA && activity.color === '#fedcba'
-    ) && getDocumentConflicts(merged).some((conflict) => conflict.kind === 'delete-edit'),
-    'delete-versus-edit must preserve the edited record and retain a conflict marker'
-  );
-  const deletionSnapshot = clone(base);
-  deletionSnapshot.catalog.activities = [];
-  const deletionDocument = updateSyncDocumentFromBackup(
-    Automerge.clone(sharedDocument, { actor: actorId('real-delete') }),
-    base,
-    deletionSnapshot
-  );
-  const containsDeleteOperation = Automerge.getAllChanges(deletionDocument).some((change) =>
-    JSON.stringify(Automerge.decodeChange(change).ops).includes('"action":"del"')
+  merged = converge(
+    branch(shared, base, (backup) => {
+      backup.catalog.activities[0]!.name = 'Deep reading';
+    }),
+    branch(shared, base, (backup) => {
+      backup.habitDayStates[0]!.outcome = 'done';
+    }),
+    'edits to different records'
   );
   assert(
-    containsDeleteOperation,
-    'a local record deletion must be represented as an Automerge delete operation'
+    merged.catalog.activities[0]?.name === 'Deep reading' &&
+      merged.habitDayStates[0]?.outcome === 'done',
+    'edits to different records must both survive'
   );
 
-  const habitA = branch('habit-a', (backup) => {
-    backup.habitDayStates[0]!.outcome = 'done';
-  });
-  const habitB = branch('habit-b', (backup) => {
-    backup.habitDayStates[0]!.outcome = 'failed';
-  });
-  merged = mergeSyncDocuments(habitA, habitB, base);
-  assert(hasConflict(merged, 'habitDayStates'), 'same habit-day edits must be surfaced');
-
-  const goalA = branch('goal-a', (backup) => {
-    backup.goalWeeks[0]!.statuses[0]!.note = 'Device A review';
-  });
-  const goalB = branch('goal-b', (backup) => {
-    backup.goalWeeks[0]!.statuses[0]!.note = 'Device B review';
-  });
-  merged = mergeSyncDocuments(goalA, goalB, base);
-  assert(hasConflict(merged, 'goalWeeks'), 'same goal-week edits must be surfaced');
-
-  const routineA = branch('routine-a', (backup) => {
-    backup.activeRoutine = activeRoutine('paused');
-  });
-  const routineB = branch('routine-b', (backup) => {
-    backup.activeRoutine = activeRoutine('completed');
-  });
-  merged = mergeSyncDocuments(routineA, routineB, base);
+  merged = converge(
+    branch(shared, base, (backup) => {
+      backup.settings.weekStartsOn = 0;
+    }),
+    branch(shared, base, (backup) => {
+      backup.settings.logicalDayRolloverHour = 5;
+    }),
+    'different settings'
+  );
   assert(
-    hasConflict(merged, 'activeRoutine') &&
-      ['paused', 'completed'].includes(
-        projectSyncDocument(merged).backup.activeRoutine?.status ?? ''
-      ),
-    'concurrent active-routine replacements must keep one whole valid state and report both alternatives'
+    merged.settings.weekStartsOn === 0 && merged.settings.logicalDayRolloverHour === 5,
+    'different settings must merge field by field'
   );
 
-  const settingA = branch('setting-a', (backup) => {
-    backup.settings.weekStartsOn = 0;
-  });
-  const settingB = branch('setting-b', (backup) => {
-    backup.settings.weekStartsOn = 6;
-  });
-  merged = mergeSyncDocuments(settingA, settingB, base);
-  assert(hasConflict(merged, 'weekStartsOn'), 'settings scalar conflicts must be retained');
-
-  const stepA = branch('step-a', (backup) => {
-    backup.catalog.routines[0]!.steps.push({
-      ...clone(backup.catalog.routines[0]!.steps[0]!),
-      id: IDs.stepB,
-      name: 'Finish',
-      sortOrder: 1,
-    });
-    backup.routineDefinitions = clone(backup.catalog.routines);
-  });
-  const stepB = branch('step-b', (backup) => {
-    backup.catalog.routines[0]!.steps.push({
-      ...clone(backup.catalog.routines[0]!.steps[0]!),
-      id: IDs.stepB.replace('7', '8'),
-      name: 'Reflect',
-      sortOrder: 1,
-    });
-    backup.routineDefinitions = clone(backup.catalog.routines);
-  });
-  merged = mergeSyncDocuments(stepA, stepB, base);
+  merged = converge(
+    branch(shared, base, (backup) => {
+      backup.catalog.activities[0]!.name = 'Reading books';
+    }),
+    branch(shared, base, (backup) => {
+      backup.catalog.activities[0]!.name = 'Read articles';
+    }),
+    'same-record edits'
+  );
   assert(
-    projectSyncDocument(merged).conflicts.some((conflict) => conflict.kind === 'routine-order'),
-    'simultaneous routine steps with the same order must be reported'
+    ['Reading books', 'Read articles'].includes(merged.catalog.activities[0]?.name ?? ''),
+    'same-record edits must keep one complete version'
   );
 
-  const transitionA = branch('transition-a', (backup) => {
-    backup.transitions.push({
-      id: IDs.transitionA,
-      activityId: IDs.activityA,
-      timestamp: '2026-09-01T13:00:00.000Z',
-      source: 'manual',
-      status: 'recorded',
-      createdAt: STAMP,
-      correctionOfId: null,
-      note: null,
-    });
-  });
-  const transitionB = branch('transition-b', (backup) => {
-    backup.transitions.push({
-      id: IDs.transitionB,
-      activityId: null,
-      timestamp: '2026-09-01T13:00:00.000Z',
-      source: 'manual',
-      status: 'recorded',
-      createdAt: STAMP,
-      correctionOfId: null,
-      note: null,
-    });
-  });
-  merged = mergeSyncDocuments(transitionA, transitionB, base);
-  projected = projectSyncDocument(merged).backup;
+  merged = converge(
+    branch(shared, base, (backup) => {
+      backup.habits = [];
+      backup.habitDayStates = [];
+    }),
+    branch(shared, base, (backup) => {
+      backup.catalog.activities[0]!.color = '#fedcba';
+    }),
+    'deletion beside an unrelated edit'
+  );
   assert(
-    projectSyncDocument(merged).conflicts.some(
-      (conflict) => conflict.kind === 'tracker-timestamp'
-    ) &&
-      projected.transitions.filter((transition) => transition.status === 'recorded').length === 1 &&
-      Object.keys(merged.dataset.transitions).length === 2,
-    'same-time tracker transitions stay in CRDT history while the valid local projection is deterministic'
+    merged.habits.length === 0 && merged.catalog.activities[0]?.color === '#fedcba',
+    'a deletion must propagate to devices that did not touch the record'
   );
 
-  const keyB = documentHeads(deviceB).join();
-  assert(keyB.length > 0, 'Automerge documents must retain change heads');
+  converge(
+    branch(shared, base, (backup) => {
+      backup.habitDayStates = [];
+    }),
+    branch(shared, base, (backup) => {
+      backup.habitDayStates[0]!.outcome = 'failed';
+    }),
+    'deletion versus edit'
+  );
+
+  merged = converge(
+    branch(shared, base, (backup) => {
+      backup.activeRoutine = activeRoutine('paused');
+    }),
+    branch(shared, base, (backup) => {
+      backup.activeRoutine = activeRoutine('completed');
+    }),
+    'active routine replacements'
+  );
+  assert(
+    ['paused', 'completed'].includes(merged.activeRoutine?.status ?? ''),
+    'concurrent active-routine replacements must keep one whole valid state'
+  );
+
+  const transitionA = branch(shared, base, (backup) => {
+    backup.transitions.push(transition(IDs.transitionA, '2026-09-01T13:00:00.000Z'));
+  });
+  merged = converge(
+    transitionA,
+    branch(shared, base, (backup) => {
+      backup.transitions.push(transition(IDs.transitionB, '2026-09-01T13:00:00.000Z'));
+    }),
+    'same-time transitions'
+  );
+  assert(
+    merged.transitions.filter((entry) => entry.status === 'recorded').length === 1,
+    'two devices recording the same instant must project one valid transition'
+  );
+
+  // Concurrent deletions and new references must still project a valid dataset.
+  const withGoalStatus = branch(shared, base, (backup) => {
+    backup.goalWeeks[0]!.statuses[0]!.note = 'Reviewed';
+  });
+  merged = converge(
+    branch(shared, base, (backup) => {
+      backup.goals = [];
+      backup.goalWeeks = [];
+    }),
+    withGoalStatus,
+    'goal deletion versus weekly review'
+  );
+  assert(
+    merged.goals.length === 0 && merged.goalWeeks.length === 0,
+    'a deleted goal must take its weekly statuses with it'
+  );
+  const unusedStatus = base.goalSettings.statusDefinitions.find(
+    (definition) => definition.id !== base.goalWeeks[0]!.statuses[0]!.statusId
+  )!;
+  merged = converge(
+    branch(shared, base, (backup) => {
+      backup.goalSettings.statusDefinitions = backup.goalSettings.statusDefinitions.filter(
+        (definition) => definition.id !== unusedStatus.id
+      );
+    }),
+    branch(shared, base, (backup) => {
+      backup.goalWeeks[0]!.statuses[0]!.statusId = unusedStatus.id;
+    }),
+    'status deletion versus new use'
+  );
+  assert(
+    merged.goalSettings.statusDefinitions.some((definition) => definition.id === unusedStatus.id),
+    'a deleted status definition used concurrently must come back'
+  );
+  const transitionBase = projectSyncDocument(transitionA, { exportedAt: STAMP });
+  merged = converge(
+    branch(transitionA, transitionBase, (backup) => {
+      backup.transitions = [];
+    }),
+    branch(transitionA, transitionBase, (backup) => {
+      backup.transitions.push(
+        transition(IDs.transitionC, '2026-09-01T14:00:00.000Z', IDs.transitionA)
+      );
+    }),
+    'transition deletion versus correction'
+  );
+  assert(
+    merged.transitions.length === 1 && merged.transitions[0]?.correctionOfId === null,
+    'a correction of a deleted transition must stand on its own'
+  );
+
+  const unchanged = cloneSyncDocument(shared);
+  applyBackupChanges(unchanged, base, projectSyncDocument(shared, { exportedAt: STAMP }));
+  assert(sameSyncState(unchanged, shared), 'unchanged records must not be rewritten');
+
+  const remote = branch(shared, base, (backup) => {
+    backup.catalog.activities[0]!.name = 'Cloud name';
+  });
+  const bootstrap = cloneSyncDocument(remote);
+  const stale = clone(base);
+  addActivity(stale, IDs.activityB, 'Only on this device', 1);
+  addMissingRecords(bootstrap, stale);
+  merged = parseBackup(projectSyncDocument(bootstrap)).backup;
+  assert(
+    merged.catalog.activities[0]?.name === 'Cloud name' &&
+      merged.catalog.activities.some((activity) => activity.id === IDs.activityB),
+    'joining without history must keep cloud versions and add records the cloud lacks'
+  );
+
+  const decoded = decodeSyncDocument(encodeSyncDocument(remote));
+  assert(
+    sameSyncState(decoded, remote) && syncDocumentDatasetId(decoded) === DATASET_ID,
+    'encoding must round-trip the complete document'
+  );
+  const partial = cloneSyncDocument(shared);
+  const before = Y.encodeStateVector(partial);
+  partial.getMap('activities').set(IDs.activityB, { id: IDs.activityB });
+  for (const encoded of [
+    'not base64!',
+    toBase64(Y.encodeStateAsUpdateV2(new Y.Doc())),
+    toBase64(Y.encodeStateAsUpdateV2(partial, before)),
+  ]) {
+    let rejected = false;
+    try {
+      decodeSyncDocument(encoded);
+    } catch {
+      rejected = true;
+    }
+    assert(rejected, 'unreadable, foreign, or incomplete documents must be rejected');
+  }
+
+  const large = clone(base);
+  for (let index = 0; index < 20_000; index += 1) {
+    large.transitions.push(
+      transition(
+        `${index.toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`,
+        new Date(Date.parse(STAMP) + index * 60_000).toISOString()
+      )
+    );
+  }
+  const started = performance.now();
+  const largeDocument = createSyncDocument(large, DATASET_ID);
+  const reloaded = decodeSyncDocument(encodeSyncDocument(largeDocument));
+  const edited = projectSyncDocument(reloaded);
+  edited.catalog.activities[0]!.name = 'Fast edit';
+  applyBackupChanges(reloaded, projectSyncDocument(largeDocument), edited);
+  mergeSyncDocuments(largeDocument, reloaded);
+  assert(
+    projectSyncDocument(largeDocument).transitions.length === 20_000,
+    'large documents must keep every record'
+  );
+  const elapsed = performance.now() - started;
+  assert(elapsed < 5_000, `syncing 20,000 transitions took ${Math.round(elapsed)}ms`);
 }
 
 class MemoryStorage implements AsyncStorageLike {
@@ -610,19 +646,15 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function fromBase64(value: string): Uint8Array {
-  const binary = atob(value);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-}
+const SYNC_FILE_HEADER = 'TULONA_YJS_SYNC_V1\n';
 
 function remoteDocument(document: SyncDocument): string {
-  return `TULONA_AUTOMERGE_SYNC_V1\n${toBase64(saveSyncDocument(document))}\n`;
+  return `${SYNC_FILE_HEADER}${encodeSyncDocument(document)}\n`;
 }
 
 function decodeRemoteDocument(contents: string): SyncDocument {
-  const prefix = 'TULONA_AUTOMERGE_SYNC_V1\n';
-  assert(contents.startsWith(prefix), 'test remote sync file should have a valid header');
-  return loadSyncDocument(fromBase64(contents.slice(prefix.length).trim()), actorId('inspection'));
+  assert(contents.startsWith(SYNC_FILE_HEADER), 'test remote sync file should have a valid header');
+  return decodeSyncDocument(contents.slice(SYNC_FILE_HEADER.length).trim());
 }
 
 function addActivity(backup: LifeTrackerBackup, id: string, name: string, sortOrder: number): void {
@@ -680,9 +712,9 @@ async function migrationAndCorruptRemote(): Promise<void> {
   assert(harness.dropbox.uploads.length === 0, 'legacy backup must require review before writes');
   await harness.service.resolveSetup(review.token, 'merge');
   const migrated = harness.dropbox.files.get(DROPBOX_SYNC_PATH);
-  assert(migrated, 'first migration must create the new Automerge Dropbox file');
+  assert(migrated, 'first migration must create the Dropbox sync file');
   const document = decodeRemoteDocument(migrated.contents);
-  const projected = projectSyncDocument(document).backup;
+  const projected = projectSyncDocument(document);
   assert(
     projected.catalog.activities.some((activity) => activity.id === IDs.activityB) &&
       projected.catalog.activities.some((activity) => activity.id === IDs.activityC),
@@ -701,12 +733,12 @@ async function migrationAndCorruptRemote(): Promise<void> {
   const corrupt = await makeServiceHarness(baseBackup());
   corrupt.dropbox.files.set(DROPBOX_SYNC_PATH, {
     rev: 'bad-rev',
-    contents: 'this is not an Automerge sync document',
+    contents: 'this is not a Tulona sync document',
   });
   const before = JSON.stringify(corrupt.local.currentBackup());
   try {
     await corrupt.service.syncNow();
-    throw new Error('corrupt remote Automerge data must be rejected');
+    throw new Error('corrupt remote sync data must be rejected');
   } catch (error) {
     assert(error instanceof Error, 'corrupt remote data should report an error');
   }
@@ -724,18 +756,14 @@ async function revisionAndCreationRaces(): Promise<void> {
   const localBackup = clone(base);
   addActivity(localBackup, IDs.activityB, 'Device A', 1);
   const harness = await makeServiceHarness(localBackup);
-  const common = createSyncDocument(base, actorId('common'), DATASET_ID);
+  const common = createSyncDocument(base, DATASET_ID);
   harness.dropbox.files.set(DROPBOX_SYNC_PATH, {
     rev: 'start-rev',
     contents: remoteDocument(common),
   });
   const remoteBranch = clone(base);
   addActivity(remoteBranch, IDs.activityC, 'Device B', 2);
-  const remoteConcurrent = updateSyncDocumentFromBackup(
-    createSyncDocument(base, actorId('remote-device'), DATASET_ID),
-    base,
-    remoteBranch
-  );
+  const remoteConcurrent = createSyncDocument(remoteBranch, DATASET_ID);
   harness.dropbox.beforeNextUpload = () => {
     harness.dropbox.files.set(DROPBOX_SYNC_PATH, {
       rev: 'intervening-rev',
@@ -745,7 +773,7 @@ async function revisionAndCreationRaces(): Promise<void> {
 
   await harness.service.syncNow();
   const finalDoc = decodeRemoteDocument(harness.dropbox.files.get(DROPBOX_SYNC_PATH)!.contents);
-  const finalBackup = projectSyncDocument(finalDoc).backup;
+  const finalBackup = projectSyncDocument(finalDoc);
   const syncUploads = harness.dropbox.uploads.filter((upload) => upload.path === DROPBOX_SYNC_PATH);
   assert(
     syncUploads.length === 2 &&
@@ -762,11 +790,7 @@ async function revisionAndCreationRaces(): Promise<void> {
   );
 
   const creation = await makeServiceHarness(base);
-  const racedDoc = updateSyncDocumentFromBackup(
-    createSyncDocument(base, actorId('racing-device'), DATASET_ID),
-    base,
-    remoteBranch
-  );
+  const racedDoc = createSyncDocument(remoteBranch, DATASET_ID);
   creation.dropbox.beforeNextUpload = () => {
     creation.dropbox.files.set(DROPBOX_SYNC_PATH, {
       rev: 'created-by-other-client',
@@ -782,7 +806,7 @@ async function revisionAndCreationRaces(): Promise<void> {
       creationSyncUploads[1]?.mode['.tag'] === 'update' &&
       projectSyncDocument(
         decodeRemoteDocument(creation.dropbox.files.get(DROPBOX_SYNC_PATH)!.contents)
-      ).backup.catalog.activities.some((activity) => activity.id === IDs.activityC),
+      ).catalog.activities.some((activity) => activity.id === IDs.activityC),
     'a simultaneous first-file creation must recover from add conflict by merging the winner'
   );
   harness.database.close();
@@ -808,7 +832,7 @@ async function writeDuringSync(): Promise<void> {
   await task;
   const remote = decodeRemoteDocument(harness.dropbox.files.get(DROPBOX_SYNC_PATH)!.contents);
   assert(
-    projectSyncDocument(remote).backup.catalog.activities.some(
+    projectSyncDocument(remote).catalog.activities.some(
       (activity) => activity.id === IDs.activityB
     ),
     'a local write during Dropbox reads must be included before upload'
@@ -827,9 +851,7 @@ async function persistentLocalHistory(): Promise<void> {
   const savedState = harness.local.readSyncState(stateKey);
   assert(savedState, 'sync state must persist locally beside the dataset');
   const savedDocument = JSON.parse(savedState) as { document: string };
-  const savedHeads = documentHeads(
-    loadSyncDocument(fromBase64(savedDocument.document), actorId('before-reload'))
-  ).sort();
+  const saved = decodeSyncDocument(savedDocument.document);
 
   const authFactory: NonNullable<DropboxBackupServiceOptions['authFactory']> = () =>
     ({}) as DropboxAuth;
@@ -846,12 +868,9 @@ async function persistentLocalHistory(): Promise<void> {
   const reloadedState = JSON.parse(harness.local.readSyncState(stateKey) ?? '{}') as {
     document?: string;
   };
-  const reloadedHeads = documentHeads(
-    loadSyncDocument(fromBase64(reloadedState.document ?? ''), actorId('after-reload'))
-  ).sort();
   assert(
-    JSON.stringify(savedHeads) === JSON.stringify(reloadedHeads),
-    'a later app instance must continue the persisted Automerge history instead of rebuilding it from JSON'
+    sameSyncState(saved, decodeSyncDocument(reloadedState.document ?? '')),
+    'a later app instance must continue the persisted sync history instead of rebuilding it from JSON'
   );
   harness.database.close();
 }
@@ -896,11 +915,7 @@ async function setupChoicesAndSafety(): Promise<void> {
   addActivity(cloudBackup, IDs.activityC, 'Cloud only', 2);
   for (const choice of ['cloud', 'local', 'merge'] as const) {
     const harness = await makeServiceHarness(localBackup);
-    const cloud = createSyncDocument(
-      cloudBackup,
-      actorId(`cloud-${choice}`),
-      '99999999-9999-4999-8999-999999999999'
-    );
+    const cloud = createSyncDocument(cloudBackup, '99999999-9999-4999-8999-999999999999');
     const originalCloud = remoteDocument(cloud);
     harness.dropbox.files.set(DROPBOX_SYNC_PATH, { rev: 'original', contents: originalCloud });
     await expectSetup(harness.service);
@@ -951,7 +966,7 @@ async function setupChoicesAndSafety(): Promise<void> {
     assert(
       projectSyncDocument(
         decodeRemoteDocument(harness.dropbox.files.get(DROPBOX_SYNC_PATH)!.contents)
-      ).backup.catalog.activities[0]!.name === 'After setup',
+      ).catalog.activities[0]!.name === 'After setup',
       'edits after adopting cloud must reach Dropbox'
     );
     harness.database.close();
@@ -962,7 +977,7 @@ async function setupChoicesAndSafety(): Promise<void> {
     harness.dropbox.files.set(DROPBOX_SYNC_PATH, {
       rev: 'original',
       contents: remoteDocument(
-        createSyncDocument(cloudBackup, actorId('stale'), '99999999-9999-4999-8999-999999999999')
+        createSyncDocument(cloudBackup, '99999999-9999-4999-8999-999999999999')
       ),
     });
     await expectSetup(harness.service);
@@ -1050,7 +1065,7 @@ async function setupChoicesAndSafety(): Promise<void> {
   const lateRace = await makeServiceHarness(localBackup);
   lateRace.dropbox.files.set(DROPBOX_SYNC_PATH, {
     rev: 'original',
-    contents: remoteDocument(createSyncDocument(cloudBackup, actorId('late-race'), DATASET_ID)),
+    contents: remoteDocument(createSyncDocument(cloudBackup, DATASET_ID)),
   });
   // A missing local history with the same cloud ID normally merges; damage history to require review.
   lateRace.local.corruptSyncState(dropboxSyncStorageKey(DATASET_ID));
@@ -1058,7 +1073,7 @@ async function setupChoicesAndSafety(): Promise<void> {
   lateRace.dropbox.beforeNextUpload = () => {
     lateRace.dropbox.files.set(DROPBOX_SYNC_PATH, {
       rev: 'raced',
-      contents: remoteDocument(createSyncDocument(cloudBackup, actorId('race-winner'), DATASET_ID)),
+      contents: remoteDocument(createSyncDocument(cloudBackup, DATASET_ID)),
     });
   };
   let raceRejected = false;
@@ -1156,43 +1171,14 @@ async function setupChoicesAndSafety(): Promise<void> {
   failedArchive.database.close();
 }
 
-/** Runs sync as Hermes does: no WebAssembly, with Automerge behind a JSON message channel. */
-async function withHostedSyncEngine(scenario: () => Promise<void>): Promise<void> {
-  const worker = createSyncEngineWorker();
-  const client = new HostedSyncEngineClient();
-  client.attach('test-engine', (message) => {
-    void handleSyncEngineMessage(worker, message).then((response) => client.receive(response));
-  });
-  const webAssembly = Object.getOwnPropertyDescriptor(globalThis, 'WebAssembly');
-  Object.defineProperty(globalThis, 'WebAssembly', {
-    configurable: true,
-    value: undefined,
-    writable: true,
-  });
-  registerHostedSyncRuntime({ transport: client.transport });
-  try {
-    await scenario();
-  } finally {
-    registerHostedSyncRuntime(null);
-    if (webAssembly) Object.defineProperty(globalThis, 'WebAssembly', webAssembly);
-  }
-}
-
 async function run(): Promise<void> {
+  syncDocumentSemantics();
   await setupChoicesAndSafety();
-  await automergeSemantics();
   await migrationAndCorruptRemote();
   await revisionAndCreationRaces();
   await writeDuringSync();
   await persistentLocalHistory();
   await localMigrationHistoryAndCrossTabNotifications();
-  await withHostedSyncEngine(async () => {
-    await setupChoicesAndSafety();
-    await migrationAndCorruptRemote();
-    await revisionAndCreationRaces();
-    await writeDuringSync();
-    await persistentLocalHistory();
-  });
 }
 
 run().catch((error: unknown) => {

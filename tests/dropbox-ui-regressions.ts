@@ -19,11 +19,14 @@ const syncDocument = read('src/backup/dropbox-sync-document.ts');
 const readme = read('README.md');
 const compactReadme = readme.replace(/\s+/g, ' ');
 const packageJson = JSON.parse(read('package.json')) as {
-  dependencies?: { dropbox?: string; '@automerge/automerge'?: string };
+  dependencies?: { dropbox?: string; yjs?: string; 'expo-crypto'?: string };
 };
 
 assert(packageJson.dependencies?.dropbox, 'the official Dropbox npm package must be installed');
-assert(packageJson.dependencies?.['@automerge/automerge'], 'Automerge must be installed');
+assert(
+  packageJson.dependencies?.yjs && packageJson.dependencies['expo-crypto'],
+  'Yjs and the native Web Crypto provider must be installed'
+);
 assert(
   backup.includes('DROPBOX_SYNC_PATH') &&
     backup.includes("'.tag': 'update'") &&
@@ -41,26 +44,25 @@ assert(
   'automatic synchronization must be debounced, serialized, and retried on focus/reconnect'
 );
 assert(
-  backup.includes("import type { SyncConflict } from './dropbox-sync-document'") &&
-    backup.includes("import('./sync-engine-worker')") &&
-    backup.includes('hasWebAssemblySyncRuntime') &&
-    backup.includes('getHostedSyncRuntime'),
-  'Automerge must load lazily in-process with WebAssembly, or run in a hosted engine without it'
+  backup.includes("import('./dropbox-sync-document')") &&
+    backup.startsWith("import './web-crypto';") &&
+    syncDocument.startsWith("import './web-crypto';") &&
+    backup.includes('subscribeToAppForeground'),
+  'Yjs must load lazily after Web Crypto is installed, and sync must resume when the app returns'
 );
 assert(
-  syncDocument.includes('Automerge.merge') &&
-    syncDocument.includes('routineSteps: Record') &&
-    syncDocument.includes('habitDayStates: Record') &&
-    syncDocument.includes('delete-edit'),
-  'the sync document must normalize entities and preserve conflict history'
+  syncDocument.includes('Y.applyUpdateV2') &&
+    syncDocument.includes('habitDayStates:') &&
+    syncDocument.includes('goalStatuses:') &&
+    syncDocument.includes('repairReferences'),
+  'the sync document must key records by identity and repair concurrent deletions'
 );
 assert(
   screen.includes('dropbox-connect') &&
     screen.includes('dropbox-auto-backup-enabled') &&
     screen.includes('dropbox-backup-now') &&
     screen.includes('dropbox-disconnect') &&
-    screen.includes('dropbox-sync-unsupported') &&
-    screen.includes('status.syncSupported'),
+    screen.includes('dropbox-sync-unsupported'),
   'backup UI must expose connect, automatic, manual, and disconnect actions'
 );
 assert(
@@ -78,14 +80,12 @@ assert(
     readme.includes('tulona-backup.json') &&
     readme.includes('files.content.read') &&
     readme.includes('files.metadata.read') &&
-    readme.includes('tulona-sync.am'),
+    readme.includes('tulona-sync.yjs'),
   'Dropbox setup, OAuth scopes, and sync-file policy must be documented'
 );
 assert(
-  compactReadme.includes('WebAssembly with exception support') &&
-    compactReadme.includes('Hermes has no WebAssembly') &&
-    compactReadme.includes('tulona://dropbox-auth'),
-  'the iOS sync engine path and its Dropbox redirect setup must be documented'
+  compactReadme.includes('Yjs') && compactReadme.includes('tulona://dropbox-auth'),
+  'the sync design and its iOS Dropbox redirect setup must be documented'
 );
 
 console.log('Validated Dropbox synchronization UI, boot integration, and setup contract.');

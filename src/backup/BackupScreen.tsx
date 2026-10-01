@@ -234,7 +234,7 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
   };
 
   const connected = status?.connected ?? false;
-  const dropboxAvailable = Boolean(status?.appKeyConfigured && status.syncSupported);
+  const dropboxAvailable = Boolean(status?.appKeyConfigured);
 
   return (
     <Column
@@ -267,7 +267,7 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
       ) : null}
       {connected ? (
         <>
-          {status?.syncSupported ? (
+          {status ? (
             <>
               <AppSwitch
                 disabled={busy || Boolean(status.setupReview)}
@@ -293,14 +293,6 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
                   testID="dropbox-sync-state"
                 >
                   Dropbox is unavailable. Local changes are saved and will sync when you reconnect.
-                </Text>
-              ) : null}
-              {status.unresolvedConflictCount ? (
-                <Text
-                  textStyle={{ color: colors.danger.foreground, fontSize: 13 }}
-                  testID="dropbox-sync-conflicts"
-                >
-                  {`${status.unresolvedConflictCount} sync conflict${status.unresolvedConflictCount === 1 ? '' : 's'} need review. Both values are retained in synchronization history.`}
                 </Text>
               ) : null}
               {status.lastError && !status.setupReview ? (
@@ -380,7 +372,7 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
                 ? 'All current activities, history, habits, goals, settings and running timers on this device will be replaced by Dropbox data. Other devices continue using the cloud dataset. A recovery copy of your current data will be saved.'
                 : choice === 'local'
                   ? 'Dropbox will use this device’s complete dataset, including settings and running timers. Existing Dropbox data will be saved in recovery files. Other connected devices may need to choose this new dataset before syncing.'
-                  : 'Records from both datasets will be combined. Matching IDs are treated as the same record; different IDs remain separate. Conflicting settings, timers or edits may need review. Recovery copies preserve the original datasets.'
+                  : 'Records from both datasets will be combined. Matching IDs are treated as the same record, and the Dropbox version of a matching record is kept; different IDs remain separate. Recovery copies preserve the original datasets.'
             }
             confirmLabel={choice === 'merge' ? 'Combine and sync' : 'Replace and sync'}
             cancelLabel="Cancel"
@@ -404,39 +396,35 @@ function DropboxBackupPanel({ service }: { service: DropboxBackupService }) {
             cancelTestID="dropbox-setup-cancel"
           />
           <Row spacing={8} style={{ width: '100%' }}>
-            {status?.syncSupported ? (
-              <AppButton
-                disabled={busy}
-                label="Sync now"
-                onPress={() => void run(() => service.syncNow())}
-                style={{ height: 48, width: '48%' }}
-                testID="dropbox-backup-now"
-              />
-            ) : null}
+            <AppButton
+              disabled={busy}
+              label="Sync now"
+              onPress={() => void run(() => service.syncNow())}
+              style={{ height: 48, width: '48%' }}
+              testID="dropbox-backup-now"
+            />
             <AppButton
               disabled={busy}
               label="Disconnect"
               onPress={() => void run(() => service.disconnect())}
-              style={{ height: 48, width: status?.syncSupported ? '48%' : '100%' }}
+              style={{ height: 48, width: '48%' }}
               testID="dropbox-disconnect"
               variant="outlined"
             />
           </Row>
-          {status?.syncSupported ? (
-            <AppButton
-              disabled={busy}
-              label="Reconnect or change Dropbox account"
-              onPress={() =>
-                void run(async () => {
-                  const { url } = await service.beginAuthorization();
-                  await Linking.openURL(url);
-                })
-              }
-              style={{ height: 48, width: '100%' }}
-              testID="dropbox-reconnect"
-              variant="outlined"
-            />
-          ) : null}
+          <AppButton
+            disabled={busy}
+            label="Reconnect or change Dropbox account"
+            onPress={() =>
+              void run(async () => {
+                const { url } = await service.beginAuthorization();
+                await Linking.openURL(url);
+              })
+            }
+            style={{ height: 48, width: '100%' }}
+            testID="dropbox-reconnect"
+            variant="outlined"
+          />
         </>
       ) : dropboxAvailable ? (
         <AppButton
