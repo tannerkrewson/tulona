@@ -1,12 +1,22 @@
 import { Picker } from '@expo/ui';
 import { Column, Text } from '@ui/primitives';
 import { useIsFocused, useRouter } from 'expo-router';
-import { View } from 'react-native';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { AppSettings } from '@domain';
 import { useAppTheme, useThemePreference } from '@theme';
-import { AccessiblePicker, AppButton, AppSlider, AppSwitch, errorText, Screen } from '@ui';
+import { AppIcon } from '@icons';
+import {
+  AppSlider,
+  errorText,
+  Form,
+  FormContent,
+  FormPickerRow,
+  FormRow,
+  FormSection,
+  FormSwitchRow,
+  Screen,
+} from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { goBackInAppStack } from '../navigation/app-back';
 import BackupScreen from '../backup/BackupScreen';
@@ -16,16 +26,6 @@ import GoalsSettingsPanel from './GoalsSettingsPanel';
 import { PrototypeDataReset, SettingsActionError } from './SettingsFeedback';
 import { loadSettingsStore } from './settings-runtime';
 import type { SettingsStore } from './settings-store';
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  const { colors } = useAppTheme();
-  return (
-    <Column spacing={6} style={{ width: '100%' }}>
-      <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>{label}</Text>
-      {children}
-    </Column>
-  );
-}
 
 type CategoryContentProps = {
   category: SettingsCategory;
@@ -51,20 +51,27 @@ function CategoryControls({ category, store }: Pick<CategoryContentProps, 'categ
       .catch(() => undefined);
   };
 
+  const hourLabel = (hour: number) =>
+    hour === 0 ? 'Midnight' : `${hour % 12 || 12}:00 ${hour < 12 ? 'AM' : 'PM'}`;
+
   switch (category.id) {
     case 'appearance':
       return (
-        <View style={{ width: '100%', flexDirection: 'row', gap: 8 }}>
-          {(
-            [
-              { id: 'system', label: 'System' },
-              { id: 'light', label: 'Light' },
-              { id: 'dark', label: 'Dark' },
-            ] as const
-          ).map((option) => (
-            <View key={option.id} style={{ flex: 1, minWidth: 0 }}>
-              <AppButton
+        <Form>
+          <FormSection>
+            {(
+              [
+                { id: 'system', label: 'Automatic', icon: 'settings' },
+                { id: 'light', label: 'Light', icon: 'sun' },
+                { id: 'dark', label: 'Dark', icon: 'moon' },
+              ] as const
+            ).map((option) => (
+              <FormRow
+                accessibilityLabel={`${option.label}${settings.appearance === option.id ? ', selected' : ''}`}
                 disabled={saving}
+                icon={option.icon}
+                key={option.id}
+                kind="action"
                 label={option.label}
                 onPress={() =>
                   run(
@@ -72,44 +79,39 @@ function CategoryControls({ category, store }: Pick<CategoryContentProps, 'categ
                     (nextSettings) => setThemeAppearance(nextSettings.appearance)
                   )
                 }
-                style={{ height: 44, width: '100%' }}
                 testID={`settings-appearance-${option.id}`}
-                variant={settings.appearance === option.id ? 'filled' : 'outlined'}
+                trailing={
+                  settings.appearance === option.id ? (
+                    <AppIcon color={colors.primary} name="check" size={20} strokeWidth={2.6} />
+                  ) : undefined
+                }
               />
-            </View>
-          ))}
-        </View>
+            ))}
+          </FormSection>
+        </Form>
       );
     case 'time-and-activity':
       return (
-        <Column spacing={16} style={{ width: '100%' }}>
-          <Field label="Logical day starts at">
-            <AccessiblePicker
-              label="Logical day starts at"
-              selectedValue={String(settings.logicalDayRolloverHour)}
+        <Form>
+          <FormSection
+            footer={`Time before ${hourLabel(settings.logicalDayRolloverHour).toLowerCase()} counts toward the previous day.`}
+          >
+            <FormPickerRow
+              label="Day starts at"
               onValueChange={(value) =>
                 run(() => store.getState().setLogicalDayRolloverHour(Number(value)))
               }
+              selectedValue={String(settings.logicalDayRolloverHour)}
               testID="settings-logical-day"
             >
               {Array.from({ length: 24 }, (_, hour) => (
-                <Picker.Item
-                  key={hour}
-                  label={
-                    hour === 0
-                      ? '12:00 AM (midnight)'
-                      : `${hour % 12 || 12}:00 ${hour < 12 ? 'AM' : 'PM'}`
-                  }
-                  value={String(hour)}
-                />
+                <Picker.Item key={hour} label={hourLabel(hour)} value={String(hour)} />
               ))}
-            </AccessiblePicker>
-          </Field>
-          <Field label="Week starts on">
-            <AccessiblePicker
+            </FormPickerRow>
+            <FormPickerRow
               label="Week starts on"
-              selectedValue={String(settings.weekStartsOn)}
               onValueChange={(value) => run(() => store.getState().setWeekStartsOn(Number(value)))}
+              selectedValue={String(settings.weekStartsOn)}
               testID="settings-week-start"
             >
               {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(
@@ -117,15 +119,15 @@ function CategoryControls({ category, store }: Pick<CategoryContentProps, 'categ
                   <Picker.Item key={label} label={label} value={String(day)} />
                 )
               )}
-            </AccessiblePicker>
-          </Field>
-          <Field label="Ignore activities shorter than">
-            <AccessiblePicker
-              label="Ignore activities shorter than"
-              selectedValue={String(settings.minimumActivityDurationMs)}
+            </FormPickerRow>
+          </FormSection>
+          <FormSection footer="Stopping an activity sooner than this discards it, so quick mis-taps don't end up in your history.">
+            <FormPickerRow
+              label="Ignore shorter than"
               onValueChange={(value) =>
                 run(() => store.getState().setMinimumActivityDurationMs(Number(value)))
               }
+              selectedValue={String(settings.minimumActivityDurationMs)}
               testID="settings-minimum-activity-duration"
             >
               <Picker.Item label="Off" value="0" />
@@ -136,41 +138,57 @@ function CategoryControls({ category, store }: Pick<CategoryContentProps, 'categ
               <Picker.Item label="1 minute" value="60000" />
               <Picker.Item label="2 minutes" value="120000" />
               <Picker.Item label="5 minutes" value="300000" />
-            </AccessiblePicker>
-          </Field>
-        </Column>
+            </FormPickerRow>
+          </FormSection>
+        </Form>
       );
     case 'routines':
       return (
-        <Column spacing={16} style={{ width: '100%' }}>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-            Foreground sound is best-effort and never schedules background notifications.
-          </Text>
-          <AppSwitch
-            disabled={saving}
-            label="Alarm"
-            onValueChange={(value) => run(() => store.getState().setRoutineAlarmEnabled(value))}
-            testID="settings-alarm-enabled"
-            value={settings.alarmSettings.enabled}
-          />
-          <Column spacing={6} style={{ width: '100%' }}>
-            <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
-              {`Volume · ${Math.round((settings.alarmSettings.volume ?? 1) * 100)}%`}
-            </Text>
-            <AppSlider
-              disabled={saving || !settings.alarmSettings.enabled}
-              max={1}
-              min={0}
-              onValueChange={(value) => run(() => store.getState().setRoutineAlarmVolume(value))}
-              step={0.25}
-              testID="settings-alarm-volume"
-              value={settings.alarmSettings.volume ?? 1}
+        <Form>
+          <FormSection
+            footer="Plays when a step's time is up while Tulona is open. It doesn't send notifications."
+            title="Step Alarm"
+          >
+            <FormSwitchRow
+              disabled={saving}
+              label="Sound"
+              onValueChange={(value) => run(() => store.getState().setRoutineAlarmEnabled(value))}
+              testID="settings-alarm-enabled"
+              value={settings.alarmSettings.enabled}
             />
-          </Column>
-          <Field label="When reopening a routine">
-            <AccessiblePicker
-              label="When reopening a routine"
-              selectedValue={settings.defaultRoutineBehavior}
+            <FormContent>
+              <Column spacing={6} style={{ width: '100%' }}>
+                <Text
+                  textStyle={{
+                    color: settings.alarmSettings.enabled ? colors.text : colors.textMuted,
+                    fontSize: 17,
+                  }}
+                >
+                  {`Volume · ${Math.round((settings.alarmSettings.volume ?? 1) * 100)}%`}
+                </Text>
+                <AppSlider
+                  disabled={saving || !settings.alarmSettings.enabled}
+                  max={1}
+                  min={0}
+                  onValueChange={(value) =>
+                    run(() => store.getState().setRoutineAlarmVolume(value))
+                  }
+                  step={0.25}
+                  testID="settings-alarm-volume"
+                  value={settings.alarmSettings.volume ?? 1}
+                />
+              </Column>
+            </FormContent>
+          </FormSection>
+          <FormSection
+            footer={
+              settings.defaultRoutineBehavior === 'resume'
+                ? 'An interrupted routine picks up where you left off.'
+                : 'An interrupted routine restarts its current step from the beginning.'
+            }
+          >
+            <FormPickerRow
+              label="When reopened"
               onValueChange={(value) =>
                 run(() =>
                   store
@@ -178,13 +196,14 @@ function CategoryControls({ category, store }: Pick<CategoryContentProps, 'categ
                     .setDefaultRoutineBehavior(value as AppSettings['defaultRoutineBehavior'])
                 )
               }
+              selectedValue={settings.defaultRoutineBehavior}
               testID="settings-routine-behavior"
             >
-              <Picker.Item label="Resume where I left off" value="resume" />
-              <Picker.Item label="Restart the current step" value="restart" />
-            </AccessiblePicker>
-          </Field>
-        </Column>
+              <Picker.Item label="Resume" value="resume" />
+              <Picker.Item label="Restart step" value="restart" />
+            </FormPickerRow>
+          </FormSection>
+        </Form>
       );
     case 'goals':
       return <GoalsSettingsPanel />;
