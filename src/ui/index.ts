@@ -25,6 +25,7 @@ export { DurationText, formatDuration, type DurationTextProps } from './Duration
 export { DurationPicker, type DurationPickerProps, type DurationValue } from './DurationPicker';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export {
+  ColorDot,
   Form,
   FormColorRow,
   FormContent,

@@ -94,6 +94,8 @@ export interface FormRowProps {
   value?: string;
   icon?: IconValue;
   iconColor?: string;
+  /** Custom leading content, such as a color swatch, in place of an icon. */
+  leading?: ReactNode;
   /** Replaces the value text with custom trailing content. */
   trailing?: ReactNode;
   onPress?: () => void;
@@ -112,6 +114,7 @@ export function FormRow({
   value,
   icon,
   iconColor,
+  leading,
   trailing,
   onPress,
   kind = 'navigation',
@@ -132,6 +135,7 @@ export function FormRow({
           : colors.text;
   const content = (
     <>
+      {leading ? <View style={styles.rowIcon}>{leading}</View> : null}
       {icon ? (
         <View style={styles.rowIcon}>
           <AppIcon
@@ -327,6 +331,12 @@ export function FormContent({ children, testID }: { children: ReactNode; testID?
     <View style={styles.content} testID={testID}>
       {children}
     </View>
+  );
+}
+
+export function ColorDot({ color, size = 18 }: { color: string; size?: number }) {
+  return (
+    <View style={{ backgroundColor: color, borderRadius: size / 2, height: size, width: size }} />
   );
 }
 

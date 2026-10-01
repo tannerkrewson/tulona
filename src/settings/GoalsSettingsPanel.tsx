@@ -1,7 +1,7 @@
 import { Picker } from '@expo/ui';
-import { Column, Row, Text } from '@ui/primitives';
+import { Column, Text } from '@ui/primitives';
 import { useIsFocused } from 'expo-router';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import {
@@ -9,16 +9,21 @@ import {
   MIN_GOAL_HISTORICAL_CIRCLE_COUNT,
   type GoalSettings,
   type GoalStatusColor,
-  type GoalStatusDefinition,
 } from '@domain';
 import { useAppTheme } from '@theme';
 import {
-  AccessiblePicker,
-  AccessibleTextInput,
   AppButton,
+  ColorDot,
   ConfirmationModal,
   errorText,
-  ReorderControls,
+  Form,
+  FormPickerRow,
+  FormRow,
+  FormSection,
+  FormSheet,
+  FormTextField,
+  HeaderTextButton,
+  IconButton,
 } from '@ui';
 
 import { loadGoalsRuntime } from '../goals/goal-runtime';
@@ -49,160 +54,91 @@ const STATUS_COLOR_OPTIONS: readonly {
   { value: 'light-grey', label: 'Light grey', swatch: '#D1D5DB' },
 ];
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  const { colors } = useAppTheme();
-  return (
-    <Column spacing={6} style={{ width: '100%' }}>
-      <Text textStyle={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>{label}</Text>
-      {children}
-    </Column>
-  );
-}
-
 function statusColorOption(color: GoalStatusColor) {
   return STATUS_COLOR_OPTIONS.find((option) => option.value === color) ?? STATUS_COLOR_OPTIONS[0];
 }
 
-function StatusColorPicker({
-  value,
+type StatusDraft = { id: string | null; name: string; color: GoalStatusColor };
+
+function StatusSheet({
+  draft,
+  busy,
   onChange,
-  testID,
-  disabled,
+  onCancel,
+  onSave,
+  onDelete,
 }: {
-  value: GoalStatusColor;
-  onChange: (value: GoalStatusColor) => void;
-  testID: string;
-  disabled: boolean;
+  draft: StatusDraft | null;
+  busy: boolean;
+  onChange: (draft: StatusDraft) => void;
+  onCancel: () => void;
+  onSave: () => void;
+  onDelete: () => Promise<boolean>;
 }) {
-  const option = statusColorOption(value);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const current = draft ?? { id: null, name: '', color: 'green' as const };
+  const testSuffix = current.id ?? 'new';
   return (
-    <Row alignment="center" spacing={10} style={{ width: '100%' }}>
-      <View
-        style={{
-          backgroundColor: option.swatch,
-          borderColor: '#00000022',
-          borderRadius: 12,
-          borderWidth: 1,
-          height: 24,
-          width: 24,
-        }}
-      />
-      <View style={{ flex: 1 }}>
-        <AccessiblePicker
-          enabled={!disabled}
-          label="Status color"
-          onValueChange={(next) => onChange(next as GoalStatusColor)}
-          selectedValue={value}
-          testID={testID}
+    <FormSheet
+      confirmDisabled={busy || current.name.trim().length === 0}
+      confirmLabel={current.id ? 'Save' : 'Add'}
+      onClose={onCancel}
+      onConfirm={onSave}
+      testID={current.id ? `goal-status-${current.id}` : 'goal-status-create'}
+      title={current.id ? 'Edit Status' : 'New Status'}
+      visible={draft !== null}
+    >
+      <FormSection>
+        <FormTextField
+          autoFocus={!current.id}
+          label="Status name"
+          onChangeText={(name) => onChange({ ...current, name })}
+          placeholder="Name"
+          testID={current.id ? `goal-status-name-${current.id}` : 'goal-status-new-name'}
+          value={current.name}
+        />
+        <FormPickerRow
+          enabled={!busy}
+          label="Color"
+          onValueChange={(next) => onChange({ ...current, color: next as GoalStatusColor })}
+          selectedValue={current.color}
+          testID={current.id ? `goal-status-color-${current.id}` : 'goal-status-new-color'}
         >
           {STATUS_COLOR_OPTIONS.map((color) => (
             <Picker.Item key={color.value} label={color.label} value={color.value} />
           ))}
-        </AccessiblePicker>
-      </View>
-    </Row>
-  );
-}
-
-function StatusDefinitionRow({
-  definition,
-  busy,
-  isFirst,
-  isLast,
-  onSave,
-  onDelete,
-  onMoveUp,
-  onMoveDown,
-}: {
-  definition: GoalStatusDefinition;
-  busy: boolean;
-  isFirst: boolean;
-  isLast: boolean;
-  onSave: (id: string, input: UpdateGoalStatusDefinitionInput) => Promise<boolean>;
-  onDelete: (id: string) => Promise<boolean>;
-  onMoveUp: () => Promise<boolean>;
-  onMoveDown: () => Promise<boolean>;
-}) {
-  const { colors } = useAppTheme();
-  const [name, setName] = useState(definition.name);
-  const [color, setColor] = useState<GoalStatusColor>(definition.color);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-
-  return (
-    <>
-      <Column
-        spacing={12}
-        style={{
-          backgroundColor: colors.surfaceMuted,
-          borderColor: colors.border,
-          borderRadius: 12,
-          borderWidth: 1,
-          padding: 14,
-          width: '100%',
-        }}
-        testID={`goal-status-${definition.id}`}
-      >
-        <AccessibleTextInput
-          autoCorrect={false}
-          label={`${definition.name} status name`}
-          onChangeText={setName}
-          placeholder="Status name"
-          testID={`goal-status-name-${definition.id}`}
-          defaultValue={name}
-          textStyle={{ color: colors.text, fontSize: 16 }}
-        />
-        <StatusColorPicker
-          disabled={busy}
-          onChange={setColor}
-          testID={`goal-status-color-${definition.id}`}
-          value={color}
-        />
-        <Row alignment="center" spacing={8} style={{ width: '100%' }}>
-          <View style={{ flex: 1 }}>
-            <AppButton
-              disabled={busy || name.trim().length === 0}
-              label="Save status"
-              onPress={() => void onSave(definition.id, { name, color })}
-              style={{ height: 44, width: '100%' }}
-              testID={`goal-status-save-${definition.id}`}
-            />
-          </View>
-          <AppButton
+        </FormPickerRow>
+      </FormSection>
+      {current.id ? (
+        <FormSection footer="A status can only be deleted when no weekly review or check uses it.">
+          <FormRow
             disabled={busy}
-            label="Delete"
+            icon="trash-2"
+            kind="destructive"
+            label="Delete Status"
             onPress={() => setConfirmingDelete(true)}
-            style={{ height: 44 }}
-            testID={`goal-status-delete-${definition.id}`}
-            variant="outlined"
+            testID={`goal-status-delete-${testSuffix}`}
           />
-        </Row>
-        <ReorderControls
-          canMoveDown={!isLast}
-          canMoveUp={!isFirst}
-          disabled={busy}
-          onMoveDown={() => void onMoveDown()}
-          onMoveUp={() => void onMoveUp()}
-          testID={`goal-status-reorder-${definition.id}`}
-        />
-      </Column>
+        </FormSection>
+      ) : null}
       <ConfirmationModal
         busy={busy}
         cancelLabel="Cancel"
-        cancelTestID={`goal-status-cancel-delete-${definition.id}`}
-        confirmLabel="Confirm delete"
-        confirmTestID={`goal-status-confirm-delete-${definition.id}`}
-        message="Deleting a status is allowed only when no weekly history or automatic rule uses it."
+        cancelTestID={`goal-status-cancel-delete-${testSuffix}`}
+        confirmLabel="Delete"
+        confirmTestID={`goal-status-confirm-delete-${testSuffix}`}
+        message="Goals that used this status will need a new one."
         onCancel={() => setConfirmingDelete(false)}
         onConfirm={() => {
-          void onDelete(definition.id).then((deleted) => {
+          void onDelete().then((deleted) => {
             if (deleted) setConfirmingDelete(false);
           });
         }}
-        testID={`goal-status-delete-confirmation-${definition.id}`}
-        title={`Delete ${definition.name}?`}
+        testID={`goal-status-delete-confirmation-${testSuffix}`}
+        title={`Delete ${current.name || 'this status'}?`}
         visible={confirmingDelete}
       />
-    </>
+    </FormSheet>
   );
 }
 
@@ -215,19 +151,27 @@ function GoalsSettingsContent({
   busy: boolean;
   onMutation: (mutation: (service: GoalService) => Promise<unknown>) => Promise<boolean>;
 }) {
-  const { colors } = useAppTheme();
-  const [newStatusName, setNewStatusName] = useState('');
-  const [newStatusColor, setNewStatusColor] = useState<GoalStatusColor>('green');
-  const [newStatusInputVersion, setNewStatusInputVersion] = useState(0);
+  const [draft, setDraft] = useState<StatusDraft | null>(null);
+  const [reordering, setReordering] = useState(false);
   const definitions = settings.statusDefinitions;
 
-  const saveDefinition = async (
-    id: string,
-    input: UpdateGoalStatusDefinitionInput
-  ): Promise<boolean> => onMutation((nextService) => nextService.updateStatusDefinition(id, input));
-
-  const deleteDefinition = async (id: string): Promise<boolean> =>
-    onMutation((nextService) => nextService.deleteStatusDefinition(id));
+  const saveDraft = () => {
+    if (!draft) return;
+    const action = draft.id
+      ? (nextService: GoalService) =>
+          nextService.updateStatusDefinition(draft.id as string, {
+            name: draft.name,
+            color: draft.color,
+          } satisfies UpdateGoalStatusDefinitionInput)
+      : (nextService: GoalService) =>
+          nextService.createStatusDefinition({
+            name: draft.name,
+            color: draft.color,
+          } satisfies CreateGoalStatusDefinitionInput);
+    void onMutation(action).then((saved) => {
+      if (saved) setDraft(null);
+    });
+  };
 
   const reorder = async (index: number, direction: -1 | 1): Promise<boolean> => {
     const nextIndex = index + direction;
@@ -238,15 +182,11 @@ function GoalsSettingsContent({
   };
 
   return (
-    <Column spacing={18} style={{ width: '100%' }} testID="settings-goals">
-      <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-        These settings apply to every weekly goal. Status colors are semantic and shared by current
-        and historical goal reviews.
-      </Text>
-      <Field label="Weekly review day">
-        <AccessiblePicker
+    <Form testID="settings-goals">
+      <FormSection footer="Applies to every goal.">
+        <FormPickerRow
           enabled={!busy}
-          label="Weekly review day"
+          label="Review day"
           onValueChange={(next) =>
             void onMutation((nextService) =>
               nextService.updateSettings({ reviewDay: Number(next) })
@@ -258,12 +198,10 @@ function GoalsSettingsContent({
           {WEEKDAY_LABELS.map((label, day) => (
             <Picker.Item key={label} label={label} value={String(day)} />
           ))}
-        </AccessiblePicker>
-      </Field>
-      <Field label="Historical status circles">
-        <AccessiblePicker
+        </FormPickerRow>
+        <FormPickerRow
           enabled={!busy}
-          label="Historical status circles"
+          label="Weeks shown"
           onValueChange={(next) =>
             void onMutation((nextService) =>
               nextService.updateSettings({ historicalCircleCount: Number(next) })
@@ -281,84 +219,83 @@ function GoalsSettingsContent({
               return <Picker.Item key={count} label={`${count}`} value={String(count)} />;
             }
           )}
-        </AccessiblePicker>
-      </Field>
-      <Column spacing={12} style={{ width: '100%' }} testID="goal-status-definitions">
-        <Column spacing={4} style={{ width: '100%' }}>
-          <Text textStyle={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-            Status definitions
-          </Text>
-          <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-            Rename, recolor, reorder, or remove the shared statuses used by goal reviews.
-          </Text>
-        </Column>
+        </FormPickerRow>
+      </FormSection>
+      <FormSection
+        footer="The results you can give a goal each week."
+        headerAction={
+          definitions.length > 1 ? (
+            <HeaderTextButton
+              compact
+              label={reordering ? 'Done' : 'Reorder'}
+              onPress={() => setReordering((current) => !current)}
+              testID="goal-status-reorder"
+            />
+          ) : undefined
+        }
+        testID="goal-status-definitions"
+        title="Statuses"
+      >
         {definitions.map((definition, index) => (
-          <StatusDefinitionRow
-            busy={busy}
-            definition={definition}
-            isFirst={index === 0}
-            isLast={index === definitions.length - 1}
-            key={`${definition.id}-${definition.name}-${definition.color}`}
-            onDelete={deleteDefinition}
-            onMoveDown={() => reorder(index, 1)}
-            onMoveUp={() => reorder(index, -1)}
-            onSave={saveDefinition}
+          <FormRow
+            key={definition.id}
+            label={definition.name}
+            leading={<ColorDot color={statusColorOption(definition.color).swatch} />}
+            onPress={
+              reordering
+                ? undefined
+                : () =>
+                    setDraft({ id: definition.id, name: definition.name, color: definition.color })
+            }
+            testID={`goal-status-row-${definition.id}`}
+            trailing={
+              reordering ? (
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  <IconButton
+                    disabled={busy || index === 0}
+                    icon="chevron-up"
+                    label={`Move ${definition.name} up`}
+                    onPress={() => void reorder(index, -1)}
+                    testID={`goal-status-reorder-${definition.id}-up`}
+                    variant="plain"
+                  />
+                  <IconButton
+                    disabled={busy || index === definitions.length - 1}
+                    icon="chevron-down"
+                    label={`Move ${definition.name} down`}
+                    onPress={() => void reorder(index, 1)}
+                    testID={`goal-status-reorder-${definition.id}-down`}
+                    variant="plain"
+                  />
+                </View>
+              ) : undefined
+            }
           />
         ))}
-        <Column
-          spacing={12}
-          style={{
-            borderColor: colors.border,
-            borderRadius: 12,
-            borderWidth: 1,
-            padding: 14,
-            width: '100%',
-          }}
-          testID="goal-status-create"
-        >
-          <Text textStyle={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
-            Add a status
-          </Text>
-          <AccessibleTextInput
-            autoCorrect={false}
-            defaultValue={newStatusName}
-            key={`goal-status-new-name-${newStatusInputVersion}`}
-            label="New status name"
-            onChangeText={setNewStatusName}
-            placeholder="Status name"
-            testID="goal-status-new-name"
-            textStyle={{ color: colors.text, fontSize: 16 }}
-          />
-          <StatusColorPicker
-            disabled={busy}
-            onChange={setNewStatusColor}
-            testID="goal-status-new-color"
-            value={newStatusColor}
-          />
-          <AppButton
-            disabled={busy || newStatusName.trim().length === 0}
-            label="Add status"
-            onPress={() => {
-              const input: CreateGoalStatusDefinitionInput = {
-                name: newStatusName,
-                color: newStatusColor,
-              };
-              void onMutation((nextService) => nextService.createStatusDefinition(input)).then(
-                (created) => {
-                  if (created) {
-                    setNewStatusName('');
-                    setNewStatusColor('green');
-                    setNewStatusInputVersion((version) => version + 1);
-                  }
-                }
-              );
-            }}
-            style={{ height: 48, width: '100%' }}
-            testID="goal-status-add"
-          />
-        </Column>
-      </Column>
-    </Column>
+        <FormRow
+          disabled={busy || reordering}
+          icon="plus"
+          kind="action"
+          label="Add Status"
+          onPress={() => setDraft({ id: null, name: '', color: 'green' })}
+          testID="goal-status-add"
+        />
+      </FormSection>
+      <StatusSheet
+        busy={busy}
+        draft={draft}
+        onCancel={() => setDraft(null)}
+        onChange={setDraft}
+        onDelete={async () => {
+          const id = draft?.id;
+          if (!id) return false;
+          const deleted = await onMutation((nextService) => nextService.deleteStatusDefinition(id));
+          if (deleted) setDraft(null);
+          return deleted;
+        }}
+        onSave={saveDraft}
+      />
+    </Form>
   );
 }
 
