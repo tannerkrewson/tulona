@@ -462,9 +462,9 @@ function ActivitySessionContent({
                 testID="activity-session-duration"
                 style={{
                   color: colors.text,
-                  fontSize: Math.min(96, (width - 44) / (stopwatch.length * 0.62)),
+                  fontSize: Math.min(84, (width - 44) / (stopwatch.length * 0.66)),
                   fontVariant: ['tabular-nums'],
-                  fontWeight: '200',
+                  fontWeight: '400',
                   letterSpacing: -1,
                   textAlign: 'center',
                 }}

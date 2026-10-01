@@ -224,15 +224,19 @@ export function syncActiveActivityWidget(input: ActiveActivityWidgetSyncInput): 
   if (published === lastPublished) return;
   lastPublished = published;
   const routine = props.routine;
-  if (routine && !routine.paused && !routine.overtime && routine.stepEndsAtMs > Date.now()) {
-    activeActivityWidget.updateTimeline([
-      { date: new Date(), props },
-      {
-        date: new Date(routine.stepEndsAtMs),
-        props: { ...props, routine: { ...routine, overtime: true } },
-      },
-    ]);
-    return;
+  try {
+    if (routine && !routine.paused && !routine.overtime && routine.stepEndsAtMs > Date.now()) {
+      activeActivityWidget.updateTimeline([
+        { date: new Date(), props },
+        {
+          date: new Date(routine.stepEndsAtMs),
+          props: { ...props, routine: { ...routine, overtime: true } },
+        },
+      ]);
+      return;
+    }
+    activeActivityWidget.updateSnapshot(props);
+  } catch {
+    lastPublished = '';
   }
-  activeActivityWidget.updateSnapshot(props);
 }
