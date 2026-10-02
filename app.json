@@ -46,7 +46,8 @@
               "displayName": "Current activity",
               "description": "See what you are tracking, or your current routine step, with a live timer.",
               "ios": {
-                "supportedFamilies": ["systemSmall", "systemMedium"]
+                "supportedFamilies": ["systemSmall", "systemMedium"],
+                "initialLayout": "./src/widgets/active-activity-widget-layout.tsx"
               }
             }
           ]

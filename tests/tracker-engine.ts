@@ -348,6 +348,18 @@ async function run(): Promise<void> {
   });
   const recordedStop = await longService.switchActivity(null);
   assert(recordedStop.activityId === null, 'long activities must persist a stopped state');
+  const resumed = await longService.resumeSession(ids.inserted);
+  const afterResume = await longService.getActiveTransition();
+  assert(
+    resumed.id === ids.inserted &&
+      afterResume?.id === ids.inserted &&
+      afterResume.timestamp === '2026-08-04T11:59:50.000Z',
+    'resuming a stopped session must continue it from its original start'
+  );
+  await rejects(
+    () => longService.resumeSession(ids.inserted),
+    'only a session that the tracker stopped can be resumed'
+  );
 
   const relabelRepository = new MemoryTrackerRepository();
   const precedingActivity = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';

@@ -97,6 +97,17 @@ export class BackupService {
     );
   }
 
+  /** Replaces only the stored sync state, unless another writer replaced it first. */
+  async replaceSynchronizationState(
+    syncStateKey: string,
+    expectedSyncState: string | null,
+    nextSyncState: string
+  ): Promise<boolean> {
+    if ((await this.database.read(syncStateKey)) !== expectedSyncState) return false;
+    await this.database.write(syncStateKey, nextSyncState);
+    return true;
+  }
+
   inspectImport(input: string | unknown): BackupImportResult {
     return parseBackup(input, this.options.parse);
   }

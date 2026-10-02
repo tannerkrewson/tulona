@@ -80,6 +80,13 @@ function entriesOf(backup: LifeTrackerBackup): Map<string, Map<string, unknown>>
  * Records the edits that turned `previous` into `next`: changed records are rewritten and removed
  * records deleted. Records nobody touched keep whatever other devices wrote.
  */
+/** Exports serialize records in a stable key order, so plain JSON settles nearly every comparison. */
+function sameRecord(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (JSON.stringify(left) === JSON.stringify(right)) return true;
+  return canonicalJson(left) === canonicalJson(right);
+}
+
 export function applyBackupChanges(
   document: SyncDocument,
   previous: LifeTrackerBackup | null,
@@ -91,7 +98,7 @@ export function applyBackupChanges(
       const map = document.getMap<Json>(name);
       const prior = before?.get(name);
       for (const [key, value] of records) {
-        if (prior?.has(key) && canonicalJson(prior.get(key)) === canonicalJson(value)) continue;
+        if (prior?.has(key) && sameRecord(prior.get(key), value)) continue;
         map.set(key, toJson(value));
       }
       for (const key of prior?.keys() ?? []) {
@@ -288,7 +295,13 @@ export function projectSyncDocument(
   return backup;
 }
 
+const nativeBase64 = Uint8Array as unknown as {
+  prototype: { toBase64?: (this: Uint8Array) => string };
+  fromBase64?: (value: string) => Uint8Array;
+};
+
 function bytesToBase64(bytes: Uint8Array): string {
+  if (nativeBase64.prototype.toBase64) return nativeBase64.prototype.toBase64.call(bytes);
   let binary = '';
   for (let index = 0; index < bytes.length; index += 0x2000) {
     binary += String.fromCharCode(...bytes.subarray(index, index + 0x2000));
@@ -300,6 +313,7 @@ function base64ToBytes(value: string): Uint8Array {
   if (!value || value.length % 4 !== 0 || /[^A-Za-z0-9+/=]/.test(value)) {
     throw new Error('Dropbox synchronization file contains invalid encoded data');
   }
+  if (nativeBase64.fromBase64) return nativeBase64.fromBase64(value);
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);

@@ -53,6 +53,7 @@ export interface TrackerStoreState {
   snapTransitionStartToPrevious(id: string): Promise<TimeTransition>;
   resetActiveStartToNow(id: string): Promise<TimeTransition>;
   deleteTransition(id: string, confirmation: HistoricalConfirmationInput): Promise<TimeTransition>;
+  resumeSession(id: string): Promise<TimeTransition>;
   mergeTransition(id: string, confirmation: HistoricalConfirmationInput): Promise<TimeTransition>;
   mergeTransitions(id: string, confirmation: HistoricalConfirmationInput): Promise<TimeTransition>;
 }
@@ -175,6 +176,7 @@ export function createTrackerStore(service: TrackerServiceApi, options: TrackerS
       resetActiveStartToNow: (id) => runMutation(() => service.resetActiveStartToNow(id)),
       deleteTransition: (id, confirmation) =>
         runMutation(() => service.deleteTransition(id, confirmation)),
+      resumeSession: (id) => runMutation(() => service.resumeSession(id)),
       mergeTransition: (id, confirmation) =>
         runMutation(() => service.mergeTransition(id, confirmation)),
       mergeTransitions: (id, confirmation) =>

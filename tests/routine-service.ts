@@ -30,6 +30,10 @@ class MemoryStorage implements AsyncStorageLike {
     return this.values.get(key) ?? null;
   }
 
+  async getAllKeys(): Promise<readonly string[]> {
+    return [...this.values.keys()];
+  }
+
   async setItem(key: string, value: string): Promise<void> {
     if (this.failTrackerWrites && key.includes(':tracker:')) throw new Error('tracker unavailable');
     if (this.failNextKey && key.includes(this.failNextKey)) {

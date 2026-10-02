@@ -22,6 +22,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     alignItems: 'center',
+  },
+  // UIKit adds safe-area insets on top of a grown content frame, which would
+  // make every page scroll by the inset height even when it is short.
+  scrollContentGrow: {
     flexGrow: 1,
   },
 });
@@ -70,7 +74,7 @@ export function AppScreen({
       <ScrollView
         // UIKit insets the content for the status bar, tab bar, and bottom
         // accessory; the web keeps an explicit top inset.
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, !isIOS && styles.scrollContentGrow]}
         contentInsetAdjustmentBehavior="automatic"
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"

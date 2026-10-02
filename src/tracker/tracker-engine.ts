@@ -22,13 +22,39 @@ export interface TrackerQuery {
   activeTransition: TimeTransition | null;
 }
 
+/**
+ * Transition records are immutable and shared between history snapshots, so
+ * parsed times and ID checks are memoized per record rather than redone for
+ * the whole history after every write.
+ */
+const parsedTimes = new WeakMap<TimeTransition, { timestamp: string; ms: number | null }>();
+const validRecords = new WeakMap<TimeTransition, boolean>();
+
 function transitionTime(transition: TimeTransition): number | null {
+  const cached = parsedTimes.get(transition);
+  if (cached && cached.timestamp === transition.timestamp) return cached.ms;
+  let ms: number | null;
   try {
     const value = timestampMs(transition.timestamp);
-    return Number.isFinite(value) ? value : null;
+    ms = Number.isFinite(value) ? value : null;
   } catch {
-    return null;
+    ms = null;
   }
+  parsedTimes.set(transition, { timestamp: transition.timestamp, ms });
+  return ms;
+}
+
+/** Milliseconds for a stored transition, or null when its timestamp is invalid. */
+export const transitionTimeMs = transitionTime;
+
+function hasValidIds(transition: TimeTransition): boolean {
+  let valid = validRecords.get(transition);
+  if (valid === undefined) {
+    valid =
+      isUuid(transition.id) && (transition.activityId === null || isUuid(transition.activityId));
+    validRecords.set(transition, valid);
+  }
+  return valid;
 }
 
 function createdTime(transition: TimeTransition): number {
@@ -52,19 +78,59 @@ export function compareTransitions(left: TimeTransition, right: TimeTransition):
   );
 }
 
-export function orderTransitions(transitions: readonly TimeTransition[]): TimeTransition[] {
-  return [...transitions].sort(compareTransitions);
+interface TimelineIndex {
+  ordered: TimeTransition[];
+  /** Recorded transitions with valid IDs and timestamps, in order. */
+  valid: TimeTransition[];
+  validTimes: number[];
 }
 
-function isValidTransition(transition: TimeTransition, now: number): boolean {
-  const timestamp = transitionTime(transition);
-  return (
-    transition.status === 'recorded' &&
-    timestamp !== null &&
-    timestamp <= now &&
-    isUuid(transition.id) &&
-    (transition.activityId === null || isUuid(transition.activityId))
-  );
+/**
+ * Indexes are memoized per array, so the repository's cached history is
+ * ordered and validated once instead of on every lookup. Indexed arrays must
+ * never be mutated.
+ */
+const timelineIndexes = new WeakMap<readonly TimeTransition[], TimelineIndex>();
+
+function timelineIndex(transitions: readonly TimeTransition[]): TimelineIndex {
+  const cached = timelineIndexes.get(transitions);
+  if (cached) return cached;
+  let ordered = transitions as TimeTransition[];
+  for (let index = 1; index < transitions.length; index += 1) {
+    if (compareTransitions(transitions[index - 1], transitions[index]) > 0) {
+      ordered = [...transitions].sort(compareTransitions);
+      break;
+    }
+  }
+  const valid: TimeTransition[] = [];
+  const validTimes: number[] = [];
+  for (const transition of ordered) {
+    const time = transitionTime(transition);
+    if (transition.status === 'recorded' && time !== null && hasValidIds(transition)) {
+      valid.push(transition);
+      validTimes.push(time);
+    }
+  }
+  const index = { ordered, valid, validTimes };
+  timelineIndexes.set(transitions, index);
+  if (ordered !== transitions) timelineIndexes.set(ordered, index);
+  return index;
+}
+
+/** Number of valid transitions at or before `nowMs`. */
+function validCountAt(index: TimelineIndex, nowMs: number): number {
+  let low = 0;
+  let high = index.validTimes.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (index.validTimes[middle] <= nowMs) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+export function orderTransitions(transitions: readonly TimeTransition[]): TimeTransition[] {
+  return timelineIndex(transitions).ordered;
 }
 
 export function validTransitions(
@@ -72,7 +138,9 @@ export function validTransitions(
   nowMs = Date.now()
 ): TimeTransition[] {
   if (!Number.isFinite(nowMs)) throw new RangeError('Current time must be finite');
-  return orderTransitions(transitions).filter((transition) => isValidTransition(transition, nowMs));
+  const index = timelineIndex(transitions);
+  const count = validCountAt(index, nowMs);
+  return count === index.valid.length ? index.valid : index.valid.slice(0, count);
 }
 
 /** Derives the one active state from the latest recorded transition. */
@@ -80,7 +148,9 @@ export function latestValidTransition(
   transitions: readonly TimeTransition[],
   nowMs = Date.now()
 ): TimeTransition | null {
-  return validTransitions(transitions, nowMs).at(-1) ?? null;
+  if (!Number.isFinite(nowMs)) throw new RangeError('Current time must be finite');
+  const index = timelineIndex(transitions);
+  return index.valid[validCountAt(index, nowMs) - 1] ?? null;
 }
 
 /** Returns the most recent recorded activity transition, ignoring stop markers. */
@@ -88,11 +158,12 @@ export function latestValidActivityTransition(
   transitions: readonly TimeTransition[],
   nowMs = Date.now()
 ): TimeTransition | null {
-  return (
-    validTransitions(transitions, nowMs)
-      .filter((transition) => transition.activityId !== null)
-      .at(-1) ?? null
-  );
+  if (!Number.isFinite(nowMs)) throw new RangeError('Current time must be finite');
+  const index = timelineIndex(transitions);
+  for (let position = validCountAt(index, nowMs) - 1; position >= 0; position -= 1) {
+    if (index.valid[position].activityId !== null) return index.valid[position];
+  }
+  return null;
 }
 
 export const getActiveTransition = latestValidTransition;

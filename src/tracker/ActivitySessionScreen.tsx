@@ -291,6 +291,11 @@ function ActivitySessionContent({
     contextMatches && transitionContext
       ? transitionContext.following
       : visibleAdjacentTransition(transitions, transition, 'following');
+  const canResume =
+    !isActive &&
+    transition.activityId !== null &&
+    following?.activityId === null &&
+    activeTransition?.id === following.id;
   const endMs = following ? timestampMs(following.timestamp) : isActive ? nowMs : null;
   const durationMs = endMs === null ? 0 : Math.max(0, endMs - timestampMs(transition.timestamp));
   const totalSeconds = Math.floor(durationMs / 1000);
@@ -374,6 +379,13 @@ function ActivitySessionContent({
         await store.getState().deleteTransition(transition.id, { confirm: true });
         goBackInAppStack(router, '/');
       });
+    });
+  };
+
+  const resumeSession = () => {
+    void runAction(async () => {
+      await store.getState().resumeSession(transition.id);
+      loadTransitionContext();
     });
   };
 
@@ -543,6 +555,35 @@ function ActivitySessionContent({
               style={[styles.deleteArea, { borderColor: colors.border }]}
               testID="activity-session-actions"
             >
+              {canResume ? (
+                <Pressable
+                  cancelable={false}
+                  disabled={busy}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Resume ${activityName}`}
+                  accessibilityHint="Continues this session from its original start time"
+                  onPress={resumeSession}
+                  style={({ pressed }) => [
+                    styles.resumeButton,
+                    {
+                      backgroundColor: activityColor,
+                      opacity: busy ? 0.5 : pressed ? 0.8 : 1,
+                    },
+                  ]}
+                  testID="activity-session-resume"
+                >
+                  <AppIcon
+                    name="play"
+                    color={iconForeground}
+                    fill={iconForeground}
+                    size={18}
+                    strokeWidth={0}
+                  />
+                  <Text textStyle={{ color: iconForeground, fontSize: 17, fontWeight: '600' }}>
+                    Resume
+                  </Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 cancelable={false}
                 disabled={busy}
@@ -636,7 +677,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 72,
   },
-  deleteArea: { paddingTop: 8, width: '100%' },
+  deleteArea: { gap: 8, paddingTop: 8, width: '100%' },
+  resumeButton: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    borderRadius: 25,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    minHeight: 50,
+    minWidth: 180,
+    paddingHorizontal: 28,
+  },
   deleteButton: {
     minHeight: 48,
     flexDirection: 'row',

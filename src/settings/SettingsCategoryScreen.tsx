@@ -20,6 +20,7 @@ import {
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { goBackInAppStack } from '../navigation/app-back';
 import BackupScreen from '../backup/BackupScreen';
+import { WIDGET_APP_GROUP, widgetSharedStorageAvailable } from '../widgets/widget-shared-storage';
 
 import { getSettingsCategory, type SettingsCategory } from './settings-categories';
 import GoalsSettingsPanel from './GoalsSettingsPanel';
@@ -88,6 +89,15 @@ function CategoryControls({ category, store }: Pick<CategoryContentProps, 'categ
               />
             ))}
           </FormSection>
+          {widgetSharedStorageAvailable() === false ? (
+            <FormSection
+              footer={`This install can’t share data with the Home Screen widget because it was signed without the ${WIDGET_APP_GROUP} App Group. Re-sign it with a provisioning profile that includes that group for both the app and its widget extension.`}
+              footerTestID="settings-widget-app-group-missing"
+              title="Widgets"
+            >
+              <FormRow label="Home Screen widget" muted value="Unavailable" />
+            </FormSection>
+          ) : null}
         </Form>
       );
     case 'time-and-activity':

@@ -19,6 +19,7 @@ import {
   materializeTransitionIntervals,
   orderTransitions,
   queryTransitions,
+  transitionTimeMs,
   validTransitions,
   type TrackerQuery,
   type TrackerRange,
@@ -138,6 +139,7 @@ export interface TrackerServiceApi {
   snapTransitionStartToPrevious(id: UUID): Promise<TimeTransition>;
   resetActiveStartToNow(id: UUID): Promise<TimeTransition>;
   deleteTransition(id: UUID, confirmation?: HistoricalConfirmationInput): Promise<TimeTransition>;
+  resumeSession(id: UUID): Promise<TimeTransition>;
   mergeTransition(id: UUID, confirmation?: HistoricalConfirmationInput): Promise<TimeTransition>;
   mergeTransitions(id: UUID, confirmation?: HistoricalConfirmationInput): Promise<TimeTransition>;
 }
@@ -749,14 +751,7 @@ export class TrackerService implements TrackerServiceApi {
       next,
       options.operationKind ?? 'tracker-transition-edit'
     );
-    const prior = orderTransitions(transitions)
-      .filter(
-        (transition) =>
-          transition.id !== current.id &&
-          transition.status === 'recorded' &&
-          timestampMs(transition.timestamp) < timestampMs(next.timestamp)
-      )
-      .at(-1);
+    const prior = priorRecorded(transitions, timestampMs(next.timestamp), current.id);
     await this.notifyMutation({
       kind: mutationKind,
       previous: current,
@@ -830,14 +825,7 @@ export class TrackerService implements TrackerServiceApi {
     );
 
     for (const { previous, next } of changed) {
-      const prior = orderTransitions(transitions)
-        .filter(
-          (transition) =>
-            transition.id !== previous.id &&
-            transition.status === 'recorded' &&
-            timestampMs(transition.timestamp) < timestampMs(previous.timestamp)
-        )
-        .at(-1);
+      const prior = priorRecorded(transitions, timestampMs(previous.timestamp), previous.id);
       await this.notifyMutation({
         kind: 'reassign',
         previous,
@@ -856,6 +844,27 @@ export class TrackerService implements TrackerServiceApi {
     confirmation: HistoricalConfirmationInput = {}
   ): Promise<TimeTransition> {
     return this.removeTransition(id, confirmation, 'tracker-transition-delete');
+  }
+
+  /** Restarts the most recent session from its original start by removing the stop that ended it. */
+  async resumeSession(id: UUID): Promise<TimeTransition> {
+    assertUuid(id, 'Transition ID');
+    const now = normalizeNow(this.now());
+    const transitions = await this.readHistory(now);
+    const valid = validTransitions(transitions, now);
+    const stop = valid.at(-1);
+    const session = valid.at(-2);
+    if (!stop || stop.activityId !== null || session?.id !== id || session.activityId === null) {
+      validation('Only the most recent session can be resumed while the tracker is stopped');
+    }
+    await this.removeTransitionRecord(transitions, stop, stop.id, 'tracker-transition-resume');
+    await this.notifyMutation({
+      kind: 'delete',
+      previous: stop,
+      current: session,
+      affectedActivityIds: [session.activityId],
+    });
+    return session;
   }
 
   private async removeTransition(
@@ -889,10 +898,7 @@ export class TrackerService implements TrackerServiceApi {
     id: UUID,
     operationKind: string
   ): Promise<TimeTransition | undefined> {
-    const prior = orderTransitions(transitions)
-      .filter((transition) => transition.status === 'recorded' && transition.id !== target.id)
-      .filter((transition) => timestampMs(transition.timestamp) < timestampMs(target.timestamp))
-      .at(-1);
+    const prior = priorRecorded(transitions, timestampMs(target.timestamp), target.id);
     const month = monthKey(target.timestamp);
     const collection = await this.repository.readMonth(month);
     await this.repository.writeCrossMonth(
@@ -954,8 +960,9 @@ export class TrackerService implements TrackerServiceApi {
     return this.mergeTransition(id, confirmation);
   }
 
+  /** The full history; lookups filter by time, so later transitions are harmless. */
   private async readHistory(now: number): Promise<TimeTransition[]> {
-    return this.repository.readRange(0, now);
+    return this.repository.readAll ? this.repository.readAll() : this.repository.readRange(0, now);
   }
 
   private async notifyMutation(mutation: TrackerMutation): Promise<void> {
@@ -1074,11 +1081,24 @@ export class TrackerService implements TrackerServiceApi {
 }
 
 function transitionTimeAtOrBefore(transition: TimeTransition, now: number): boolean {
-  try {
-    return timestampMs(transition.timestamp) <= now;
-  } catch {
-    return false;
+  const time = transitionTimeMs(transition);
+  return time !== null && time <= now;
+}
+
+/** The latest recorded transition before `beforeMs`, ignoring `excludeId`. */
+function priorRecorded(
+  transitions: readonly TimeTransition[],
+  beforeMs: number,
+  excludeId: UUID
+): TimeTransition | undefined {
+  const ordered = orderTransitions(transitions);
+  for (let index = ordered.length - 1; index >= 0; index -= 1) {
+    const transition = ordered[index];
+    if (transition.status !== 'recorded' || transition.id === excludeId) continue;
+    const time = transitionTimeMs(transition);
+    if (time !== null && time < beforeMs) return transition;
   }
+  return undefined;
 }
 
 function validateMinimumActivityDuration(value: number): number {

@@ -534,8 +534,16 @@ class FakeDropbox {
   downloadGate: Promise<void> | null = null;
   releaseDownload: (() => void) | null = null;
   private revision = 0;
+  downloads = 0;
+
+  async filesGetMetadata(args: { path: string }): Promise<unknown> {
+    const file = this.files.get(args.path);
+    if (!file) throw this.error(409, 'not_found');
+    return { result: { '.tag': 'file', rev: file.rev } };
+  }
 
   async filesDownload(args: { path: string }): Promise<unknown> {
+    this.downloads += 1;
     if (this.downloadError) throw this.downloadError;
     if (this.downloadGate) await this.downloadGate;
     const file = this.files.get(args.path);
@@ -591,6 +599,16 @@ class FakeBackupService {
   });
 
   inspectImport = (input: unknown) => parseBackup(input);
+
+  replaceSynchronizationState = async (
+    syncStateKey: string,
+    expectedSyncState: string | null,
+    nextSyncState: string
+  ): Promise<boolean> => {
+    if ((this.entries.get(syncStateKey) ?? null) !== expectedSyncState) return false;
+    this.entries.set(syncStateKey, nextSyncState);
+    return true;
+  };
 
   applySynchronizationProjection = async (
     input: string | unknown,
@@ -836,6 +854,55 @@ async function writeDuringSync(): Promise<void> {
       (activity) => activity.id === IDs.activityB
     ),
     'a local write during Dropbox reads must be included before upload'
+  );
+  harness.database.close();
+}
+
+async function ownEditsSkipDownloads(): Promise<void> {
+  const harness = await makeServiceHarness(baseBackup());
+  await harness.service.syncNow();
+  const downloads = harness.dropbox.downloads;
+
+  const renamed = harness.local.currentBackup();
+  renamed.catalog.activities[0]!.name = 'Renamed here';
+  harness.local.setBackup(renamed);
+  await harness.service.syncNow({ automatic: true });
+  await harness.service.syncNow({ automatic: true });
+  const remoteName = () =>
+    projectSyncDocument(
+      decodeRemoteDocument(harness.dropbox.files.get(DROPBOX_SYNC_PATH)!.contents)
+    ).catalog.activities[0]?.name;
+  assert(
+    harness.dropbox.downloads === downloads && remoteName() === 'Renamed here',
+    'this device’s own edits must publish without downloading Dropbox again'
+  );
+
+  const failed = harness.local.currentBackup();
+  failed.catalog.activities[0]!.name = 'Upload failed';
+  harness.local.setBackup(failed);
+  harness.dropbox.beforeNextUpload = () => {
+    throw new Error('network down');
+  };
+  await harness.service.syncNow({ automatic: true }).catch(() => undefined);
+  await harness.service.syncNow({ automatic: true });
+  assert(remoteName() === 'Upload failed', 'an edit whose upload failed must upload next sync');
+
+  const other = decodeRemoteDocument(harness.dropbox.files.get(DROPBOX_SYNC_PATH)!.contents);
+  const otherBefore = projectSyncDocument(other);
+  const otherAfter = clone(otherBefore);
+  addActivity(otherAfter, IDs.activityC, 'Other device', 2);
+  applyBackupChanges(other, otherBefore, otherAfter);
+  harness.dropbox.files.set(DROPBOX_SYNC_PATH, {
+    rev: 'other-device-rev',
+    contents: remoteDocument(other),
+  });
+  await harness.service.syncNow({ automatic: true });
+  assert(
+    harness.dropbox.downloads > downloads &&
+      harness.local
+        .currentBackup()
+        .catalog.activities.some((activity) => activity.id === IDs.activityC),
+    'a revision from another device must be downloaded and merged'
   );
   harness.database.close();
 }
@@ -1177,6 +1244,7 @@ async function run(): Promise<void> {
   await migrationAndCorruptRemote();
   await revisionAndCreationRaces();
   await writeDuringSync();
+  await ownEditsSkipDownloads();
   await persistentLocalHistory();
   await localMigrationHistoryAndCrossTabNotifications();
 }

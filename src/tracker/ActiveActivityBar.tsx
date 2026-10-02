@@ -34,6 +34,12 @@ export function supportsNativeBottomAccessory(): boolean {
   return Platform.OS === 'ios' && Number.parseInt(String(Platform.Version), 10) >= 26;
 }
 
+/** Keeps list content clear of the overlay bar; the native accessory already insets scroll views. */
+export function ActiveActivityBarSpacer() {
+  if (supportsNativeBottomAccessory()) return null;
+  return <View style={{ height: ACTIVE_ACTIVITY_BAR_HEIGHT + 20, width: '100%' }} />;
+}
+
 /** Loads the shared tracker runtime once and hydrates its store. */
 export function useActiveActivityRuntime(enabled = true): RoutineRuntime | null {
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);

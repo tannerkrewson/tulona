@@ -14,7 +14,7 @@ import {
   chooseRoutineStartConflict,
   type RoutineConflictChoice,
 } from '../routine/routine-start-conflict';
-import { ACTIVE_ACTIVITY_BAR_HEIGHT } from './ActiveActivityBar';
+import { ActiveActivityBarSpacer } from './ActiveActivityBar';
 import { ActivityRow } from './ActivityRow';
 import { CatalogHeader } from './CatalogHeader';
 import { CatalogIconButton } from './CatalogIconButton';
@@ -291,7 +291,7 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
               No activities in this folder yet. Use + to add one.
             </Text>
           ) : null}
-          <View style={{ height: ACTIVE_ACTIVITY_BAR_HEIGHT + 20, width: '100%' }} />
+          <ActiveActivityBarSpacer />
         </Column>
       </Column>
     </Screen>

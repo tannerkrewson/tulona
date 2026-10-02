@@ -1,7 +1,6 @@
 import { Column, Text } from '@ui/primitives';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
 
 import type {
   ActiveRoutine,
@@ -26,7 +25,7 @@ import {
   chooseRoutineStartConflict,
   type RoutineConflictChoice,
 } from '../routine/routine-start-conflict';
-import { ACTIVE_ACTIVITY_BAR_HEIGHT } from './ActiveActivityBar';
+import { ActiveActivityBarSpacer } from './ActiveActivityBar';
 import { ActivityRow } from './ActivityRow';
 import { CatalogHeader } from './CatalogHeader';
 import { FolderRow } from './FolderRow';
@@ -445,7 +444,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
                 : `No ${TRACKER_VIEW_OPTIONS.find((option) => option.value === catalogView)?.label.toLowerCase() ?? 'items'} found.`}
             </Text>
           ) : null}
-          <View style={{ height: ACTIVE_ACTIVITY_BAR_HEIGHT + 20, width: '100%' }} />
+          <ActiveActivityBarSpacer />
         </Column>
       </Column>
     </Screen>

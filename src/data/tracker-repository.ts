@@ -13,6 +13,48 @@ function emptyMonth(month: MonthKey): TrackerMonthCollection {
   return { month, transitions: [], latestTransitions: [] };
 }
 
+function isStoredTransition(value: unknown): value is Transition {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.timestamp === 'string' &&
+    typeof candidate.status === 'string' &&
+    (candidate.activityId === null || typeof candidate.activityId === 'string')
+  );
+}
+
+/**
+ * Months are fully schema-validated when written; loading the whole history
+ * only checks structure, because full validation dominated startup on large
+ * histories. The tracker engine still ignores records with invalid IDs or times.
+ */
+function parseMonth(key: string, month: MonthKey, value: string): TrackerMonthCollection {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch (error) {
+    throw new PersistenceError('corruption', 'Stored tracker month is not valid JSON', key, error);
+  }
+  const collection = parsed as Partial<TrackerMonthCollection> | null;
+  if (
+    !collection ||
+    collection.month !== month ||
+    !Array.isArray(collection.transitions) ||
+    !collection.transitions.every(isStoredTransition)
+  ) {
+    throw new PersistenceError('validation', `Stored tracker month ${month} is malformed`, key);
+  }
+  return {
+    ...collection,
+    month,
+    transitions: collection.transitions,
+    latestTransitions: Array.isArray(collection.latestTransitions)
+      ? collection.latestTransitions
+      : [],
+  };
+}
+
 function validateMonth(value: string): MonthKey {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(value))
     throw new RangeError(`Invalid tracker month "${value}"`);
@@ -76,9 +118,23 @@ export interface TrackerRepositoryApi {
   recoverJournal(): Promise<RecoveryReport>;
 }
 
+/**
+ * Month buckets stay the durable unit, but the whole history is read once into
+ * memory: every tracker question (active session, neighbors, ranges) is then
+ * answered without touching storage. Writes made through this repository update
+ * the cache; writes from anywhere else (sync, restores, journal recovery, other
+ * tabs) drop it so the next read reloads.
+ */
 export class TrackerRepository implements TrackerRepositoryApi {
   private readonly store: DatasetStore;
   private readonly journal: OperationJournal;
+  private readonly monthPrefix: string;
+  private months: Map<MonthKey, TrackerMonthCollection> | null = null;
+  private timeline: Transition[] | null = null;
+  private loading: Promise<Map<MonthKey, TrackerMonthCollection>> | null = null;
+  private generation = 0;
+  private ownKeys = new Set<string>();
+  private unsubscribers: (() => void)[] = [];
 
   constructor(
     private readonly database: KeyValueDatabase,
@@ -86,28 +142,29 @@ export class TrackerRepository implements TrackerRepositoryApi {
   ) {
     this.store = new DatasetStore(database);
     this.journal = new OperationJournal(database);
+    this.monthPrefix = `${namespace.key('tracker')}:`;
+  }
+
+  /** Releases the in-memory history and stops observing storage. */
+  dispose(): void {
+    this.invalidate();
   }
 
   async readMonth(month: MonthKey): Promise<TrackerMonthCollection> {
     const normalizedMonth = validateMonth(month);
-    return (
-      (await this.store.read(
-        this.namespace,
-        'tracker',
-        trackerMonthCollectionSchema,
-        normalizedMonth
-      )) ?? emptyMonth(normalizedMonth)
-    );
+    const months = await this.loadedMonths();
+    return months.get(normalizedMonth) ?? emptyMonth(normalizedMonth);
   }
 
   async readMonths(start: MonthKey, end: MonthKey): Promise<Transition[]> {
     const normalizedStart = validateMonth(start);
     const normalizedEnd = validateMonth(end);
     if (normalizedStart > normalizedEnd) throw new RangeError('Tracker month range is reversed');
-    const months = monthKeys(normalizedStart, normalizedEnd);
-    if (months.length === 0) return [];
-    const collections = await Promise.all(months.map((month) => this.readMonth(month)));
-    return sortTransitions(collections.flatMap((collection) => collection.transitions));
+    const months = await this.loadedMonths();
+    const selected = [...months.keys()]
+      .filter((month) => month >= normalizedStart && month <= normalizedEnd)
+      .sort();
+    return selected.flatMap((month) => months.get(month)?.transitions ?? []);
   }
 
   /** Includes the prior bucket so a range beginning mid-month has its state. */
@@ -120,19 +177,92 @@ export class TrackerRepository implements TrackerRepositoryApi {
     return this.readMonths(monthKey(firstMonth.toJSDate()), monthKey(endMs));
   }
 
-  /** Reads every persisted tracker month without making History render do so. */
+  /**
+   * The full ordered history. The same array is returned until the history
+   * changes, so callers must treat it as immutable.
+   */
   async readAll(): Promise<Transition[]> {
-    if (this.database.keys) {
-      const prefix = `${this.namespace.key('tracker')}:`;
-      const months = (await this.database.keys())
-        .filter((key) => key.startsWith(prefix))
-        .map((key) => key.slice(prefix.length))
-        .filter((suffix) => /^\d{4}-(0[1-9]|1[0-2])$/.test(suffix))
-        .sort();
-      if (months.length === 0) return [];
-      return this.readMonths(months[0] as MonthKey, months.at(-1) as MonthKey);
+    const months = await this.loadedMonths();
+    if (!this.timeline) {
+      this.timeline = [...months.keys()]
+        .sort()
+        .flatMap((month) => months.get(month)?.transitions ?? []);
     }
-    return this.readRange(0, Date.now());
+    return this.timeline;
+  }
+
+  private async loadedMonths(): Promise<Map<MonthKey, TrackerMonthCollection>> {
+    if (this.months) return this.months;
+    if (this.loading) return this.loading;
+    const generation = this.generation;
+    this.observeStorage();
+    const loading = this.readMonthsFromStorage().then((months) => {
+      if (generation === this.generation) {
+        this.months = months;
+        this.timeline = null;
+      }
+      return months;
+    });
+    this.loading = loading;
+    try {
+      return await loading;
+    } finally {
+      if (this.loading === loading) this.loading = null;
+    }
+  }
+
+  private async readMonthsFromStorage(): Promise<Map<MonthKey, TrackerMonthCollection>> {
+    const months = new Map<MonthKey, TrackerMonthCollection>();
+    if (!this.database.keys) {
+      for (const month of monthKeys('1970-01' as MonthKey, monthKey(Date.now()))) {
+        const collection = await this.store.read(
+          this.namespace,
+          'tracker',
+          trackerMonthCollectionSchema,
+          month
+        );
+        if (collection && collection.transitions.length > 0) months.set(month, collection);
+      }
+      return months;
+    }
+    const keys = (await this.database.keys()).filter(
+      (key) =>
+        key.startsWith(this.monthPrefix) &&
+        /^\d{4}-(0[1-9]|1[0-2])$/.test(key.slice(this.monthPrefix.length))
+    );
+    const values = await this.database.multiRead(keys);
+    for (const key of keys) {
+      const value = values.get(key);
+      if (value === null || value === undefined) continue;
+      const month = key.slice(this.monthPrefix.length) as MonthKey;
+      months.set(month, parseMonth(key, month, value));
+    }
+    return months;
+  }
+
+  private observeStorage(): void {
+    if (this.unsubscribers.length > 0) return;
+    const onWrite = (keys: readonly string[], source?: string) => {
+      const foreign = keys.some(
+        (key) => key.startsWith(this.monthPrefix) && (source === 'sync' || !this.ownKeys.has(key))
+      );
+      if (foreign) this.invalidate();
+    };
+    const onExternalWrite = (keys: readonly string[]) => {
+      if (keys.some((key) => key.startsWith(this.monthPrefix))) this.invalidate();
+    };
+    const unsubscribeWrites = this.database.subscribeToWrites?.(onWrite);
+    const unsubscribeExternal = this.database.subscribeToExternalWrites?.(onExternalWrite);
+    if (unsubscribeWrites) this.unsubscribers.push(unsubscribeWrites);
+    if (unsubscribeExternal) this.unsubscribers.push(unsubscribeExternal);
+  }
+
+  private invalidate(): void {
+    this.generation += 1;
+    this.months = null;
+    this.timeline = null;
+    this.loading = null;
+    for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
   }
 
   async writeMonth(collection: TrackerMonthCollection): Promise<void> {
@@ -257,7 +387,10 @@ export class TrackerRepository implements TrackerRepositoryApi {
     operationKind = 'tracker-month-write',
     companionChanges: readonly JournalChange[] = []
   ): Promise<void> {
+    const months = await this.loadedMonths();
+    const generation = this.generation;
     const changes: JournalChange[] = [];
+    const nextMonths = new Map<MonthKey, TrackerMonthCollection>();
     for (const { month, collection } of collections) {
       if (collection.transitions.some((transition) => monthKey(transition.timestamp) !== month)) {
         throw new PersistenceError(
@@ -281,6 +414,7 @@ export class TrackerRepository implements TrackerRepositoryApi {
         key: this.namespace.key('tracker', month),
         newValue: JSON.stringify(parsed.data),
       });
+      nextMonths.set(month, parsed.data);
     }
     const keys = new Set(changes.map((change) => change.key));
     for (const change of companionChanges) {
@@ -290,12 +424,26 @@ export class TrackerRepository implements TrackerRepositoryApi {
       keys.add(change.key);
       changes.push(change);
     }
-    await this.journal.run({
-      id: operationId,
-      datasetId: this.namespace.datasetId,
-      kind: operationKind,
-      changes,
-    });
+    for (const key of keys) this.ownKeys.add(key);
+    try {
+      await this.journal.run({
+        id: operationId,
+        datasetId: this.namespace.datasetId,
+        kind: operationKind,
+        changes,
+      });
+    } catch (error) {
+      this.invalidate();
+      throw error;
+    } finally {
+      for (const key of keys) this.ownKeys.delete(key);
+    }
+    if (generation !== this.generation || this.months !== months) return;
+    for (const [month, collection] of nextMonths) {
+      if (collection.transitions.length === 0) months.delete(month);
+      else months.set(month, collection);
+    }
+    this.timeline = null;
   }
 }
 
