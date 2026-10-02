@@ -8,7 +8,7 @@ import {
   formatDuration,
   type CatalogCollection,
   type HistoryPeriod,
-  historicalSnapshotColor,
+  historicalActivityStyle,
   type HistoricalActivitySnapshot,
   type HistorySession,
   type TimeTransition,
@@ -54,14 +54,16 @@ function safeActivityColor(color: string | null | undefined, fallback: string): 
 }
 
 function snapshotPresentation(
+  activityId: string | null,
   snapshot: HistoricalActivitySnapshot,
   catalog: CatalogCollection,
   fallbackColor: string
 ): Omit<SessionPresentation, 'entry'> {
+  const style = historicalActivityStyle(activityId, snapshot, catalog);
   return {
     name: snapshot.name,
-    color: safeActivityColor(historicalSnapshotColor(snapshot, catalog.folders), fallbackColor),
-    iconName: snapshot.iconName ?? 'activity',
+    color: safeActivityColor(style.color, fallbackColor),
+    iconName: style.iconName ?? 'activity',
     folderName: snapshot.folderName,
   };
 }
@@ -72,7 +74,12 @@ function presentationFor(
   fallbackColor: string
 ): Omit<SessionPresentation, 'entry'> {
   if (session.activitySnapshot)
-    return snapshotPresentation(session.activitySnapshot, catalog, fallbackColor);
+    return snapshotPresentation(
+      session.activityId,
+      session.activitySnapshot,
+      catalog,
+      fallbackColor
+    );
   const resolved = resolveCatalogItem(catalog, session.activityId, fallbackColor);
   if (!resolved) {
     return {

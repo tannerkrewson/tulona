@@ -522,6 +522,33 @@ export function historicalSnapshotColor(
   return folderColor ?? snapshot.color;
 }
 
+/**
+ * History is drawn in an activity's current color and icon, so restyling an
+ * activity restyles its past sessions. Snapshots only style deleted activities.
+ */
+export function historicalActivityStyle(
+  activityId: string | null,
+  snapshot: HistoricalActivitySnapshot | null | undefined,
+  catalog?: Pick<CatalogCollection, 'activities' | 'folders' | 'routines'>
+): { color: string | null; iconName: string | null } {
+  const item =
+    activityId === null
+      ? undefined
+      : (catalog?.activities.find((candidate) => candidate.id === activityId) ??
+        catalog?.routines.find((candidate) => candidate.id === activityId));
+  if (item) {
+    const folder = item.folderId
+      ? catalog?.folders.find((candidate) => candidate.id === item.folderId)
+      : undefined;
+    return { color: folder?.color ?? item.color, iconName: item.iconName };
+  }
+  if (!snapshot) return { color: null, iconName: null };
+  return {
+    color: historicalSnapshotColor(snapshot, catalog?.folders),
+    iconName: snapshot.iconName,
+  };
+}
+
 function historyMetadata(
   session: Pick<HistorySession, 'activityId' | 'activitySnapshot'>,
   catalog?: CatalogCollection
@@ -529,7 +556,7 @@ function historyMetadata(
   if (session.activitySnapshot) {
     return {
       ...session.activitySnapshot,
-      color: historicalSnapshotColor(session.activitySnapshot, catalog?.folders),
+      ...historicalActivityStyle(session.activityId, session.activitySnapshot, catalog),
     };
   }
   const item =

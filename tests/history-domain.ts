@@ -10,6 +10,7 @@ import {
   defaultGoalSettings,
   currentHistoryPeriod,
   historicalActivitySnapshotForCatalogItem,
+  historicalActivityStyle,
   historicalSnapshotColor,
   historyDayPeriod,
   logicalDayBounds,
@@ -533,6 +534,38 @@ assertEqual(
   ).activities[0].color,
   '#2563eb',
   'catalog-resolved history totals show folder colors'
+);
+const importedSnapshot = createHistoricalActivitySnapshot(
+  activity(ids.first, 'Deep work', null, '#000000'),
+  null
+);
+const recoloredActivity = {
+  ...activity(ids.first, 'Deep work', null, '#ef4444'),
+  iconName: 'book',
+};
+const recoloredStyle = historicalActivityStyle(
+  ids.first,
+  importedSnapshot,
+  catalog({ activities: [recoloredActivity] })
+);
+assertEqual(
+  `${recoloredStyle.color} ${recoloredStyle.iconName}`,
+  '#ef4444 book',
+  'past sessions take the current color and icon of an activity that still exists'
+);
+assertEqual(
+  aggregateHistory(
+    [session(ids.transitionA, ids.first, 0, 60_000, importedSnapshot)],
+    undefined,
+    catalog({ activities: [recoloredActivity] })
+  ).activities[0].color,
+  '#ef4444',
+  'history totals follow an activity recolored after its sessions were recorded'
+);
+assertEqual(
+  historicalActivityStyle(ids.first, importedSnapshot, catalog({})).color,
+  '#000000',
+  'deleted activities keep their captured color'
 );
 
 async function run(): Promise<void> {

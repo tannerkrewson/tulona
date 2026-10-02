@@ -130,8 +130,8 @@ assertEqual(
 );
 assertEqual(
   aggregation.activities[0]?.color,
-  '#123456',
-  'annual aggregation must use historical activity colors rather than current catalog colors'
+  '#abcdef',
+  'annual aggregation must show recolored activities in their current catalog color'
 );
 assertEqual(
   aggregation.totalMs,

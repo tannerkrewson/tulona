@@ -308,7 +308,7 @@ function ActivitySessionContent({
       : `${minutes}:${seconds}`;
   const isRoutineItem = resolved?.item.kind === 'routine';
   const activityColor =
-    transition.activitySnapshot?.color ?? resolved?.displayColor ?? colors.primary;
+    resolved?.displayColor ?? transition.activitySnapshot?.color ?? colors.primary;
   const iconForeground = getAccessibleTextColor(activityColor);
   const previousName = previous?.activityId
     ? (previous.activitySnapshot?.name ??
