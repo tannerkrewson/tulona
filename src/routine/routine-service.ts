@@ -265,27 +265,13 @@ export class RoutineService implements RoutineServiceApi {
     return this.writeRoutineAndSwitchActivity(current, next, activityId, at, 'manual');
   }
 
+  /** A pause is part of the routine's session, so the tracked activity keeps running. */
   async pause(at: RoutineTimestampInput = this.now()): Promise<ActiveRoutine> {
-    await this.ensureJournalRecovered();
-    const previous = activeRequired(await this.routineRepository.readActive());
-    const next = pauseRoutineState(previous, at);
-    await this.writeRoutineAndSwitchActivity(previous, next, null, at, 'routine', 'Routine paused');
-    return next;
+    return this.mutate((active) => pauseRoutineState(active, at));
   }
 
   async resume(at: RoutineTimestampInput = this.now()): Promise<ActiveRoutine> {
-    await this.ensureJournalRecovered();
-    const previous = activeRequired(await this.routineRepository.readActive());
-    const next = resumeRoutineState(previous, at);
-    await this.writeRoutineAndSwitchActivity(
-      previous,
-      next,
-      routineActivityId(next),
-      at,
-      'routine',
-      'Routine resumed'
-    );
-    return next;
+    return this.mutate((active) => resumeRoutineState(active, at));
   }
 
   async addTime(

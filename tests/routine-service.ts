@@ -495,21 +495,20 @@ async function run(): Promise<void> {
   });
   pausedRoutine.setNow(at(5_000));
   const paused = await pausedRoutine.routineService.pause();
+  const pausedTransition = await pausedRoutine.trackerService.getActiveTransition(at(5_000));
   assert(
     pausedRun.id === '12121212-1212-4121-8121-121212121212' &&
       paused.status === 'paused' &&
-      (await pausedRoutine.trackerService.getActiveTransition())?.activityId === null,
-    'pausing a routine preserves its state and closes its tracked interval'
+      pausedTransition?.activityId === routineId &&
+      pausedTransition.timestamp === startedAt,
+    'pausing a routine preserves its state and keeps its tracked session open'
   );
   pausedRoutine.setNow(at(10_000));
   const resumed = await pausedRoutine.routineService.resume();
   const resumedTransition = await pausedRoutine.trackerService.getActiveTransition(at(10_000));
   assert(
-    resumed.status === 'running' &&
-      resumedTransition !== null &&
-      resumedTransition.activityId === routineId &&
-      resumedTransition.timestamp === at(10_000),
-    'resuming a paused routine reopens a new session for the same activity'
+    resumed.status === 'running' && resumedTransition?.id === pausedTransition.id,
+    'resuming a paused routine continues the same tracked session'
   );
 }
 
