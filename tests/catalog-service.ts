@@ -154,6 +154,14 @@ async function run(): Promise<void> {
     name: 'Root routine',
     trackingMode: 'overall',
   });
+  const reviewing = await service.updateRoutine(ids.rootRoutine, { reviewHabitsAtEnd: true });
+  const renamed = await service.updateRoutine(ids.rootRoutine, { name: 'Root routine' });
+  assert(
+    overallRoutine.reviewHabitsAtEnd === false &&
+      reviewing.reviewHabitsAtEnd === true &&
+      renamed.reviewHabitsAtEnd === true,
+    'routines can opt into an end-of-run habit review, and other edits keep that choice'
+  );
   const uncoloredRoutineSnapshot = await service.snapshotRoutine(ids.rootRoutine, timestamp);
   assert(
     uncoloredRoutineSnapshot.color === null,

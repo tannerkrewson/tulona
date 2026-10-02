@@ -73,6 +73,7 @@ export interface CreateRoutineInput extends CatalogStyleInput {
   id?: UUID;
   folderId?: UUID | null;
   trackingMode: RoutineTrackingMode;
+  reviewHabitsAtEnd?: boolean;
   steps?: readonly (RoutineStep | CreateRoutineStepInput)[];
 }
 
@@ -109,6 +110,7 @@ export interface UpdateRoutineInput {
   color?: string | null;
   iconName?: string | null;
   folderId?: UUID | null;
+  reviewHabitsAtEnd?: boolean;
 }
 
 export interface DuplicateRoutineOptions {
@@ -687,6 +689,7 @@ export class CatalogService implements CatalogServiceApi {
       color: validateColor(input.color),
       iconName: validateIcon(input.iconName),
       trackingMode,
+      reviewHabitsAtEnd: input.reviewHabitsAtEnd === true,
       steps,
       createdAt: now,
       updatedAt: now,
@@ -711,6 +714,7 @@ export class CatalogService implements CatalogServiceApi {
       sortOrder: moved ? nextSiblingOrder(catalog, folderId, id) : current.sortOrder,
       color: input.color === undefined ? current.color : validateColor(input.color),
       iconName: input.iconName === undefined ? current.iconName : validateIcon(input.iconName),
+      reviewHabitsAtEnd: input.reviewHabitsAtEnd ?? current.reviewHabitsAtEnd ?? false,
       updatedAt: this.timestamp(),
     };
     const next = normalizeCatalogOrders({

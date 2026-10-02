@@ -83,6 +83,8 @@ export interface RoutineDefinition extends Timestamps, Archivable {
   color: string | null;
   iconName: string | null;
   trackingMode: RoutineTrackingMode;
+  /** Opens the mindful habit review when a run finishes. */
+  reviewHabitsAtEnd?: boolean;
   steps: RoutineStep[];
 }
 

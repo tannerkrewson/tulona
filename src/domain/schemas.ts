@@ -245,6 +245,7 @@ export const routineDefinitionSchema = z
     color: z.string().nullable(),
     iconName: z.string().nullable(),
     trackingMode: routineTrackingMode,
+    reviewHabitsAtEnd: z.boolean().optional(),
     steps: z.array(routineStepSchema),
     ...timestamps,
     archivedAt: nullableArchivedAt,

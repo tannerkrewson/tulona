@@ -582,6 +582,7 @@ function RoutineEditorForm({
     routine?.trackingMode ?? ''
   );
   const [folderId, setFolderId] = useState(routine?.folderId ?? initialFolderId ?? ROOT_VALUE);
+  const [reviewHabitsAtEnd, setReviewHabitsAtEnd] = useState(routine?.reviewHabitsAtEnd ?? false);
   const [newSteps, setNewSteps] = useState<StepDraft[]>([]);
   const [editingStepId, setEditingStepId] = useState<UUID | null>(null);
   const [draft, setDraft] = useState<StepDraft | null>(null);
@@ -629,6 +630,7 @@ function RoutineEditorForm({
           color: color.trim() || null,
           iconName: iconName.trim() || null,
           folderId: selectedFolderId,
+          reviewHabitsAtEnd,
         });
         onSaved();
       } else {
@@ -638,6 +640,7 @@ function RoutineEditorForm({
           iconName: iconName.trim() || null,
           folderId: selectedFolderId,
           trackingMode,
+          reviewHabitsAtEnd,
           steps: newSteps.map((step) => inputFromDraft(step, trackingMode)),
         });
         onSaved();
@@ -854,6 +857,14 @@ function RoutineEditorForm({
               <Picker.Item label="One activity" value="overall" />
               <Picker.Item label="Each step" value="steps" />
             </FormPickerRow>
+          </FormSection>
+          <FormSection footer="Walks through today's habits once the last step is done.">
+            <FormSwitchRow
+              label="Review habits at the end"
+              onValueChange={setReviewHabitsAtEnd}
+              testID="routine-review-habits"
+              value={reviewHabitsAtEnd}
+            />
           </FormSection>
           <FormSection
             footer={

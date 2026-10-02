@@ -151,6 +151,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   const [timerAreaHeight, setTimerAreaHeight] = useState(0);
   const [adjustingTime, setAdjustingTime] = useState(false);
   const recovering = useRef(false);
+  const reviewedHabitsForRun = useRef<string | null>(null);
   const lastAction = useRef<
     ((nextRuntime: RoutineRuntime) => Promise<ActiveRoutine | void>) | null
   >(null);
@@ -245,6 +246,15 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     }, 1000);
     return () => clearInterval(timer);
   }, [runtime, busy, routeRecovered, routineId]);
+
+  const reviewHabitsAtEnd =
+    catalog?.routines.find((routine) => routine.id === routineId)?.reviewHabitsAtEnd === true;
+  useEffect(() => {
+    if (!active || active.status !== 'awaiting-next-activity' || !reviewHabitsAtEnd) return;
+    if (reviewedHabitsForRun.current === active.id) return;
+    reviewedHabitsForRun.current = active.id;
+    router.push('/habit-review?afterRoutine=1');
+  }, [active, reviewHabitsAtEnd, router]);
 
   const runAction = async (
     action: (nextRuntime: RoutineRuntime) => Promise<ActiveRoutine | void>,

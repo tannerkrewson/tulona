@@ -174,3 +174,11 @@ assert(
     /name="routine\/\[routineId\]"[\s\S]{0,120}gestureEnabled: false/.test(rootLayout),
   'the active runner has no header or swipe-back; its stop menu can leave it running'
 );
+const habitReview = read('src/habits/HabitReviewScreen.tsx');
+assert(
+  runner.includes("router.push('/habit-review?afterRoutine=1')") &&
+    runner.includes("active.status !== 'awaiting-next-activity' || !reviewHabitsAtEnd") &&
+    habitReview.includes('if (skipEmptyReview) goBack();') &&
+    read('src/routine/RoutineEditorScreen.tsx').includes('testID="routine-review-habits"'),
+  'routines that opt in open the habit review once a run finishes, skipping empty reviews'
+);

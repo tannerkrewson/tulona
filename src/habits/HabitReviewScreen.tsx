@@ -68,7 +68,14 @@ function ReviewLoading({
   );
 }
 
-export default function HabitReviewScreen({ day: dayParam }: { day?: string | string[] }) {
+export default function HabitReviewScreen({
+  afterRoutine = false,
+  day: dayParam,
+}: {
+  /** Opened at the end of a routine, so an empty review returns straight to it. */
+  afterRoutine?: boolean;
+  day?: string | string[];
+}) {
   const router = useRouter();
   const goBack = useCallback(() => goBackInAppStack(router, '/(tabs)/habits'), [router]);
   const [store, setStore] = useState<HabitStore | null>(null);
@@ -97,6 +104,7 @@ export default function HabitReviewScreen({ day: dayParam }: { day?: string | st
 
   return (
     <HabitReviewContent
+      afterRoutine={afterRoutine}
       dayParam={dayParam}
       goBack={goBack}
       key={Array.isArray(dayParam) ? dayParam[0] : (dayParam ?? 'today')}
@@ -115,10 +123,12 @@ function reviewQueue(store: HabitStore, day: LogicalDayKey): Habit[] {
 }
 
 function HabitReviewContent({
+  afterRoutine,
   dayParam,
   goBack,
   store,
 }: {
+  afterRoutine: boolean;
   dayParam?: string | string[];
   goBack: () => void;
   store: HabitStore;
@@ -138,6 +148,10 @@ function HabitReviewContent({
     setIndex(0);
   }
   const { queue } = review;
+  const skipEmptyReview = afterRoutine && queue.length === 0;
+  useEffect(() => {
+    if (skipEmptyReview) goBack();
+  }, [goBack, skipEmptyReview]);
   const habit = queue[index];
   const currentState = habit
     ? states.find((state) => state.habitId === habit.id && state.logicalDay === day)
