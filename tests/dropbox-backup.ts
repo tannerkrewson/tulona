@@ -65,6 +65,7 @@ async function run(): Promise<void> {
       },
       inspectImport: parseBackup,
       applySynchronizationProjection: async () => false,
+      readSynchronizationState: async () => null,
       replaceSynchronizationState: async () => false,
     },
     database,

@@ -23,6 +23,14 @@ export function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+/**
+ * Code-unit order for machine strings such as IDs and ISO timestamps. Their
+ * order matches `localeCompare`, which is far slower over large histories.
+ */
+export function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 /** Stable sort by order; input position breaks ties deterministically. */
 export function sortByOrder<T extends Ordered>(items: readonly T[]): T[] {
   return items

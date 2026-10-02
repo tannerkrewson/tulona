@@ -1,4 +1,4 @@
-import { createId, monthKey, trackerMonthCollectionSchema } from '@domain';
+import { compareText, createId, monthKey, trackerMonthCollectionSchema } from '@domain';
 import type { MonthKey, Transition, TrackerMonthCollection } from '@domain';
 import { DateTime } from 'luxon';
 
@@ -63,8 +63,7 @@ function validateMonth(value: string): MonthKey {
 
 function sortTransitions(transitions: readonly Transition[]): Transition[] {
   return [...transitions].sort(
-    (left, right) =>
-      left.timestamp.localeCompare(right.timestamp) || left.id.localeCompare(right.id)
+    (left, right) => compareText(left.timestamp, right.timestamp) || compareText(left.id, right.id)
   );
 }
 
@@ -143,6 +142,10 @@ export class TrackerRepository implements TrackerRepositoryApi {
     this.store = new DatasetStore(database);
     this.journal = new OperationJournal(database);
     this.monthPrefix = `${namespace.key('tracker')}:`;
+  }
+
+  get datasetId(): string {
+    return this.namespace.datasetId;
   }
 
   /** Releases the in-memory history and stops observing storage. */

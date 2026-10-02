@@ -2,7 +2,7 @@ import './web-crypto';
 
 import * as Y from 'yjs';
 
-import type { Transition } from '@domain';
+import { compareText, type Transition } from '@domain';
 
 import {
   BACKUP_FORMAT,
@@ -76,10 +76,6 @@ function entriesOf(backup: LifeTrackerBackup): Map<string, Map<string, unknown>>
   return entries;
 }
 
-/**
- * Records the edits that turned `previous` into `next`: changed records are rewritten and removed
- * records deleted. Records nobody touched keep whatever other devices wrote.
- */
 /** Exports serialize records in a stable key order, so plain JSON settles nearly every comparison. */
 function sameRecord(left: unknown, right: unknown): boolean {
   if (left === right) return true;
@@ -87,29 +83,64 @@ function sameRecord(left: unknown, right: unknown): boolean {
   return canonicalJson(left) === canonicalJson(right);
 }
 
-export function applyBackupChanges(
+interface PriorRecords {
+  has(key: string): boolean;
+  get(key: string): unknown;
+  keys(): IterableIterator<string>;
+}
+
+function applyChanges(
   document: SyncDocument,
-  previous: LifeTrackerBackup | null,
+  priorFor: (name: string) => PriorRecords | undefined,
   next: LifeTrackerBackup
-): void {
-  const before = previous ? entriesOf(previous) : null;
+): boolean {
+  let changed = false;
   document.transact(() => {
     for (const [name, records] of entriesOf(next)) {
       const map = document.getMap<Json>(name);
-      const prior = before?.get(name);
+      const prior = priorFor(name);
       for (const [key, value] of records) {
         if (prior?.has(key) && sameRecord(prior.get(key), value)) continue;
         map.set(key, toJson(value));
+        changed = true;
       }
-      for (const key of prior?.keys() ?? []) {
-        if (records.has(key)) continue;
+      const removed = [...(prior?.keys() ?? [])].filter((key) => !records.has(key));
+      for (const key of removed) {
+        const value = prior?.get(key);
         map.delete(key);
+        changed = true;
         if (name === 'statusDefinitions') {
-          document.getMap<Json>(RETIRED_STATUS_DEFINITIONS).set(key, toJson(prior?.get(key)));
+          document.getMap<Json>(RETIRED_STATUS_DEFINITIONS).set(key, toJson(value));
         }
       }
     }
   });
+  return changed;
+}
+
+/**
+ * Records the edits that turned `previous` into `next`: changed records are rewritten and removed
+ * records deleted. Records nobody touched keep whatever other devices wrote. Returns whether any
+ * record changed.
+ */
+export function applyBackupChanges(
+  document: SyncDocument,
+  previous: LifeTrackerBackup | null,
+  next: LifeTrackerBackup
+): boolean {
+  const before = previous ? entriesOf(previous) : null;
+  return applyChanges(document, (name) => before?.get(name), next);
+}
+
+/**
+ * `applyBackupChanges` from the document's own records, for a document holding exactly the data
+ * last applied locally. Avoids projecting the whole document to learn that previous state.
+ */
+export function applyBackupChangesToDocument(
+  document: SyncDocument,
+  next: LifeTrackerBackup
+): boolean {
+  return applyChanges(document, (name) => document.getMap<Json>(name), next);
 }
 
 /** Adds records the document lacks without changing or removing any it already holds. */
@@ -156,7 +187,7 @@ export function syncDocumentDatasetId(document: SyncDocument): string {
 }
 
 function compareOrdered(left: Ordered, right: Ordered): number {
-  return left.sortOrder - right.sortOrder || left.id.localeCompare(right.id);
+  return left.sortOrder - right.sortOrder || compareText(left.id, right.id);
 }
 
 function values<T>(document: SyncDocument, name: string): T[] {
@@ -169,7 +200,7 @@ function uniqueRecordedTimestamps(transitions: Transition[]): Transition[] {
   for (const transition of transitions) {
     if (transition.status !== 'recorded') continue;
     const prior = recorded.get(transition.timestamp);
-    if (!prior || transition.id.localeCompare(prior.id) < 0) {
+    if (!prior || compareText(transition.id, prior.id) < 0) {
       recorded.set(transition.timestamp, transition);
     }
   }
@@ -257,22 +288,21 @@ export function projectSyncDocument(
       transitions: uniqueRecordedTimestamps(
         values<Transition>(document, 'transitions').sort(
           (left, right) =>
-            left.timestamp.localeCompare(right.timestamp) || left.id.localeCompare(right.id)
+            compareText(left.timestamp, right.timestamp) || compareText(left.id, right.id)
         )
       ),
       routineHistory: values<Backup['routineHistory'][number]>(document, 'routineHistory').sort(
         (left, right) =>
-          left.completedAt.localeCompare(right.completedAt) || left.id.localeCompare(right.id)
+          compareText(left.completedAt, right.completedAt) || compareText(left.id, right.id)
       ),
       activeRoutine: (fields('state').activeRoutine ?? null) as Backup['activeRoutine'],
       habits: values<Backup['habits'][number]>(document, 'habits').sort(compareOrdered),
       habitDayStates: values<Backup['habitDayStates'][number]>(document, 'habitDayStates').sort(
         (left, right) =>
-          left.logicalDay.localeCompare(right.logicalDay) ||
-          left.habitId.localeCompare(right.habitId)
+          compareText(left.logicalDay, right.logicalDay) || compareText(left.habitId, right.habitId)
       ),
       goals: values<Backup['goals'][number]>(document, 'goals').sort((left, right) =>
-        left.id.localeCompare(right.id)
+        compareText(left.id, right.id)
       ),
       goalSettings: {
         ...(fields('goalSettings') as Omit<Backup['goalSettings'], 'statusDefinitions'>),
@@ -284,10 +314,10 @@ export function projectSyncDocument(
           .map((definition, sortOrder) => ({ ...definition, sortOrder })),
       },
       goalWeeks: [...weeks]
-        .sort(([left], [right]) => left.localeCompare(right))
+        .sort(([left], [right]) => compareText(left, right))
         .map(([weekStart, statuses]) => ({
           weekStart,
-          statuses: statuses.sort((left, right) => left.goalId.localeCompare(right.goalId)),
+          statuses: statuses.sort((left, right) => compareText(left.goalId, right.goalId)),
         })),
     } satisfies LifeTrackerBackup)
   ) as LifeTrackerBackup;
@@ -302,15 +332,19 @@ const nativeBase64 = Uint8Array as unknown as {
 
 function bytesToBase64(bytes: Uint8Array): string {
   if (nativeBase64.prototype.toBase64) return nativeBase64.prototype.toBase64.call(bytes);
-  let binary = '';
-  for (let index = 0; index < bytes.length; index += 0x2000) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + 0x2000));
+  // Spreading chunks into fromCharCode is several times slower in Hermes than apply.
+  const chunks: string[] = [];
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    chunks.push(
+      String.fromCharCode.apply(null, bytes.subarray(index, index + 0x8000) as unknown as number[])
+    );
   }
-  return btoa(binary);
+  return btoa(chunks.join(''));
 }
 
 function base64ToBytes(value: string): Uint8Array {
-  if (!value || value.length % 4 !== 0 || /[^A-Za-z0-9+/=]/.test(value)) {
+  // `atob` rejects characters outside the alphabet.
+  if (!value || value.length % 4 !== 0) {
     throw new Error('Dropbox synchronization file contains invalid encoded data');
   }
   if (nativeBase64.fromBase64) return nativeBase64.fromBase64(value);
@@ -320,14 +354,40 @@ function base64ToBytes(value: string): Uint8Array {
   return bytes;
 }
 
+/**
+ * An encoded document is one or more base64 Yjs updates, one per line, applied in order. Appending
+ * the edits since the last encoding avoids re-encoding the whole history after every change.
+ */
 export function encodeSyncDocument(document: SyncDocument): string {
   return bytesToBase64(Y.encodeStateAsUpdateV2(document));
+}
+
+export function syncDocumentStateVector(document: SyncDocument): Uint8Array {
+  return Y.encodeStateVector(document);
+}
+
+/** The edits `document` holds beyond `stateVector`, as one more line of an encoded document. */
+export function encodeSyncDocumentChanges(document: SyncDocument, stateVector: Uint8Array): string {
+  return bytesToBase64(Y.encodeStateAsUpdateV2(document, stateVector));
+}
+
+export function encodedSyncUpdateCount(encoded: string): number {
+  let count = 1;
+  for (let index = encoded.indexOf('\n'); index !== -1; index = encoded.indexOf('\n', index + 1)) {
+    count += 1;
+  }
+  return count;
 }
 
 export function decodeSyncDocument(encoded: string): SyncDocument {
   const document = new Y.Doc();
   try {
-    Y.applyUpdateV2(document, base64ToBytes(encoded.replace(/\s/g, '')));
+    const updates = encoded
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (updates.length === 0) throw new Error('No updates');
+    for (const update of updates) Y.applyUpdateV2(document, base64ToBytes(update));
   } catch (error) {
     throw new Error('Dropbox synchronization document is unreadable', { cause: error });
   }

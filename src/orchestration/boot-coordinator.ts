@@ -308,14 +308,15 @@ export class BootCoordinator {
     namespace: DatasetNamespace,
     recoveredOperationIds: string[]
   ): Promise<BootHydrationResult> {
+    const tracker = createTrackerRepository(this.database, namespace);
     const repositories: BootRepositories = {
       catalog: createCatalogRepository(this.database, namespace),
       settings: createSettingsRepository(this.database, namespace),
-      tracker: createTrackerRepository(this.database, namespace),
+      tracker,
       routine: observeRoutineWrites(createRoutineRepository(this.database, namespace)),
       habits: createHabitRepository(this.database, namespace),
       goals: createGoalRepository(this.database, namespace),
-      backup: new BackupRepository(this.database),
+      backup: new BackupRepository(this.database, tracker),
     };
 
     let settings: Awaited<ReturnType<SettingsService['read']>>;

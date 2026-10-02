@@ -1,3 +1,4 @@
+import { compareText } from './ordering';
 import type { IsoTimestamp, LogicalDayKey, MonthKey, TimeInterval, Transition } from './models';
 import { DateTime } from 'luxon';
 
@@ -243,7 +244,7 @@ export function materializeIntervals(
         transitionTimestamp({ ...right.transition, timestamp: right.transition.createdAt });
       return (
         createdAtDifference ||
-        left.transition.id.localeCompare(right.transition.id) ||
+        compareText(left.transition.id, right.transition.id) ||
         left.index - right.index
       );
     });

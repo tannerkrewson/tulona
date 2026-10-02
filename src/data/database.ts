@@ -11,7 +11,7 @@ export interface AsyncStorageLike {
   multiGet?(keys: readonly string[]): Promise<readonly (readonly [string, string | null])[]>;
   multiSet?(entries: readonly (readonly [string, string])[]): Promise<void>;
   multiRemove?(keys: readonly string[]): Promise<void>;
-  readSnapshot?(): Promise<ReadonlyMap<string, string>>;
+  readSnapshot?(include?: (key: string) => boolean): Promise<ReadonlyMap<string, string>>;
   compareAndApplySnapshot?(commit: DatabaseSnapshotCommit): Promise<boolean>;
 }
 
@@ -43,8 +43,8 @@ export interface KeyValueDatabase {
   subscribeToWrites?(listener: DatabaseWriteListener): () => void;
   /** Writes made in another tab of the same origin. */
   subscribeToExternalWrites?(listener: DatabaseWriteListener): () => void;
-  /** A consistent view of all key/value entries when the adapter can provide one. */
-  readSnapshot?(): Promise<ReadonlyMap<string, string>>;
+  /** A consistent view of the entries `include` accepts (all by default). */
+  readSnapshot?(include?: (key: string) => boolean): Promise<ReadonlyMap<string, string>>;
   /** Atomically compare and apply a dataset projection where the adapter allows it. */
   compareAndApplySnapshot?(commit: DatabaseSnapshotCommit): Promise<boolean>;
 }
@@ -246,19 +246,25 @@ export class AsyncStorageDatabase implements KeyValueDatabase {
     });
   }
 
-  async readSnapshot(): Promise<ReadonlyMap<string, string>> {
+  private async readMatching(
+    include: (key: string) => boolean
+  ): Promise<readonly (readonly [string, string | null])[]> {
+    const keys = (await this.storage.getAllKeys!()).filter(include);
+    return this.storage.multiGet
+      ? this.storage.multiGet(keys)
+      : Promise.all(keys.map(async (key) => [key, await this.storage.getItem(key)] as const));
+  }
+
+  async readSnapshot(
+    include: (key: string) => boolean = () => true
+  ): Promise<ReadonlyMap<string, string>> {
     return this.serializeOperation(async () => {
-      if (this.storage.readSnapshot) return this.storage.readSnapshot();
+      if (this.storage.readSnapshot) return this.storage.readSnapshot(include);
       if (!this.storage.getAllKeys) {
         throw new PersistenceError('read', 'This storage adapter cannot take a full snapshot');
       }
       try {
-        const keys = await this.storage.getAllKeys();
-        const values = this.storage.multiGet
-          ? await this.storage.multiGet(keys)
-          : await Promise.all(
-              keys.map(async (key) => [key, await this.storage.getItem(key)] as const)
-            );
+        const values = await this.readMatching(include);
         return new Map(
           values.flatMap(([key, value]) => (value === null ? [] : [[key, value] as const]))
         );
@@ -287,13 +293,12 @@ export class AsyncStorageDatabase implements KeyValueDatabase {
           'This storage adapter cannot safely apply a synchronized snapshot'
         );
       }
-      const keys = await this.storage.getAllKeys();
-      const values = this.storage.multiGet
-        ? await this.storage.multiGet(keys)
-        : await Promise.all(
-            keys.map(async (key) => [key, await this.storage.getItem(key)] as const)
-          );
-      const actual = new Map(values);
+      const actual = new Map(
+        await this.readMatching(
+          (key) =>
+            key.startsWith(commit.prefix) || commit.compare.has(key) || commit.writes.has(key)
+        )
+      );
       const actualPrefix = new Map(
         [...actual].flatMap(([key, value]) =>
           key.startsWith(commit.prefix) && value !== null ? [[key, value] as const] : []

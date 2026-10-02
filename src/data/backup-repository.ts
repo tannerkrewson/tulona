@@ -7,6 +7,7 @@ import {
   goalWeekCollectionSchema,
   habitCollectionSchema,
   habitMonthCollectionSchema,
+  compareText,
   monthKey,
   routineHistoryCollectionSchema,
   trackerMonthCollectionSchema,
@@ -29,6 +30,7 @@ import { HabitRepository } from './habit-repository';
 import { GoalRepository } from './goal-repository';
 import { RoutineRepository } from './routine-repository';
 import { SettingsRepository } from './settings-repository';
+import { datasetPrefix } from './keys';
 import type { DatasetNamespace } from './namespaces';
 import { TrackerRepository } from './tracker-repository';
 
@@ -49,7 +51,12 @@ export interface BackupRepositoryApi {
   read(namespace: DatasetNamespace): Promise<BackupDatasetSnapshot>;
   write(namespace: DatasetNamespace, snapshot: BackupDatasetSnapshot): Promise<void>;
   verify(namespace: DatasetNamespace, expected: BackupDatasetSnapshot): Promise<void>;
-  readConsistent?(namespace: DatasetNamespace): Promise<ConsistentBackupRead>;
+  /** Reads the dataset and `extraKeys` from one storage snapshot. */
+  readConsistent?(
+    namespace: DatasetNamespace,
+    extraKeys?: readonly string[]
+  ): Promise<ConsistentBackupRead>;
+  readLive?(namespace: DatasetNamespace): Promise<BackupDatasetSnapshot>;
   applySynchronizedSnapshot?(
     namespace: DatasetNamespace,
     snapshot: BackupDatasetSnapshot,
@@ -109,29 +116,28 @@ class SnapshotDatabase implements KeyValueDatabase {
 
 function sortTransitions(values: readonly Transition[]): Transition[] {
   return [...values].sort(
-    (left, right) =>
-      left.timestamp.localeCompare(right.timestamp) || left.id.localeCompare(right.id)
+    (left, right) => compareText(left.timestamp, right.timestamp) || compareText(left.id, right.id)
   );
 }
 
 function sortRuns(values: readonly RoutineRunHistory[]): RoutineRunHistory[] {
   return [...values].sort(
     (left, right) =>
-      left.completedAt.localeCompare(right.completedAt) || left.id.localeCompare(right.id)
+      compareText(left.completedAt, right.completedAt) || compareText(left.id, right.id)
   );
 }
 
 function sortStates(values: readonly HabitDayState[]): HabitDayState[] {
   return [...values].sort(
     (left, right) =>
-      left.logicalDay.localeCompare(right.logicalDay) || left.habitId.localeCompare(right.habitId)
+      compareText(left.logicalDay, right.logicalDay) || compareText(left.habitId, right.habitId)
   );
 }
 
 function sortCatalog(catalog: CatalogCollection): CatalogCollection {
   const byOrder = <T extends { sortOrder: number; id: string }>(values: readonly T[]) =>
     [...values].sort(
-      (left, right) => left.sortOrder - right.sortOrder || left.id.localeCompare(right.id)
+      (left, right) => left.sortOrder - right.sortOrder || compareText(left.id, right.id)
     );
   return {
     folders: byOrder(catalog.folders),
@@ -151,21 +157,21 @@ export function normalizeBackupSnapshot(snapshot: BackupDatasetSnapshot): Backup
     routineHistory: sortRuns(snapshot.routineHistory),
     activeRoutine: snapshot.activeRoutine,
     habits: [...snapshot.habits].sort(
-      (left, right) => left.sortOrder - right.sortOrder || left.id.localeCompare(right.id)
+      (left, right) => left.sortOrder - right.sortOrder || compareText(left.id, right.id)
     ),
     habitDayStates: sortStates(snapshot.habitDayStates),
     goals: [...snapshot.goals],
     goalSettings: {
       ...snapshot.goalSettings,
       statusDefinitions: [...snapshot.goalSettings.statusDefinitions].sort(
-        (left, right) => left.sortOrder - right.sortOrder || left.id.localeCompare(right.id)
+        (left, right) => left.sortOrder - right.sortOrder || compareText(left.id, right.id)
       ),
     },
     goalWeeks: [...snapshot.goalWeeks]
-      .sort((left, right) => left.weekStart.localeCompare(right.weekStart))
+      .sort((left, right) => compareText(left.weekStart, right.weekStart))
       .map((week) => ({
         weekStart: week.weekStart,
-        statuses: [...week.statuses].sort((left, right) => left.goalId.localeCompare(right.goalId)),
+        statuses: [...week.statuses].sort((left, right) => compareText(left.goalId, right.goalId)),
       })),
   };
 }
@@ -188,14 +194,35 @@ function monthRange(start: string, end: string): string[] {
 }
 
 export class BackupRepository implements BackupRepositoryApi {
-  constructor(private readonly database: KeyValueDatabase) {}
+  constructor(
+    private readonly database: KeyValueDatabase,
+    /** The app's own tracker repository, whose in-memory history `readLive` reuses. */
+    private readonly liveTracker?: TrackerRepository
+  ) {}
 
   async read(namespace: DatasetNamespace): Promise<BackupDatasetSnapshot> {
     return (await this.readConsistent(namespace)).snapshot;
   }
 
-  async readConsistent(namespace: DatasetNamespace): Promise<ConsistentBackupRead> {
-    const entries = this.database.readSnapshot ? await this.database.readSnapshot() : null;
+  /**
+   * The dataset as the app currently holds it, sharing the tracker's cached records instead of
+   * reading and parsing the whole history again. Not a consistent storage snapshot.
+   */
+  async readLive(namespace: DatasetNamespace): Promise<BackupDatasetSnapshot> {
+    const tracker =
+      this.liveTracker?.datasetId === namespace.datasetId ? this.liveTracker : undefined;
+    return this.readFrom(this.database, namespace, tracker);
+  }
+
+  async readConsistent(
+    namespace: DatasetNamespace,
+    extraKeys: readonly string[] = []
+  ): Promise<ConsistentBackupRead> {
+    const prefix = datasetPrefix(namespace.datasetId);
+    const extra = new Set(extraKeys);
+    const entries = this.database.readSnapshot
+      ? await this.database.readSnapshot((key) => key.startsWith(prefix) || extra.has(key))
+      : null;
     const database = entries ? new SnapshotDatabase(entries) : this.database;
     return {
       snapshot: await this.readFrom(database, namespace),
@@ -205,10 +232,11 @@ export class BackupRepository implements BackupRepositoryApi {
 
   private async readFrom(
     database: KeyValueDatabase,
-    namespace: DatasetNamespace
+    namespace: DatasetNamespace,
+    liveTracker?: TrackerRepository
   ): Promise<BackupDatasetSnapshot> {
     const catalogRepository = new CatalogRepository(database, namespace);
-    const trackerRepository = new TrackerRepository(database, namespace);
+    const trackerRepository = liveTracker ?? new TrackerRepository(database, namespace);
     const routineRepository = new RoutineRepository(database, namespace);
     const habitRepository = new HabitRepository(database, namespace);
     const goalRepository = new GoalRepository(database, namespace);
@@ -232,13 +260,15 @@ export class BackupRepository implements BackupRepositoryApi {
       goalRepository.readGoals(),
       goalRepository.readSettings(),
       goalRepository.readWeeks(),
-      this.months(database, namespace, 'tracker'),
+      liveTracker ? Promise.resolve([]) : this.months(database, namespace, 'tracker'),
       this.months(database, namespace, 'routine-history'),
       this.months(database, namespace, 'habit-days'),
     ]);
-    const transitions = (
-      await Promise.all(trackerMonths.map((month) => trackerRepository.readMonth(month)))
-    ).flatMap((collection) => collection.transitions);
+    const transitions = liveTracker
+      ? await liveTracker.readAll()
+      : (
+          await Promise.all(trackerMonths.map((month) => trackerRepository.readMonth(month)))
+        ).flatMap((collection) => collection.transitions);
     const routineHistory = (
       await Promise.all(historyMonths.map((month) => routineRepository.readHistory(month)))
     ).flatMap((collection) => collection.runs);
@@ -266,22 +296,25 @@ export class BackupRepository implements BackupRepositoryApi {
     compare: ReadonlyMap<string, string | null>,
     writes: ReadonlyMap<string, string>
   ): Promise<boolean> {
-    if (!this.database.compareAndApplySnapshot || !this.database.readSnapshot) {
+    if (!this.database.compareAndApplySnapshot) {
       await this.write(namespace, snapshot);
       await this.database.multiWrite([...writes]);
       return true;
     }
-    const current = await this.database.readSnapshot();
-    const prefix = `${namespace.key('catalog').slice(0, namespace.key('catalog').lastIndexOf(':') + 1)}`;
+    const prefix = datasetPrefix(namespace.datasetId);
     const expectedPrefix = new Map([...expectedEntries].filter(([key]) => key.startsWith(prefix)));
     const snapshotEntries = encodeDatasetSnapshot(namespace, snapshot);
-    const currentPrefix = [...current.keys()].filter((key) => key.startsWith(prefix));
-    const deletes = currentPrefix.filter((key) => !snapshotEntries.has(key));
+    // The commit only applies while storage still equals `expectedPrefix`, so unchanged entries
+    // need no write; skipping them keeps in-memory caches of those keys valid.
+    const changed = [...snapshotEntries].filter(
+      ([key, value]) => expectedPrefix.get(key) !== value
+    );
+    const deletes = [...expectedPrefix.keys()].filter((key) => !snapshotEntries.has(key));
     const commit: DatabaseSnapshotCommit = {
       prefix,
       expectedPrefix,
       compare,
-      writes: new Map([...snapshotEntries, ...writes]),
+      writes: new Map([...changed, ...writes]),
       deletes,
       source: 'sync',
     };

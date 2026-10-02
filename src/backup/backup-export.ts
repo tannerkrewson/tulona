@@ -29,7 +29,19 @@ export function exportBackupFromSnapshot(
   snapshot: BackupDatasetSnapshot,
   options: BackupExportOptions = {}
 ): LifeTrackerBackup {
-  const backup = {
+  const result = backupSchema.safeParse(backupFromSnapshot(snapshot, options));
+  if (!result.success) {
+    throw new Error(`Cannot export invalid dataset: ${result.error.message}`);
+  }
+  return result.data as LifeTrackerBackup;
+}
+
+/** The backup shape over records repositories already validated when they were written. */
+export function backupFromSnapshot(
+  snapshot: BackupDatasetSnapshot,
+  options: BackupExportOptions = {}
+): LifeTrackerBackup {
+  return {
     format: BACKUP_FORMAT,
     backupVersion: CURRENT_BACKUP_VERSION,
     schemaVersion: CURRENT_BACKUP_SCHEMA_VERSION,
@@ -46,12 +58,7 @@ export function exportBackupFromSnapshot(
     goals: snapshot.goals,
     goalSettings: snapshot.goalSettings,
     goalWeeks: snapshot.goalWeeks,
-  };
-  const result = backupSchema.safeParse(backup);
-  if (!result.success) {
-    throw new Error(`Cannot export invalid dataset: ${result.error.message}`);
-  }
-  return result.data as LifeTrackerBackup;
+  } as LifeTrackerBackup;
 }
 
 export function serializeBackup(backup: LifeTrackerBackup): string {

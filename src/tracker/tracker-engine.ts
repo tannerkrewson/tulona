@@ -1,4 +1,5 @@
 import {
+  compareText,
   isUuid,
   materializeIntervals,
   timestampMs,
@@ -69,12 +70,10 @@ function createdTime(transition: TimeTransition): number {
 export function compareTransitions(left: TimeTransition, right: TimeTransition): number {
   const leftTime = transitionTime(left);
   const rightTime = transitionTime(right);
-  if (leftTime === null) return rightTime === null ? left.id.localeCompare(right.id) : 1;
+  if (leftTime === null) return rightTime === null ? compareText(left.id, right.id) : 1;
   if (rightTime === null) return -1;
   return (
-    leftTime - rightTime ||
-    createdTime(left) - createdTime(right) ||
-    left.id.localeCompare(right.id)
+    leftTime - rightTime || createdTime(left) - createdTime(right) || compareText(left.id, right.id)
   );
 }
 

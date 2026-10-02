@@ -47,15 +47,20 @@ export class IndexedDbStorage implements AsyncStorageLike {
     return database.getAllKeys(INDEXED_DB_STORE);
   }
 
-  async readSnapshot(): Promise<ReadonlyMap<string, string>> {
+  async readSnapshot(
+    include: (key: string) => boolean = () => true
+  ): Promise<ReadonlyMap<string, string>> {
     const database = await this.database;
     const transaction = database.transaction(INDEXED_DB_STORE, 'readonly');
-    const [keys, values] = await Promise.all([
-      transaction.store.getAllKeys(),
-      transaction.store.getAll(),
-    ]);
+    const keys = (await transaction.store.getAllKeys()).map(String).filter(include);
+    const values = await Promise.all(keys.map((key) => transaction.store.get(key)));
     await transaction.done;
-    return new Map(keys.map((key, index) => [String(key), values[index]]));
+    return new Map(
+      keys.flatMap((key, index) => {
+        const value = values[index];
+        return value === undefined ? [] : [[key, value] as const];
+      })
+    );
   }
 
   async compareAndApplySnapshot(commit: DatabaseSnapshotCommit): Promise<boolean> {

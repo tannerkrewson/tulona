@@ -6,6 +6,7 @@ import type { TrackerRange } from '../tracker/tracker-engine';
 import type { ReportingServiceApi } from '../reporting/reporting-service';
 
 import {
+  backupFromSnapshot,
   exportBackup,
   exportBackupFromSnapshot,
   serializeBackup,
@@ -57,10 +58,13 @@ export class BackupService {
     return serializeBackup(await this.export());
   }
 
-  async exportSynchronizationSnapshot(): Promise<SynchronizationSnapshot> {
+  /** `entries` holds the dataset's raw values plus any existing keys named by `extraKeys`. */
+  async exportSynchronizationSnapshot(
+    extraKeys: (datasetId: string) => readonly string[] = () => []
+  ): Promise<SynchronizationSnapshot> {
     const namespace = await this.activeNamespace();
     const read = this.repository.readConsistent
-      ? await this.repository.readConsistent(namespace)
+      ? await this.repository.readConsistent(namespace, extraKeys(namespace.datasetId))
       : {
           snapshot: await this.repository.read(namespace),
           entries: this.database.readSnapshot ? await this.database.readSnapshot() : new Map(),
@@ -72,39 +76,64 @@ export class BackupService {
     };
   }
 
+  /**
+   * The dataset as the app holds it in memory, without the storage snapshot and validation of
+   * `exportSynchronizationSnapshot`. Enough to publish local edits, not to compare-and-apply.
+   */
+  async exportLocalSnapshot(
+    extraKeys: (datasetId: string) => readonly string[] = () => []
+  ): Promise<SynchronizationSnapshot> {
+    if (!this.repository.readLive) return this.exportSynchronizationSnapshot(extraKeys);
+    const namespace = await this.activeNamespace();
+    const [snapshot, extras] = await Promise.all([
+      this.repository.readLive(namespace),
+      this.database.multiRead(extraKeys(namespace.datasetId)),
+    ]);
+    return {
+      backup: backupFromSnapshot(snapshot, this.options),
+      datasetId: namespace.datasetId,
+      entries: new Map(
+        [...extras].flatMap(([key, value]) => (value === null ? [] : [[key, value] as const]))
+      ),
+    };
+  }
+
   async applySynchronizationProjection(
     input: string | unknown,
     expectedDatasetId: string,
     expectedDatasetEntries: ReadonlyMap<string, string>,
-    syncStateKey: string,
-    expectedSyncState: string | null,
-    nextSyncState: string
+    compare: ReadonlyMap<string, string | null>,
+    writes: ReadonlyMap<string, string>
   ): Promise<boolean> {
     const imported = parseBackup(input, this.options.parse);
     const namespace = await this.activeNamespace();
     if (namespace.datasetId !== expectedDatasetId) return false;
     if (!this.repository.applySynchronizedSnapshot) {
       await this.repository.write(namespace, snapshotFromBackup(imported.backup));
-      await this.database.write(syncStateKey, nextSyncState);
+      await this.database.multiWrite([...writes]);
       return true;
     }
     return this.repository.applySynchronizedSnapshot(
       namespace,
       snapshotFromBackup(imported.backup),
       expectedDatasetEntries,
-      new Map([[syncStateKey, expectedSyncState]]),
-      new Map([[syncStateKey, nextSyncState]])
+      compare,
+      writes
     );
   }
 
-  /** Replaces only the stored sync state, unless another writer replaced it first. */
+  readSynchronizationState(key: string): Promise<string | null> {
+    return this.database.read(key);
+  }
+
+  /** Writes sync state only while `compareKey` still holds `expected`. */
   async replaceSynchronizationState(
-    syncStateKey: string,
-    expectedSyncState: string | null,
-    nextSyncState: string
+    compareKey: string,
+    expected: string | null,
+    writes: ReadonlyMap<string, string>
   ): Promise<boolean> {
-    if ((await this.database.read(syncStateKey)) !== expectedSyncState) return false;
-    await this.database.write(syncStateKey, nextSyncState);
+    if ((await this.database.read(compareKey)) !== expected) return false;
+    await this.database.multiWrite([...writes]);
     return true;
   }
 

@@ -21,6 +21,7 @@ import {
 export const DROPBOX_BACKUP_PATH = '/tulona-backup.json';
 export const DROPBOX_SYNC_PATH = '/tulona-sync.yjs';
 export const DROPBOX_SYNC_STORAGE_KEY = 'tulona:dropbox-sync-state:';
+export const DROPBOX_SYNC_META_KEY = 'tulona:dropbox-sync-meta:';
 export const DROPBOX_BACKUP_SCOPES = [
   'files.content.read',
   'files.content.write',
@@ -32,8 +33,12 @@ export const DROPBOX_SYNC_MAX_RETRIES = 6;
 /** The JSON copy is a recovery convenience; rewriting it after every edit costs a full export. */
 export const DROPBOX_READABLE_BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
-const SYNC_FILE_HEADER = 'TULONA_YJS_SYNC_V1\n';
-const SYNC_STATE_VERSION = 2 as const;
+/** Version 2 files may hold several update lines; version 1 readers would misread them. */
+const SYNC_FILE_HEADER = 'TULONA_YJS_SYNC_V2\n';
+const SINGLE_UPDATE_SYNC_FILE_HEADER = 'TULONA_YJS_SYNC_V1\n';
+/** Appended updates repeat the delete set, so the file is re-encoded whole after this many. */
+const SYNC_MAX_APPENDED_UPDATES = 100;
+const SYNC_STATE_VERSION = 3 as const;
 const SYNC_LOCK_NAME = 'tulona-dropbox-sync';
 type SyncDocumentModule = typeof import('./dropbox-sync-document');
 
@@ -67,19 +72,34 @@ interface DropboxRemoteFile {
 }
 
 interface DropboxSyncStateRecord {
-  version: typeof SYNC_STATE_VERSION;
+  version: 2 | typeof SYNC_STATE_VERSION;
   document: string;
-  projection: LifeTrackerBackup;
+  /** Version 2 stored the dataset beside the document; later versions project the document. */
+  projection?: LifeTrackerBackup;
   datasetId: string;
   updatedAt: string;
+}
+
+/**
+ * Small companion of the sync state: any write of the state replaces `stamp`, so comparing this
+ * value detects other writers without reading the state itself.
+ */
+interface DropboxSyncMeta {
+  stamp: string;
+  /** The Dropbox revision holding exactly the stored document, if this device uploaded it. */
+  remoteRev: string | null;
 }
 
 interface SyncSession {
   datasetId: string;
   document: SyncDocument;
-  projection: LifeTrackerBackup;
-  /** The persisted sync state this session produced; another writer invalidates the session. */
-  stateValue: string;
+  /** The dataset last applied to `document`, or null when `document` itself holds exactly that. */
+  projection: LifeTrackerBackup | null;
+  /** The persisted sync metadata this session produced; another writer invalidates the session. */
+  metaValue: string | null;
+  /** `document` as stored and uploaded, and the state it was encoded at. */
+  encoded: string;
+  encodedState: Uint8Array;
   remoteRev: string | null;
   /** Whether Dropbox holds `document`; false after a local change whose upload has not landed. */
   uploaded: boolean;
@@ -96,7 +116,7 @@ interface PendingSetup {
   review: DropboxSetupReview;
   datasetId: string;
   localBackup: LifeTrackerBackup;
-  localStateRaw: string | null;
+  localMeta: string | null;
   remoteRevision: string | null;
   legacyRevision: string | null;
   refreshToken: string;
@@ -232,38 +252,56 @@ function parseSyncState(value: string | null): DropboxSyncStateRecord | null {
   } catch (error) {
     throw new Error('Local Dropbox synchronization history is invalid JSON', { cause: error });
   }
+  const record = parsed as Record<string, unknown> | null;
   if (
-    typeof parsed !== 'object' ||
-    parsed === null ||
-    (parsed as Record<string, unknown>).version !== SYNC_STATE_VERSION ||
-    typeof (parsed as Record<string, unknown>).document !== 'string' ||
-    typeof (parsed as Record<string, unknown>).datasetId !== 'string' ||
-    typeof (parsed as Record<string, unknown>).updatedAt !== 'string' ||
-    typeof (parsed as Record<string, unknown>).projection !== 'object'
+    typeof record !== 'object' ||
+    record === null ||
+    (record.version !== 2 && record.version !== SYNC_STATE_VERSION) ||
+    typeof record.document !== 'string' ||
+    typeof record.datasetId !== 'string' ||
+    typeof record.updatedAt !== 'string' ||
+    (record.version === 2 && typeof record.projection !== 'object')
   ) {
     throw new Error('Local Dropbox synchronization history is invalid or unsupported');
   }
-  return parsed as DropboxSyncStateRecord;
+  return record as unknown as DropboxSyncStateRecord;
 }
 
-function serializeSyncState(
-  encodedDocument: string,
-  projection: LifeTrackerBackup,
-  datasetId: string,
-  now: () => number
-): string {
+function serializeSyncState(encodedDocument: string, datasetId: string, now: () => number): string {
   const value: DropboxSyncStateRecord = {
     version: SYNC_STATE_VERSION,
     document: encodedDocument,
-    projection,
     datasetId,
     updatedAt: new Date(now()).toISOString(),
   };
   return JSON.stringify(value);
 }
 
+function serializeSyncMeta(remoteRev: string | null): string {
+  const value: DropboxSyncMeta = { stamp: createId(), remoteRev };
+  return JSON.stringify(value);
+}
+
+function syncMetaRemoteRevision(value: string | null): string | null {
+  if (value === null) return null;
+  try {
+    const rev = (JSON.parse(value) as Partial<DropboxSyncMeta> | null)?.remoteRev;
+    return typeof rev === 'string' && rev.length > 0 ? rev : null;
+  } catch {
+    return null;
+  }
+}
+
 export function dropboxSyncStorageKey(datasetId: string): string {
   return `${DROPBOX_SYNC_STORAGE_KEY}${datasetId}`;
+}
+
+export function dropboxSyncMetaKey(datasetId: string): string {
+  return `${DROPBOX_SYNC_META_KEY}${datasetId}`;
+}
+
+function syncMetaKeys(datasetId: string): string[] {
+  return [dropboxSyncMetaKey(datasetId)];
 }
 
 function remoteDocumentContents(encodedDocument: string): string {
@@ -276,7 +314,7 @@ function uploadedRevision(response: unknown): string | null {
 }
 
 function decodeRemoteDocument(value: string, sync: SyncDocumentModule): SyncDocument {
-  if (!value.startsWith(SYNC_FILE_HEADER)) {
+  if (!value.startsWith(SYNC_FILE_HEADER) && !value.startsWith(SINGLE_UPDATE_SYNC_FILE_HEADER)) {
     throw new Error('Dropbox synchronization file has an invalid header');
   }
   const encoded = value.slice(SYNC_FILE_HEADER.length).trim();
@@ -380,8 +418,10 @@ export class DropboxBackupService {
       | 'exportSynchronizationSnapshot'
       | 'inspectImport'
       | 'applySynchronizationProjection'
+      | 'readSynchronizationState'
       | 'replaceSynchronizationState'
-    >,
+    > &
+      Partial<Pick<BackupService, 'exportLocalSnapshot'>>,
     private readonly database: KeyValueDatabase,
     options: DropboxBackupServiceOptions = {}
   ) {
@@ -681,15 +721,19 @@ export class DropboxBackupService {
 
       for (let attempt = 0; attempt < this.maxRetries; attempt += 1) {
         if (generation !== this.uploadGeneration) return;
-        const local = await this.backupService.exportSynchronizationSnapshot();
+        const local =
+          !resolution && this.backupService.exportLocalSnapshot
+            ? await this.backupService.exportLocalSnapshot(syncMetaKeys)
+            : await this.backupService.exportSynchronizationSnapshot(syncMetaKeys);
         const syncStateKey = dropboxSyncStorageKey(local.datasetId);
-        const localStateRaw = local.entries.get(syncStateKey) ?? null;
+        const syncMetaKey = dropboxSyncMetaKey(local.datasetId);
+        const localMeta = local.entries.get(syncMetaKey) ?? null;
         if (!resolution && this.session) {
           const outcome = await this.synchronizeFromSession(
             client,
             this.session,
             local,
-            localStateRaw,
+            localMeta,
             sync,
             generation,
             automatic
@@ -701,6 +745,7 @@ export class DropboxBackupService {
           }
         }
         this.session = null;
+        const localStateRaw = await this.backupService.readSynchronizationState(syncStateKey);
         let localState: DropboxSyncStateRecord | null = null;
         let localDocument: SyncDocument | null = null;
         let historyError = false;
@@ -711,12 +756,53 @@ export class DropboxBackupService {
           localDocument = localState
             ? sync.decodeSyncDocument(localState.document)
             : sync.createSyncDocument(local.backup, local.datasetId);
-          if (localState && !sameDataset(localState.projection, local.backup)) {
-            sync.applyBackupChanges(localDocument, localState.projection, local.backup);
-          }
         } catch {
           historyError = true;
         }
+        if (generation !== this.uploadGeneration) return;
+
+        // When Dropbox still holds the stored document, publishing local edits needs no download.
+        const storedRemoteRev = syncMetaRemoteRevision(localMeta);
+        if (!resolution && localState && localDocument && storedRemoteRev) {
+          await delay(0);
+          this.session = {
+            datasetId: local.datasetId,
+            document: localDocument,
+            projection: localState.projection ?? null,
+            metaValue: localMeta,
+            encoded: localState.document,
+            encodedState: sync.syncDocumentStateVector(localDocument),
+            remoteRev: storedRemoteRev,
+            uploaded: true,
+          };
+          const outcome = await this.synchronizeFromSession(
+            client,
+            this.session,
+            local,
+            localMeta,
+            sync,
+            generation,
+            automatic
+          );
+          if (outcome === 'done' || outcome === 'cancelled') return;
+          this.session = null;
+          if (outcome === 'retry') {
+            await delay(retryDelay(attempt));
+            continue;
+          }
+        }
+        if (localState && localDocument) {
+          try {
+            if (localState.projection) {
+              sync.applyBackupChanges(localDocument, localState.projection, local.backup);
+            } else {
+              sync.applyBackupChangesToDocument(localDocument, local.backup);
+            }
+          } catch {
+            historyError = true;
+          }
+        }
+        await delay(0);
 
         const remoteFile = await this.downloadFile(client, DROPBOX_SYNC_PATH);
         let legacyFile = remoteFile ? null : await this.downloadFile(client, DROPBOX_BACKUP_PATH);
@@ -732,6 +818,7 @@ export class DropboxBackupService {
           } else if (legacyFile) {
             cloudBackup = this.backupService.inspectImport(legacyFile.contents).backup;
           }
+          await delay(0);
         } catch {
           cloudError = true;
           if (remoteFile) {
@@ -777,7 +864,7 @@ export class DropboxBackupService {
             authRecord.refreshToken !== expected.refreshToken ||
             local.datasetId !== expected.datasetId ||
             !sameDataset(local.backup, expected.localBackup) ||
-            localStateRaw !== expected.localStateRaw ||
+            localMeta !== expected.localMeta ||
             (remoteFile?.rev ?? null) !== expected.remoteRevision ||
             (legacyFile?.rev ?? null) !== expected.legacyRevision
           ) {
@@ -824,7 +911,7 @@ export class DropboxBackupService {
             },
             datasetId: local.datasetId,
             localBackup: local.backup,
-            localStateRaw,
+            localMeta,
             remoteRevision: remoteFile?.rev ?? null,
             legacyRevision: legacyFile?.rev ?? null,
             refreshToken: authRecord.refreshToken,
@@ -863,7 +950,8 @@ export class DropboxBackupService {
           if (remoteDocument) sync.mergeSyncDocuments(merged, remoteDocument);
         }
 
-        let latestLocal = await this.backupService.exportSynchronizationSnapshot();
+        await delay(0);
+        let latestLocal = await this.backupService.exportSynchronizationSnapshot(syncMetaKeys);
         if (generation !== this.uploadGeneration) return;
         if (latestLocal.datasetId !== local.datasetId) {
           throw new Error(
@@ -878,24 +966,34 @@ export class DropboxBackupService {
         if (!sameDataset(local.backup, latestLocal.backup)) {
           sync.applyBackupChanges(merged, local.backup, latestLocal.backup);
         }
+        await delay(0);
         const projection = this.backupService.inspectImport(
           sync.projectSyncDocument(merged, { exportedAt: new Date(this.now()).toISOString() })
         ).backup;
+        await delay(0);
 
+        const remoteMatches = Boolean(
+          remoteFile && remoteDocument && sync.sameSyncState(merged, remoteDocument)
+        );
         const encoded = sync.encodeSyncDocument(merged);
-        const stateValue = serializeSyncState(encoded, projection, latestLocal.datasetId, this.now);
+        const stateValue = serializeSyncState(encoded, latestLocal.datasetId, this.now);
+        const metaValue = serializeSyncMeta(remoteMatches ? (remoteFile?.rev ?? null) : null);
         const expectedPrefix = new Map(
           [...latestLocal.entries].filter(([key]) => key.startsWith(`ds:${latestLocal.datasetId}:`))
         );
-        const expectedSyncState = latestLocal.entries.get(syncStateKey) ?? null;
+        const expectedMeta = latestLocal.entries.get(syncMetaKey) ?? null;
+        const localChanged = !sameDataset(projection, latestLocal.backup);
         if (generation !== this.uploadGeneration) return;
+        await delay(0);
         const applied = await this.backupService.applySynchronizationProjection(
           projection,
           latestLocal.datasetId,
           expectedPrefix,
-          syncStateKey,
-          expectedSyncState,
-          stateValue
+          new Map([[syncMetaKey, expectedMeta]]),
+          new Map([
+            [syncStateKey, stateValue],
+            [syncMetaKey, metaValue],
+          ])
         );
         if (!applied) {
           if (resolution)
@@ -906,18 +1004,20 @@ export class DropboxBackupService {
           continue;
         }
 
-        await this.notifyViewsAfterSync();
+        if (localChanged) await this.notifyViewsAfterSync();
 
         const session: SyncSession = {
           datasetId: latestLocal.datasetId,
           document: merged,
           projection,
-          stateValue,
+          metaValue,
+          encoded,
+          encodedState: sync.syncDocumentStateVector(merged),
           remoteRev: remoteFile?.rev ?? null,
           uploaded: false,
         };
 
-        if (remoteFile && remoteDocument && sync.sameSyncState(merged, remoteDocument)) {
+        if (remoteMatches) {
           this.session = { ...session, uploaded: true };
           await this.uploadHumanReadableBackup(client, projection, generation, automatic);
           if (generation !== this.uploadGeneration) return;
@@ -941,6 +1041,7 @@ export class DropboxBackupService {
             this.uploadAbortController ? { signal: this.uploadAbortController.signal } : undefined
           );
           this.session = { ...session, remoteRev: uploadedRevision(response), uploaded: true };
+          await this.recordUploadedRevision(this.session);
         } catch (error) {
           if (!isDropboxConflict(error)) throw error;
           if (resolution) {
@@ -1020,34 +1121,48 @@ export class DropboxBackupService {
     client: Dropbox,
     session: SyncSession,
     local: SynchronizationSnapshot,
-    localStateRaw: string | null,
+    localMeta: string | null,
     sync: SyncDocumentModule,
     generation: number,
     automatic: boolean
   ): Promise<'done' | 'retry' | 'full' | 'cancelled'> {
-    if (session.datasetId !== local.datasetId || session.stateValue !== localStateRaw) {
+    if (session.datasetId !== local.datasetId || session.metaValue !== localMeta) {
       return 'full';
     }
     const remoteRev = await this.remoteRevision(client, DROPBOX_SYNC_PATH);
     if (generation !== this.uploadGeneration) return 'cancelled';
     if (typeof remoteRev !== 'string' || remoteRev !== session.remoteRev) return 'full';
 
-    let encoded: string | null = null;
-    if (!sameDataset(session.projection, local.backup)) {
-      sync.applyBackupChanges(session.document, session.projection, local.backup);
-      encoded = sync.encodeSyncDocument(session.document);
-      const stateValue = serializeSyncState(encoded, local.backup, local.datasetId, this.now);
+    await delay(0);
+    const changed = session.projection
+      ? sync.applyBackupChanges(session.document, session.projection, local.backup)
+      : sync.applyBackupChangesToDocument(session.document, local.backup);
+    if (changed) {
+      await delay(0);
+      const encoded =
+        sync.encodedSyncUpdateCount(session.encoded) >= SYNC_MAX_APPENDED_UPDATES
+          ? sync.encodeSyncDocument(session.document)
+          : `${session.encoded}\n${sync.encodeSyncDocumentChanges(session.document, session.encodedState)}`;
+      const metaValue = serializeSyncMeta(null);
       const replaced = await this.backupService.replaceSynchronizationState(
-        dropboxSyncStorageKey(local.datasetId),
-        localStateRaw,
-        stateValue
+        dropboxSyncMetaKey(local.datasetId),
+        localMeta,
+        new Map([
+          [
+            dropboxSyncStorageKey(local.datasetId),
+            serializeSyncState(encoded, local.datasetId, this.now),
+          ],
+          [dropboxSyncMetaKey(local.datasetId), metaValue],
+        ])
       );
       if (!replaced) {
         this.session = null;
         return 'retry';
       }
       session.projection = local.backup;
-      session.stateValue = stateValue;
+      session.metaValue = metaValue;
+      session.encoded = encoded;
+      session.encodedState = sync.syncDocumentStateVector(session.document);
       session.uploaded = false;
     }
 
@@ -1059,7 +1174,7 @@ export class DropboxBackupService {
         const response = await client.filesUpload(
           {
             path: DROPBOX_SYNC_PATH,
-            contents: remoteDocumentContents(encoded ?? sync.encodeSyncDocument(session.document)),
+            contents: remoteDocumentContents(session.encoded),
             mode: { '.tag': 'update', update: remoteRev },
             autorename: false,
             strict_conflict: true,
@@ -1073,6 +1188,7 @@ export class DropboxBackupService {
         } else {
           session.remoteRev = uploadedRev;
           session.uploaded = true;
+          await this.recordUploadedRevision(session);
         }
       } catch (error) {
         if (!isDropboxConflict(error)) throw error;
@@ -1084,10 +1200,24 @@ export class DropboxBackupService {
     }
 
     if (generation !== this.uploadGeneration) return 'cancelled';
-    await this.uploadHumanReadableBackup(client, session.projection, generation, automatic);
+    await this.uploadHumanReadableBackup(client, local.backup, generation, automatic);
     if (generation !== this.uploadGeneration) return 'cancelled';
     await this.markSynchronized();
     return 'done';
+  }
+
+  /** Lets a later app launch skip the download while Dropbox still holds this upload. */
+  private async recordUploadedRevision(session: SyncSession): Promise<void> {
+    if (!session.remoteRev) return;
+    const metaKey = dropboxSyncMetaKey(session.datasetId);
+    const metaValue = serializeSyncMeta(session.remoteRev);
+    const replaced = await this.backupService.replaceSynchronizationState(
+      metaKey,
+      session.metaValue,
+      new Map([[metaKey, metaValue]])
+    );
+    if (replaced) session.metaValue = metaValue;
+    else if (this.session === session) this.session = null;
   }
 
   private async uploadHumanReadableBackup(

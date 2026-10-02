@@ -7,6 +7,7 @@ import {
   CURRENT_BACKUP_VERSION,
   DropboxBackupService,
   DROPBOX_SYNC_PATH,
+  dropboxSyncMetaKey,
   dropboxSyncStorageKey,
   parseBackup,
   serializeBackup,
@@ -600,13 +601,16 @@ class FakeBackupService {
 
   inspectImport = (input: unknown) => parseBackup(input);
 
+  readSynchronizationState = async (key: string): Promise<string | null> =>
+    this.entries.get(key) ?? null;
+
   replaceSynchronizationState = async (
-    syncStateKey: string,
-    expectedSyncState: string | null,
-    nextSyncState: string
+    compareKey: string,
+    expected: string | null,
+    writes: ReadonlyMap<string, string>
   ): Promise<boolean> => {
-    if ((this.entries.get(syncStateKey) ?? null) !== expectedSyncState) return false;
-    this.entries.set(syncStateKey, nextSyncState);
+    if ((this.entries.get(compareKey) ?? null) !== expected) return false;
+    for (const [key, value] of writes) this.entries.set(key, value);
     return true;
   };
 
@@ -614,9 +618,8 @@ class FakeBackupService {
     input: string | unknown,
     expectedDatasetId: string,
     expectedDatasetEntries: ReadonlyMap<string, string>,
-    syncStateKey: string,
-    expectedSyncState: string | null,
-    nextSyncState: string
+    compare: ReadonlyMap<string, string | null>,
+    writes: ReadonlyMap<string, string>
   ): Promise<boolean> => {
     this.beforeApply?.();
     this.beforeApply = null;
@@ -625,10 +628,12 @@ class FakeBackupService {
       [...this.entries].filter(([key]) => key.startsWith(`ds:${this.datasetId}:`))
     );
     if (!sameMap(actualDatasetEntries, expectedDatasetEntries)) return false;
-    if ((this.entries.get(syncStateKey) ?? null) !== expectedSyncState) return false;
+    for (const [key, expected] of compare) {
+      if ((this.entries.get(key) ?? null) !== expected) return false;
+    }
     this.backup = parseBackup(input).backup;
     this.updateFixtureEntry();
-    this.entries.set(syncStateKey, nextSyncState);
+    for (const [key, value] of writes) this.entries.set(key, value);
     return true;
   };
 
@@ -643,6 +648,7 @@ class FakeBackupService {
 
   corruptSyncState(key: string): void {
     this.entries.set(key, 'broken history');
+    this.entries.set(dropboxSyncMetaKey(this.datasetId), 'replaced by another writer');
   }
 
   readSyncState(key: string): string | null {
@@ -671,7 +677,10 @@ function remoteDocument(document: SyncDocument): string {
 }
 
 function decodeRemoteDocument(contents: string): SyncDocument {
-  assert(contents.startsWith(SYNC_FILE_HEADER), 'test remote sync file should have a valid header');
+  assert(
+    /^TULONA_YJS_SYNC_V[12]\n/.test(contents),
+    'test remote sync file should have a valid header'
+  );
   return decodeSyncDocument(contents.slice(SYNC_FILE_HEADER.length).trim());
 }
 
@@ -931,13 +940,53 @@ async function persistentLocalHistory(): Promise<void> {
     clientFactory,
     maxRetries: 4,
   });
+  const downloadsBeforeReload = harness.dropbox.downloads;
   await reloadedService.syncNow();
+  assert(
+    harness.dropbox.downloads === downloadsBeforeReload,
+    'a later app instance must not download a Dropbox revision it uploaded itself'
+  );
   const reloadedState = JSON.parse(harness.local.readSyncState(stateKey) ?? '{}') as {
     document?: string;
+    projection?: unknown;
   };
+  // The relaunch may append once: the fixture lacks schema defaults that the applied dataset has.
   assert(
-    sameSyncState(saved, decodeSyncDocument(reloadedState.document ?? '')),
+    (reloadedState.document ?? '').startsWith(savedDocument.document) &&
+      Y.equalSnapshots(
+        Y.snapshot(saved),
+        Y.snapshot(decodeSyncDocument(reloadedState.document!.split('\n').slice(0, 2).join('\n')))
+      ),
     'a later app instance must continue the persisted sync history instead of rebuilding it from JSON'
+  );
+  assert(
+    reloadedState.projection === undefined,
+    'the persisted sync history must not duplicate the dataset'
+  );
+
+  const relaunchEdit = harness.local.currentBackup();
+  relaunchEdit.catalog.activities[0]!.name = 'Edited after relaunch';
+  harness.local.setBackup(relaunchEdit);
+  const relaunchedService = new DropboxBackupService(harness.local, harness.database, {
+    appKey: 'test-app-key',
+    redirectUri: 'https://example.test/dropbox-auth',
+    authFactory,
+    clientFactory,
+    maxRetries: 4,
+  });
+  await relaunchedService.syncNow();
+  const published = decodeSyncDocument(
+    harness.dropbox.files.get(DROPBOX_SYNC_PATH)!.contents.slice(SYNC_FILE_HEADER.length).trim()
+  );
+  assert(
+    harness.dropbox.downloads === downloadsBeforeReload &&
+      published.getMap('activities').toJSON()[relaunchEdit.catalog.activities[0]!.id]?.name ===
+        'Edited after relaunch',
+    'edits made before a relaunch must publish on top of the stored history without a download'
+  );
+  assert(
+    harness.dropbox.files.get(DROPBOX_SYNC_PATH)!.contents.trim().split('\n').length > 2,
+    'a local edit must append its changes instead of re-encoding the whole history'
   );
   harness.database.close();
 }
