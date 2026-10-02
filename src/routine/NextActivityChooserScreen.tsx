@@ -19,6 +19,7 @@ import {
 } from '@domain';
 import { useAppTheme } from '@theme';
 import { AppButton, errorText, ROW_SURFACE_LIST_GAP, Screen } from '@ui';
+import { goHomeInAppStack } from '../navigation/app-back';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { ActivityRow } from '../tracker/ActivityRow';
@@ -319,7 +320,7 @@ export function NextActivityChooserScreen() {
     setError(null);
     try {
       await runtime.routineService.selectNextActivity(activityId);
-      router.replace('/');
+      goHomeInAppStack(router);
     } catch (choiceError) {
       setError(errorText(choiceError));
     } finally {
@@ -329,11 +330,11 @@ export function NextActivityChooserScreen() {
 
   if (!active || !catalog) {
     return (
-      <Screen onBack={() => router.replace('/')} title="Choose activity">
+      <Screen onBack={() => goHomeInAppStack(router)} title="Choose activity">
         <Column alignment="center" spacing={16} style={{ width: '100%' }}>
           <ChooserError message={error ?? 'Restoring the next-activity chooser...'}>
             <RecoveryActions
-              onClose={() => router.replace('/')}
+              onClose={() => goHomeInAppStack(router)}
               onRetry={load}
               testID="chooser-recovery"
             />
@@ -355,7 +356,7 @@ export function NextActivityChooserScreen() {
 
   return (
     <Screen
-      onBack={() => (folderId === null ? router.replace('/') : setFolderId(null))}
+      onBack={() => (folderId === null ? goHomeInAppStack(router) : setFolderId(null))}
       title={title}
     >
       <Column spacing={ROW_SURFACE_LIST_GAP} style={{ width: '100%' }}>
@@ -442,7 +443,7 @@ export function NextActivityChooserScreen() {
         ) : null}
         <ChooserError message={error}>
           <RecoveryActions
-            onClose={() => router.replace('/')}
+            onClose={() => goHomeInAppStack(router)}
             onRetry={() => {
               if (lastChoice.current) void choose(lastChoice.current);
               else load();
@@ -453,7 +454,7 @@ export function NextActivityChooserScreen() {
         <AppButton
           disabled={busy}
           label="Decide later"
-          onPress={() => router.replace('/')}
+          onPress={() => goHomeInAppStack(router)}
           style={{ height: 48, width: '100%' }}
           variant="outlined"
           testID="chooser-decide-later"

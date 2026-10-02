@@ -118,11 +118,11 @@ const controlRowStart = runner.indexOf('<Row alignment="center" style={styles.co
 const controlRowEnd = runner.indexOf('</Row>', controlRowStart);
 const controlRow = runner.slice(controlRowStart, controlRowEnd);
 assert(
-  controlRow.indexOf('icon="square"') < controlRow.indexOf('icon="clock"') &&
-    controlRow.indexOf('icon="clock"') < controlRow.indexOf('icon="arrow-right"') &&
-    controlRow.indexOf('icon="arrow-right"') < controlRow.indexOf('icon="pause"') &&
-    controlRow.indexOf('icon="pause"') < controlRow.indexOf('icon="skip-forward"'),
-  'routine controls must remain in stop, clock, next, pause, skip order'
+  controlRow.indexOf('icon="square"') < controlRow.indexOf('icon="pause"') &&
+    controlRow.indexOf('icon="pause"') < controlRow.indexOf('icon="arrow-right"') &&
+    controlRow.indexOf('icon="arrow-right"') < controlRow.indexOf('icon="clock"') &&
+    controlRow.indexOf('icon="clock"') < controlRow.indexOf('icon="skip-forward"'),
+  'routine controls must remain in stop, pause, next, clock, skip order'
 );
 assert(
   editor.includes("onSaved={() => router.replace('/')}") &&
@@ -163,4 +163,14 @@ assert(
     activeBar.includes('pausedRoutineStepName') &&
     activeBar.includes('routineTimer'),
   'the tracker bar shows routine identity, current step, countdown, and a visible paused state'
+);
+const rootLayout = read('app/_layout.tsx');
+assert(
+  runner.includes(
+    '<Screen backgroundColor={RUNNER.background} scrollable={false} testID="routine-runner-screen">'
+  ) &&
+    runner.includes("{ label: 'Back to Home, Keep Running' }") &&
+    runner.includes('testID="routine-runner-name"') &&
+    /name="routine\/\[routineId\]"[\s\S]{0,120}gestureEnabled: false/.test(rootLayout),
+  'the active runner has no header or swipe-back; its stop menu can leave it running'
 );

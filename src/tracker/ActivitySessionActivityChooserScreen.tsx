@@ -9,7 +9,7 @@ import { errorText, ROW_SURFACE_LIST_GAP, Screen } from '@ui';
 import { resolveCatalogItem } from '../catalog/catalog-service';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
-import { goBackInAppStack } from '../navigation/app-back';
+import { goBackInAppStack, goHomeInAppStack } from '../navigation/app-back';
 import { SessionActivityChoices } from './SessionActivityChoices';
 
 function ChooserError({ message, children }: { message: string; children: ReactNode }) {
@@ -62,7 +62,7 @@ export function ActivitySessionActivityChooserScreen({
     if (routineId) {
       goBackInAppStack(router, `/routine/${encodeURIComponent(routineId)}`);
     } else if (returnToTracker) {
-      router.replace('/');
+      goHomeInAppStack(router);
     } else {
       goBackInAppStack(router, `/activity-session/${encodeURIComponent(transitionId ?? '')}`);
     }
@@ -117,10 +117,10 @@ export function ActivitySessionActivityChooserScreen({
     try {
       if (routineId) {
         await runtime.routineService.stopAndReplaceActivity(activityId as UUID);
-        router.replace('/');
+        goHomeInAppStack(router);
       } else if (transition) {
         await runtime.trackerStore.getState().reassignTransition(transition.id, activityId);
-        if (returnToTracker) router.replace('/');
+        if (returnToTracker) goHomeInAppStack(router);
         else returnToSession();
       }
     } catch (choiceError) {

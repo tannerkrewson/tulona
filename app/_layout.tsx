@@ -46,7 +46,11 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen name="activity-session/activity-chooser" />
-            <Stack.Screen name="routine/[routineId]" />
+            <Stack.Screen
+              name="routine/[routineId]"
+              // An active routine is left only through its stop menu.
+              options={{ gestureEnabled: false }}
+            />
             <Stack.Screen name="routine-edit/[routineId]" />
             <Stack.Screen name="routine-chooser" />
             <Stack.Screen name="habit/[habitId]" />

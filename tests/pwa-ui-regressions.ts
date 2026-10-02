@@ -162,7 +162,7 @@ assert(
   'tracker edit-mode activity arrows must be inline and refresh the visible catalog after reorder'
 );
 assert(
-  folderDetail.includes("const goBackToTracker = () => router.replace('/')") &&
+  folderDetail.includes("const goBackToTracker = () => goBackInAppStack(router, '/')") &&
     folderDetail.includes('onBack={goBackToTracker}') &&
     folderDetail.includes('await store.getState().hydrate()'),
   'folder back must return to the tracker context and child reorders must refresh the catalog'

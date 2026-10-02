@@ -6,6 +6,7 @@ import { View } from 'react-native';
 import type { ActiveRoutine, Activity, RoutineDefinition } from '@domain';
 import { useAppTheme } from '@theme';
 import { errorText, Screen } from '@ui';
+import { goBackInAppStack } from '../navigation/app-back';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
 
 import { resolveCatalogItem } from '../catalog/catalog-service';
@@ -26,7 +27,7 @@ export interface FolderDetailScreenProps {
 export function FolderDetailScreen({ folderId }: FolderDetailScreenProps) {
   const { colors } = useAppTheme();
   const router = useRouter();
-  const goBackToTracker = () => router.replace('/');
+  const goBackToTracker = () => goBackInAppStack(router, '/');
   const [runtime, setRuntime] = useState<RoutineRuntime | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -69,7 +70,7 @@ export function FolderDetailScreen({ folderId }: FolderDetailScreenProps) {
 function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderId: string }) {
   const { colors } = useAppTheme();
   const router = useRouter();
-  const goBackToTracker = () => router.replace('/');
+  const goBackToTracker = () => goBackInAppStack(router, '/');
   const store = runtime.trackerStore;
   const catalog = store((state) => state.catalog);
   const activeTransition = store((state) => state.activeTransition);

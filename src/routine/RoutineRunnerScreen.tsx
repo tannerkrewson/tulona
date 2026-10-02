@@ -25,7 +25,7 @@ import {
   Screen,
 } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
-import { goBackInAppStack } from '../navigation/app-back';
+import { goBackInAppStack, goHomeInAppStack } from '../navigation/app-back';
 
 import { routineTiming } from './routine-engine';
 import { orderedSteps, routineStepVisual, routineStyle, validHexColor } from './routine-visuals';
@@ -156,6 +156,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   >(null);
 
   const goBack = useCallback(() => goBackInAppStack(router, '/'), [router]);
+  const goHome = useCallback(() => goHomeInAppStack(router), [router]);
 
   const routeRecovered = useCallback(
     (next: ActiveRoutine | null): boolean => {
@@ -555,8 +556,9 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
       isStepTracked ? (validHexColor(currentVisual.color) ?? colors.primary) : routineVisual.accent
     ),
   };
-  const currentIcon = isStepTracked ? currentVisual.iconName || 'activity' : routineVisual.iconName;
-  const nextIcon = isStepTracked ? nextVisual?.iconName || 'activity' : routineVisual.iconName;
+  const fallbackIcon = isStepTracked ? 'activity' : routineVisual.iconName;
+  const currentIcon = currentVisual.iconName || fallbackIcon;
+  const nextIcon = nextVisual?.iconName || fallbackIcon;
   const nextIconColor = isStepTracked
     ? (validHexColor(nextVisual?.color) ?? colors.primary)
     : RUNNER.accent;
@@ -588,20 +590,23 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     const allowReplace = active.routineSnapshot.trackingMode === 'overall';
     void chooseAction({
       actions: [
+        { label: 'Back to Home, Keep Running' },
         { destructive: true, label: 'Stop and Choose Next Activity' },
         ...(allowReplace ? [{ label: 'Log Whole Run as Something Else' }] : []),
       ],
-      message: 'Time tracked so far is kept.',
-      title: `Stop ${active.routineSnapshot.name}?`,
+      message: 'Stopping keeps the time tracked so far.',
+      title: active.routineSnapshot.name,
     }).then((index) => {
       if (index === 0) {
+        goHome();
+      } else if (index === 1) {
         void runAction(async (nextRuntime) => {
           const boundary = await nextRuntime.routineService.stopAndSwitch();
           router.replace(
             `/activity-session/activity-chooser?transitionId=${encodeURIComponent(boundary.id)}&returnToTracker=1`
           );
         });
-      } else if (index === 1) {
+      } else if (index === 2) {
         router.push(
           `/activity-session/activity-chooser?routineId=${encodeURIComponent(active.routineId)}`
         );
@@ -610,13 +615,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
   };
 
   return (
-    <Screen
-      backgroundColor={RUNNER.background}
-      onBack={goBack}
-      scrollable={false}
-      testID="routine-runner-screen"
-      title={active.routineSnapshot.name}
-    >
+    <Screen backgroundColor={RUNNER.background} scrollable={false} testID="routine-runner-screen">
       <View style={styles.runnerBody}>
         <View style={styles.stats} testID="routine-run-stats">
           <RunStat
@@ -819,12 +818,12 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
               />
               <RoundControl
                 disabled={busy || isPaused}
-                icon="clock"
-                label="Adjust time"
-                onPress={() => setAdjustingTime(true)}
+                icon="pause"
+                label="Pause routine"
+                onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.pause())}
                 palette={RUNNER}
-                size={controlSizes.addTime}
-                testID="open-add-time"
+                size={controlSizes.pause}
+                testID="routine-pause"
               />
               <RoundControl
                 disabled={busy || isPaused}
@@ -838,12 +837,12 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
               />
               <RoundControl
                 disabled={busy || isPaused}
-                icon="pause"
-                label="Pause routine"
-                onPress={() => void runAction((nextRuntime) => nextRuntime.routineService.pause())}
+                icon="clock"
+                label="Adjust time"
+                onPress={() => setAdjustingTime(true)}
                 palette={RUNNER}
-                size={controlSizes.pause}
-                testID="routine-pause"
+                size={controlSizes.addTime}
+                testID="open-add-time"
               />
               <RoundControl
                 disabled={busy || isPaused}
@@ -857,7 +856,7 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             </Row>
 
             <Pressable
-              accessibilityLabel={`Open routine steps, step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
+              accessibilityLabel={`Open ${active.routineSnapshot.name} steps, step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
               accessibilityRole="button"
               onPress={() => setRoutineMenuOpen(true)}
               style={({ pressed }) => [
@@ -871,6 +870,15 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
               testID="open-routine-steps"
             >
               <AppIcon name="list-checks" color={RUNNER.accent} size={18} />
+              <Text
+                numberOfLines={1}
+                style={{ flexShrink: 1 }}
+                testID="routine-runner-name"
+                textStyle={{ color: RUNNER.muted, fontSize: 15, fontWeight: '600' }}
+              >
+                {active.routineSnapshot.name}
+              </Text>
+              <View style={[styles.stepCounterDivider, { backgroundColor: RUNNER.border }]} />
               <Text textStyle={{ color: RUNNER.text, fontSize: 16, fontWeight: '700' }}>
                 {`Step ${runnableStepIndex + 1} of ${runnableSteps.length}`}
               </Text>
@@ -1352,9 +1360,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 9,
     justifyContent: 'center',
+    maxWidth: '100%',
     minHeight: 46,
     paddingHorizontal: 16,
   },
+  stepCounterDivider: { height: 18, width: StyleSheet.hairlineWidth * 2 },
   errorCard: {
     borderRadius: 14,
     borderWidth: 1,
