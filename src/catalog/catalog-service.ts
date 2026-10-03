@@ -26,6 +26,7 @@ import {
   moveDown,
   moveUp,
   normalizeCatalogOrders,
+  reorderCatalogItems,
   reorderCatalogRoot,
   reorderHabits,
   reorderRoutineSteps,
@@ -169,6 +170,7 @@ export interface CatalogServiceApi {
   deleteRoutineStep(routineId: UUID, stepId: UUID): Promise<RoutineStep>;
   removeRoutineStep(routineId: UUID, stepId: UUID): Promise<RoutineStep>;
   reorderItem(id: UUID, direction: OrderDirection): Promise<CatalogCollection>;
+  saveItemOrder(orderedIds: readonly UUID[]): Promise<CatalogCollection>;
   reorderRoutineStep(
     routineId: UUID,
     stepId: UUID,
@@ -995,6 +997,25 @@ export class CatalogService implements CatalogServiceApi {
 
   async removeRoutineStep(routineId: UUID, stepId: UUID): Promise<RoutineStep> {
     return this.deleteRoutineStep(routineId, stepId);
+  }
+
+  async saveItemOrder(orderedIds: readonly UUID[]): Promise<CatalogCollection> {
+    const current = await this.read();
+    const ordered = reorderCatalogItems(current, orderedIds);
+    const now = this.timestamp();
+    const stampChanges = <T extends CatalogEntity>(items: T[], previous: T[]): T[] => {
+      const byId = new Map(previous.map((item) => [item.id, item]));
+      return items.map((item) =>
+        item.sortOrder === byId.get(item.id)?.sortOrder ? item : { ...item, updatedAt: now }
+      );
+    };
+    const next = {
+      folders: stampChanges(ordered.folders, current.folders),
+      activities: stampChanges(ordered.activities, current.activities),
+      routines: stampChanges(ordered.routines, current.routines),
+    };
+    await this.write(next);
+    return next;
   }
 
   async reorderItem(id: UUID, direction: OrderDirection): Promise<CatalogCollection> {

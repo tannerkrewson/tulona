@@ -19,6 +19,7 @@ import { ActiveActivityBarSpacer } from './ActiveActivityBar';
 import { ActivityRow } from './ActivityRow';
 import { CatalogHeader } from './CatalogHeader';
 import { CatalogIconButton } from './CatalogIconButton';
+import { useCatalogOrderDraft } from './useCatalogOrderDraft';
 
 export interface FolderDetailScreenProps {
   folderId: string;
@@ -72,12 +73,15 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
   const router = useRouter();
   const goBackToTracker = () => goBackInAppStack(router, '/');
   const store = runtime.trackerStore;
-  const catalog = store((state) => state.catalog);
+  const storedCatalog = store((state) => state.catalog);
+  const orderDraft = useCatalogOrderDraft(storedCatalog, runtime);
+  const catalog = orderDraft.catalog;
   const activeTransition = store((state) => state.activeTransition);
   const persistenceError = store((state) => state.persistenceError);
   const loading = store((state) => state.loading);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [actionBusy, setBusy] = useState(false);
+  const busy = actionBusy || orderDraft.busy;
   const [editMode, setEditMode] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -129,7 +133,8 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
         item.folderId === folder.id && (runtime.settings.showArchived || item.archivedAt === null)
     )
     .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name));
-  const visibleError = actionError ?? (persistenceError ? errorText(persistenceError) : null);
+  const visibleError =
+    orderDraft.error ?? actionError ?? (persistenceError ? errorText(persistenceError) : null);
 
   const editItem = (item: Activity | RoutineDefinition) =>
     router.push(`/${item.kind === 'routine' ? 'routine-edit' : 'activity'}/${item.id}`);
@@ -146,11 +151,17 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
     }
   };
 
-  const reorderItem = (itemId: string, direction: 'up' | 'down') =>
+  const reorderItem = (itemId: string, direction: 'up' | 'down') => {
+    if (orderDraft.move(itemId, direction)) return;
     void runAction(async () => {
       await runtime.catalogService.reorderItem(itemId, direction);
       await store.getState().hydrate();
     });
+  };
+
+  const saveOrder = async () => {
+    if (await orderDraft.save()) setEditMode(false);
+  };
 
   const activate = (item: Activity | RoutineDefinition) => {
     void runAction(async () => {
@@ -242,10 +253,16 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
           ]}
           createOpen={createOpen}
           editMode={editMode}
+          disabled={busy}
+          hasOrderDraft={orderDraft.hasDraft}
+          onAlphabetize={() => void orderDraft.alphabetize(children.map((item) => item.id))}
+          onSaveOrder={() => void saveOrder()}
+          onCancelOrder={orderDraft.cancel}
           onBack={goBackToTracker}
           onToggleCreate={() => setCreateOpen((open) => !open)}
           onToggleEdit={() => {
-            setEditMode((open) => !open);
+            if (editMode && orderDraft.hasDraft) void saveOrder();
+            else setEditMode((open) => !open);
             setCreateOpen(false);
           }}
           title={folder.name}

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 
 import {
+  AppButton,
   NativeMenuButton,
   type NativeMenuItem,
   PageHeader,
@@ -29,6 +30,11 @@ export interface CatalogHeaderProps {
   onToggleCreate: () => void;
   onToggleEdit: () => void;
   filterMenu?: ReactNode;
+  onAlphabetize?: () => void;
+  onSaveOrder?: () => void;
+  onCancelOrder?: () => void;
+  hasOrderDraft?: boolean;
+  disabled?: boolean;
 }
 
 /** Shared catalog navigation with a popover creation menu. */
@@ -43,6 +49,11 @@ export function CatalogHeader({
   onToggleCreate,
   onToggleEdit,
   filterMenu,
+  onAlphabetize,
+  onSaveOrder,
+  onCancelOrder,
+  hasOrderDraft = false,
+  disabled = false,
 }: CatalogHeaderProps) {
   return (
     <View style={{ position: 'relative', width: '100%', zIndex: 10 }}>
@@ -72,6 +83,7 @@ export function CatalogHeader({
         ) : null}
         {filterMenu}
         <CatalogIconButton
+          disabled={disabled}
           icon={editMode ? 'check' : 'pencil'}
           label={editMode ? 'Done' : 'Edit'}
           onPress={onToggleEdit}
@@ -106,6 +118,34 @@ export function CatalogHeader({
           />
         )}
       </PageHeader>
+      {editMode && onAlphabetize ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+          <AppButton
+            disabled={disabled}
+            label="Alphabetize"
+            onPress={onAlphabetize}
+            testID="catalog-alphabetize"
+            variant="outlined"
+          />
+          {hasOrderDraft ? (
+            <>
+              <AppButton
+                disabled={disabled}
+                label="Cancel"
+                onPress={onCancelOrder}
+                testID="catalog-order-cancel"
+                variant="text"
+              />
+              <AppButton
+                disabled={disabled}
+                label="Save"
+                onPress={onSaveOrder}
+                testID="catalog-order-save"
+              />
+            </>
+          ) : null}
+        </View>
+      ) : null}
       {createOpen ? (
         <PopoverSurface
           style={{

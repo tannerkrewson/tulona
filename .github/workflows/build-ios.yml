@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: ios-build-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   EXPO_PUBLIC_DROPBOX_APP_KEY: ${{ vars.EXPO_PUBLIC_DROPBOX_APP_KEY }}
@@ -64,6 +64,12 @@ jobs:
 
       - name: Test Dropbox backup UI contract
         run: npm run test:dropbox-ui
+
+      - name: Test tracker catalog ordering
+        run: |
+          npm run test:catalog
+          npm run test:catalog-order
+          npm run test:tracker-ui
 
       - name: Validate iOS JavaScript bundle
         run: |
@@ -131,6 +137,12 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: validate
     runs-on: xcode-27
+    env:
+      USE_CCACHE: '1'
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 500M
+      CCACHE_COMPILERCHECK: content
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -147,12 +159,44 @@ jobs:
       - name: Generate native iOS project with widgets
         run: npx expo prebuild --platform ios --no-install --clean
 
+      - name: Identify native build tools
+        id: native-tools
+        run: |
+          echo "xcode=$(xcodebuild -version | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache CocoaPods downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            ~/.cocoapods
+          key: ${{ runner.os }}-${{ runner.arch }}-pods-v1-${{ hashFiles('package-lock.json', 'ios/Podfile', 'ios/Podfile.properties.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-pods-v1-
+
+      - name: Install native compiler cache
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+        run: |
+          if ! command -v ccache >/dev/null; then
+            brew install ccache
+          fi
+
+      - name: Restore native compiler cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ccache-v1-${{ steps.native-tools.outputs.xcode }}-${{ hashFiles('package-lock.json', 'ios/Podfile', 'ios/Podfile.properties.json') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-ccache-v1-${{ steps.native-tools.outputs.xcode }}-${{ hashFiles('package-lock.json', 'ios/Podfile', 'ios/Podfile.properties.json') }}-
+
       - name: Install CocoaPods dependencies
         run: pod install --project-directory=ios
 
       - name: Build unsigned iOS archive
         run: |
           xcodebuild \
+            -showBuildTimingSummary \
             -workspace ios/Tulona.xcworkspace \
             -scheme Tulona \
             -configuration Release \
@@ -163,18 +207,18 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             DEVELOPMENT_TEAM= \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             archive
+
+      - name: Report native compiler cache statistics
+        if: always()
+        run: |
+          if command -v ccache >/dev/null; then
+            ccache --show-stats
+          fi
 
       - name: Verify Expo JSI native linkage
         run: python3 scripts/verify-ios-jsi-linkage.py "$RUNNER_TEMP/Tulona.xcarchive/Products/Applications/Tulona.app"
-
-      - name: Upload iOS debug symbols
-        uses: actions/upload-artifact@v7
-        with:
-          name: Tulona-${{ github.sha }}-dSYMs
-          path: ${{ runner.temp }}/Tulona.xcarchive/dSYMs/Tulona.app.dSYM
-          if-no-files-found: error
-          retention-days: 14
 
       - name: Package and validate unsigned IPA
         run: |

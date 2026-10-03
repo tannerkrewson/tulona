@@ -77,6 +77,61 @@ function rootCatalogEntities(catalog: CatalogCollection): (Folder | TrackableIte
   ];
 }
 
+/** Reorders selected siblings within their existing slots, preserving hidden items and placement. */
+export function reorderCatalogItems(
+  catalog: CatalogCollection,
+  orderedIds: readonly string[]
+): CatalogCollection {
+  const entities: (Folder | TrackableItem)[] = [
+    ...catalog.folders,
+    ...catalog.activities,
+    ...catalog.routines,
+  ];
+  const byId = new Map(entities.map((item) => [item.id, item]));
+  const groups = new Map<string | null, (Folder | TrackableItem)[]>();
+  const seen = new Set<string>();
+  for (const id of orderedIds) {
+    const item = byId.get(id);
+    if (!item || seen.has(id)) throw new RangeError(`Invalid catalog order item "${id}"`);
+    seen.add(id);
+    const parent = 'kind' in item ? item.folderId : null;
+    const group = groups.get(parent) ?? [];
+    group.push(item);
+    groups.set(parent, group);
+  }
+  const orderById = new Map<string, number>();
+  for (const group of groups.values()) {
+    const slots = group.map((item) => item.sortOrder).sort((left, right) => left - right);
+    group.forEach((item, index) => orderById.set(item.id, slots[index]));
+  }
+  const applyOrder = <T extends IdentifiedOrdered>(item: T): T => {
+    const sortOrder = orderById.get(item.id);
+    return sortOrder === undefined || sortOrder === item.sortOrder ? item : { ...item, sortOrder };
+  };
+  return {
+    folders: catalog.folders.map(applyOrder),
+    activities: catalog.activities.map(applyOrder),
+    routines: catalog.routines.map(applyOrder),
+  };
+}
+
+/** Case-insensitive, natural name order; equal names retain their displayed order. */
+export function alphabetizedCatalogIds(
+  catalog: CatalogCollection,
+  visibleIds: readonly string[]
+): string[] {
+  const names = new Map(
+    [...catalog.folders, ...catalog.activities, ...catalog.routines].map((item) => [
+      item.id,
+      item.name,
+    ])
+  );
+  const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
+  return [...visibleIds].sort((left, right) =>
+    collator.compare(names.get(left) ?? '', names.get(right) ?? '')
+  );
+}
+
 /** Moves a folder or root trackable item through the shared catalog order. */
 export function reorderCatalogRoot(
   catalog: CatalogCollection,

@@ -29,6 +29,7 @@ import { ActiveActivityBarSpacer } from './ActiveActivityBar';
 import { ActivityRow } from './ActivityRow';
 import { CatalogHeader } from './CatalogHeader';
 import { FolderRow } from './FolderRow';
+import { useCatalogOrderDraft } from './useCatalogOrderDraft';
 
 type RootCatalogEntry =
   { kind: 'folder'; folder: Folder } | { kind: 'item'; item: Activity | RoutineDefinition };
@@ -173,12 +174,15 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
   const router = useRouter();
   const store = runtime.trackerStore;
   const settings = runtime.settings;
-  const catalog = store((state) => state.catalog);
+  const storedCatalog = store((state) => state.catalog);
+  const orderDraft = useCatalogOrderDraft(storedCatalog, runtime);
+  const catalog = orderDraft.catalog;
   const activeTransition = store((state) => state.activeTransition);
   const persistenceError = store((state) => state.persistenceError);
   const loading = store((state) => state.loading);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [actionBusy, setBusy] = useState(false);
+  const busy = actionBusy || orderDraft.busy;
   const [editMode, setEditMode] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [catalogView, setCatalogView] = useState<TrackerCatalogView>('all');
@@ -221,7 +225,8 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
   }
 
   const rootEntries = entriesForView(catalog, showArchived, catalogView);
-  const visibleError = actionError ?? (persistenceError ? errorText(persistenceError) : null);
+  const visibleError =
+    orderDraft.error ?? actionError ?? (persistenceError ? errorText(persistenceError) : null);
 
   const runAction = async (action: () => Promise<void>) => {
     lastAction.current = action;
@@ -250,11 +255,17 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
     }
   };
 
-  const reorderRootEntry = (itemId: string, direction: 'up' | 'down') =>
+  const reorderRootEntry = (itemId: string, direction: 'up' | 'down') => {
+    if (orderDraft.move(itemId, direction)) return;
     void runAction(async () => {
       await runtime.catalogService.reorderItem(itemId, direction);
       await store.getState().hydrate();
     });
+  };
+
+  const saveOrder = async () => {
+    if (await orderDraft.save()) setEditMode(false);
+  };
 
   const activate = (item: Activity | RoutineDefinition) => {
     void runAction(async () => {
@@ -354,6 +365,17 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
           ]}
           createOpen={createOpen}
           editMode={editMode}
+          disabled={busy}
+          hasOrderDraft={orderDraft.hasDraft}
+          onAlphabetize={() =>
+            void orderDraft.alphabetize(
+              rootEntries.map((entry) =>
+                entry.kind === 'folder' ? entry.folder.id : entry.item.id
+              )
+            )
+          }
+          onSaveOrder={() => void saveOrder()}
+          onCancelOrder={orderDraft.cancel}
           filterMenu={
             <PageFilterMenu
               accessibilityLabel="Choose tracker view"
@@ -373,7 +395,8 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
           }
           onToggleCreate={() => setCreateOpen((open) => !open)}
           onToggleEdit={() => {
-            setEditMode((open) => !open);
+            if (editMode && orderDraft.hasDraft) void saveOrder();
+            else setEditMode((open) => !open);
             setCreateOpen(false);
           }}
           onHistory={() => router.push('/history')}

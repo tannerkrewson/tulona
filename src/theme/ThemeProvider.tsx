@@ -1,4 +1,5 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
+import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from 'expo-router';
 import { applyAppearance, readStoredAppearance } from './appearance-store';
 import { getThemeColors, resolveColorScheme, type ThemeMode } from './colors';
 import { useSystemColorScheme } from './systemColorScheme';
@@ -20,6 +21,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [appearance, setAppearance] = useState<ThemeMode>(readStoredAppearance);
   const colorScheme = resolveColorScheme(appearance, systemColorScheme);
   const colors = getThemeColors(colorScheme);
+  const baseNavigationTheme = colorScheme === 'dark' ? DarkTheme : DefaultTheme;
+  const navigationTheme = {
+    ...baseNavigationTheme,
+    colors: {
+      ...baseNavigationTheme.colors,
+      background: colors.background,
+      card: colors.surface,
+      border: colors.border,
+      text: colors.text,
+      primary: colors.primary,
+      notification: colors.danger.foreground,
+    },
+  };
 
   useEffect(() => applyAppearance(appearance), [appearance]);
 
@@ -50,7 +64,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   return (
     <ThemePreferenceContext.Provider value={{ appearance, setAppearance }}>
-      {children}
+      <NavigationThemeProvider value={navigationTheme}>{children}</NavigationThemeProvider>
     </ThemePreferenceContext.Provider>
   );
 }
