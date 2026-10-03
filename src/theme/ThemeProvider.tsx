@@ -46,6 +46,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.backgroundColor = colors.background;
     root.style.setProperty('--tulona-background', colors.background);
     root.style.setProperty('--tulona-surface', colors.surface);
+    // React Native Web accepts CSS variables as colors but drops color-mix() directly.
+    root.style.setProperty(
+      '--tulona-glass-surface',
+      `color-mix(in srgb, ${colors.surface} 80%, transparent)`
+    );
     root.style.setProperty('--tulona-border', colors.border);
     root.style.setProperty('--tulona-text', colors.text);
     root.style.setProperty('--tulona-tab-active', colors.primary);

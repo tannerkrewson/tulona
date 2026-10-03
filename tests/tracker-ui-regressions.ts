@@ -96,4 +96,10 @@ assert(
   'active pause must persist routine pause state before entering tracker idle state'
 );
 
+assert(
+  activeBar.includes("const webSurface = 'var(--tulona-glass-surface)'") &&
+    activeBar.includes("backdropFilter: 'blur(16px)'"),
+  'the web tracker surface must use a translucent CSS color variable and backdrop blur'
+);
+
 console.log('Validated tracker active timer and idle resume regression guards.');

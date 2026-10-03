@@ -149,7 +149,7 @@ function ActiveActivityBarContent({
   const router = useRouter();
   const isWeb = Platform.OS === 'web';
   const isAccessory = placement === 'accessory';
-  const webSurface = 'color-mix(in srgb, var(--tulona-surface) 80%, transparent)';
+  const webSurface = 'var(--tulona-glass-surface)';
   const webBorder = 'var(--tulona-border)';
   const store = runtime.trackerStore;
   const catalog = store((state) => state.catalog);
