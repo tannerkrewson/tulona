@@ -335,7 +335,11 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
     const routineVisual = routineStyle(active, catalog, colors.primary);
     const finish = (destination: 'chooser' | 'tracker') =>
       void runAction(async (nextRuntime) => {
-        await nextRuntime.routineService.finalizeCompletion();
+        if (destination === 'tracker') {
+          await nextRuntime.routineService.selectNextActivity(null);
+        } else {
+          await nextRuntime.routineService.finalizeCompletion();
+        }
         router.replace(destination === 'chooser' ? '/routine-chooser' : '/');
       });
     return (

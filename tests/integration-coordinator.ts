@@ -316,11 +316,72 @@ async function activeDatasetHydratesInOrder(): Promise<void> {
   );
 }
 
+async function completedRoutineCanStayStoppedOvernight(): Promise<void> {
+  for (const trackingMode of ['overall', 'steps'] as const) {
+    let currentNow = nowMs;
+    const storage = new MemoryStorage();
+    const database = new AsyncStorageDatabase(storage);
+    const coordinator = new BootCoordinator(database, new DatasetManager(database), {
+      now: () => currentNow,
+    });
+    const initial = await coordinator.hydrate();
+    assert(initial.runtime, 'overnight fixture must have a runtime');
+    const { catalog, routine } = initial.runtime.services;
+    await catalog.createActivity({ id: ids.activity, name: 'Focus' });
+    await catalog.createRoutine({
+      id: ids.routine,
+      name: 'Evening routine',
+      trackingMode,
+      steps: [{ activityId: ids.activity, durationMs: 60_000 }],
+    });
+    const active = await routine.startRoutine(ids.routine);
+    const completedAt = nowMs + 60_000;
+    currentNow = completedAt;
+    await routine.done(completedAt);
+    await routine.finalizeCompletion(completedAt);
+
+    // Leaving the choice pending must still restore the activity chooser.
+    coordinator.reset();
+    const pending = await coordinator.hydrate();
+    assert(pending.destination.kind === 'chooser', 'an unresolved choice must survive reopening');
+    assert(pending.runtime, 'pending completion must have a runtime');
+
+    // Done resolves the choice with no activity, rather than leaving it pending.
+    await pending.runtime.services.routine.selectNextActivity(null);
+    const nextMorning = nowMs + 12 * 60 * 60 * 1000;
+    const reopenedDatabase = new AsyncStorageDatabase(storage);
+    const reopened = new BootCoordinator(reopenedDatabase, new DatasetManager(reopenedDatabase), {
+      now: () => nextMorning,
+    });
+    const morning = await reopened.hydrate();
+    assert(
+      morning.destination.kind === 'tabs',
+      'Done must reopen to tabs without an activity prompt'
+    );
+    assert(morning.activeRoutine === null, 'Done must clear the completed routine across restarts');
+    assert(
+      morning.currentTransition?.activityId === null &&
+        Date.parse(morning.currentTransition.timestamp) === completedAt,
+      'the tracker must stay stopped at completion without logging overnight time'
+    );
+    assert(morning.runtime, 'morning boot must have a runtime');
+    const history = await morning.runtime.repositories.routine.readHistory('2026-08');
+    assert(
+      history.runs.length === 1 &&
+        history.runs[0].id === active.id &&
+        history.runs[0].status === 'completed' &&
+        history.runs[0].durationMs === 60_000,
+      'Done and restart must preserve one completed run with its original duration'
+    );
+  }
+}
+
 async function run(): Promise<void> {
   bootRoutingPreservesDeepLinks();
   await corruptMetadataRemainsExportable();
   await emptyBootStartsTabsWithBlankCatalog();
   await activeDatasetHydratesInOrder();
+  await completedRoutineCanStayStoppedOvernight();
 }
 
 run().catch((error: unknown) => {
