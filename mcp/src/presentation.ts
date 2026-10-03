@@ -70,10 +70,7 @@ export function project(
   if (options.fields) {
     const projected: Record<string, unknown> = {};
     for (const field of options.fields) {
-      if (!Object.hasOwn(record, field))
-        throw new Error(
-          `Unknown field "${field}" for ${collection}. Use detail: full to inspect available top-level fields.`
-        );
+      if (!Object.hasOwn(record, field)) continue;
       projected[field] = record[field];
     }
     return projected;
@@ -81,6 +78,7 @@ export function project(
   if (options.detail === 'full') return record;
   const view = { ...record };
   for (const [key, label] of [
+    ['folderId', 'folder'],
     ['activityId', 'activity'],
     ['habitId', 'habit'],
     ['goalId', 'goal'],

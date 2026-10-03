@@ -16,6 +16,7 @@ Use the SAME Dropbox app key and account as Tulona, especially for App Folder ap
 You can also supply TULONA_DROPBOX_APP_KEY and TULONA_DROPBOX_REFRESH_TOKEN.
 Credential directory: ${configDirectory()}
 Override it with TULONA_MCP_CONFIG_DIR (useful for separate accounts).
+TULONA_MCP_RESULT_FORMAT=text (default) or structured (requires client support).
 `;
 
 async function main() {
@@ -66,7 +67,10 @@ async function main() {
     return;
   }
   if (command !== 'serve') throw new Error(help);
-  const server = createServer(reader);
+  const resultFormat = process.env.TULONA_MCP_RESULT_FORMAT ?? 'text';
+  if (resultFormat !== 'text' && resultFormat !== 'structured')
+    throw new Error('TULONA_MCP_RESULT_FORMAT must be text or structured.');
+  const server = createServer(reader, { resultFormat });
   await server.connect(new StdioServerTransport());
   const shutdown = () => {
     void server.close().then(() => process.exit(0));

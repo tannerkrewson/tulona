@@ -3,6 +3,9 @@ import { z } from 'zod';
 import type { Snapshot } from './dropbox';
 import { activityReport, collections, dayOverview, query, summary } from './queries';
 import { day, timestamp, timezone, uuid } from './ranges';
+import { outputs } from './outputs';
+
+export type ResultFormat = 'text' | 'structured';
 
 const annotations = {
   readOnlyHint: true,
@@ -27,14 +30,16 @@ const localDay = {
     .describe('Calendar defaults to midnight; logical uses the saved Tulona rollover hour.'),
 };
 
-async function result(operation: () => Promise<unknown>) {
+async function result(format: ResultFormat, operation: () => Promise<Record<string, unknown>>) {
   try {
     const value = await operation();
     const text = JSON.stringify(value);
     if (Buffer.byteLength(text) > 512 * 1024) {
       throw new Error('The result exceeds 512 KiB. Request a smaller page or narrower query.');
     }
-    return { content: [{ type: 'text' as const, text }] };
+    return format === 'structured'
+      ? { content: [], structuredContent: value }
+      : { content: [{ type: 'text' as const, text }] };
   } catch (error) {
     return {
       isError: true,
@@ -48,7 +53,11 @@ async function result(operation: () => Promise<unknown>) {
   }
 }
 
-export function createServer(reader: { snapshot(): Promise<Snapshot> }) {
+export function createServer(
+  reader: { snapshot(): Promise<Snapshot> },
+  options: { resultFormat?: ResultFormat } = {}
+) {
+  const format = options.resultFormat ?? 'text';
   const server = new McpServer(
     { name: 'tulona', version: '0.1.0' },
     {
@@ -61,16 +70,18 @@ export function createServer(reader: { snapshot(): Promise<Snapshot> }) {
     {
       description:
         'Read snapshot freshness, counts, settings, and active routine. Full detail and Dropbox diagnostics are opt-in.',
+      outputSchema: format === 'structured' ? outputs.summary : undefined,
       inputSchema: presentation,
       annotations,
     },
-    (options) => result(async () => summary(await reader.snapshot(), options))
+    (options) => result(format, async () => summary(await reader.snapshot(), options))
   );
   server.registerTool(
     'tulona_query',
     {
       description:
         'Read compact records by default; full detail or exact top-level fields enable auditing and ID lookups. Definitions retain IDs; compact events resolve linked names. Transitions support start/end (end exclusive), or inclusive from_day/to_day in timezone with calendar/logical boundaries. Other dates: history start UTC, habits logical days, goals week starts, catalog updated UTC. Archived/superseded records are opt-in. Search uses raw records. Follow next_offset; concurrent edits can change pages',
+      outputSchema: format === 'structured' ? outputs.query : undefined,
       inputSchema: {
         ...presentation,
         fields: z
@@ -105,13 +116,14 @@ export function createServer(reader: { snapshot(): Promise<Snapshot> }) {
       },
       annotations,
     },
-    (options) => result(async () => query(await reader.snapshot(), options))
+    (options) => result(format, async () => query(await reader.snapshot(), options))
   );
   server.registerTool(
     'tulona_activity_report',
     {
       description:
         "Calculate total tracked time by activity/routine in an explicit time range using Tulona's own interval calculations. ISO timestamps require UTC or an explicit offset. End is exclusive. Reports stop at the snapshot export time, even if a timer was running; they cannot infer later unsynced time. Top activities sort by duration; totals include all activities.",
+      outputSchema: format === 'structured' ? outputs.report : undefined,
       inputSchema: {
         ...presentation,
         start: timestamp.describe('Inclusive ISO timestamp with Z or offset.'),
@@ -121,13 +133,16 @@ export function createServer(reader: { snapshot(): Promise<Snapshot> }) {
       annotations,
     },
     ({ start, end, limit, ...options }) =>
-      result(async () => activityReport(await reader.snapshot(), start, end, limit, options))
+      result(format, async () =>
+        activityReport(await reader.snapshot(), start, end, limit, options)
+      )
   );
   server.registerTool(
     'tulona_day_overview',
     {
       description:
         'Read snapshot freshness, latest recorded activity/start (across all days), and day totals in minutes in one call. Optional paginated timeline uses local timestamps with offsets. Defaults: current day in UTC, calendar midnight. Logical days use the saved rollover (normally 5 a.m.). Durations stop at the snapshot cutoff; unknown time is separate from idle.',
+      outputSchema: format === 'structured' ? outputs.overview : undefined,
       inputSchema: {
         ...presentation,
         ...localDay,
@@ -140,7 +155,7 @@ export function createServer(reader: { snapshot(): Promise<Snapshot> }) {
       },
       annotations,
     },
-    (options) => result(async () => dayOverview(await reader.snapshot(), options))
+    (options) => result(format, async () => dayOverview(await reader.snapshot(), options))
   );
   return server;
 }

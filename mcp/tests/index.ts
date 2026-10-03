@@ -370,7 +370,7 @@ test('reports use shared interval semantics, include the earlier transition, and
   assert.equal(report.tracked_minutes, 30);
   assert.equal(report.idle_minutes, 60);
   assert.equal(report.activities[0]!.name, 'Work');
-  assert.equal(report.observed_through, STAMP);
+  assert.equal(report.source.observedThrough, STAMP);
   data.backup.transitions[1]!.status = 'superseded';
   assert.equal(
     activityReport(data, '2026-09-01T10:00:00.000Z', '2026-09-01T15:00:00.000Z').tracked_minutes,
@@ -398,11 +398,13 @@ test('real MCP client discovers annotated tools, calls them, and gets validation
     const { tools } = await client.listTools();
     assert.equal(tools.length, 4);
     assert(tools.every((tool) => tool.annotations?.readOnlyHint));
+    assert(tools.every((tool) => tool.outputSchema === undefined));
     const result = await client.callTool({
       name: 'tulona_query',
       arguments: { collection: 'habit_days', limit: 1 },
     });
     assert.equal(result.isError, undefined);
+    assert.equal(result.structuredContent, undefined);
     const content = result.content as { text: string }[];
     assert.equal(JSON.parse(content[0]!.text).records.length, 1);
     const invalid = await client.callTool({
@@ -483,7 +485,10 @@ test('compact queries omit repeated metadata, retain lookup IDs on definitions, 
       note: 'Started work',
     }
   );
-  assert.throws(() => query(data, { collection: 'activities', fields: ['typo'] }), /Unknown field/);
+  assert.deepEqual(
+    query(data, { collection: 'transitions', fields: ['id', 'activitySnapshot'] }).records[0],
+    { id: data.backup.transitions[1]!.id }
+  );
   assert.equal(query(data, { collection: 'habit_days' }).records[1]!.manual, false);
   assert.equal('revision' in full.source, false);
   assert.equal(
@@ -571,4 +576,143 @@ test('day overview returns totals, latest snapshot state, optional paginated tim
   assert.equal(dayOverview(data, { day: '2026-09-01' }).latest_recorded!.activity, 'Work');
   data.backup.transitions[0]!.timestamp = '2026-09-01T13:00:00.000Z';
   assert.equal(dayOverview(data, { day: '2026-09-01' }).latest_recorded, null);
+});
+
+test('structured mode validates output schemas through the SDK and never duplicates text', async () => {
+  let reads = 0;
+  const server = createServer(
+    {
+      snapshot: async () => {
+        reads++;
+        return snapshot();
+      },
+    },
+    { resultFormat: 'structured' }
+  );
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: 'structured-test', version: '1.0.0' });
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  try {
+    const { tools } = await client.listTools();
+    assert(tools.every((tool) => tool.outputSchema));
+    const props = tools.find((tool) => tool.name === 'tulona_query')!.inputSchema
+      .properties as Record<string, Record<string, unknown>>;
+    for (const field of ['start', 'end', 'record_id', 'entity_id', 'from_day']) {
+      assert.equal(props[field]!.type, 'string');
+      for (const key of ['format', 'pattern', 'anyOf', 'oneOf'])
+        assert.equal(key in props[field]!, false);
+    }
+    for (const [name, args] of [
+      ['tulona_summary', {}],
+      ['tulona_query', { collection: 'activities', detail: 'full', diagnostics: true }],
+      ['tulona_activity_report', { start: '2026-09-01T10:00:00Z', end: '2026-09-01T14:00:00Z' }],
+      ['tulona_day_overview', { day: '2026-09-01', timeline: true, detail: 'full' }],
+    ] as const) {
+      const result = await client.callTool({ name, arguments: args });
+      assert.equal(result.isError, undefined);
+      assert.deepEqual(result.content, []);
+      assert.equal(
+        ((result.structuredContent as Record<string, unknown>).source as Record<string, unknown>)
+          .exportedAt,
+        STAMP
+      );
+    }
+    const readCount = reads;
+    for (const args of [
+      { collection: 'transitions', start: '2026-09-01T10:00:00' },
+      { collection: 'transitions', start: '2026-02-30T10:00:00Z' },
+      { collection: 'activities', record_id: 'invalid' },
+      { collection: 'transitions', timezone: 'invalid' },
+      { collection: 'transitions', from_day: '2026-02-30' },
+    ]) {
+      assert.equal(
+        (await client.callTool({ name: 'tulona_query', arguments: args })).isError,
+        true
+      );
+    }
+    assert.equal(reads, readCount, 'Invalid input is rejected before downloading a backup');
+    const error = await client.callTool({
+      name: 'tulona_activity_report',
+      arguments: { start: STAMP, end: STAMP },
+    });
+    assert.equal(error.isError, true);
+    assert.equal(error.structuredContent, undefined);
+    assert.match(JSON.stringify(error.content), /end later than start/);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('shipped structured stdio bundle exposes a single validated payload with a mocked provider', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tulona-structured-stdio-'));
+  const mock = join(directory, 'provider.cjs');
+  // The mock runs only in this child process; production Dropbox endpoints stay fixed.
+  await writeFile(
+    mock,
+    `global.fetch = async (url) => {
+    if (String(url).endsWith('/oauth2/token')) return new Response(JSON.stringify({access_token: 'test', expires_in: 3600}));
+    if (String(url) !== 'https://content.dropboxapi.com/2/files/download') throw new Error('Unexpected endpoint');
+    return new Response(${JSON.stringify(JSON.stringify(fixture()))}, {headers: {'Dropbox-API-Result': '{"rev":"test","server_modified":"${STAMP}"}'}});
+  };`
+  );
+  const client = new Client({ name: 'structured-stdio-test', version: '1.0.0' });
+  try {
+    await client.connect(
+      new StdioClientTransport({
+        command: process.execPath,
+        args: ['--require', mock, resolve('bin/tulona-mcp.cjs')],
+        env: {
+          ...process.env,
+          TULONA_MCP_RESULT_FORMAT: 'structured',
+          TULONA_DROPBOX_APP_KEY: 'test',
+          TULONA_DROPBOX_REFRESH_TOKEN: 'test',
+        } as Record<string, string>,
+        stderr: 'pipe',
+      })
+    );
+    assert((await client.listTools()).tools.every((tool) => tool.outputSchema));
+    const result = await client.callTool({
+      name: 'tulona_day_overview',
+      arguments: { day: '2026-09-01', timeline: true },
+    });
+    assert.equal(result.isError, undefined);
+    assert.deepEqual(result.content, []);
+    assert.equal((result.structuredContent as Record<string, unknown>).tracked_minutes, 60);
+    assert.equal(
+      ((result.structuredContent as Record<string, unknown>).timeline as unknown[]).length,
+      2
+    );
+  } finally {
+    await client.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('field projection can audit oversized records without breaking pagination', () => {
+  const data = snapshot();
+  data.backup.transitions[0]!.note = 'x'.repeat(300 * 1024);
+  assert.throws(
+    () => query(data, { collection: 'transitions', entity_id: ACTIVITY, detail: 'full' }),
+    /256 KiB/
+  );
+  const page = query(data, { collection: 'transitions', fields: ['id', 'activityId'], limit: 1 });
+  assert.deepEqual(page.records, [{ id: data.backup.transitions[1]!.id, activityId: null }]);
+  assert.equal(page.next_offset, 1);
+  const second = query(data, { collection: 'transitions', fields: ['id'], offset: 1 });
+  assert.deepEqual(second.records, [{ id: data.backup.transitions[0]!.id }]);
+  assert.equal(second.next_offset, null);
+});
+
+test('overview clips a carried timer to the day and ignores future and superseded state', () => {
+  const data = snapshot();
+  data.backup.transitions[0]!.timestamp = '2026-08-31T23:00:00.000Z';
+  data.backup.transitions[1]!.timestamp = '2026-09-01T13:00:00.000Z';
+  const report = dayOverview(data, { day: '2026-09-01', timeline: true });
+  assert.equal(report.tracked_minutes, 720);
+  assert.equal(report.unknown_minutes, 0);
+  assert.equal(report.latest_recorded!.startedAt, '2026-08-31T23:00:00.000Z');
+  assert.equal(report.timeline![0]!.start, '2026-09-01T00:00:00.000Z');
+  assert.equal(report.timeline![0]!.end, STAMP);
 });

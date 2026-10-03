@@ -50,16 +50,19 @@ export function summary(snapshot: Snapshot, options: Presentation = {}) {
     counts: snapshot.summary,
     settings:
       options.detail === 'full' ? snapshot.backup.settings : compact(snapshot.backup.settings),
-    activeRoutine: active
-      ? compact({
-          name: active.routineSnapshot.name,
-          status: active.status,
-          startedAt: active.startedAt,
-          pausedAt: active.pausedAt,
-          currentStepIndex: active.currentStepIndex,
-          stepCount: active.routineSnapshot.steps.length,
-        })
-      : null,
+    activeRoutine:
+      options.detail === 'full'
+        ? active
+        : active
+          ? compact({
+              name: active.routineSnapshot.name,
+              status: active.status,
+              startedAt: active.startedAt,
+              pausedAt: active.pausedAt,
+              currentStepIndex: active.currentStepIndex,
+              stepCount: active.routineSnapshot.steps.length,
+            })
+          : null,
   };
 }
 
@@ -248,7 +251,6 @@ export function activityReport(
     source: source(snapshot, options.diagnostics),
     start: new Date(startMs).toISOString(),
     requested_end: new Date(endMs).toISOString(),
-    observed_through: new Date(snapshotMs).toISOString(),
     tracked_minutes: minutes(
       activities.reduce((total, activity) => total + activity.durationMs, 0)
     ),
