@@ -19,8 +19,9 @@ import {
   MAX_BACKUP_BYTES,
   type Snapshot,
 } from '../src/dropbox';
-import { activityReport, query } from '../src/queries';
+import { activityReport, dayOverview, query } from '../src/queries';
 import { createServer } from '../src/server';
+import { dayBounds } from '../src/ranges';
 
 const ACTIVITY = '11111111-1111-4111-8111-111111111111';
 const HABIT = '22222222-2222-4222-8222-222222222222';
@@ -366,17 +367,17 @@ test('queries filter linked IDs/days and page deterministically; archived record
 test('reports use shared interval semantics, include the earlier transition, and never extrapolate beyond export', () => {
   const data = snapshot();
   const report = activityReport(data, '2026-09-01T10:30:00.000Z', '2026-09-01T15:00:00.000Z');
-  assert.equal(report.tracked_ms, 30 * 60_000);
-  assert.equal(report.idle_ms, 60 * 60_000);
+  assert.equal(report.tracked_minutes, 30);
+  assert.equal(report.idle_minutes, 60);
   assert.equal(report.activities[0]!.name, 'Work');
   assert.equal(report.observed_through, STAMP);
   data.backup.transitions[1]!.status = 'superseded';
   assert.equal(
-    activityReport(data, '2026-09-01T10:00:00.000Z', '2026-09-01T15:00:00.000Z').tracked_ms,
-    2 * 60 * 60_000
+    activityReport(data, '2026-09-01T10:00:00.000Z', '2026-09-01T15:00:00.000Z').tracked_minutes,
+    120
   );
   assert.equal(
-    activityReport(data, '2026-09-02T10:00:00.000Z', '2026-09-02T15:00:00.000Z').tracked_ms,
+    activityReport(data, '2026-09-02T10:00:00.000Z', '2026-09-02T15:00:00.000Z').tracked_minutes,
     0
   );
 });
@@ -395,7 +396,7 @@ test('real MCP client discovers annotated tools, calls them, and gets validation
   await client.connect(clientTransport);
   try {
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 3);
+    assert.equal(tools.length, 4);
     assert(tools.every((tool) => tool.annotations?.readOnlyHint));
     const result = await client.callTool({
       name: 'tulona_query',
@@ -434,7 +435,7 @@ test('shipped bundle launches over stdio on a clean machine before login without
   const client = new Client({ name: 'stdio-test', version: '1.0.0' });
   try {
     await client.connect(transport);
-    assert.equal((await client.listTools()).tools.length, 3);
+    assert.equal((await client.listTools()).tools.length, 4);
     const result = await client.callTool({ name: 'tulona_summary', arguments: {} });
     assert.equal(result.isError, true);
     assert.match(JSON.stringify(result.content), /not connected/);
@@ -447,4 +448,127 @@ test('shipped bundle launches over stdio on a clean machine before login without
     await client.close();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test('compact queries omit repeated metadata, retain lookup IDs on definitions, and support raw auditing', () => {
+  const data = snapshot();
+  data.backup.transitions[0]!.activitySnapshot = {
+    id: ACTIVITY as never,
+    kind: 'activity',
+    name: 'Original work',
+    color: '#ffffff',
+    iconName: 'work',
+    folderId: null,
+    folderName: null,
+  };
+  const view = query(data, { collection: 'transitions', entity_id: ACTIVITY }).records[0]!;
+  assert.deepEqual(view, {
+    timestamp: '2026-09-01T10:00:00.000Z',
+    note: 'Started work',
+    activity: 'Original work',
+  });
+  assert.equal(query(data, { collection: 'transitions' }).records[0]!.activity, 'Idle');
+  assert.equal(query(data, { collection: 'activities' }).records[0]!.id, ACTIVITY);
+  const full = query(data, { collection: 'transitions', entity_id: ACTIVITY, detail: 'full' });
+  assert.deepEqual(full.records[0], data.backup.transitions[0]);
+  assert.deepEqual(
+    query(data, {
+      collection: 'transitions',
+      entity_id: ACTIVITY,
+      fields: ['id', 'activityId', 'note'],
+    }).records[0],
+    {
+      id: data.backup.transitions[0]!.id,
+      activityId: ACTIVITY,
+      note: 'Started work',
+    }
+  );
+  assert.throws(() => query(data, { collection: 'activities', fields: ['typo'] }), /Unknown field/);
+  assert.equal(query(data, { collection: 'habit_days' }).records[1]!.manual, false);
+  assert.equal('revision' in full.source, false);
+  assert.equal(
+    query(data, { collection: 'activities', diagnostics: true }).source.revision,
+    'rev-one'
+  );
+  assert.equal(full.source.exportedAt, STAMP);
+  assert.equal(full.source.observedThrough, STAMP);
+  assert(full.source.age_minutes > 0);
+  assert(JSON.stringify(view).length < JSON.stringify(full.records[0]).length / 3);
+});
+
+test('transition windows distinguish local calendar/logical days and exclude the end instant', () => {
+  const data = snapshot();
+  data.backup.settings.logicalDayRolloverHour = 5;
+  data.backup.transitions[0]!.timestamp = '2026-09-01T03:59:59.000Z';
+  data.backup.transitions[1]!.timestamp = '2026-09-01T04:00:00.000Z';
+  const opts = {
+    collection: 'transitions' as const,
+    from_day: '2026-08-31',
+    to_day: '2026-08-31',
+    timezone: 'America/New_York',
+  };
+  assert.equal(query(data, opts).total, 1);
+  assert.equal(query(data, { ...opts, day_kind: 'logical' }).total, 2);
+  assert.equal(
+    query(data, {
+      collection: 'transitions',
+      start: '2026-08-31T23:59:59-04:00',
+      end: '2026-09-01T00:00:00-04:00',
+    }).total,
+    1
+  );
+  assert.throws(() => query(data, { ...opts, start: STAMP }), /not both/);
+  assert.throws(
+    () => query(data, { collection: 'transitions', start: STAMP, end: STAMP }),
+    /later/
+  );
+  assert.throws(() => query(data, { ...opts, timezone: 'invalid' }), /IANA/);
+  assert.throws(
+    () => query(data, { collection: 'habit_days', timezone: 'UTC' }),
+    /only to transitions/
+  );
+});
+
+test('local day boundaries handle DST calendar and logical rollovers independently', () => {
+  for (const [day, hours] of [
+    ['2026-03-08', 23],
+    ['2026-11-01', 25],
+  ] as const) {
+    const calendar = dayBounds(day, 'America/New_York');
+    assert.equal((calendar.endMs - calendar.startMs) / 3_600_000, hours);
+    const logical = dayBounds(day, 'America/New_York', 'logical', 5);
+    assert.equal((logical.endMs - logical.startMs) / 3_600_000, 24);
+  }
+  const prior = dayBounds('2026-03-07', 'America/New_York', 'logical', 5);
+  assert.equal((prior.endMs - prior.startMs) / 3_600_000, 23);
+});
+
+test('day overview returns totals, latest snapshot state, optional paginated timeline and unknown time', () => {
+  const data = snapshot();
+  const overview = dayOverview(data, {
+    day: '2026-09-01',
+    timezone: 'America/New_York',
+    timeline: true,
+    timeline_limit: 1,
+  });
+  assert.equal(overview.tracked_minutes, 60);
+  assert.equal(overview.idle_minutes, 60);
+  assert.equal(overview.unknown_minutes, 360);
+  assert.deepEqual(overview.latest_recorded, {
+    activity: 'Idle',
+    startedAt: '2026-09-01T11:00:00.000Z',
+  });
+  assert.equal(overview.timeline![0]!.start, '2026-09-01T06:00:00.000-04:00');
+  assert.equal(overview.timeline_next_offset, 1);
+  const next = dayOverview(data, { day: '2026-09-01', timeline: true, timeline_offset: 1 });
+  assert.equal(next.timeline![0]!.activity, 'Idle');
+  assert.equal(next.timeline_next_offset, null);
+  assert.equal('timeline' in dayOverview(data, { day: '2026-09-01' }), false);
+  const future = dayOverview(data, { day: '2026-09-02', timeline: true });
+  assert.equal(future.tracked_minutes + future.idle_minutes + future.unknown_minutes, 0);
+  assert.deepEqual(future.timeline, []);
+  data.backup.transitions[1]!.status = 'superseded';
+  assert.equal(dayOverview(data, { day: '2026-09-01' }).latest_recorded!.activity, 'Work');
+  data.backup.transitions[0]!.timestamp = '2026-09-01T13:00:00.000Z';
+  assert.equal(dayOverview(data, { day: '2026-09-01' }).latest_recorded, null);
 });
