@@ -17,10 +17,12 @@ const folderEditor = fs.readFileSync(
 );
 
 assert(
-  activeBar.includes("return pathname === '/' || /^\\/folder\\/[^/]+$/.test(pathname);") &&
+  activeBar.includes(
+    "return pathname === '/' || pathname === '/habits' || /^\\/folder\\/[^/]+$/.test(pathname);"
+  ) &&
     activeBar.includes('setRuntime(nextRuntime);') &&
     activeBar.includes('nextRuntime.trackerStore.getState().hydrate()'),
-  'the floating tracker control must remain scoped to catalog routes and hydrate catalog state'
+  'the floating tracker control must remain available on catalog and habits routes and hydrate catalog state'
 );
 assert(
   activeBar.includes('lastActivityTransition') &&

@@ -28,6 +28,8 @@ export interface HabitHeaderProps {
   editOpenLabel?: string;
   editActions?: readonly HabitHeaderAction[];
   filterMenu?: ReactNode;
+  onReview?: () => void;
+  reviewDisabled?: boolean;
   editTestID?: string;
   testID?: string;
 }
@@ -43,6 +45,8 @@ export function HabitHeader({
   editOpenLabel = 'Close habit edit actions',
   editActions = [],
   filterMenu,
+  onReview,
+  reviewDisabled = false,
   editTestID = 'edit-habit',
   testID,
 }: HabitHeaderProps) {
@@ -64,6 +68,17 @@ export function HabitHeader({
         title={title}
       >
         {filterMenu}
+        {onReview ? (
+          <IconButton
+            accessibilityHint="Review today’s active habits one at a time"
+            disabled={reviewDisabled}
+            icon="sparkles"
+            label="Start mindful review"
+            onPress={onReview}
+            testID="start-habit-review"
+            variant="muted"
+          />
+        ) : null}
         {Platform.OS === 'ios' && editActions.length > 0 ? (
           <NativeMenuButton
             icon="pencil"

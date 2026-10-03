@@ -39,6 +39,7 @@ export function AppScreen({
   title,
   headerRight,
   scrollable = true,
+  underBottomChrome = false,
   testID,
   backgroundColor,
 }: AppScreenProps) {
@@ -57,11 +58,11 @@ export function AppScreen({
     // device edges, so fixed-height screens stop above system chrome.
     return (
       <SafeAreaView
-        edges={['top', 'left', 'right', 'bottom']}
+        edges={underBottomChrome ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']}
         style={[styles.root, { backgroundColor: screenBackground }]}
         testID={testID}
       >
-        <View style={[styles.frame, styles.root, { paddingBottom: 12 }]}>
+        <View style={[styles.frame, styles.root, { paddingBottom: underBottomChrome ? 0 : 12 }]}>
           {header}
           {children}
         </View>

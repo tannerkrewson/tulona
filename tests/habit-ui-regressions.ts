@@ -75,8 +75,8 @@ assert(
   habitItem.includes('getRowSurfaceStyle') &&
     habitItem.includes('getRowSurfaceBackground') &&
     habitItem.includes('backgroundColor: rowSurface') &&
-    !habitItem.includes('borderColor:') &&
-    !habitItem.includes('borderWidth:') &&
+    habitItem.includes("const outlinedStatus = colorScheme === 'dark'") &&
+    habitItem.includes('borderColor: accent, borderWidth: 2') &&
     !habitItem.includes('colors.success.background') &&
     !habitItem.includes('colors.warning.background') &&
     !habitItem.includes('colors.danger.background'),
@@ -191,6 +191,16 @@ assert(
     !habitHeader.includes("from '@expo/ui'") &&
     habitReview.includes("<View style={{ height: 54, width: '100%' }}>"),
   'habit routes must use the system menu on iOS and one React Native popover surface elsewhere'
+);
+
+assert(
+  habitHeader.includes('icon="sparkles"') &&
+    habitHeader.includes('label="Start mindful review"') &&
+    habitList.includes('reviewDisabled={habitsByCategory.active.length === 0}') &&
+    !habitList.includes('paddingBottom: 68') &&
+    habitList.includes('underBottomChrome') &&
+    habitList.includes('contentInsetAdjustmentBehavior="automatic"'),
+  'mindful review must be an accessible header icon and habit scroll content must extend beneath bottom chrome'
 );
 
 console.log(

@@ -146,6 +146,7 @@ export interface ScrollViewProps {
   style?: StyleProp<ViewStyle>;
   contentContainerStyle?: StyleProp<ViewStyle>;
   hidden?: boolean;
+  contentInsetAdjustmentBehavior?: 'automatic' | 'never' | 'always' | 'scrollableAxes';
   testID?: string;
 }
 
@@ -155,6 +156,7 @@ export function ScrollView({
   showsIndicators = true,
   style,
   contentContainerStyle,
+  contentInsetAdjustmentBehavior,
   hidden = false,
   testID,
 }: ScrollViewProps) {
@@ -162,6 +164,7 @@ export function ScrollView({
   return (
     <RNScrollView
       contentContainerStyle={contentContainerStyle}
+      contentInsetAdjustmentBehavior={contentInsetAdjustmentBehavior}
       horizontal={direction === 'horizontal'}
       keyboardShouldPersistTaps="handled"
       nestedScrollEnabled

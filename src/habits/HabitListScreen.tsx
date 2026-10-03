@@ -219,10 +219,12 @@ function HabitListContent({ store }: { store: HabitStore }) {
   );
 
   return (
-    <Screen scrollable={false} testID="habits-screen">
+    <Screen scrollable={false} underBottomChrome testID="habits-screen">
       <View style={{ flex: 1, gap: 14, minHeight: 0, position: 'relative', width: '100%' }}>
         <HabitHeader
           onAdd={() => router.push('/habit/new')}
+          onReview={() => router.push('/habit-review' as Href)}
+          reviewDisabled={habitsByCategory.active.length === 0}
           editLabel="Edit habits"
           editOpen={editMode}
           editOpenLabel="Done editing habits"
@@ -255,7 +257,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
           testID="habit-view-menu"
           value={selectedCategory}
         />
-        <View style={{ flex: 1, minHeight: 0, paddingBottom: 68, width: '100%' }}>
+        <View style={{ flex: 1, minHeight: 0, width: '100%' }}>
           {selectedCategory === 'active' ? (
             <>
               {pastMidnightWarningVisible ? (
@@ -328,41 +330,6 @@ function HabitListContent({ store }: { store: HabitStore }) {
             />
           )}
         </View>
-        <Pressable
-          accessibilityHint={
-            habitsByCategory.active.length === 0
-              ? 'Add an active habit to start a mindful review'
-              : 'Review today’s active habits one at a time'
-          }
-          accessibilityLabel="Start mindful review"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: habitsByCategory.active.length === 0 }}
-          disabled={habitsByCategory.active.length === 0}
-          onPress={() => router.push('/habit-review' as Href)}
-          style={({ pressed }) => ({
-            alignItems: 'center',
-            backgroundColor: colors.surfaceMuted,
-            borderColor: colors.border,
-            borderRadius: 16,
-            borderWidth: 1,
-            bottom: 0,
-            flexDirection: 'row',
-            gap: 10,
-            height: 58,
-            justifyContent: 'center',
-            left: 0,
-            opacity: habitsByCategory.active.length === 0 ? 0.42 : pressed ? 0.78 : 1,
-            position: 'absolute',
-            right: 0,
-            width: '100%',
-          })}
-          testID="start-habit-review"
-        >
-          <AppIcon color={colors.primary} name="sparkles" size={20} />
-          <NativeText style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-            Start mindful review
-          </NativeText>
-        </Pressable>
       </View>
     </Screen>
   );
@@ -383,11 +350,18 @@ function HabitCategoryList({
 }) {
   const { colors } = useAppTheme();
   const future = category === 'future';
+  const bottomScrollPadding = useHabitBottomPadding();
 
   return (
     <View style={{ flex: 1, minHeight: 0, width: '100%' }}>
-      <ScrollView style={{ height: '100%', width: '100%' }}>
-        <Column spacing={12} style={{ paddingBottom: 20, paddingTop: 12, width: '100%' }}>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        style={{ height: '100%', width: '100%' }}
+      >
+        <Column
+          spacing={12}
+          style={{ paddingBottom: bottomScrollPadding, paddingTop: 12, width: '100%' }}
+        >
           <Text textStyle={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
             {future
               ? 'These habits will become active when their scheduled start date arrives.'
@@ -760,6 +734,11 @@ function WeekDaysRow({
   );
 }
 
+function useHabitBottomPadding() {
+  const insets = useSafeAreaInsets();
+  return Platform.OS === 'ios' ? insets.bottom + 20 : 104;
+}
+
 function HabitDayList({
   activeHabits,
   day,
@@ -787,16 +766,21 @@ function HabitDayList({
   saving: boolean;
   states: HabitDayState[];
 }) {
+  const bottomScrollPadding = useHabitBottomPadding();
   return (
     <View style={{ flex: 1, minHeight: 0, width: '100%' }}>
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{
           paddingLeft: horizontalInsets.left,
           paddingRight: horizontalInsets.right,
         }}
         style={{ height: '100%', width: '100%' }}
       >
-        <Column spacing={12} style={{ paddingBottom: 20, paddingTop: 12, width: '100%' }}>
+        <Column
+          spacing={12}
+          style={{ paddingBottom: bottomScrollPadding, paddingTop: 12, width: '100%' }}
+        >
           {activeHabits.length === 0 ? (
             <EmptyState iconName="heart" testID="habits-empty" title="No active habits yet" />
           ) : (
@@ -891,7 +875,8 @@ function HabitListItem({
         : complete
           ? 'check'
           : null;
-  const statusBackground = accent;
+  const outlinedStatus = colorScheme === 'dark' && habit.color === null && !outcome && !complete;
+  const statusBackground = outlinedStatus ? 'transparent' : accent;
   const statusColor = editMode ? colors.textMuted : getAccessibleTextColor(statusBackground);
   const statusLabel = habitOutcomeLabel(outcome) ?? habitCompletionLabel(state ?? null);
   const rowSurface = getRowSurfaceBackground({
@@ -1029,6 +1014,7 @@ function HabitListItem({
                 style={({ pressed }) => ({
                   alignItems: 'center',
                   backgroundColor: editMode ? colors.surfaceMuted : statusBackground,
+                  ...(outlinedStatus && !editMode ? { borderColor: accent, borderWidth: 2 } : null),
                   borderRadius: 8,
                   height: ROW_SURFACE_ICON_SIZE,
                   justifyContent: 'center',

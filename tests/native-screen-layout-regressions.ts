@@ -25,7 +25,7 @@ assert(
 );
 assert(
   appScreen.includes('<SafeAreaView') &&
-    appScreen.includes("edges={['top', 'left', 'right', 'bottom']}") &&
+    appScreen.includes("['top', 'left', 'right', 'bottom']") &&
     appScreen.includes('<PageHeader onBack={onBack} title={title}>'),
   'fixed-height screens must stop above system chrome and keep the page header in React Native layout'
 );
@@ -37,7 +37,7 @@ assert(
   'layout primitives must be React Native views so native controls only host SwiftUI at the leaves'
 );
 assert(
-  habitScreen.includes('<Screen scrollable={false} testID="habits-screen">') &&
+  habitScreen.includes('<Screen scrollable={false} underBottomChrome testID="habits-screen">') &&
     settingsScreen.includes('<Screen title="Settings">'),
   'the habits pager and Settings menu must use the shared React Native screen shell'
 );

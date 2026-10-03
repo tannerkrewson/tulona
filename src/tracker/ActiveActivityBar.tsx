@@ -19,7 +19,7 @@ import { routineOwnsActivity } from '../routine/routine-visuals';
 import { loadRoutineRuntime, type RoutineRuntime } from '../routine/routine-runtime';
 
 function isCatalogPath(pathname: string): boolean {
-  return pathname === '/' || /^\/folder\/[^/]+$/.test(pathname);
+  return pathname === '/' || pathname === '/habits' || /^\/folder\/[^/]+$/.test(pathname);
 }
 
 const TAB_BAR_HEIGHT = 64;
@@ -149,7 +149,7 @@ function ActiveActivityBarContent({
   const router = useRouter();
   const isWeb = Platform.OS === 'web';
   const isAccessory = placement === 'accessory';
-  const webSurface = 'var(--tulona-surface)';
+  const webSurface = 'color-mix(in srgb, var(--tulona-surface) 80%, transparent)';
   const webBorder = 'var(--tulona-border)';
   const store = runtime.trackerStore;
   const catalog = store((state) => state.catalog);
@@ -489,6 +489,7 @@ function ActiveActivityBarContent({
           styles.overlayBar,
           {
             backgroundColor: isWeb ? webSurface : colors.surface,
+            ...(isWeb ? { backdropFilter: 'blur(16px)' } : null),
             borderColor: isWeb ? webBorder : colors.border,
             // The web tab bar's CSS height includes the cold-start-safe
             // home-indicator inset, so the bar can meet it exactly.
