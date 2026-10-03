@@ -1,4 +1,5 @@
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { ReorderScrollView as ScrollView } from './ReorderScrollView';
+import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@theme';

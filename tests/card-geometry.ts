@@ -106,8 +106,8 @@ assert(
     habitItem.includes('getRowSurfaceBackground') &&
     habitItem.includes('surface: colors.surface') &&
     habitItem.includes('surfaceMuted: colors.surfaceMuted') &&
-    !habitItem.includes('borderColor:') &&
-    !habitItem.includes('borderWidth:') &&
+    habitItem.includes('outlinedStatus && !editMode') &&
+    habitItem.includes('borderColor: accent, borderWidth: 2') &&
     !habitItem.includes('colors.success.background') &&
     !habitItem.includes('colors.warning.background') &&
     !habitItem.includes('colors.danger.background'),

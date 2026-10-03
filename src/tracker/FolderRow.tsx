@@ -18,8 +18,6 @@ export interface FolderRowProps {
   editMode?: boolean;
   disabled?: boolean;
   onPress: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
   actionsTestID?: string;
   testID?: string;
 }
@@ -30,8 +28,6 @@ export function FolderRow({
   editMode = false,
   disabled = false,
   onPress,
-  onMoveUp,
-  onMoveDown,
   actionsTestID,
   testID,
 }: FolderRowProps) {
@@ -107,15 +103,12 @@ export function FolderRow({
         >
           {rowContent}
         </Pressable>
-        {onMoveUp && onMoveDown ? (
-          <CatalogEditActions
-            disabled={disabled}
-            inline
-            onDown={onMoveDown}
-            onUp={onMoveUp}
-            testID={actionsTestID ?? `${testID ?? 'folder-row'}-actions`}
-          />
-        ) : null}
+        <CatalogEditActions
+          reorderLabel={`Reorder ${folder.name}`}
+          disabled={disabled}
+          inline
+          testID={actionsTestID ?? `${testID ?? 'folder-row'}-actions`}
+        />
       </View>
     );
   }

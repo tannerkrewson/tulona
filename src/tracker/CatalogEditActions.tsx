@@ -1,24 +1,23 @@
+import { DragHandle } from '@ui/ReorderableList';
 import { View } from 'react-native';
 
 import { CatalogIconButton } from './CatalogIconButton';
 
 export interface CatalogEditActionsProps {
-  onUp: () => void;
-  onDown: () => void;
   onEdit?: () => void;
   disabled: boolean;
   inline?: boolean;
   testID: string;
+  reorderLabel?: string;
 }
 
-/** Compact edit-mode actions; movement stays inline and icon-only. */
+/** Compact edit-mode actions; reordering uses a shared drag handle. */
 export function CatalogEditActions({
-  onUp,
-  onDown,
   onEdit,
   disabled,
   inline = false,
   testID,
+  reorderLabel,
 }: CatalogEditActionsProps) {
   return (
     <View
@@ -38,20 +37,7 @@ export function CatalogEditActions({
           testID={`${testID}-edit`}
         />
       ) : null}
-      <CatalogIconButton
-        disabled={disabled}
-        icon="chevron-up"
-        label="Move up"
-        onPress={onUp}
-        testID={`${testID}-up`}
-      />
-      <CatalogIconButton
-        disabled={disabled}
-        icon="chevron-down"
-        label="Move down"
-        onPress={onDown}
-        testID={`${testID}-down`}
-      />
+      <DragHandle label={reorderLabel} disabled={disabled} testID={`${testID}-drag`} />
     </View>
   );
 }

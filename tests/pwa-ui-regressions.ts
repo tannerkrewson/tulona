@@ -158,14 +158,15 @@ assert(
   activityRow.includes('<CatalogEditActions') &&
     activityRow.includes('inline') &&
     catalogEditActions.includes('inline ? { flexShrink: 0 }') &&
-    activities.includes('await store.getState().hydrate()'),
-  'tracker edit-mode activity arrows must be inline and refresh the visible catalog after reorder'
+    catalogEditActions.includes('<DragHandle') &&
+    activities.includes('onReorder={orderDraft.reorder}'),
+  'tracker edit-mode drag handles must stay inline and use the catalog Save/Cancel order draft'
 );
 assert(
   folderDetail.includes("const goBackToTracker = () => goBackInAppStack(router, '/')") &&
     folderDetail.includes('onBack={goBackToTracker}') &&
-    folderDetail.includes('await store.getState().hydrate()'),
-  'folder back must return to the tracker context and child reorders must refresh the catalog'
+    folderDetail.includes('onReorder={orderDraft.reorder}'),
+  'folder back must return to the tracker context and child drags must use the catalog order draft'
 );
 assert(
   tabs.includes('name="(tracker)"') &&

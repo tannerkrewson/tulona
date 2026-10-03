@@ -103,6 +103,49 @@ async function createServices(
 }
 
 async function run(): Promise<void> {
+  {
+    const services = await createServices(new MemoryStorage(), 'steps');
+    const second = await services.catalogService.addRoutineStep(routineId, {
+      activityId: secondActivityId,
+      durationMs: 60_000,
+      endBehavior: 'overtime',
+    });
+    const definition = await services.catalogService.getRoutine(routineId);
+    const firstId = definition.steps[0].id;
+    await services.catalogService.saveRoutineStepOrder(routineId, [second.id, firstId]);
+    assert(
+      (await services.catalogService.getRoutine(routineId)).steps[0].id === second.id,
+      'routine drag ordering persists the definition'
+    );
+    const active = await services.routineService.startRoutine(routineId, { startedAt });
+    const transition = await services.trackerService.getActiveTransition(startedAt);
+    const next = await services.routineService.reorderSteps([firstId, second.id]);
+    assert(
+      next.currentStepIndex === 1 &&
+        next.routineSnapshot.steps[next.currentStepIndex].id === second.id,
+      'reordering keeps the current step active after moving it'
+    );
+    assert(
+      JSON.stringify(next.stepSessions) === JSON.stringify(active.stepSessions),
+      'reordering preserves routine timing and sessions'
+    );
+    assert(
+      (await services.trackerService.getActiveTransition(startedAt))?.id === transition?.id,
+      'reordering does not split the tracked session'
+    );
+    assert(
+      (await services.routineRepository.readActive())?.currentStepIndex === 1,
+      'active drag order survives reload'
+    );
+    await rejects(
+      () => services.routineService.reorderSteps([firstId, firstId]),
+      'duplicate active-step IDs are rejected'
+    );
+    await rejects(
+      () => services.catalogService.saveRoutineStepOrder(routineId, [second.id]),
+      'incomplete step orders are rejected'
+    );
+  }
   const storage = new MemoryStorage();
   const services = await createServices(storage);
   const firstStep = (await services.catalogService.getRoutine(routineId)).steps[0];

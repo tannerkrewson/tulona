@@ -2,11 +2,7 @@ import { useState } from 'react';
 
 import type { CatalogCollection } from '@domain';
 import { confirmAction, errorText } from '@ui';
-import {
-  alphabetizedCatalogIds,
-  reorderCatalogItems,
-  type OrderDirection,
-} from '../catalog/ordering';
+import { alphabetizedCatalogIds, reorderCatalogItems } from '../catalog/ordering';
 import type { RoutineRuntime } from '../routine/routine-runtime';
 
 /** Alphabetizing stays local until Save; persistence merges only order into the latest catalog. */
@@ -41,31 +37,6 @@ export function useCatalogOrderDraft(catalog: CatalogCollection | null, runtime:
     }
   };
 
-  const move = (id: string, direction: OrderDirection): boolean => {
-    if (!currentIds || !preview) return false;
-    const previewEntities = [...preview.folders, ...preview.activities, ...preview.routines];
-    const item = byId.get(id);
-    if (!item) return true;
-    const parent = 'folderId' in item ? item.folderId : null;
-    const selected = new Set(currentIds);
-    const siblings = previewEntities
-      .filter(
-        (candidate) =>
-          selected.has(candidate.id) &&
-          ('folderId' in candidate ? candidate.folderId : null) === parent
-      )
-      .sort((left, right) => left.sortOrder - right.sortOrder);
-    const index = siblings.findIndex((candidate) => candidate.id === id);
-    const target = direction === 'up' ? index - 1 : index + 1;
-    if (index < 0 || target < 0 || target >= siblings.length) return true;
-    const next = [...currentIds];
-    const left = next.indexOf(id);
-    const right = next.indexOf(siblings[target].id);
-    [next[left], next[right]] = [next[right], next[left]];
-    setOrderedIds(next);
-    return true;
-  };
-
   const save = async (): Promise<boolean> => {
     if (busy) return false;
     if (!currentIds) return true;
@@ -90,7 +61,18 @@ export function useCatalogOrderDraft(catalog: CatalogCollection | null, runtime:
     busy,
     error,
     alphabetize,
-    move,
+    reorder: (ids: string[]) => {
+      if (!preview || busy) return;
+      const next = reorderCatalogItems(preview, ids);
+      const selected = new Set([...(currentIds ?? []), ...ids]);
+      setOrderedIds(
+        [...next.folders, ...next.activities, ...next.routines]
+          .filter((item) => selected.has(item.id))
+          .sort((left, right) => left.sortOrder - right.sortOrder)
+          .map((item) => item.id)
+      );
+      setError(null);
+    },
     save,
     cancel: () => {
       setOrderedIds(null);

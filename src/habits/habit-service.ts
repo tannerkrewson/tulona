@@ -1,3 +1,4 @@
+import { reorderVisibleIds } from '../catalog/ordering';
 import {
   createId,
   dateForLogicalDay,
@@ -97,6 +98,7 @@ export interface HabitServiceApi {
   archiveHabit(id: UUID): Promise<Habit>;
   restore(id: UUID): Promise<Habit>;
   restoreHabit(id: UUID): Promise<Habit>;
+  reorderVisible(ids: readonly UUID[]): Promise<Habit[]>;
   reorder(id: UUID, direction: 'up' | 'down'): Promise<Habit[]>;
   readMonth(month: MonthKey): Promise<import('@domain').HabitMonthCollection>;
   readStates(start: LogicalDayKey, end: LogicalDayKey): Promise<HabitDayState[]>;
@@ -413,6 +415,23 @@ export class HabitService implements HabitServiceApi {
 
   async restoreHabit(id: UUID): Promise<Habit> {
     return this.restore(id);
+  }
+
+  async reorderVisible(ids: readonly UUID[]): Promise<Habit[]> {
+    const habits = sortByOrder(await this.read());
+    let orderedIds: string[];
+    try {
+      orderedIds = reorderVisibleIds(
+        habits.map((habit) => habit.id),
+        ids
+      );
+    } catch {
+      throw new PersistenceError('validation', 'Invalid habit order');
+    }
+    const byId = new Map(habits.map((habit) => [habit.id, habit]));
+    const ordered = normalizeHabitOrder(orderedIds.map((id) => byId.get(id)!));
+    await this.write(ordered);
+    return this.read();
   }
 
   async reorder(id: UUID, direction: 'up' | 'down'): Promise<Habit[]> {

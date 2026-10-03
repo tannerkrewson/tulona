@@ -59,7 +59,7 @@ export {
   type PageFilterMenuSelectionProps,
   type PageFilterMenuToggle,
 } from './PageFilterMenu';
-export { ReorderControls, type ReorderControlsProps } from './ReorderControls';
+export { DragHandle, ReorderableList } from './ReorderableList';
 export {
   getRowSurfaceBackground,
   getRowSurfaceLayoutStyle,

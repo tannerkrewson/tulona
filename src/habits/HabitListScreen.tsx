@@ -1,3 +1,4 @@
+import { DragHandle, ReorderableList } from '@ui/ReorderableList';
 import { Column, ScrollView, Text } from '@ui/primitives';
 import { useIsFocused, useRouter, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -205,6 +206,7 @@ function HabitListContent({ store }: { store: HabitStore }) {
       day={day}
       horizontalInsets={horizontalInsets}
       editMode={editMode}
+      onReorder={(ids) => store.getState().reorderHabits(ids)}
       logicalDayRolloverHour={logicalDayRolloverHour}
       onDetails={(habitId) => router.push(`/habit/${habitId}`)}
       onOutcome={(habitId, outcome) =>
@@ -324,6 +326,8 @@ function HabitListContent({ store }: { store: HabitStore }) {
             <HabitCategoryList
               category={selectedCategory}
               habits={visibleHabits}
+              onReorder={(ids) => store.getState().reorderHabits(ids)}
+              saving={saving}
               editMode={editMode}
               onDetails={(habitId) => router.push(`/habit/${habitId}`)}
               rolloverHour={logicalDayRolloverHour}
@@ -338,12 +342,16 @@ function HabitListContent({ store }: { store: HabitStore }) {
 function HabitCategoryList({
   category,
   habits,
+  onReorder,
+  saving,
   editMode,
   onDetails,
   rolloverHour,
 }: {
   category: Exclude<HabitCategory, 'active'>;
   habits: readonly Habit[];
+  onReorder: (ids: string[]) => Promise<unknown>;
+  saving: boolean;
   editMode: boolean;
   onDetails: (habitId: string) => void;
   rolloverHour: number;
@@ -374,8 +382,13 @@ function HabitCategoryList({
               title={future ? 'No future habits' : 'No archived habits'}
             />
           ) : (
-            <Column spacing={8} style={{ width: '100%' }}>
-              {habits.map((habit) => (
+            <ReorderableList
+              items={habits}
+              getId={(habit) => habit.id}
+              enabled={editMode && !saving}
+              onReorder={onReorder}
+              gap={8}
+              renderItem={(habit) => (
                 <HabitCategoryListItem
                   key={habit.id}
                   category={category}
@@ -384,8 +397,8 @@ function HabitCategoryList({
                   onDetails={() => onDetails(habit.id)}
                   rolloverHour={rolloverHour}
                 />
-              ))}
-            </Column>
+              )}
+            />
           )}
         </Column>
       </ScrollView>
@@ -425,6 +438,7 @@ function HabitCategoryListItem({
           ? 'Opens the habit editor'
           : 'Opens habit details, where it can be edited or restored'
       }
+      accessible={!editMode}
       accessibilityLabel={`${habit.name}. ${subtitle}${editMode ? '. Edit habit' : ''}`}
       accessibilityRole="button"
       onPress={onDetails}
@@ -459,6 +473,9 @@ function HabitCategoryListItem({
           {subtitle}
         </NativeText>
       </View>
+      {editMode ? (
+        <DragHandle label={`Reorder ${habit.name}`} testID={`drag-habit-${habit.id}`} />
+      ) : null}
       <AppIcon
         accessibilityLabel="Open details"
         color={colors.textMuted}
@@ -744,6 +761,7 @@ function HabitDayList({
   day,
   horizontalInsets,
   editMode,
+  onReorder,
   logicalDayRolloverHour,
   onDetails,
   onOutcome,
@@ -757,6 +775,7 @@ function HabitDayList({
   day: LogicalDayKey;
   horizontalInsets: { left: number; right: number };
   editMode: boolean;
+  onReorder: (ids: string[]) => Promise<unknown>;
   logicalDayRolloverHour: number;
   onDetails: (habitId: string) => void;
   onOutcome: (habitId: string, outcome: HabitDayOutcome | null) => void;
@@ -784,8 +803,13 @@ function HabitDayList({
           {activeHabits.length === 0 ? (
             <EmptyState iconName="heart" testID="habits-empty" title="No active habits yet" />
           ) : (
-            <Column spacing={8} style={{ width: '100%' }}>
-              {activeHabits.map((habit) => (
+            <ReorderableList
+              items={activeHabits}
+              getId={(habit) => habit.id}
+              enabled={editMode && !saving}
+              onReorder={onReorder}
+              gap={8}
+              renderItem={(habit) => (
                 <HabitListItem
                   key={habit.id}
                   editMode={editMode}
@@ -803,8 +827,8 @@ function HabitDayList({
                   onOutcome={(outcome) => onOutcome(habit.id, outcome)}
                   onToggleMetricDisplay={onToggleMetricDisplay}
                 />
-              ))}
-            </Column>
+              )}
+            />
           )}
         </Column>
       </ScrollView>
@@ -921,6 +945,7 @@ function HabitListItem({
                 ? `Edit ${habit.name}`
                 : `${habit.name}. ${statusLabel}. ${metricValue} ${metricLabel.toLowerCase()}. Signals: ${habitSignalSummary(state ?? null)}.`
             }
+            accessible={!editMode}
             accessibilityRole={editMode ? 'button' : 'checkbox'}
             accessibilityState={
               editMode ? { disabled: saving } : { checked: complete, disabled: saving }
@@ -1054,41 +1079,49 @@ function HabitListItem({
                   {statusLabel}
                 </NativeText>
               </View>
-              <Pressable
-                accessibilityHint="Toggles all visible habits between current streak and total days"
-                accessibilityLabel={`${metricLabel}: ${metricValue}`}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: saving || editMode }}
-                accessibilityValue={{ text: String(metricValue) }}
-                disabled={saving || editMode}
-                onPress={(event) => {
-                  event.stopPropagation();
-                  if (!editMode) onToggleMetricDisplay();
-                }}
-                style={{
-                  alignItems: 'flex-end',
-                  alignSelf: 'stretch',
-                  flexShrink: 0,
-                  justifyContent: 'center',
-                  marginLeft: 'auto',
-                  minWidth: HABIT_ROW_STREAK_WIDTH,
-                  width: HABIT_ROW_STREAK_WIDTH,
-                }}
-                testID={`toggle-habit-metric-${habit.id}`}
-              >
-                <NativeText
-                  numberOfLines={1}
-                  style={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
+              {editMode ? (
+                <DragHandle
+                  disabled={saving}
+                  label={`Reorder ${habit.name}`}
+                  testID={`drag-habit-${habit.id}`}
+                />
+              ) : (
+                <Pressable
+                  accessibilityHint="Toggles all visible habits between current streak and total days"
+                  accessibilityLabel={`${metricLabel}: ${metricValue}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: saving || editMode }}
+                  accessibilityValue={{ text: String(metricValue) }}
+                  disabled={saving || editMode}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    if (!editMode) onToggleMetricDisplay();
+                  }}
+                  style={{
+                    alignItems: 'flex-end',
+                    alignSelf: 'stretch',
+                    flexShrink: 0,
+                    justifyContent: 'center',
+                    marginLeft: 'auto',
+                    minWidth: HABIT_ROW_STREAK_WIDTH,
+                    width: HABIT_ROW_STREAK_WIDTH,
+                  }}
+                  testID={`toggle-habit-metric-${habit.id}`}
                 >
-                  {String(metricValue)}
-                </NativeText>
-                <NativeText
-                  numberOfLines={1}
-                  style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
-                >
-                  {metricLabel}
-                </NativeText>
-              </Pressable>
+                  <NativeText
+                    numberOfLines={1}
+                    style={{ color: colors.text, fontSize: 17, fontWeight: '600', lineHeight: 22 }}
+                  >
+                    {String(metricValue)}
+                  </NativeText>
+                  <NativeText
+                    numberOfLines={1}
+                    style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
+                  >
+                    {metricLabel}
+                  </NativeText>
+                </Pressable>
+              )}
             </View>
           </Pressable>
         </HabitContextMenu>

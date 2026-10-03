@@ -111,6 +111,7 @@ export interface RoutineServiceApi {
   resetTime(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   resetRoutineTime(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   moveCurrentStepToEnd(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
+  reorderSteps(ids: readonly UUID[]): Promise<ActiveRoutine>;
   reorderStep(stepId: UUID, direction: 'up' | 'down'): Promise<ActiveRoutine>;
   jumpToStep(stepId: UUID, at?: RoutineTimestampInput): Promise<ActiveRoutine>;
   done(at?: RoutineTimestampInput): Promise<ActiveRoutine>;
@@ -298,6 +299,32 @@ export class RoutineService implements RoutineServiceApi {
 
   async moveCurrentStepToEnd(at: RoutineTimestampInput = this.now()): Promise<ActiveRoutine> {
     return this.mutate((active) => moveCurrentRoutineStepToEnd(active, at));
+  }
+
+  async reorderSteps(ids: readonly UUID[]): Promise<ActiveRoutine> {
+    return this.mutate((active) => {
+      if (active.status !== 'running' && active.status !== 'paused') {
+        throw new Error(`Routine steps cannot be reordered while ${active.status}`);
+      }
+      const byId = new Map(active.routineSnapshot.steps.map((step) => [step.id, step]));
+      if (
+        ids.length !== byId.size ||
+        new Set(ids).size !== ids.length ||
+        ids.some((id) => !byId.has(id))
+      ) {
+        throw new Error('Invalid routine step order');
+      }
+      const ordered = [...active.routineSnapshot.steps].sort((a, b) => a.sortOrder - b.sortOrder);
+      const currentId = ordered[active.currentStepIndex]?.id;
+      return {
+        ...active,
+        currentStepIndex: currentId ? ids.indexOf(currentId) : active.currentStepIndex,
+        routineSnapshot: {
+          ...active.routineSnapshot,
+          steps: ids.map((id, sortOrder) => ({ ...byId.get(id)!, sortOrder })),
+        },
+      };
+    });
   }
 
   async reorderStep(stepId: UUID, direction: 'up' | 'down'): Promise<ActiveRoutine> {

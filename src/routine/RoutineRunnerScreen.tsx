@@ -1,3 +1,4 @@
+import { DragHandle, ReorderableList } from '@ui/ReorderableList';
 import { Column, Row, Text } from '@ui/primitives';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -477,10 +478,8 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
               () => setRoutineMenuOpen(false)
             )
           }
-          onMove={(stepId, direction) =>
-            void runAction((nextRuntime) =>
-              nextRuntime.routineService.reorderStep(stepId, direction)
-            )
+          onReorder={(ids) =>
+            runAction((nextRuntime) => nextRuntime.routineService.reorderSteps(ids))
           }
           onToggle={(stepId, enabled) =>
             void runAction((nextRuntime) =>
@@ -910,8 +909,8 @@ export function RoutineRunnerScreen({ routineId }: RoutineRunnerScreenProps) {
             () => setRoutineMenuOpen(false)
           )
         }
-        onMove={(stepId, direction) =>
-          void runAction((nextRuntime) => nextRuntime.routineService.reorderStep(stepId, direction))
+        onReorder={(ids) =>
+          runAction((nextRuntime) => nextRuntime.routineService.reorderSteps(ids))
         }
         onToggle={(stepId, enabled) =>
           void runAction((nextRuntime) =>
@@ -1178,7 +1177,7 @@ function RoutineStepsSheet({
   catalog,
   onClose,
   onJump,
-  onMove,
+  onReorder,
   onToggle,
   visible,
 }: {
@@ -1188,7 +1187,7 @@ function RoutineStepsSheet({
   catalog: CatalogCollection | null;
   onClose: () => void;
   onJump: (stepId: string) => void;
-  onMove: (stepId: string, direction: 'up' | 'down') => void;
+  onReorder: (ids: string[]) => Promise<unknown>;
   onToggle: (stepId: string, enabled: boolean) => void;
   visible: boolean;
 }) {
@@ -1226,87 +1225,80 @@ function RoutineStepsSheet({
         }
         title={`${finishedCount} of ${enabledSteps.length} finished`}
       >
-        {steps.map((step, index) => {
-          const visual = routineStepVisual(
-            step,
-            active.routineSnapshot.trackingMode,
-            catalog,
-            baseColor
-          );
-          const session = active.stepSessions.find((candidate) => candidate.stepId === step.id);
-          const status = session?.status ?? 'pending';
-          const enabled = step.enabled !== false;
-          const current = status === 'active';
-          const stepColor = validHexColor(visual.color) ?? baseColor;
-          const name = visual.name || 'Untitled step';
-          const leading =
-            status === 'completed' ? (
-              <AppIcon color={stepColor} name="check-circle-2" size={22} />
-            ) : status === 'skipped' ? (
-              <AppIcon color={colors.textMuted} name="skip-forward" size={20} />
-            ) : (
-              <AppIcon
-                color={current ? stepColor : colors.textMuted}
-                name={visual.iconName || 'circle'}
-                size={21}
+        <ReorderableList
+          items={steps}
+          getId={(step) => step.id}
+          enabled={editing && !busy}
+          onReorder={onReorder}
+          renderItem={(step) => {
+            const visual = routineStepVisual(
+              step,
+              active.routineSnapshot.trackingMode,
+              catalog,
+              baseColor
+            );
+            const session = active.stepSessions.find((candidate) => candidate.stepId === step.id);
+            const status = session?.status ?? 'pending';
+            const enabled = step.enabled !== false;
+            const current = status === 'active';
+            const stepColor = validHexColor(visual.color) ?? baseColor;
+            const name = visual.name || 'Untitled step';
+            const leading =
+              status === 'completed' ? (
+                <AppIcon color={stepColor} name="check-circle-2" size={22} />
+              ) : status === 'skipped' ? (
+                <AppIcon color={colors.textMuted} name="skip-forward" size={20} />
+              ) : (
+                <AppIcon
+                  color={current ? stepColor : colors.textMuted}
+                  name={visual.iconName || 'circle'}
+                  size={21}
+                />
+              );
+            return (
+              <FormRow
+                key={step.id}
+                accessibilityLabel={`${name}, ${enabled ? stepStatusLabel(status) : 'Turned off'}`}
+                label={name}
+                leading={leading}
+                muted={!enabled || status === 'skipped'}
+                onPress={
+                  !editing && enabled && !current && !busy ? () => onJump(step.id) : undefined
+                }
+                subtitle={`${compactDuration(step.durationMs + (session?.addedTimeMs ?? 0))}${
+                  enabled
+                    ? status === 'pending' || current
+                      ? ''
+                      : ` · ${stepStatusLabel(status)}`
+                    : ' · Off'
+                }`}
+                testID={`routine-jump-step-${step.id}`}
+                trailing={
+                  editing ? (
+                    <View style={styles.stepEditActions}>
+                      <Switch
+                        accessibilityLabel={`${enabled ? 'Turn off' : 'Turn on'} ${name}`}
+                        disabled={busy || current}
+                        onValueChange={(next) => onToggle(step.id, next)}
+                        testID={`routine-toggle-step-${step.id}`}
+                        value={enabled}
+                      />
+                      <DragHandle
+                        disabled={busy}
+                        label={`Reorder ${name}`}
+                        testID={`routine-reorder-drag-${step.id}`}
+                      />
+                    </View>
+                  ) : current ? (
+                    <Text textStyle={{ color: stepColor, fontSize: 15, fontWeight: '700' }}>
+                      Now
+                    </Text>
+                  ) : undefined
+                }
               />
             );
-          return (
-            <FormRow
-              key={step.id}
-              accessibilityLabel={`${name}, ${enabled ? stepStatusLabel(status) : 'Turned off'}`}
-              label={name}
-              leading={leading}
-              muted={!enabled || status === 'skipped'}
-              onPress={!editing && enabled && !current && !busy ? () => onJump(step.id) : undefined}
-              subtitle={`${compactDuration(step.durationMs + (session?.addedTimeMs ?? 0))}${
-                enabled
-                  ? status === 'pending' || current
-                    ? ''
-                    : ` · ${stepStatusLabel(status)}`
-                  : ' · Off'
-              }`}
-              testID={`routine-jump-step-${step.id}`}
-              trailing={
-                editing ? (
-                  <View style={styles.stepEditActions}>
-                    <Switch
-                      accessibilityLabel={`${enabled ? 'Turn off' : 'Turn on'} ${name}`}
-                      disabled={busy || current}
-                      onValueChange={(next) => onToggle(step.id, next)}
-                      testID={`routine-toggle-step-${step.id}`}
-                      value={enabled}
-                    />
-                    <Pressable
-                      accessibilityLabel={`Move ${name} up`}
-                      accessibilityRole="button"
-                      disabled={busy || index === 0}
-                      hitSlop={6}
-                      onPress={() => onMove(step.id, 'up')}
-                      style={{ opacity: busy || index === 0 ? 0.25 : 1 }}
-                      testID={`routine-reorder-up-${step.id}`}
-                    >
-                      <AppIcon color={colors.text} name="chevron-up" size={20} />
-                    </Pressable>
-                    <Pressable
-                      accessibilityLabel={`Move ${name} down`}
-                      accessibilityRole="button"
-                      disabled={busy || index === steps.length - 1}
-                      hitSlop={6}
-                      onPress={() => onMove(step.id, 'down')}
-                      style={{ opacity: busy || index === steps.length - 1 ? 0.25 : 1 }}
-                      testID={`routine-reorder-down-${step.id}`}
-                    >
-                      <AppIcon color={colors.text} name="chevron-down" size={20} />
-                    </Pressable>
-                  </View>
-                ) : current ? (
-                  <Text textStyle={{ color: stepColor, fontSize: 15, fontWeight: '700' }}>Now</Text>
-                ) : undefined
-              }
-            />
-          );
-        })}
+          }}
+        />
       </FormSection>
     </FormSheet>
   );

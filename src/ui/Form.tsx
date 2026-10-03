@@ -1,15 +1,8 @@
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ReorderScrollView as ScrollView } from './ReorderScrollView';
 import type { PickerItemValue } from '@expo/ui';
 import { Children, Fragment, isValidElement, useState, type ReactNode } from 'react';
-import {
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon, type IconValue } from '@icons';
@@ -524,7 +517,7 @@ export function FormSheet({
       presentationStyle={pageSheet ? 'pageSheet' : 'fullScreen'}
       visible={visible}
     >
-      <View
+      <GestureHandlerRootView
         style={[
           styles.sheet,
           { backgroundColor: colors.background, paddingTop: pageSheet ? 0 : insets.top },
@@ -568,7 +561,7 @@ export function FormSheet({
         >
           {children}
         </ScrollView>
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

@@ -171,6 +171,7 @@ export interface CatalogServiceApi {
   removeRoutineStep(routineId: UUID, stepId: UUID): Promise<RoutineStep>;
   reorderItem(id: UUID, direction: OrderDirection): Promise<CatalogCollection>;
   saveItemOrder(orderedIds: readonly UUID[]): Promise<CatalogCollection>;
+  saveRoutineStepOrder(routineId: UUID, ids: readonly UUID[]): Promise<RoutineDefinition>;
   reorderRoutineStep(
     routineId: UUID,
     stepId: UUID,
@@ -1049,6 +1050,30 @@ export class CatalogService implements CatalogServiceApi {
       })),
     });
     await this.write(next);
+    return next;
+  }
+
+  async saveRoutineStepOrder(routineId: UUID, ids: readonly UUID[]): Promise<RoutineDefinition> {
+    const catalog = await this.read();
+    const routine = catalog.routines.find((item) => item.id === routineId);
+    if (!routine) throw new PersistenceError('validation', `Unknown routine "${routineId}"`);
+    const byId = new Map(routine.steps.map((step) => [step.id, step]));
+    if (
+      ids.length !== byId.size ||
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => !byId.has(id))
+    ) {
+      throw new PersistenceError('validation', 'Invalid routine step order');
+    }
+    const next = {
+      ...routine,
+      updatedAt: this.timestamp(),
+      steps: ids.map((id, sortOrder) => ({ ...byId.get(id)!, sortOrder })),
+    };
+    await this.write({
+      ...catalog,
+      routines: catalog.routines.map((item) => (item.id === routineId ? next : item)),
+    });
     return next;
   }
 

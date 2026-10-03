@@ -25,8 +25,6 @@ export interface ActivityRowProps {
   editMode?: boolean;
   disabled?: boolean;
   onPress: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
   actionsTestID?: string;
   testID?: string;
 }
@@ -45,8 +43,6 @@ export function ActivityRow({
   editMode = false,
   disabled = false,
   onPress,
-  onMoveUp,
-  onMoveDown,
   actionsTestID,
   testID,
 }: ActivityRowProps) {
@@ -140,15 +136,12 @@ export function ActivityRow({
         >
           {rowContent}
         </Pressable>
-        {onMoveUp && onMoveDown ? (
-          <CatalogEditActions
-            disabled={disabled}
-            inline
-            onDown={onMoveDown}
-            onUp={onMoveUp}
-            testID={actionsTestID ?? `${testID ?? 'activity-row'}-actions`}
-          />
-        ) : null}
+        <CatalogEditActions
+          reorderLabel={`Reorder ${item.name}`}
+          disabled={disabled}
+          inline
+          testID={actionsTestID ?? `${testID ?? 'activity-row'}-actions`}
+        />
       </View>
     );
   }

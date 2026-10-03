@@ -71,6 +71,7 @@
     "test:perf": "tsx tests/perf-large-history.ts",
     "test:tracker-ui": "tsx tests/tracker-ui-regressions.ts",
     "test:catalog": "tsx tests/catalog-service.ts",
+    "test:drag-order": "tsx tests/drag-ordering.ts",
     "test:catalog-order": "tsx tests/catalog-ordering.ts",
     "test:routine": "tsx tests/routine-service.ts",
     "test:routine-ui": "tsx tests/routine-ui-regressions.ts",

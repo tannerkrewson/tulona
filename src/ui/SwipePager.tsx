@@ -104,7 +104,14 @@ export function SwipePager({
           {width > 0
             ? [index - 1, index, index + 1].map((page) =>
                 page > index && !canGoNext ? null : (
-                  <View key={page} style={[styles.page, { left: page * width, width }]}>
+                  <View
+                    key={page}
+                    accessibilityElementsHidden={page !== index}
+                    importantForAccessibility={page === index ? 'auto' : 'no-hide-descendants'}
+                    aria-hidden={page !== index}
+                    pointerEvents={page === index ? 'auto' : 'none'}
+                    style={[styles.page, { left: page * width, width }]}
+                  >
                     {renderPage(page)}
                   </View>
                 )

@@ -1,3 +1,4 @@
+import { ReorderableList } from '@ui/ReorderableList';
 import { Column, Text } from '@ui/primitives';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -202,7 +203,7 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
         .then((currentSettings) => setShowArchived(currentSettings.showArchived))
         .catch(() => undefined);
       return undefined;
-    }, [runtime.settingsService, settings, store])
+    }, [runtime.settingsService, settings, store, setShowArchived])
   );
 
   if (!catalog) {
@@ -253,14 +254,6 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
     } finally {
       setArchiveSettingBusy(false);
     }
-  };
-
-  const reorderRootEntry = (itemId: string, direction: 'up' | 'down') => {
-    if (orderDraft.move(itemId, direction)) return;
-    void runAction(async () => {
-      await runtime.catalogService.reorderItem(itemId, direction);
-      await store.getState().hydrate();
-    });
   };
 
   const saveOrder = async () => {
@@ -421,45 +414,48 @@ function ActivitiesContent({ runtime }: { runtime: RoutineRuntime }) {
           />
         ) : null}
         <Column spacing={ROW_SURFACE_LIST_GAP} style={{ width: '100%' }}>
-          {rootEntries.map((entry) => {
-            if (entry.kind === 'folder') {
-              const { folder } = entry;
+          <ReorderableList
+            items={rootEntries}
+            getId={(entry) => (entry.kind === 'folder' ? entry.folder.id : entry.item.id)}
+            enabled={editMode && !busy}
+            onReorder={orderDraft.reorder}
+            gap={ROW_SURFACE_LIST_GAP}
+            renderItem={(entry) => {
+              if (entry.kind === 'folder') {
+                const { folder } = entry;
+                return (
+                  <FolderRow
+                    actionsTestID={`folder-actions-${folder.id}`}
+                    disabled={busy || folder.archivedAt !== null}
+                    editMode={editMode}
+                    folder={folder}
+                    key={folder.id}
+                    onPress={() =>
+                      router.push(editMode ? `/folder-edit/${folder.id}` : `/folder/${folder.id}`)
+                    }
+                    testID={`folder-${folder.id}`}
+                  />
+                );
+              }
+
+              const { item } = entry;
+              const resolved = resolveCatalogItem(catalog, item.id, colors.primary);
+              const active = activeTransition?.activityId === item.id;
               return (
-                <FolderRow
-                  actionsTestID={`folder-actions-${folder.id}`}
-                  disabled={busy || folder.archivedAt !== null}
+                <ActivityRow
+                  key={item.id}
+                  active={active}
+                  actionsTestID={`catalog-actions-${item.id}`}
+                  color={resolved?.displayColor}
+                  disabled={busy || (!editMode && item.archivedAt !== null)}
                   editMode={editMode}
-                  folder={folder}
-                  key={folder.id}
-                  onMoveDown={() => reorderRootEntry(folder.id, 'down')}
-                  onMoveUp={() => reorderRootEntry(folder.id, 'up')}
-                  onPress={() =>
-                    router.push(editMode ? `/folder-edit/${folder.id}` : `/folder/${folder.id}`)
-                  }
-                  testID={`folder-${folder.id}`}
+                  item={item}
+                  onPress={() => (editMode ? editItem(item) : activate(item))}
+                  testID={`catalog-item-${item.id}`}
                 />
               );
-            }
-
-            const { item } = entry;
-            const resolved = resolveCatalogItem(catalog, item.id, colors.primary);
-            const active = activeTransition?.activityId === item.id;
-            return (
-              <ActivityRow
-                key={item.id}
-                active={active}
-                actionsTestID={`catalog-actions-${item.id}`}
-                color={resolved?.displayColor}
-                disabled={busy || (!editMode && item.archivedAt !== null)}
-                editMode={editMode}
-                item={item}
-                onMoveDown={() => reorderRootEntry(item.id, 'down')}
-                onMoveUp={() => reorderRootEntry(item.id, 'up')}
-                onPress={() => (editMode ? editItem(item) : activate(item))}
-                testID={`catalog-item-${item.id}`}
-              />
-            );
-          })}
+            }}
+          />
           {rootEntries.length === 0 ? (
             <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>
               {catalogView === 'all'

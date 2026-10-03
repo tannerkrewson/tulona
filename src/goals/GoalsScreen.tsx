@@ -1,3 +1,5 @@
+import { ReorderableList } from '@ui/ReorderableList';
+import { reorderVisibleIds } from '../catalog/ordering';
 import { Picker } from '@expo/ui';
 import { Column, Row, Text } from '@ui/primitives';
 import { useIsFocused, useRouter, type Href } from 'expo-router';
@@ -365,8 +367,6 @@ function GoalRow({
   editMode,
   disabled,
   onEdit,
-  onMoveDown,
-  onMoveUp,
   onReview,
 }: {
   goal: Goal;
@@ -378,8 +378,6 @@ function GoalRow({
   editMode: boolean;
   disabled: boolean;
   onEdit: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
   onReview: () => void;
 }) {
   const { colorScheme, colors } = useAppTheme();
@@ -465,13 +463,7 @@ function GoalRow({
         >
           {hostedCardContent}
         </Pressable>
-        <CatalogEditActions
-          disabled={disabled}
-          inline
-          onDown={onMoveDown}
-          onUp={onMoveUp}
-          testID={`goal-actions-${goal.id}`}
-        />
+        <CatalogEditActions disabled={disabled} inline testID={`goal-actions-${goal.id}`} />
       </View>
     );
   }
@@ -1276,14 +1268,12 @@ export default function GoalsScreen() {
     [filter, resource]
   );
 
-  const reorderGoal = async (goalId: string, direction: 'up' | 'down') => {
+  const reorderGoals = async (visibleIds: string[]) => {
     if (!resource || reordering) return;
-    const index = resource.goals.findIndex((goal) => goal.id === goalId);
-    const target = direction === 'up' ? index - 1 : index + 1;
-    if (index < 0 || target < 0 || target >= resource.goals.length) return;
-    const ids = resource.goals.map((goal) => goal.id);
-    const [moved] = ids.splice(index, 1);
-    ids.splice(target, 0, moved);
+    const ids = reorderVisibleIds(
+      resource.goals.map((goal) => goal.id),
+      visibleIds
+    );
     setReordering(true);
     setLoadError(null);
     try {
@@ -1291,6 +1281,7 @@ export default function GoalsScreen() {
       await load();
     } catch (reorderError) {
       setLoadError(errorText(reorderError));
+      throw reorderError;
     } finally {
       setReordering(false);
     }
@@ -1356,8 +1347,14 @@ export default function GoalsScreen() {
                 title={filter === 'in-progress' ? 'No goals yet' : 'No matching goals'}
               />
             ) : (
-              <Column spacing={10} style={{ width: '100%' }} testID="goal-list">
-                {visibleGoals.map((goal) => (
+              <ReorderableList
+                items={visibleGoals}
+                getId={(goal) => goal.id}
+                enabled={editMode && !reordering}
+                onReorder={reorderGoals}
+                gap={10}
+                testID="goal-list"
+                renderItem={(goal) => (
                   <GoalRow
                     catalog={resource.catalog}
                     currentSnapshot={resource.currentSnapshot}
@@ -1368,13 +1365,11 @@ export default function GoalsScreen() {
                     editMode={editMode}
                     disabled={reordering}
                     onEdit={() => router.push(`/goal-edit/${goal.id}` as Href)}
-                    onMoveDown={() => void reorderGoal(goal.id, 'down')}
-                    onMoveUp={() => void reorderGoal(goal.id, 'up')}
                     onReview={() => router.push(`/goal-review/${goal.id}` as Href)}
                     settings={resource.goalSettings}
                   />
-                ))}
-              </Column>
+                )}
+              />
             )}
           </>
         ) : null}

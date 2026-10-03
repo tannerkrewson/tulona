@@ -1,3 +1,4 @@
+import { ReorderableList } from '@ui/ReorderableList';
 import { Column, Text } from '@ui/primitives';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -151,14 +152,6 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
     }
   };
 
-  const reorderItem = (itemId: string, direction: 'up' | 'down') => {
-    if (orderDraft.move(itemId, direction)) return;
-    void runAction(async () => {
-      await runtime.catalogService.reorderItem(itemId, direction);
-      await store.getState().hydrate();
-    });
-  };
-
   const saveOrder = async () => {
     if (await orderDraft.save()) setEditMode(false);
   };
@@ -285,25 +278,30 @@ function FolderContent({ runtime, folderId }: { runtime: RoutineRuntime; folderI
           />
         ) : null}
         <Column spacing={12} style={{ width: '100%' }}>
-          {children.map((item) => {
-            const resolved = resolveCatalogItem(catalog, item.id, colors.primary);
-            const active = activeTransition?.activityId === item.id;
-            return (
-              <ActivityRow
-                key={item.id}
-                active={active}
-                actionsTestID={`folder-child-actions-${item.id}`}
-                color={resolved?.displayColor}
-                disabled={busy || (!editMode && item.archivedAt !== null)}
-                editMode={editMode}
-                item={item}
-                onMoveDown={() => reorderItem(item.id, 'down')}
-                onMoveUp={() => reorderItem(item.id, 'up')}
-                onPress={() => (editMode ? editItem(item) : activate(item))}
-                testID={`folder-child-${item.id}`}
-              />
-            );
-          })}
+          <ReorderableList
+            items={children}
+            getId={(item) => item.id}
+            enabled={editMode && !busy}
+            onReorder={orderDraft.reorder}
+            gap={12}
+            renderItem={(item) => {
+              const resolved = resolveCatalogItem(catalog, item.id, colors.primary);
+              const active = activeTransition?.activityId === item.id;
+              return (
+                <ActivityRow
+                  key={item.id}
+                  active={active}
+                  actionsTestID={`folder-child-actions-${item.id}`}
+                  color={resolved?.displayColor}
+                  disabled={busy || (!editMode && item.archivedAt !== null)}
+                  editMode={editMode}
+                  item={item}
+                  onPress={() => (editMode ? editItem(item) : activate(item))}
+                  testID={`folder-child-${item.id}`}
+                />
+              );
+            }}
+          />
           {children.length === 0 ? (
             <Text textStyle={{ color: colors.textMuted, fontSize: 15 }}>
               No activities in this folder yet. Use + to add one.

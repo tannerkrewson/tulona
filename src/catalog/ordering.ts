@@ -200,3 +200,16 @@ export function normalizeCatalogOrders(catalog: CatalogCollection): CatalogColle
     })),
   };
 }
+
+/** Reorder just the displayed slots, leaving filtered-out items in place. */
+export function reorderVisibleIds(
+  allIds: readonly string[],
+  visibleIds: readonly string[]
+): string[] {
+  const selected = new Set(visibleIds);
+  if (selected.size !== visibleIds.length || visibleIds.some((id) => !allIds.includes(id))) {
+    throw new RangeError('Invalid visible order');
+  }
+  let index = 0;
+  return allIds.map((id) => (selected.has(id) ? visibleIds[index++] : id));
+}

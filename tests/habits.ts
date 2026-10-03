@@ -163,6 +163,33 @@ function interval(activityId: string, seconds: number): TimeInterval {
 }
 
 async function run(): Promise<void> {
+  {
+    const repository = new MemoryHabitRepository();
+    repository.habits = [
+      habit(ids.habit),
+      { ...habit(ids.routine), sortOrder: 1, archivedAt: now },
+      { ...habit(ids.secondHabit), sortOrder: 2 },
+    ];
+    const service = new HabitService(repository, { now: () => now });
+    const next = await service.reorderVisible([ids.secondHabit, ids.habit]);
+    assert(
+      next.map((item) => item.id).join() === [ids.secondHabit, ids.routine, ids.habit].join(),
+      'drag order persists across reload and keeps archived habits in their slots'
+    );
+    assert(
+      next.every((item, index) => item.sortOrder === index),
+      'drag ordering assigns stable contiguous sort order'
+    );
+    assert(
+      next[1].archivedAt === now && next[0].name === ids.secondHabit,
+      'drag ordering preserves habit metadata'
+    );
+    await rejects(
+      () => service.reorderVisible([ids.habit, ids.habit]),
+      'duplicate drag IDs are rejected'
+    );
+    await rejects(() => service.reorderVisible(['missing']), 'unknown drag IDs are rejected');
+  }
   assert(
     isHabitScheduledDay({ kind: 'daily' }, '2026-08-30T02:00:00.000Z', { rolloverHour: 3 }),
     'daily schedules use logical days before recurrence evaluation'

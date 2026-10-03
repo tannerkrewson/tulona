@@ -1,8 +1,8 @@
+import { DragHandle, ReorderableList } from '@ui/ReorderableList';
 import { Picker } from '@expo/ui';
 import { Column, Text } from '@ui/primitives';
 import { useRouter } from 'expo-router';
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
 
 import type {
   Activity,
@@ -31,7 +31,6 @@ import {
   FormSwitchRow,
   FormTextField,
   HeaderTextButton,
-  IconButton,
   Screen,
 } from '@ui';
 import { RecoveryActions } from '../orchestration/RecoveryActions';
@@ -382,22 +381,16 @@ function StepRow({
   activities,
   folders,
   trackingMode,
-  index,
-  count,
   reordering,
   onEdit,
-  onMove,
   busy,
 }: {
   step: EditableStep;
   activities: readonly Activity[];
   folders: readonly Folder[];
   trackingMode: RoutineTrackingMode;
-  index: number;
-  count: number;
   reordering: boolean;
   onEdit: () => void;
-  onMove: (direction: 'up' | 'down') => void;
   busy: boolean;
 }) {
   const { colors } = useAppTheme();
@@ -424,24 +417,11 @@ function StepRow({
       testID={`routine-step-${step.id}`}
       trailing={
         reordering ? (
-          <View style={{ flexDirection: 'row', gap: 4 }}>
-            <IconButton
-              disabled={busy || index === 0}
-              icon="chevron-up"
-              label="Move step up"
-              onPress={() => onMove('up')}
-              testID={`move-step-up-${step.id}`}
-              variant="plain"
-            />
-            <IconButton
-              disabled={busy || index === count - 1}
-              icon="chevron-down"
-              label="Move step down"
-              onPress={() => onMove('down')}
-              testID={`move-step-down-${step.id}`}
-              variant="plain"
-            />
-          </View>
+          <DragHandle
+            disabled={busy}
+            label={`Reorder ${step.name}`}
+            testID={`drag-step-${step.id}`}
+          />
         ) : undefined
       }
     />
@@ -758,19 +738,15 @@ function RoutineEditorForm({
       ]);
     }
   };
-  const moveStep = (step: EditableStep, index: number, direction: 'up' | 'down') =>
-    routine
-      ? void run(async () => {
-          await service.reorderRoutineStep(routine.id, step.id, direction);
-        })
-      : setNewSteps((current) => {
-          const to = direction === 'up' ? index - 1 : index + 1;
-          if (to < 0 || to >= current.length) return current;
-          const next = [...current];
-          const [moved] = next.splice(index, 1);
-          if (moved) next.splice(to, 0, moved);
-          return next;
-        });
+  const reorderSteps = async (ids: string[]) => {
+    if (routine) {
+      await run(async () => {
+        await service.saveRoutineStepOrder(routine.id, ids);
+      });
+    } else {
+      setNewSteps((current) => ids.map((id) => current.find((step) => step.id === id)!));
+    }
+  };
   const trackingFooter = routine
     ? trackingMode === 'steps'
       ? 'Each step logs time to its own activity. This is set when a routine is created.'
@@ -886,25 +862,28 @@ function RoutineEditorForm({
             }
             title="Steps"
           >
-            {steps.map((step, index) => (
-              <StepRow
-                activities={activities}
-                busy={busy}
-                count={steps.length}
-                folders={catalog.folders}
-                index={index}
-                key={step.id}
-                onEdit={() => {
-                  setError(null);
-                  setEditingStepId(step.id);
-                  setDraft(draftFromStep(step));
-                }}
-                onMove={(direction) => moveStep(step, index, direction)}
-                reordering={reordering}
-                step={step}
-                trackingMode={trackingMode as RoutineTrackingMode}
-              />
-            ))}
+            <ReorderableList
+              items={steps}
+              getId={(step) => step.id}
+              enabled={reordering && !busy}
+              onReorder={reorderSteps}
+              renderItem={(step) => (
+                <StepRow
+                  activities={activities}
+                  busy={busy}
+                  folders={catalog.folders}
+                  key={step.id}
+                  onEdit={() => {
+                    setError(null);
+                    setEditingStepId(step.id);
+                    setDraft(draftFromStep(step));
+                  }}
+                  reordering={reordering}
+                  step={step}
+                  trackingMode={trackingMode as RoutineTrackingMode}
+                />
+              )}
+            />
             <FormRow
               disabled={busy || !trackingMode || reordering}
               icon="plus"

@@ -52,6 +52,7 @@ export interface HabitStoreState {
   shiftSelectedDay(amount: number): Promise<void>;
   createHabit(input: CreateHabitInput): Promise<Habit>;
   updateHabit(id: string, input: UpdateHabitInput): Promise<Habit>;
+  reorderHabits(ids: readonly string[]): Promise<Habit[]>;
   archiveHabit(id: string): Promise<Habit>;
   restoreHabit(id: string): Promise<Habit>;
 }
@@ -244,6 +245,7 @@ export function createHabitStore(service: HabitServiceApi, options: HabitStoreOp
       },
       createHabit: (input) => runMutation(() => service.createHabit(input)),
       updateHabit: (id, input) => runMutation(() => service.updateHabit(id, input)),
+      reorderHabits: (ids) => runMutation(() => service.reorderVisible(ids)),
       archiveHabit: (id) => runMutation(() => service.archiveHabit(id)),
       restoreHabit: (id) => runMutation(() => service.restoreHabit(id)),
     };

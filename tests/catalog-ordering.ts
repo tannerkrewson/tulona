@@ -1,5 +1,9 @@
 import { CatalogService } from '../src/catalog/catalog-service';
-import { alphabetizedCatalogIds, reorderCatalogItems } from '../src/catalog/ordering';
+import {
+  alphabetizedCatalogIds,
+  reorderCatalogItems,
+  reorderVisibleIds,
+} from '../src/catalog/ordering';
 import type { CatalogRepositoryApi } from '../src/data/catalog-repository';
 import type { CatalogCollection } from '../src/domain';
 
@@ -8,6 +12,13 @@ import type { CatalogCollection } from '../src/domain';
 const { strict: assert } = require('node:assert');
 
 async function run() {
+  assert.deepEqual(
+    reorderVisibleIds(['a', 'hidden', 'b', 'c'], ['c', 'a', 'b']),
+    ['c', 'hidden', 'a', 'b'],
+    'filtered drag lists keep hidden slots in place'
+  );
+  assert.throws(() => reorderVisibleIds(['a', 'b'], ['a', 'a']), /Invalid visible order/);
+
   let stored: CatalogCollection = { folders: [], activities: [], routines: [] };
   let writes = 0;
   let failWrite = false;

@@ -1,7 +1,7 @@
+import { ReorderScrollView as RNScrollView } from './ReorderScrollView';
 import type { ReactNode } from 'react';
 import {
   Pressable,
-  ScrollView as RNScrollView,
   Text as RNText,
   StyleSheet,
   View,

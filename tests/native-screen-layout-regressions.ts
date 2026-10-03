@@ -16,7 +16,7 @@ const settingsScreen = read('src/settings/SettingsScreen.tsx');
 const habitScreen = read('src/habits/HabitListScreen.tsx');
 
 assert(
-  appScreen.includes("import { Platform, ScrollView, StyleSheet, View } from 'react-native'") &&
+  appScreen.includes("import { ReorderScrollView as ScrollView } from './ReorderScrollView'") &&
     !appScreen.includes("from '@expo/ui'") &&
     appScreen.includes('contentInsetAdjustmentBehavior="automatic"') &&
     appScreen.includes('keyboardShouldPersistTaps="handled"') &&
